@@ -1,0 +1,79 @@
+/* ============================================================
+   SALO — Rider Layout Styles
+   Mirrors Customer & Owner Layouts; uses --salo-green accent
+   ============================================================ */
+
+.rider-shell {
+  display: flex;
+  min-height: 100dvh;
+  background: var(--bg-primary);
+}
+
+.rider-sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: var(--z-sticky);
+  transition: width var(--transition-normal);
+  background: var(--nav-bg);
+  border-right: 1px solid var(--nav-border);
+}
+
+.rider-sidebar.collapsed {
+  width: var(--sidebar-collapsed-width);
+}
+
+/* Rider active sidebar indicator uses muted green (--salo-green) */
+.rider-sidebar .sidebar-item.active {
+  background: var(--status-success-bg, #E8F5E9);
+  color: var(--salo-green, #2E7D32);
+}
+
+.rider-sidebar .sidebar-item.active .sidebar-item-icon {
+  color: var(--salo-green, #2E7D32);
+}
+
+.rider-main {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left var(--transition-normal);
+}
+
+.rider-main.sidebar-collapsed {
+  margin-left: var(--sidebar-collapsed-width);
+}
+
+.rider-content {
+  flex: 1;
+  padding: var(--space-8);
+  max-width: var(--content-max-width);
+  width: 100%;
+  margin: 0 auto;
+}
+
+@media (max-width: 1024px) {
+  .rider-sidebar {
+    transform: translateX(-100%);
+    width: var(--sidebar-width) !important;
+  }
+
+  .rider-sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-xl);
+  }
+
+  .rider-main,
+  .rider-main.sidebar-collapsed {
+    margin-left: 0;
+  }
+
+  .rider-content {
+    padding: var(--space-4);
+  }
+}
