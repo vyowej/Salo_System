@@ -25,6 +25,14 @@ import OwnerReservationsPage from './features/restaurant/pages/OwnerReservations
 import OwnerEarningsPage from './features/restaurant/pages/OwnerEarningsPage';
 import OwnerProfilePage from './features/restaurant/pages/OwnerProfilePage';
 
+// Rider Module (Phase 5)
+import RiderDashboard from './features/rider/pages/RiderDashboard';
+import RiderActiveDeliveryPage from './features/rider/pages/RiderActiveDeliveryPage';
+import RiderJobsPage from './features/rider/pages/RiderJobsPage';
+import RiderHistoryPage from './features/rider/pages/RiderHistoryPage';
+import RiderEarningsPage from './features/rider/pages/RiderEarningsPage';
+import RiderProfilePage from './features/rider/pages/RiderProfilePage';
+
 /**
  * SALO App Routes
  * Phase 1: Design System Showcase (/showcase)
@@ -63,6 +71,14 @@ export default function App() {
       <Route path="/owner/reservations" element={<OwnerReservationsPage />} />
       <Route path="/owner/earnings" element={<OwnerEarningsPage />} />
       <Route path="/owner/profile" element={<OwnerProfilePage />} />
+
+      {/* ── Rider Module (Phase 5) ── */}
+      <Route path="/rider" element={<RiderDashboard />} />
+      <Route path="/rider/active" element={<RiderActiveDeliveryPage />} />
+      <Route path="/rider/jobs" element={<RiderJobsPage />} />
+      <Route path="/rider/history" element={<RiderHistoryPage />} />
+      <Route path="/rider/earnings" element={<RiderEarningsPage />} />
+      <Route path="/rider/profile" element={<RiderProfilePage />} />
 
       {/* ── Design System Showcase (Phase 1) ── */}
       <Route path="/showcase" element={<DesignShowcase />} />
