@@ -62,6 +62,7 @@ export default function DesignShowcase() {
 
   return (
     <div className="showcase">
+      <div className="fiesta-banderitas-strip" aria-hidden="true" />
       {/* ── TopBar ──────────────────────────────────── */}
       <header className="showcase-topbar">
         <div className="showcase-topbar-logo">
@@ -176,27 +177,42 @@ export default function DesignShowcase() {
               </div>
             </section>
 
-            {/* Color system */}
+            {/* Filipino Fiesta Brand Color system */}
             <section className="showcase-section">
               <div className="showcase-section-header">
-                <h2 className="showcase-section-title">Color System</h2>
-                <p className="showcase-section-desc">Official SALO brand palette. Orange is used for actions and highlights — never as a background wash.</p>
+                <h2 className="showcase-section-title">Filipino Fiesta Brand Color System</h2>
+                <p className="showcase-section-desc">
+                  Official SALO logo colors reflecting modern Filipino food culture: Fiesta Orange, Golden Yellow, Earthy Palayok Brown, and Dahon ng Saging Green.
+                  Light mode is pure white (#FFFFFF); Dark mode is near-black (#171717). No beige or cream.
+                </p>
+              </div>
+
+              {/* Decorative banderitas showcase */}
+              <div style={{ marginBottom: 'var(--space-6)' }}>
+                <p className="showcase-subsection-label">Subtle Banderitas Accent Strip (.fiesta-banderitas-strip)</p>
+                <div className="fiesta-banderitas-strip" style={{ borderRadius: 'var(--radius-full)', height: 6, marginBottom: 'var(--space-3)' }} />
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                  <span className="fiesta-pill">🍛 Orange · Primary Action</span>
+                  <span className="fiesta-pill fiesta-pill-gold">☀️ Gold · Celebrations & Sun</span>
+                  <span className="fiesta-pill fiesta-pill-green">🍃 Green · Dahon ng Saging</span>
+                  <span className="fiesta-pill" style={{ background: 'var(--fiesta-brown-subtle)', color: 'var(--fiesta-brown-text)' }}>🍲 Brown · Palayok Comfort</span>
+                </div>
               </div>
 
               <div className="showcase-subsection">
-                <p className="showcase-subsection-label">Brand Colors</p>
+                <p className="showcase-subsection-label">The 4 Official Logo & Brand Colors</p>
                 <div className="color-swatches">
                   {[
-                    { name: 'Primary', hex: '#F36B2B', var: '--salo-primary' },
-                    { name: 'Hover', hex: '#E75B20', var: '--salo-primary-hover' },
-                    { name: 'Active', hex: '#D94F19', var: '--salo-primary-active' },
-                    { name: 'Light', hex: '#FFF0E8', var: '--salo-primary-light', dark: true },
-                    { name: 'Secondary', hex: '#FF8A45', var: '--salo-secondary-orange' },
+                    { name: 'Fiesta Orange', hex: '#F36B2B', desc: 'Energy & Actions' },
+                    { name: 'Golden Yellow', hex: '#F59E0B', desc: 'Sun & Festivities' },
+                    { name: 'Earthy Brown', hex: '#5D4037', desc: 'Palayok & Warmth' },
+                    { name: 'Muted Green', hex: '#2E7D32', desc: 'Dahon ng Saging' },
                   ].map(s => (
-                    <div key={s.name} className="color-swatch">
-                      <div className="color-swatch-block" style={{ background: s.hex, border: s.dark ? '1px solid #EAEAEA' : undefined }} />
+                    <div key={s.name} className="color-swatch" style={{ minWidth: 110 }}>
+                      <div className="color-swatch-block" style={{ background: s.hex, width: 80, height: 64 }} />
                       <span className="color-swatch-label">{s.name}</span>
                       <span className="color-swatch-hex">{s.hex}</span>
+                      <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{s.desc}</span>
                     </div>
                   ))}
                 </div>
@@ -206,7 +222,7 @@ export default function DesignShowcase() {
                 <p className="showcase-subsection-label">Status Colors</p>
                 <div className="color-swatches">
                   {[
-                    { name: 'Success', hex: '#269B62' },
+                    { name: 'Success', hex: '#2E7D32' },
                     { name: 'Warning', hex: '#E6A23C' },
                     { name: 'Error', hex: '#DC4545' },
                   ].map(s => (
@@ -223,7 +239,7 @@ export default function DesignShowcase() {
                 <p className="showcase-subsection-label">Surface Colors (Current Theme)</p>
                 <div className="color-swatches">
                   {[
-                    { name: 'BG Primary', var: 'var(--bg-primary)', label: '--bg-primary' },
+                    { name: 'BG Primary (Pure)', var: 'var(--bg-primary)', label: '--bg-primary' },
                     { name: 'BG Secondary', var: 'var(--bg-secondary)', label: '--bg-secondary' },
                     { name: 'BG Tertiary', var: 'var(--bg-tertiary)', label: '--bg-tertiary' },
                     { name: 'Surface', var: 'var(--surface-primary)', label: '--surface-primary' },
@@ -237,6 +253,43 @@ export default function DesignShowcase() {
                   ))}
                 </div>
               </div>
+            </section>
+
+            {/* Natural Filipino / Taglish Microcopy Guidelines */}
+            <section className="showcase-section">
+              <div className="showcase-section-header">
+                <h2 className="showcase-section-title">Natural Filipino / Taglish Microcopy Standards</h2>
+                <p className="showcase-section-desc">
+                  Voice & tone: Warm, welcoming, festive, comforting, and homey. Avoid stiff corporate English or overly theatrical Tagalog.
+                </p>
+              </div>
+
+              <Card>
+                <CardBody>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
+                    <div style={{ padding: 'var(--space-3)', background: 'var(--surface-secondary)', borderRadius: 'var(--radius-md)' }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', marginBottom: 4 }}>Time-Aware Greetings</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Magandang umaga, {`{name}`}! Kain tayo!&rdquo;</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Magandang hapon! Gutom ka na ba?&rdquo;</p>
+                      <p style={{ fontWeight: 600, fontSize: 13 }}>&ldquo;Magandang gabi! Tara, kain tayo!&rdquo;</p>
+                    </div>
+
+                    <div style={{ padding: 'var(--space-3)', background: 'var(--surface-secondary)', borderRadius: 'var(--radius-md)' }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--fiesta-gold-text)', textTransform: 'uppercase', marginBottom: 4 }}>Search & Discovery</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Ano&apos;ng cravings mo today?&rdquo;</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Hanapin ang paborito mong kainan...&rdquo;</p>
+                      <p style={{ fontWeight: 600, fontSize: 13 }}>&ldquo;Paborito sa Handaan & Salo-salo&rdquo;</p>
+                    </div>
+
+                    <div style={{ padding: 'var(--space-3)', background: 'var(--surface-secondary)', borderRadius: 'var(--radius-md)' }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--fiesta-green-text)', textTransform: 'uppercase', marginBottom: 4 }}>Action CTAs</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Order na!&rdquo; / &ldquo;Tara, Order Na!&rdquo;</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Magpareserba ng Mesa&rdquo;</p>
+                      <p style={{ fontWeight: 600, fontSize: 13 }}>&ldquo;Tingnan ang Multi-Cart&rdquo;</p>
+                    </div>
+                  </div>
+                </CardBody>
+              </Card>
             </section>
 
             {/* Typography */}
