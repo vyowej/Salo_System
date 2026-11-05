@@ -1,44 +1,66 @@
 /* ============================================================
    SALO — Theme Definitions
    Applied to <html data-theme="light|dark">
+   Modern Filipino Fiesta-Inspired Color Architecture
+   Light: PURE WHITE (#FFFFFF) backgrounds
+   Dark:  BLACK / NEAR-BLACK (#171717) backgrounds
    ============================================================ */
 
 [data-theme="light"] {
   color-scheme: light;
 
-  /* Backgrounds */
+  /* Backgrounds — STRICTLY pure white, no beige, cream, or tan */
   --bg-primary:   #FFFFFF;
-  --bg-secondary: #F7F7F7;
-  --bg-tertiary:  #F1F1F1;
+  --bg-secondary: #F8F9FA;
+  --bg-tertiary:  #F1F3F5;
 
   /* Surfaces */
   --surface-primary:   #FFFFFF;
-  --surface-secondary: #F7F7F7;
-  --surface-hover:     #F2F2F2;
+  --surface-secondary: #F8F9FA;
+  --surface-hover:     #F1F3F5;
 
   /* Text */
   --text-primary:   #171717;
-  --text-secondary: #737373;
-  --text-muted:     #999999;
+  --text-secondary: #595959;
+  --text-muted:     #8C8C8C;
   --text-inverse:   #FFFFFF;
 
   /* Borders */
-  --border-primary:   #EAEAEA;
-  --border-secondary: #F0F0F0;
+  --border-primary:   #EAECEF;
+  --border-secondary: #F1F3F5;
   --border-focus:     #F36B2B;
 
-  /* Accent */
+  /* Primary Brand Accent (Fiesta Orange) */
   --accent:        #F36B2B;
   --accent-hover:  #E75B20;
   --accent-active: #D94F19;
   --accent-subtle: #FFF0E8;
   --accent-text:   #FFFFFF;
 
+  /* ── Filipino Fiesta Brand Color System ──────────────── */
+  /* Fiesta Golden Yellow (Sun & Festivities) */
+  --fiesta-gold:         #F59E0B;
+  --fiesta-gold-hover:   #D97706;
+  --fiesta-gold-subtle:  #FEF3C7;
+  --fiesta-gold-text:    #92400E;
+
+  /* Earthy Palayok Brown (Warm Clay & Cooking) */
+  --fiesta-brown:        #5D4037;
+  --fiesta-brown-hover:  #4E342E;
+  --fiesta-brown-subtle: #EFEBE9;
+  --fiesta-brown-text:   #3E2723;
+
+  /* Dahon ng Saging Green (Fresh Leaf & Table Spread) */
+  --fiesta-green:        #2E7D32;
+  --fiesta-green-hover:  #1B5E20;
+  --fiesta-green-subtle: #E8F5E9;
+  --fiesta-green-text:   #1B5E20;
+
   /* Status */
-  --status-success-bg:   #ECFDF5;
-  --status-success-text: #269B62;
-  --status-warning-bg:   #FFFBEB;
-  --status-warning-text: #B45309;
+  --status-success-bg:   #E8F5E9;
+  --status-success-text: #2E7D32;
+  --status-warning-bg:   #FEF3C7;
+  --status-warning-text: #92400E;
   --status-error-bg:     #FEF2F2;
   --status-error-text:   #DC4545;
   --status-info-bg:      #EFF6FF;
@@ -52,19 +74,19 @@
   --shadow-xl:  0 16px 50px rgba(0, 0, 0, 0.11);
 
   /* Overlays */
-  --overlay-bg: rgba(0, 0, 0, 0.45);
+  --overlay-bg: rgba(23, 23, 23, 0.45);
 
   /* Input */
-  --input-bg:       #FFFFFF;
-  --input-border:   #DCDCDC;
+  --input-bg:           #FFFFFF;
+  --input-border:       #DCDCDC;
   --input-border-focus: #F36B2B;
-  --input-text:     #171717;
-  --input-placeholder: #AAAAAA;
+  --input-text:         #171717;
+  --input-placeholder:  #8C8C8C;
 
   /* Navigation */
-  --nav-bg:         #FFFFFF;
-  --nav-border:     #EAEAEA;
-  --nav-item-hover: #F7F7F7;
+  --nav-bg:               #FFFFFF;
+  --nav-border:           #EAECEF;
+  --nav-item-hover:       #F8F9FA;
   --nav-item-active-bg:   #FFF0E8;
   --nav-item-active-text: #F36B2B;
   --nav-item-active-icon: #F36B2B;
@@ -73,15 +95,15 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  /* Backgrounds */
+  /* Backgrounds — STRICTLY near-black / true dark */
   --bg-primary:   #171717;
-  --bg-secondary: #202020;
-  --bg-tertiary:  #252525;
+  --bg-secondary: #1F1F21;
+  --bg-tertiary:  #262629;
 
   /* Surfaces */
-  --surface-primary:   #202020;
-  --surface-secondary: #252525;
-  --surface-hover:     #303030;
+  --surface-primary:   #1E1E20;
+  --surface-secondary: #262629;
+  --surface-hover:     #303034;
 
   /* Text */
   --text-primary:   #FFFFFF;
@@ -90,48 +112,67 @@
   --text-inverse:   #171717;
 
   /* Borders */
-  --border-primary:   #383838;
-  --border-secondary: #303030;
+  --border-primary:   #353539;
+  --border-secondary: #2C2C30;
   --border-focus:     #FF8045;
 
-  /* Accent */
+  /* Primary Brand Accent (Fiesta Orange in Dark) */
   --accent:        #FF8045;
   --accent-hover:  #FF965F;
   --accent-active: #F36B2B;
   --accent-subtle: #3A241A;
   --accent-text:   #FFFFFF;
 
+  /* ── Filipino Fiesta Brand Color System in Dark ──────── */
+  /* Fiesta Golden Yellow */
+  --fiesta-gold:         #FBBF24;
+  --fiesta-gold-hover:   #FCD34D;
+  --fiesta-gold-subtle:  #332705;
+  --fiesta-gold-text:    #FDE68A;
+
+  /* Earthy Palayok Brown */
+  --fiesta-brown:        #A1887F;
+  --fiesta-brown-hover:  #BCAAA4;
+  --fiesta-brown-subtle: #2D2422;
+  --fiesta-brown-text:   #D7CCC8;
+
+  /* Dahon ng Saging Green */
+  --fiesta-green:        #4ADE80;
+  --fiesta-green-hover:  #86EFAC;
+  --fiesta-green-subtle: #0B2915;
+  --fiesta-green-text:   #BBF7D0;
+
   /* Status */
-  --status-success-bg:   #052E1A;
+  --status-success-bg:   #0B2915;
   --status-success-text: #4ADE80;
-  --status-warning-bg:   #2D1D00;
-  --status-warning-text: #FCD34D;
+  --status-warning-bg:   #332705;
+  --status-warning-text: #FDE68A;
   --status-error-bg:     #2D0808;
   --status-error-text:   #FCA5A5;
   --status-info-bg:      #0D1B40;
   --status-info-text:    #93C5FD;
 
   /* Shadows */
-  --shadow-xs:  0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.35);
-  --shadow-md:  0 4px 18px rgba(0, 0, 0, 0.4);
-  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.45);
-  --shadow-xl:  0 16px 54px rgba(0, 0, 0, 0.55);
+  --shadow-xs:  0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md:  0 4px 18px rgba(0, 0, 0, 0.45);
+  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-xl:  0 16px 54px rgba(0, 0, 0, 0.6);
 
   /* Overlays */
-  --overlay-bg: rgba(0, 0, 0, 0.65);
+  --overlay-bg: rgba(0, 0, 0, 0.7);
 
   /* Input */
-  --input-bg:            #252525;
-  --input-border:        #404040;
+  --input-bg:            #242427;
+  --input-border:        #3C3C42;
   --input-border-focus:  #FF8045;
   --input-text:          #FFFFFF;
-  --input-placeholder:   #666666;
+  --input-placeholder:   #686870;
 
   /* Navigation */
-  --nav-bg:         #202020;
-  --nav-border:     #303030;
-  --nav-item-hover: #2A2A2A;
+  --nav-bg:               #1E1E20;
+  --nav-border:           #323236;
+  --nav-item-hover:       #29292D;
   --nav-item-active-bg:   #3A241A;
   --nav-item-active-text: #FF8045;
   --nav-item-active-icon: #FF8045;
