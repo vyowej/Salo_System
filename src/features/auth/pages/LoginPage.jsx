@@ -67,8 +67,9 @@ export default function LoginPage() {
   return (
     <AuthLayout maxWidth={440}>
       <div className="auth-header">
-        <h1 className="auth-title">Welcome back</h1>
-        <p className="auth-subtitle">Sign in to your SALO account</p>
+        <span className="fiesta-pill" style={{ marginBottom: 8 }}>🇵🇭 Maligayang Pagbabalik</span>
+        <h1 className="auth-title">Tara, kain tayo!</h1>
+        <p className="auth-subtitle">Sign in sa iyong SALO account</p>
       </div>
 
       {error && (
@@ -208,9 +209,9 @@ export default function LoginPage() {
       </div>
 
       <div className="auth-footer-prompt">
-        Don&apos;t have an account?{' '}
+        Wala ka pang account?{' '}
         <Link to="/register" className="auth-link" style={{ fontWeight: 'var(--font-weight-semibold)' }}>
-          Create an account
+          Mag-register dito
         </Link>
       </div>
     </AuthLayout>
