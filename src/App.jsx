@@ -17,11 +17,20 @@ import ReservationsPage from './features/customer/pages/ReservationsPage';
 import AddressesPage from './features/customer/pages/AddressesPage';
 import ProfilePage from './features/customer/pages/ProfilePage';
 
+// Owner Module (Phase 4)
+import OwnerDashboard from './features/restaurant/pages/OwnerDashboard';
+import OwnerOrdersPage from './features/restaurant/pages/OwnerOrdersPage';
+import OwnerMenuPage from './features/restaurant/pages/OwnerMenuPage';
+import OwnerReservationsPage from './features/restaurant/pages/OwnerReservationsPage';
+import OwnerEarningsPage from './features/restaurant/pages/OwnerEarningsPage';
+import OwnerProfilePage from './features/restaurant/pages/OwnerProfilePage';
+
 /**
  * SALO App Routes
  * Phase 1: Design System Showcase (/showcase)
  * Phase 2: Public Landing Page (/) & Authentication Flows (/login, /register, etc.)
  * Phase 3: Customer Module (/customer/*)
+ * Phase 4: Restaurant Owner Module (/owner/*)
  */
 export default function App() {
   return (
@@ -46,6 +55,14 @@ export default function App() {
       <Route path="/customer/reservations" element={<ReservationsPage />} />
       <Route path="/customer/addresses" element={<AddressesPage />} />
       <Route path="/customer/profile" element={<ProfilePage />} />
+
+      {/* ── Owner Module (Phase 4) ── */}
+      <Route path="/owner" element={<OwnerDashboard />} />
+      <Route path="/owner/orders" element={<OwnerOrdersPage />} />
+      <Route path="/owner/menu" element={<OwnerMenuPage />} />
+      <Route path="/owner/reservations" element={<OwnerReservationsPage />} />
+      <Route path="/owner/earnings" element={<OwnerEarningsPage />} />
+      <Route path="/owner/profile" element={<OwnerProfilePage />} />
 
       {/* ── Design System Showcase (Phase 1) ── */}
       <Route path="/showcase" element={<DesignShowcase />} />

@@ -1,0 +1,75 @@
+/* ============================================================
+   SALO — Owner Layout Styles
+   Mirrors CustomerLayout structure; uses --salo-gold accent
+   ============================================================ */
+
+.owner-shell {
+  display: flex;
+  min-height: 100dvh;
+  background: var(--bg-primary);
+}
+
+.owner-sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: var(--z-sticky);
+  transition: width var(--transition-normal);
+  background: var(--nav-bg);
+  border-right: 1px solid var(--nav-border);
+}
+
+.owner-sidebar.collapsed {
+  width: var(--sidebar-collapsed-width);
+}
+
+/* Override active sidebar indicator to salo-gold for owner module */
+.owner-sidebar .sidebar-item.active {
+  background: var(--fiesta-gold-subtle, #FEF3C7);
+  color: var(--fiesta-gold, #F59E0B);
+}
+
+.owner-sidebar .sidebar-item.active .sidebar-item-icon {
+  color: var(--fiesta-gold, #F59E0B);
+}
+
+.owner-main {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left var(--transition-normal);
+}
+
+.owner-main.sidebar-collapsed {
+  margin-left: var(--sidebar-collapsed-width);
+}
+
+.owner-content {
+  flex: 1;
+  padding: var(--space-8);
+  max-width: var(--content-max-width);
+  width: 100%;
+  margin: 0 auto;
+}
+
+@media (max-width: 1024px) {
+  .owner-sidebar {
+    transform: translateX(-100%);
+    width: var(--sidebar-width) !important;
+    z-index: var(--z-overlay);
+  }
+  .owner-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  .owner-main {
+    margin-left: 0 !important;
+  }
+  .owner-content {
+    padding: var(--space-6) var(--space-4);
+  }
+}

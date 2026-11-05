@@ -22,6 +22,9 @@ export default function LoginPage() {
   const getDestination = (resUser) => {
     if (location.state?.from?.pathname) return location.state.from.pathname;
     if (resUser?.role === 'customer') return '/customer';
+    if (resUser?.role === 'owner') return '/owner';
+    if (resUser?.role === 'rider') return '/rider';
+    if (resUser?.role === 'admin') return '/admin';
     return '/';
   };
 
