@@ -1,0 +1,79 @@
+/* ============================================================
+   SALO — Administrator Layout Styles
+   Authoritative, high-density, professional; uses --salo-brown accent
+   ============================================================ */
+
+.admin-shell {
+  display: flex;
+  min-height: 100dvh;
+  background: var(--bg-primary);
+}
+
+.admin-sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: var(--z-sticky);
+  transition: width var(--transition-normal);
+  background: var(--nav-bg);
+  border-right: 1px solid var(--nav-border);
+}
+
+.admin-sidebar.collapsed {
+  width: var(--sidebar-collapsed-width);
+}
+
+/* Admin active sidebar indicator uses earthy brown (--salo-brown) */
+.admin-sidebar .sidebar-item.active {
+  background: var(--fiesta-brown-subtle, #EFEBE9);
+  color: var(--salo-brown, #5D4037);
+}
+
+.admin-sidebar .sidebar-item.active .sidebar-item-icon {
+  color: var(--salo-brown, #5D4037);
+}
+
+.admin-main {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left var(--transition-normal);
+}
+
+.admin-main.sidebar-collapsed {
+  margin-left: var(--sidebar-collapsed-width);
+}
+
+.admin-content {
+  flex: 1;
+  padding: var(--space-8);
+  max-width: var(--content-max-width);
+  width: 100%;
+  margin: 0 auto;
+}
+
+@media (max-width: 1024px) {
+  .admin-sidebar {
+    transform: translateX(-100%);
+    width: var(--sidebar-width) !important;
+  }
+
+  .admin-sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-xl);
+  }
+
+  .admin-main,
+  .admin-main.sidebar-collapsed {
+    margin-left: 0;
+  }
+
+  .admin-content {
+    padding: var(--space-4);
+  }
+}
