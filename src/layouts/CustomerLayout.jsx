@@ -101,6 +101,7 @@ export default function CustomerLayout({ children }) {
 
       {/* ── Main Area ──────────────────────────────────── */}
       <div className={`customer-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
+        <div className="fiesta-banderitas-strip" aria-hidden="true" />
         <TopBar
           userName={user?.name || 'Customer'}
           userInitials={userInitials}
