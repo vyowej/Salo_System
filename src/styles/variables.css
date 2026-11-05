@@ -1,23 +1,51 @@
 /* ============================================================
    SALO — Design Tokens
-   All components must consume these tokens.
-   Do not introduce arbitrary values.
+   Official Filipino Fiesta-Inspired Brand Identity
+   Colors: Warm Fiesta Orange, Golden Yellow, Earthy Brown, Muted Green
    ============================================================ */
 
 :root {
-  /* ── Brand ───────────────────────────────────────────── */
-  --salo-primary:        #F36B2B;
-  --salo-primary-hover:  #E75B20;
-  --salo-primary-active: #D94F19;
-  --salo-primary-light:  #FFF0E8;
-  --salo-secondary-orange: #FF8A45;
+  /* ── Official SALO Logo & Fiesta Palette ─────────────── */
+  /* 1. Fiesta Orange (Primary Brand Action & Energy) */
+  --salo-orange:           #F36B2B;
+  --salo-orange-hover:     #E75B20;
+  --salo-orange-active:    #D94F19;
+  --salo-orange-light:     #FFF0E8;
+  --salo-orange-secondary: #FF8A45;
 
-  --salo-white: #FFFFFF;
-  --salo-black: #171717;
+  /* Aliased primary */
+  --salo-primary:          var(--salo-orange);
+  --salo-primary-hover:    var(--salo-orange-hover);
+  --salo-primary-active:   var(--salo-orange-active);
+  --salo-primary-light:    var(--salo-orange-light);
+  --salo-secondary-orange: var(--salo-orange-secondary);
 
-  --salo-success: #269B62;
-  --salo-warning: #E6A23C;
-  --salo-error:   #DC4545;
+  /* 2. Fiesta Golden Yellow (Sun, Warmth, Celebrations) */
+  --salo-gold:             #F59E0B;
+  --salo-gold-hover:       #D97706;
+  --salo-gold-light:       #FEF3C7;
+  --salo-gold-dark:        #B45309;
+
+  /* 3. Earthy Brown (Palayok, Clay Pot, Traditional Comfort) */
+  --salo-brown:            #5D4037;
+  --salo-brown-hover:      #4E342E;
+  --salo-brown-light:      #EFEBE9;
+  --salo-brown-dark:       #3E2723;
+
+  /* 4. Muted Green (Dahon ng Saging, Freshness, Hospitality) */
+  --salo-green:            #2E7D32;
+  --salo-green-hover:      #1B5E20;
+  --salo-green-light:      #E8F5E9;
+  --salo-green-dark:       #1B5E20;
+
+  /* Neutral extremes */
+  --salo-white:            #FFFFFF;
+  --salo-black:            #171717;
+
+  /* Status Colors */
+  --salo-success:          #269B62;
+  --salo-warning:          #E6A23C;
+  --salo-error:            #DC4545;
 
   /* ── Typography ─────────────────────────────────────── */
   --font-family:
@@ -43,9 +71,9 @@
   --font-weight-semibold: 600;
   --font-weight-bold:     700;
 
-  --line-height-tight:  1.2;
-  --line-height-normal: 1.5;
-  --line-height-relaxed: 1.65;
+  --line-height-tight:    1.2;
+  --line-height-normal:   1.5;
+  --line-height-relaxed:  1.65;
 
   /* ── Spacing scale ──────────────────────────────────── */
   --space-1:  4px;
@@ -70,10 +98,10 @@
   --radius-full: 9999px;
 
   /* ── Layout ─────────────────────────────────────────── */
-  --topbar-height:          72px;
-  --sidebar-width:          250px;
+  --topbar-height:           72px;
+  --sidebar-width:           250px;
   --sidebar-collapsed-width: 76px;
-  --content-max-width:      1280px;
+  --content-max-width:       1280px;
 
   /* ── Transitions ────────────────────────────────────── */
   --transition-fast:   150ms ease;
