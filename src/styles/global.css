@@ -1,5 +1,6 @@
 /* ============================================================
    SALO — Global Styles
+   Enhanced with Modern Filipino Fiesta-Inspired Accents
    ============================================================ */
 
 body {
@@ -39,6 +40,84 @@ body {
   transition: color var(--transition-fast);
 }
 .link:hover { color: var(--accent-hover); }
+
+/* ── Filipino Fiesta Decorative Elements ─────────────── */
+/* Subtle repeating 4-color banderitas accent strip */
+.fiesta-banderitas-strip {
+  height: 4px;
+  width: 100%;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--fiesta-orange, #F36B2B) 0px,
+    var(--fiesta-orange, #F36B2B) 24px,
+    var(--fiesta-gold, #F59E0B) 24px,
+    var(--fiesta-gold, #F59E0B) 48px,
+    var(--fiesta-green, #2E7D32) 48px,
+    var(--fiesta-green, #2E7D32) 72px,
+    var(--fiesta-brown, #5D4037) 72px,
+    var(--fiesta-brown, #5D4037) 96px
+  );
+  opacity: 0.9;
+}
+
+/* Tasteful pennant / scalloped border top for banners & cards */
+.fiesta-accent-border {
+  border-top: 3px solid var(--accent);
+  position: relative;
+}
+
+.fiesta-accent-border::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--fiesta-orange) 0%,
+    var(--fiesta-gold) 35%,
+    var(--fiesta-green) 70%,
+    var(--fiesta-brown) 100%
+  );
+  border-radius: var(--radius-full) var(--radius-full) 0 0;
+}
+
+/* Fiesta Pill / Cultural Tag */
+.fiesta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.03em;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: 1px solid rgba(243, 107, 43, 0.2);
+}
+
+.fiesta-pill-gold {
+  background: var(--fiesta-gold-subtle);
+  color: var(--fiesta-gold-text);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.fiesta-pill-green {
+  background: var(--fiesta-green-subtle);
+  color: var(--fiesta-green-text);
+  border: 1px solid rgba(46, 125, 50, 0.25);
+}
+
+/* Warm Taglish Microcopy Typography Styling */
+.taglish-hero-greeting {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
 
 /* ── Utility: spacing ────────────────────────────────── */
 .mt-1  { margin-top: var(--space-1); }
