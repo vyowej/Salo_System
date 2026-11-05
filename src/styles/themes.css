@@ -1,0 +1,138 @@
+/* ============================================================
+   SALO — Theme Definitions
+   Applied to <html data-theme="light|dark">
+   ============================================================ */
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Backgrounds */
+  --bg-primary:   #FFFFFF;
+  --bg-secondary: #F7F7F7;
+  --bg-tertiary:  #F1F1F1;
+
+  /* Surfaces */
+  --surface-primary:   #FFFFFF;
+  --surface-secondary: #F7F7F7;
+  --surface-hover:     #F2F2F2;
+
+  /* Text */
+  --text-primary:   #171717;
+  --text-secondary: #737373;
+  --text-muted:     #999999;
+  --text-inverse:   #FFFFFF;
+
+  /* Borders */
+  --border-primary:   #EAEAEA;
+  --border-secondary: #F0F0F0;
+  --border-focus:     #F36B2B;
+
+  /* Accent */
+  --accent:        #F36B2B;
+  --accent-hover:  #E75B20;
+  --accent-active: #D94F19;
+  --accent-subtle: #FFF0E8;
+  --accent-text:   #FFFFFF;
+
+  /* Status */
+  --status-success-bg:   #ECFDF5;
+  --status-success-text: #269B62;
+  --status-warning-bg:   #FFFBEB;
+  --status-warning-text: #B45309;
+  --status-error-bg:     #FEF2F2;
+  --status-error-text:   #DC4545;
+  --status-info-bg:      #EFF6FF;
+  --status-info-text:    #2563EB;
+
+  /* Shadows */
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm:  0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.07);
+  --shadow-lg:  0 8px 30px rgba(0, 0, 0, 0.09);
+  --shadow-xl:  0 16px 50px rgba(0, 0, 0, 0.11);
+
+  /* Overlays */
+  --overlay-bg: rgba(0, 0, 0, 0.45);
+
+  /* Input */
+  --input-bg:       #FFFFFF;
+  --input-border:   #DCDCDC;
+  --input-border-focus: #F36B2B;
+  --input-text:     #171717;
+  --input-placeholder: #AAAAAA;
+
+  /* Navigation */
+  --nav-bg:         #FFFFFF;
+  --nav-border:     #EAEAEA;
+  --nav-item-hover: #F7F7F7;
+  --nav-item-active-bg:   #FFF0E8;
+  --nav-item-active-text: #F36B2B;
+  --nav-item-active-icon: #F36B2B;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Backgrounds */
+  --bg-primary:   #171717;
+  --bg-secondary: #202020;
+  --bg-tertiary:  #252525;
+
+  /* Surfaces */
+  --surface-primary:   #202020;
+  --surface-secondary: #252525;
+  --surface-hover:     #303030;
+
+  /* Text */
+  --text-primary:   #FFFFFF;
+  --text-secondary: #B5B5B5;
+  --text-muted:     #858585;
+  --text-inverse:   #171717;
+
+  /* Borders */
+  --border-primary:   #383838;
+  --border-secondary: #303030;
+  --border-focus:     #FF8045;
+
+  /* Accent */
+  --accent:        #FF8045;
+  --accent-hover:  #FF965F;
+  --accent-active: #F36B2B;
+  --accent-subtle: #3A241A;
+  --accent-text:   #FFFFFF;
+
+  /* Status */
+  --status-success-bg:   #052E1A;
+  --status-success-text: #4ADE80;
+  --status-warning-bg:   #2D1D00;
+  --status-warning-text: #FCD34D;
+  --status-error-bg:     #2D0808;
+  --status-error-text:   #FCA5A5;
+  --status-info-bg:      #0D1B40;
+  --status-info-text:    #93C5FD;
+
+  /* Shadows */
+  --shadow-xs:  0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md:  0 4px 18px rgba(0, 0, 0, 0.4);
+  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-xl:  0 16px 54px rgba(0, 0, 0, 0.55);
+
+  /* Overlays */
+  --overlay-bg: rgba(0, 0, 0, 0.65);
+
+  /* Input */
+  --input-bg:            #252525;
+  --input-border:        #404040;
+  --input-border-focus:  #FF8045;
+  --input-text:          #FFFFFF;
+  --input-placeholder:   #666666;
+
+  /* Navigation */
+  --nav-bg:         #202020;
+  --nav-border:     #303030;
+  --nav-item-hover: #2A2A2A;
+  --nav-item-active-bg:   #3A241A;
+  --nav-item-active-text: #FF8045;
+  --nav-item-active-icon: #FF8045;
+}

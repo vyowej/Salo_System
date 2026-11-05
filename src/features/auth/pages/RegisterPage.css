@@ -1,0 +1,80 @@
+/* ============================================================
+   SALO — Register Page Styles
+   ============================================================ */
+
+.role-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border-primary);
+  background: var(--surface-primary);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
+  gap: var(--space-1);
+}
+
+.role-card:hover {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+}
+
+.role-card.selected {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
+.role-icon {
+  font-size: 20px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.role-name {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.role-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.password-requirements {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: calc(-1 * var(--space-2));
+  line-height: 1.4;
+}
+
+@media (max-width: 480px) {
+  .role-selector {
+    grid-template-columns: 1fr;
+  }
+  .role-card {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: var(--space-3);
+    gap: var(--space-3);
+  }
+  .role-desc {
+    display: none;
+  }
+}

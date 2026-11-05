@@ -1,0 +1,113 @@
+/* ============================================================
+   SALO — Responsive Breakpoints
+   Mobile-first approach.
+   ============================================================ */
+
+/* ── Mobile: up to 575px (default base styles) ───────── */
+
+/* ── Large mobile / small tablet ────────────────────── */
+@media (min-width: 576px) {
+  .container {
+    padding: 0 var(--space-8);
+  }
+}
+
+/* ── Tablet: 768px – 1023px ──────────────────────────── */
+@media (min-width: 768px) {
+  .grid-cols-2  { grid-template-columns: repeat(2, 1fr); }
+  .grid-cols-3  { grid-template-columns: repeat(2, 1fr); }
+  .grid-cols-4  { grid-template-columns: repeat(2, 1fr); }
+  .stat-grid    { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Desktop: 1024px+ ────────────────────────────────── */
+@media (min-width: 1024px) {
+  .grid-cols-3  { grid-template-columns: repeat(3, 1fr); }
+  .grid-cols-4  { grid-template-columns: repeat(4, 1fr); }
+  .stat-grid    { grid-template-columns: repeat(4, 1fr); }
+
+  .layout-with-aside {
+    grid-template-columns: 1fr 320px;
+  }
+}
+
+/* ── Large desktop: 1440px+ ──────────────────────────── */
+@media (min-width: 1440px) {
+  .container {
+    padding: 0 var(--space-10);
+  }
+  .dashboard-content {
+    padding: var(--space-10) var(--space-8);
+  }
+}
+
+/* ── Responsive sidebar behavior ─────────────────────── */
+@media (max-width: 1023px) {
+  .dashboard-sidebar {
+    transform: translateX(-100%);
+    transition:
+      transform var(--transition-normal),
+      width var(--transition-normal);
+    z-index: var(--z-overlay);
+    width: var(--sidebar-width) !important;
+  }
+
+  .dashboard-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .dashboard-main {
+    margin-left: 0 !important;
+  }
+
+  .layout-with-aside {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Responsive grid collapse ────────────────────────── */
+@media (max-width: 767px) {
+  .grid-cols-2,
+  .grid-cols-3,
+  .grid-cols-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .page-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dashboard-content {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .auth-panel {
+    padding: var(--space-8) var(--space-6);
+  }
+}
+
+@media (max-width: 479px) {
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-topbar {
+    padding: 0 var(--space-4);
+  }
+}
+
+/* ── Print ───────────────────────────────────────────── */
+@media print {
+  .dashboard-sidebar,
+  .dashboard-topbar {
+    display: none;
+  }
+  .dashboard-main {
+    margin-left: 0;
+  }
+}

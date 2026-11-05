@@ -1,0 +1,168 @@
+/* ============================================================
+   SALO — Button Component
+   ============================================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-5);
+  height: 40px;
+  min-width: 80px;
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  border-radius: var(--radius-md);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  text-decoration: none;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast),
+    opacity var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── Sizes ───────────────────────────────────────────── */
+.btn-sm {
+  height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-xs);
+  border-radius: var(--radius-sm);
+  min-width: 60px;
+}
+
+.btn-lg {
+  height: 48px;
+  padding: 0 var(--space-8);
+  font-size: var(--font-size-md);
+  border-radius: var(--radius-lg);
+}
+
+.btn-xl {
+  height: 56px;
+  padding: 0 var(--space-10);
+  font-size: var(--font-size-lg);
+  border-radius: var(--radius-lg);
+}
+
+/* ── Full width ──────────────────────────────────────── */
+.btn-full { width: 100%; }
+
+/* ── Icon only ───────────────────────────────────────── */
+.btn-icon {
+  width: 40px;
+  min-width: unset;
+  padding: 0;
+}
+.btn-icon.btn-sm { width: 32px; }
+.btn-icon.btn-lg { width: 48px; }
+
+/* ── Primary (orange) ────────────────────────────────── */
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.btn-primary:active:not(:disabled) {
+  background: var(--accent-active);
+  border-color: var(--accent-active);
+}
+
+/* ── Secondary ───────────────────────────────────────── */
+.btn-secondary {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-primary);
+}
+
+/* ── Outline ─────────────────────────────────────────── */
+.btn-outline {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.btn-outline:hover:not(:disabled) {
+  background: var(--accent-subtle);
+}
+
+/* ── Ghost ───────────────────────────────────────────── */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: transparent;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+/* ── Danger ──────────────────────────────────────────── */
+.btn-danger {
+  background: var(--salo-error);
+  color: #fff;
+  border-color: var(--salo-error);
+}
+.btn-danger:hover:not(:disabled) {
+  background: #c73c3c;
+  border-color: #c73c3c;
+}
+
+/* ── Danger Outline ──────────────────────────────────── */
+.btn-danger-outline {
+  background: transparent;
+  color: var(--salo-error);
+  border-color: var(--salo-error);
+}
+.btn-danger-outline:hover:not(:disabled) {
+  background: var(--status-error-bg);
+}
+
+/* ── Loading state ───────────────────────────────────── */
+.btn-loading {
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+/* ── Button group ────────────────────────────────────── */
+.btn-group {
+  display: inline-flex;
+  gap: 0;
+}
+.btn-group .btn { border-radius: 0; }
+.btn-group .btn:first-child { border-radius: var(--radius-md) 0 0 var(--radius-md); }
+.btn-group .btn:last-child  { border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+.btn-group .btn + .btn { border-left: none; }
