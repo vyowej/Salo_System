@@ -49,27 +49,36 @@ export default function CustomerDashboard() {
     return matchesSearch && matchesCat;
   });
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    const name = user?.name ? user.name.split(' ')[0] : 'Kasamahan';
+    if (hour < 12) return `Magandang umaga, ${name}! Kain tayo! ☀️`;
+    if (hour < 18) return `Magandang hapon, ${name}! Gutom ka na ba? 🍲`;
+    return `Magandang gabi, ${name}! Tara, kain tayo! 🌙`;
+  };
+
   return (
     <CustomerLayout>
-      {/* ── Welcome Greeting (Open layout with strong hierarchy) ── */}
+      {/* ── Welcome Greeting with Filipino Fiesta Warmth ── */}
       <div style={{ marginBottom: 'var(--space-8)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
           <div>
-            <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              Customer Portal
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
+              <span className="fiesta-pill">🇵🇭 Maligayang Pagdating</span>
+              <span className="fiesta-pill fiesta-pill-gold">Salo-Salo Fiesta</span>
+            </div>
             <h1 className="page-title" style={{ fontSize: 'var(--font-size-3xl)', marginTop: 'var(--space-1)' }}>
-              Mabuhay, {user?.name ? user.name.split(' ')[0] : 'Kasamahan'}! 👋
+              {getGreeting()}
             </h1>
             <p className="page-subtitle">
-              Ready to order from multiple restaurants or reserve an authentic dining table?
+              Ano&apos;ng cravings mo today? Mag-order mula sa iba&apos;t ibang kusina sa iisang checkout o magpareserba ng mesa.
             </p>
           </div>
 
           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
             <Link to="/customer/cart" style={{ textDecoration: 'none' }}>
               <Button variant="primary" size="md">
-                View Multi-Cart
+                Tingnan ang Multi-Cart
               </Button>
             </Link>
           </div>
@@ -164,7 +173,7 @@ export default function CustomerDashboard() {
           </svg>
           <input
             type="text"
-            placeholder="Search restaurants, inasal, pizza, silog, sisig..."
+            placeholder="Ano'ng cravings mo today? Hanapin ang inasal, silog, lechon, pizza..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{
@@ -216,10 +225,10 @@ export default function CustomerDashboard() {
       <div style={{ marginBottom: 'var(--space-12)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
           <h2 className="section-title">
-            Featured Participating Kitchens ({filteredRestaurants.length})
+            🍲 Mga Tampok na Kainan at Kusina ({filteredRestaurants.length})
           </h2>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-            Order food or reserve tables in advance
+            Order na o magpareserba ng mesa nang maaga
           </span>
         </div>
 
