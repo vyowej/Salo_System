@@ -80,13 +80,14 @@ export default function WelcomeModal({ open, onClose }) {
           fontSize: 24,
           margin: '0 auto var(--space-3)',
         }}>
-          ✨
+          🍲
         </div>
+        <span className="fiesta-pill fiesta-pill-gold" style={{ marginBottom: 6 }}>Tuloy po kayo!</span>
         <h2 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 'var(--space-1)' }}>
-          Hi, {user?.name || 'there'}!
+          Kain tayo, {user?.name || 'Kasamahan'}!
         </h2>
         <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)' }}>
-          Welcome to SALO. Where good food brings us together.
+          Maligayang pagdating sa SALO. Where good food brings us together.
         </p>
       </div>
 
