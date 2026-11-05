@@ -29,6 +29,9 @@ export default function PublicLayout({ children }) {
 
   return (
     <div className="app-shell">
+      {/* Subtle Filipino Fiesta Banderitas Accent Strip */}
+      <div className="fiesta-banderitas-strip" aria-hidden="true" />
+
       {/* ── Public Navbar ─────────────────────────────────── */}
       <header className="public-navbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
