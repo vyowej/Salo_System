@@ -51,34 +51,35 @@ export default function CustomerDashboard() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    const name = user?.name ? user.name.split(' ')[0] : 'Kasamahan';
-    if (hour < 12) return `Magandang umaga, ${name}! Kain tayo! ☀️`;
-    if (hour < 18) return `Magandang hapon, ${name}! Gutom ka na ba? 🍲`;
-    return `Magandang gabi, ${name}! Tara, kain tayo! 🌙`;
+    const name = user?.name ? user.name.split(' ')[0] : '';
+    const nameSuffix = name ? `, ${name}` : '';
+    if (hour < 12) return `Good morning${nameSuffix}! Ready to find something delicious?`;
+    if (hour < 18) return `Good afternoon${nameSuffix}! Ready for a hearty meal?`;
+    return `Good evening${nameSuffix}! Ready for dinner?`;
   };
 
   return (
     <CustomerLayout>
-      {/* ── Welcome Greeting with Filipino Fiesta Warmth ── */}
+      {/* ── Welcome Greeting ── */}
       <div style={{ marginBottom: 'var(--space-8)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
-              <span className="fiesta-pill">🇵🇭 Maligayang Pagdating</span>
-              <span className="fiesta-pill fiesta-pill-gold">Salo-Salo Fiesta</span>
+              <span className="fiesta-pill">Kain tayo!</span>
+              <span className="fiesta-pill fiesta-pill-gold">Order. Reserve. Gather.</span>
             </div>
             <h1 className="page-title" style={{ fontSize: 'var(--font-size-3xl)', marginTop: 'var(--space-1)' }}>
               {getGreeting()}
             </h1>
             <p className="page-subtitle">
-              Ano&apos;ng cravings mo today? Mag-order mula sa iba&apos;t ibang kusina sa iisang checkout o magpareserba ng mesa.
+              Discover restaurants and enjoy good food with the people you love. Order from multiple kitchens or book a table.
             </p>
           </div>
 
           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
             <Link to="/customer/cart" style={{ textDecoration: 'none' }}>
               <Button variant="primary" size="md">
-                Tingnan ang Multi-Cart
+                View Multi-Cart
               </Button>
             </Link>
           </div>
@@ -173,7 +174,7 @@ export default function CustomerDashboard() {
           </svg>
           <input
             type="text"
-            placeholder="Ano'ng cravings mo today? Hanapin ang inasal, silog, lechon, pizza..."
+            placeholder="Search restaurants, dishes, or cuisines..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{
@@ -223,12 +224,17 @@ export default function CustomerDashboard() {
 
       {/* ── Restaurant Listings Grid ───────────────────────── */}
       <div style={{ marginBottom: 'var(--space-12)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-          <h2 className="section-title">
-            🍲 Mga Tampok na Kainan at Kusina ({filteredRestaurants.length})
-          </h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+          <div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 2 }}>
+              Gutom ka na ba?
+            </span>
+            <h2 className="section-title" style={{ margin: 0 }}>
+              Explore Restaurants ({filteredRestaurants.length})
+            </h2>
+          </div>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-            Order na o magpareserba ng mesa nang maaga
+            Order delivery or book a table in advance
           </span>
         </div>
 
@@ -348,7 +354,7 @@ export default function CustomerDashboard() {
                         navigate(`/customer/restaurants/${rest.id}?tab=reserve`);
                       }}
                     >
-                      Book Table
+                      Book a Table
                     </Button>
                   </div>
                 </div>

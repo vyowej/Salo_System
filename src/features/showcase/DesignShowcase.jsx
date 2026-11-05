@@ -255,12 +255,12 @@ export default function DesignShowcase() {
               </div>
             </section>
 
-            {/* Natural Filipino / Taglish Microcopy Guidelines */}
+            {/* Brand Voice & Language Standards */}
             <section className="showcase-section">
               <div className="showcase-section-header">
-                <h2 className="showcase-section-title">Natural Filipino / Taglish Microcopy Standards</h2>
+                <h2 className="showcase-section-title">Brand Voice & Language Standards</h2>
                 <p className="showcase-section-desc">
-                  Voice & tone: Warm, welcoming, festive, comforting, and homey. Avoid stiff corporate English or overly theatrical Tagalog.
+                  SALO is a primarily <strong>English</strong> interface. Filipino phrases appear selectively as warm brand expressions — in hero headlines, greetings, and festive badges — never in functional UI labels, buttons, forms, or error messages.
                 </p>
               </div>
 
@@ -268,25 +268,36 @@ export default function DesignShowcase() {
                 <CardBody>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
                     <div style={{ padding: 'var(--space-3)', background: 'var(--surface-secondary)', borderRadius: 'var(--radius-md)' }}>
-                      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', marginBottom: 4 }}>Time-Aware Greetings</p>
-                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Magandang umaga, {`{name}`}! Kain tayo!&rdquo;</p>
-                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Magandang hapon! Gutom ka na ba?&rdquo;</p>
-                      <p style={{ fontWeight: 600, fontSize: 13 }}>&ldquo;Magandang gabi! Tara, kain tayo!&rdquo;</p>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', marginBottom: 4 }}>✅ Filipino Brand Expressions</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Kain tayo!&rdquo; — hero headline</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Gutom ka na ba?&rdquo; — section accent</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Tuloy po kayo!&rdquo; — welcome badge</p>
+                      <p style={{ fontWeight: 600, fontSize: 13 }}>&ldquo;Magandang umaga!&rdquo; — owner greeting</p>
                     </div>
 
                     <div style={{ padding: 'var(--space-3)', background: 'var(--surface-secondary)', borderRadius: 'var(--radius-md)' }}>
-                      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--fiesta-gold-text)', textTransform: 'uppercase', marginBottom: 4 }}>Search & Discovery</p>
-                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Ano&apos;ng cravings mo today?&rdquo;</p>
-                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Hanapin ang paborito mong kainan...&rdquo;</p>
-                      <p style={{ fontWeight: 600, fontSize: 13 }}>&ldquo;Paborito sa Handaan & Salo-salo&rdquo;</p>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--salo-green)', textTransform: 'uppercase', marginBottom: 4 }}>✅ English UI (Always)</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Add to Cart&rdquo; — button label</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Proceed to Checkout&rdquo; — CTA</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Order confirmed!&rdquo; — notification</p>
+                      <p style={{ fontWeight: 600, fontSize: 13 }}>&ldquo;Book a Table&rdquo; — reservation</p>
                     </div>
 
                     <div style={{ padding: 'var(--space-3)', background: 'var(--surface-secondary)', borderRadius: 'var(--radius-md)' }}>
-                      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--fiesta-green-text)', textTransform: 'uppercase', marginBottom: 4 }}>Action CTAs</p>
-                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Order na!&rdquo; / &ldquo;Tara, Order Na!&rdquo;</p>
-                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Magpareserba ng Mesa&rdquo;</p>
-                      <p style={{ fontWeight: 600, fontSize: 13 }}>&ldquo;Tingnan ang Multi-Cart&rdquo;</p>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: '#DC4545', textTransform: 'uppercase', marginBottom: 4 }}>❌ Never Do This</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Mag-sign in dito&rdquo; — nav link</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Hanapin Na!&rdquo; — search button</p>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>&ldquo;Tingnan ang Multi-Cart&rdquo; — CTA</p>
+                      <p style={{ fontWeight: 600, fontSize: 13 }}>&ldquo;Magpareserba ng Mesa&rdquo; — button</p>
                     </div>
+                  </div>
+
+                  <div style={{ marginTop: 'var(--space-5)', padding: 'var(--space-4)', background: 'var(--accent-subtle)', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--accent)' }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>Rule: Filipino as brand personality, English as the interface language.</p>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                      A Filipino phrase headlines the hero. An English button takes the user forward.
+                      SALO&apos;s warmth comes through visual design and select expressions — not through translating the entire interface.
+                    </p>
                   </div>
                 </CardBody>
               </Card>

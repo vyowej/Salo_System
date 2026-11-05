@@ -84,10 +84,10 @@ export default function WelcomeModal({ open, onClose }) {
         </div>
         <span className="fiesta-pill fiesta-pill-gold" style={{ marginBottom: 6 }}>Tuloy po kayo!</span>
         <h2 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 'var(--space-1)' }}>
-          Kain tayo, {user?.name || 'Kasamahan'}!
+          Welcome to SALO{user?.name ? `, ${user.name.split(' ')[0]}` : ''}!
         </h2>
         <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)' }}>
-          Maligayang pagdating sa SALO. Where good food brings us together.
+          Your table is set. Good food and great gatherings start here.
         </p>
       </div>
 

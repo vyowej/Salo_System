@@ -57,29 +57,54 @@ In Philippine dining, a feast (*salo-salo*) is expansive and shared. Layouts mus
 
 ---
 
-## 3. Natural Filipino / Taglish Microcopy Guidelines
+## 3. Language & Brand Voice Policy
 
-SALO uses natural, warm, and comforting Taglish that feels like home (*parang nasa sariling hapag-kainan*):
+> **SALO's interface language is English.** Filipino/Taglish phrases are used selectively as brand expressions only.
 
-### Time-Aware Greetings
-- Morning (< 12:00 PM):
-  > *"Magandang umaga, {name}! Kain tayo!"*
-- Afternoon (12:00 PM – 6:00 PM):
-  > *"Magandang hapon, {name}! Gutom ka na ba?"*
-- Evening (6:00 PM onwards):
-  > *"Magandang gabi, {name}! Tara, kain tayo!"*
+### Primary Language: English
 
-### Search & Discovery Prompts
-- *"Ano'ng cravings mo today? Hanapin ang inasal, silog, sisig, pizza..."*
-- *"Salo-salo favorites"*
-- *"Paborito sa Handaan"*
-- *"Pampagana at Panghimagas"*
+All functional UI must be in English:
+- Navigation menus and labels
+- Buttons and CTAs
+- Form labels and placeholders
+- Validation and error messages
+- Order / reservation status text
+- Dashboard labels, tables, and analytics
+- Settings, notifications, admin tools
 
-### Action Buttons & CTAs
-- "Order Na!" / "Tara, Order Na!"
-- "Magpareserba ng Mesa"
-- "Tingnan ang Multi-Cart"
-- "Tuloy po kayo!"
+### Filipino as Brand Expression (Selected Locations Only)
+
+Use Filipino phrases naturally in:
+- **Landing page hero headline** — `"Kain tayo!"`
+- **Festive section accents** — `"Gutom ka na ba?"`
+- **Welcome / greeting badges** — `"Tuloy po kayo!"`, `"Kain tayo!"`
+- **Business-owner greetings** — `"Magandang umaga! Here's your business overview."`
+- **Rider dashboard greeting** — `"Ready for today's deliveries?"`
+
+### Correct Reference Examples
+
+| Location | Correct Wording |
+|---|---|
+| Landing page headline | `Kain tayo!` |
+| Landing page description | Discover restaurants and enjoy good food with the people you love. |
+| Customer greeting | Good morning! Ready to find something delicious? |
+| Food discovery section badge | `Gutom ka na ba?` |
+| Search placeholder | Search restaurants, dishes, or cuisines... |
+| Restaurant section heading | Explore Restaurants |
+| Add to cart | Add to Cart |
+| Checkout | Proceed to Checkout |
+| Order confirmation | Your order has been confirmed! |
+| Reservation | Book a Table |
+| Owner greeting | Magandang umaga! Here's your business overview. |
+| Rider dashboard | Ready for today's deliveries? |
+| Welcome modal badge | `Tuloy po kayo!` |
+| Welcome modal heading | Welcome to SALO! |
+
+### Strict Rules
+- ❌ Do not use Filipino for buttons, form labels, or error messages
+- ❌ Do not translate standard English UI vocabulary
+- ❌ Do not use Filipino phrases in every section — select, strategic use only
+- ✅ Filipino phrases enhance brand personality — they do not replace English usability
 
 ---
 
@@ -87,10 +112,10 @@ SALO uses natural, warm, and comforting Taglish that feels like home (*parang na
 
 When implementing Phase 4 (Restaurant Owner), Phase 5 (Rider), and Phase 6 (Admin):
 1. **Restaurant Owner Module (Phase 4):**
-   - Headings: *"Kusina & Restaurant Management"*, *"Mga Papasok na Order"*, *"Pamamahala ng Mesa"*.
+   - Interface: English throughout. Optional brand greeting: *"Magandang umaga! Here's your business overview."*
    - Use earthy brown & gold accents for kitchen readiness and menu management.
 2. **Delivery Rider Module (Phase 5):**
-   - Headings: *"Aktibong Hatid"*, *"Biyahe & Shift"*, *"Kita & Remittance"*.
+   - Interface: English throughout. Optional brand tagline: *"Kain tayo — let's get it there!"*
    - Use muted green & orange for active dispatch, safety, and delivery progress.
 3. **Admin Module (Phase 6):**
-   - Clean, trustworthy, efficient, yet carrying the subtle banderitas header and SALO identity.
+   - Clean, trustworthy, efficient, English-only. Subtle banderitas header strip and SALO branding preserved.

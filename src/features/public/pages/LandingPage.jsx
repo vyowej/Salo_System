@@ -90,16 +90,16 @@ export default function LandingPage() {
           <div>
             <div className="hero-eyebrow">
               <span>🎉</span>
-              <span>Tara, kain tayo! · Order. Reserve. Gather.</span>
+              <span>Order. Reserve. Gather.</span>
             </div>
 
             <h1 className="hero-title">
-              Salo-salo sa sarap. <br />
+              Kain tayo! <br />
               <span className="highlight">Order. Reserve. Gather.</span>
             </h1>
 
             <p className="hero-lead">
-              Gutom ka na ba? Enjoy your favorite meals together. Order from multiple kitchens in a single checkout,
+              Discover restaurants and enjoy good food with the people you love. Order from multiple kitchens in a single checkout,
               send dishes to different addresses, or reserve authentic dining tables with live confirmation.
             </p>
 
@@ -121,14 +121,14 @@ export default function LandingPage() {
               <input
                 type="text"
                 className="hero-search-input"
-                placeholder="Ano'ng cravings mo today? Inasal, sisig, pizza..."
+                placeholder="Search restaurants, dishes, or cuisines..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 aria-label="Search restaurants or dishes"
               />
               <Link to="/register" style={{ textDecoration: 'none' }}>
                 <Button variant="primary" size="md">
-                  Hanapin Na!
+                  Find Food
                 </Button>
               </Link>
             </div>
@@ -141,7 +141,7 @@ export default function LandingPage() {
                 <span>🪑</span> Table Reservations
               </span>
               <span className="fiesta-pill fiesta-pill-green">
-                <span>🛵</span> Hatid sa Iba&apos;t Ibang Address
+                <span>🛵</span> Multi-Destination Delivery
               </span>
             </div>
           </div>
@@ -213,36 +213,36 @@ export default function LandingPage() {
       <section id="features" className="landing-section">
         <div className="landing-container">
           <div className="section-header-centered">
-            <span className="section-badge" style={{ color: 'var(--accent)' }}>Kulturang Salo-Salo</span>
-            <h2 className="section-heading">Kainang Pinoy: Mas masarap kapag magkakasama</h2>
+            <span className="section-badge" style={{ color: 'var(--accent)' }}>Modern Dining Hospitality</span>
+            <h2 className="section-heading">Food brings people together</h2>
             <p className="section-subtitle">
-              Walang iwanan sa hapag. Hindi na kailangang mag-away kung saan kakain o magpalipat-lipat ng delivery apps.
-              Pinagsama-sama ng SALO ang pagkain, reserbasyon, at delivery.
+              No more settling for one restaurant or coordinating multiple delivery apps.
+              SALO unifies food ordering, table reservations, and multi-location delivery into one seamless experience.
             </p>
           </div>
 
           <div className="features-grid">
             <div className="feature-item">
               <div className="feature-icon-wrapper" style={{ color: 'var(--salo-orange)' }}>🍛</div>
-              <h3 className="feature-title">Isang Checkout, Iba&apos;t Ibang Kusina</h3>
+              <h3 className="feature-title">One Checkout, Multiple Kitchens</h3>
               <p className="feature-desc">
-                Pagsamahin ang inasal, pizza, at pampalamig sa isang consolidated cart. Bawat kusina ay nagluluto nang sarili nang hindi naaantala ang iba.
+                Combine dishes from different restaurants into a single consolidated cart. Each kitchen prepares independently without delay.
               </p>
             </div>
 
             <div className="feature-item">
               <div className="feature-icon-wrapper" style={{ color: 'var(--salo-green)' }}>📍</div>
-              <h3 className="feature-title">Hatid sa Bahay at Opisina</h3>
+              <h3 className="feature-title">Multi-Destination Delivery</h3>
               <p className="feature-desc">
-                Sorpresahin ang pamilya sa bahay habang nagpapadala ng tanghalian sa opisina gamit ang iisang order. Pwede kang magtalaga ng magkaibang delivery addresses.
+                Send a meal home to family while delivering lunch to your office in one single order. Assign custom delivery addresses per restaurant group.
               </p>
             </div>
 
             <div className="feature-item">
               <div className="feature-icon-wrapper" style={{ color: 'var(--salo-gold)' }}>🪑</div>
-              <h3 className="feature-title">Siguradong Upuan: Table Reservations</h3>
+              <h3 className="feature-title">Guaranteed Table Reservations</h3>
               <p className="feature-desc">
-                Magpareserba ng totoong mesa para sa pamilya o barkada. May transparent na dining deposit na bawas agad sa inyong bill pagdating sa restawran.
+                Reserve dining tables for gatherings with real-time confirmation and a transparent dining deposit deducted from your restaurant bill.
               </p>
             </div>
           </div>
@@ -308,8 +308,8 @@ export default function LandingPage() {
         <div className="landing-container">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
             <div>
-              <span className="section-badge">Discover & Gather</span>
-              <h2 className="section-heading" style={{ marginBottom: 0 }}>Featured Dining Spots</h2>
+              <span className="section-badge">Gutom ka na ba?</span>
+              <h2 className="section-heading" style={{ marginBottom: 0 }}>Explore Restaurants</h2>
             </div>
             <Link to="/register" style={{ textDecoration: 'none' }}>
               <Button variant="outline" size="sm">
