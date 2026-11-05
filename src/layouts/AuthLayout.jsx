@@ -15,6 +15,9 @@ export default function AuthLayout({ children, maxWidth = 460 }) {
 
   return (
     <div className="auth-shell">
+      {/* Subtle Filipino Fiesta Banderitas Accent Strip */}
+      <div className="fiesta-banderitas-strip" style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 'var(--z-sticky)' }} aria-hidden="true" />
+
       {/* Top action bar: back to home + theme toggle */}
       <div style={{
         position: 'fixed',
