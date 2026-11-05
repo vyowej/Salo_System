@@ -106,8 +106,9 @@ export default function RegisterPage() {
   return (
     <AuthLayout maxWidth={500}>
       <div className="auth-header">
-        <h1 className="auth-title">Create your account</h1>
-        <p className="auth-subtitle">Join SALO to order, reserve, or partner with us</p>
+        <span className="fiesta-pill" style={{ marginBottom: 8 }}>🎉 Salo-Salo Tayo</span>
+        <h1 className="auth-title">Sumali sa SALO</h1>
+        <p className="auth-subtitle">Gumawa ng account para mag-order, magpareserba, o maging partner</p>
       </div>
 
       {error && (
@@ -254,9 +255,9 @@ export default function RegisterPage() {
       </form>
 
       <div className="auth-footer-prompt">
-        Already have an account?{' '}
+        May account ka na?{' '}
         <Link to="/login" className="auth-link" style={{ fontWeight: 'var(--font-weight-semibold)' }}>
-          Sign in
+          Mag-sign in dito
         </Link>
       </div>
     </AuthLayout>
