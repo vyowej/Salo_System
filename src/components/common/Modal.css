@@ -12,7 +12,7 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-6);
-  animation: fadeIn var(--transition-fast) ease both;
+  animation: fadeIn var(--transition-fast) both;
 }
 
 /* ── Panel ───────────────────────────────────────────── */
@@ -25,7 +25,7 @@
   max-height: 90dvh;
   display: flex;
   flex-direction: column;
-  animation: scaleIn var(--transition-fast) ease both;
+  animation: fadeIn var(--transition-fast) both;
   overflow: hidden;
 }
 
