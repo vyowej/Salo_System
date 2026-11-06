@@ -137,6 +137,21 @@ Frontend requirements:
 - Do not expose private information in public-facing pages.
 - Follow the existing routing and authentication approach.
 
+### Visual consistency and design-system rules
+
+SALO must feel like one product across the public site and the Customer, Owner, Rider, and Admin interfaces. Before creating or changing UI, inspect the existing landing page, shared components, design tokens, and established patterns.
+
+- Reuse shared components for buttons, inputs, cards, badges, modals, dropdowns, navigation, and other common UI. Extend a shared component when needed instead of creating a one-off styled equivalent.
+- Use only existing design tokens for colors, spacing, border radii, shadows, and typography. Do not invent visual values or add tokens without a justified design-system update.
+- Use SALO orange (`#F36B2B`) for primary actions and selected states, not as a large background. Use other palette colors only as defined by existing tokens and their semantic purpose.
+- Keep light-mode backgrounds pure white or light neutral gray; never use beige, cream, ivory, or warm off-white. Keep dark mode in the genuinely dark `#171717` family.
+- Keep the same color system, typography, component styling, spacing, top-bar and sidebar treatment, logo treatment, and interaction patterns across roles. Vary content and information density, not the visual system.
+- Prefer open layouts with clear hierarchy over unnecessary nested cards.
+- Keep hover, focus, active, and loading states consistent with shared components and existing motion tokens.
+- Match the established image treatment, including aspect ratio, fit, radius, hover behavior, and placeholder style.
+
+Before implementation, confirm whether an existing component or pattern can be reused. Before marking UI work complete, compare it with the landing page and official design system. Resolve inconsistencies instead of introducing a new visual language.
+
 ### Mock data
 
 Mock data may be used for development and previews when appropriate.
