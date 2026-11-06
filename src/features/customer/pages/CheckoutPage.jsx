@@ -21,6 +21,9 @@ export default function CheckoutPage() {
   const [orderNotes, setOrderNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const hasMissingDeliveryAddresses = restaurantGroups.some(
+    (group) => group.fulfillment === 'delivery' && !group.deliveryAddress
+  );
 
   if (restaurantGroups.length === 0) {
     return (
@@ -36,6 +39,11 @@ export default function CheckoutPage() {
   }
 
   const handlePlaceOrder = async () => {
+    if (hasMissingDeliveryAddresses) {
+      setError('Each delivery sub-order must have a saved delivery address before checkout can continue.');
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
 
@@ -111,6 +119,20 @@ export default function CheckoutPage() {
           marginBottom: 'var(--space-5)',
         }}>
           {error}
+        </div>
+      )}
+
+      {hasMissingDeliveryAddresses && (
+        <div style={{
+          padding: 'var(--space-3) var(--space-4)',
+          background: 'var(--status-warning-bg)',
+          color: 'var(--status-warning-text)',
+          border: '1px solid var(--status-warning-border, rgba(245, 158, 11, 0.4))',
+          borderRadius: 'var(--radius-md)',
+          fontSize: 'var(--font-size-sm)',
+          marginBottom: 'var(--space-5)',
+        }}>
+          One or more delivery sub-orders still need a selected address before you can place the order.
         </div>
       )}
 
@@ -281,9 +303,11 @@ export default function CheckoutPage() {
             size="lg"
             fullWidth
             loading={isSubmitting}
+            disabled={hasMissingDeliveryAddresses || isSubmitting}
             onClick={handlePlaceOrder}
+            style={hasMissingDeliveryAddresses ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
           >
-            Confirm & Place Order · ₱{grandTotal.toLocaleString()}
+            {hasMissingDeliveryAddresses ? 'Complete Delivery Details' : `Confirm & Place Order · ₱${grandTotal.toLocaleString()}`}
           </Button>
 
           <div style={{

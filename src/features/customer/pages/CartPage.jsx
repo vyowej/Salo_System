@@ -20,6 +20,10 @@ export default function CartPage() {
   } = useCart();
 
   const savedAddresses = customerService.getSavedAddresses();
+  const missingDeliveryAddresses = restaurantGroups.filter(
+    (group) => group.fulfillment === 'delivery' && !group.deliveryAddress
+  );
+  const isCheckoutBlocked = missingDeliveryAddresses.length > 0;
 
   if (restaurantGroups.length === 0) {
     return (
@@ -77,6 +81,21 @@ export default function CartPage() {
           </Button>
         </div>
       </div>
+
+      {isCheckoutBlocked && (
+        <div style={{
+          background: 'var(--status-warning-bg)',
+          color: 'var(--status-warning-text)',
+          border: '1px solid var(--status-warning-border, rgba(245, 158, 11, 0.4))',
+          borderRadius: 'var(--radius-md)',
+          padding: 'var(--space-3) var(--space-4)',
+          marginBottom: 'var(--space-5)',
+          fontSize: 'var(--font-size-sm)',
+          fontWeight: 600,
+        }}>
+          Please choose a saved delivery address for each delivery sub-order before continuing to checkout.
+        </div>
+      )}
 
       <div style={{
         display: 'grid',
@@ -354,10 +373,23 @@ export default function CartPage() {
             variant="primary"
             size="lg"
             fullWidth
-            onClick={() => navigate('/customer/checkout')}
+            disabled={isCheckoutBlocked}
+            onClick={() => {
+              if (isCheckoutBlocked) return;
+              navigate('/customer/checkout');
+            }}
+            style={isCheckoutBlocked ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
           >
-            Proceed to Consolidated Checkout →
+            {isCheckoutBlocked ? 'Select Delivery Addresses First' : 'Proceed to Consolidated Checkout →'}
           </Button>
+
+          {isCheckoutBlocked && savedAddresses.length === 0 && (
+            <Link to="/customer/addresses" style={{ textDecoration: 'none', display: 'block', marginTop: 'var(--space-3)' }}>
+              <Button variant="outline" size="sm" fullWidth>
+                Add a Saved Address
+              </Button>
+            </Link>
+          )}
 
           <p style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginTop: 'var(--space-3)' }}>
             COD, GCash, Maya, and Card payment supported.

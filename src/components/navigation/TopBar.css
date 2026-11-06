@@ -99,6 +99,24 @@
   color: var(--shell-text);
 }
 
+.topbar-favorite-count {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  min-width: var(--space-4);
+  height: var(--space-4);
+  padding-inline: var(--space-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
 .topbar-btn:focus-visible,
 .topbar-hamburger:focus-visible,
 .topbar-user:focus-visible {

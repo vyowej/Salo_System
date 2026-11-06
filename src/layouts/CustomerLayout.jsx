@@ -36,6 +36,7 @@ export default function CustomerLayout({ children }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [favoriteCount, setFavoriteCount] = useState(0);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [defaultAddress, setDefaultAddress] = useState(() => customerService.getDefaultAddress());
   const [searchQuery, setSearchQuery] = useState(() => new URLSearchParams(location.search).get('q') || '');
@@ -59,11 +60,18 @@ export default function CustomerLayout({ children }) {
       setNotificationCount(unreadCount);
     };
 
+    const syncFavoriteCount = () => {
+      setFavoriteCount(customerService.getFavoriteRestaurants().length);
+    };
+
     syncNotificationCount();
+    syncFavoriteCount();
     window.addEventListener('salo:notificationsUpdated', syncNotificationCount);
+    window.addEventListener('salo:favoritesUpdated', syncFavoriteCount);
 
     return () => {
       window.removeEventListener('salo:notificationsUpdated', syncNotificationCount);
+      window.removeEventListener('salo:favoritesUpdated', syncFavoriteCount);
     };
   }, [location.pathname]);
 
@@ -133,6 +141,7 @@ export default function CustomerLayout({ children }) {
       badge: totalItemCount > 0 ? totalItemCount : null,
     },
     { id: 'orders', label: 'My Orders', icon: mkIcon(ICONS.orders), href: '/customer/orders', section: 'Activity' },
+    { id: 'favorites', label: 'Favorites', icon: mkIcon('M12 21s-8.5-4.9-10-9.5C1.2 8.5 3 5 6.8 5c2.1 0 3.3 1.1 4.2 2.5.9-1.4 2.1-2.5 4.2-2.5 3.8 0 5.6 3.5 5.6 6.5C20.5 16.1 12 21 12 21z'), href: '/customer/favorites', badge: favoriteCount > 0 ? favoriteCount : null },
     { id: 'notifications', label: 'Notifications', icon: mkIcon('M12 22a2.5 2.5 0 002.45-2h-4.9A2.5 2.5 0 0012 22zm8-6V11a8 8 0 10-16 0v5l-2 2v1h20v-1l-2-2z'), href: '/customer/notifications', badge: notificationCount > 0 ? notificationCount : null },
     { id: 'reservations', label: 'Table Bookings', icon: mkIcon(ICONS.reservation), href: '/customer/reservations' },
     { id: 'addresses', label: 'Saved Addresses', icon: mkIcon(ICONS.addresses), href: '/customer/addresses', section: 'Account' },
@@ -388,11 +397,14 @@ export default function CustomerLayout({ children }) {
                 <button
                   type="button"
                   className="topbar-btn topbar-favorite-action"
-                  aria-label="View favorites"
+                  aria-label={`View favorites with ${favoriteCount} saved restaurants`}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M12 21s-8.5-4.9-10-9.5C1.2 8.5 3 5 6.8 5c2.1 0 3.3 1.1 4.2 2.5.9-1.4 2.1-2.5 4.2-2.5 3.8 0 5.6 3.5 5.6 6.5C20.5 16.1 12 21 12 21z" />
                   </svg>
+                  {favoriteCount > 0 && (
+                    <span className="topbar-favorite-count">{favoriteCount > 9 ? '9+' : favoriteCount}</span>
+                  )}
                 </button>
               </Link>
 

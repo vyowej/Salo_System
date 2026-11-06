@@ -5,6 +5,8 @@ import { Input } from '../../../components/forms';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 
+const phonePattern = /^(\+63|0)\d{10,11}$/;
+
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
 
@@ -16,9 +18,37 @@ export default function ProfilePage() {
   });
 
   const [saved, setSaved] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  const validateForm = () => {
+    const nextErrors = {};
+
+    if (!formData.name.trim()) {
+      nextErrors.name = 'Full name is required.';
+    }
+
+    if (!formData.username.trim()) {
+      nextErrors.username = 'Username is required.';
+    }
+
+    if (!formData.email.trim()) {
+      nextErrors.email = 'Email address is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      nextErrors.email = 'Please enter a valid email address.';
+    }
+
+    if (formData.phone && !phonePattern.test(formData.phone.replace(/\s+/g, ''))) {
+      nextErrors.phone = 'Use a valid Philippine mobile number format.';
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!validateForm()) return;
+
     updateUser(formData);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -95,6 +125,7 @@ export default function ProfilePage() {
               label="Full Name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              error={errors.name}
               required
             />
             <Input
@@ -102,6 +133,7 @@ export default function ProfilePage() {
               label="Username"
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+              error={errors.username}
               required
             />
           </div>
@@ -112,6 +144,7 @@ export default function ProfilePage() {
             label="Email Address"
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            error={errors.email}
             required
           />
 
@@ -122,6 +155,7 @@ export default function ProfilePage() {
             placeholder="09XX XXX XXXX"
             value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            error={errors.phone}
             helper="Used by delivery riders and restaurant hosts."
           />
 

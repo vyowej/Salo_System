@@ -27,6 +27,7 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
   const [specialRequests, setSpecialRequests] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedReservation, setConfirmedReservation] = useState(null);
+  const [formError, setFormError] = useState('');
 
   if (!restaurant) return null;
 
@@ -34,7 +35,38 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
   const serviceFee = 50; // transparent platform reservation fee
   const totalPayable = depositAmount + serviceFee;
 
+  const validateReservation = () => {
+    if (!date) {
+      return 'Please choose a dining date.';
+    }
+
+    const selectedDate = new Date(`${date}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
+      return 'Reservations must be scheduled for today or a future date.';
+    }
+
+    if (!time) {
+      return 'Please select an arrival time slot.';
+    }
+
+    if (!Number.isFinite(Number(guests)) || Number(guests) <= 0) {
+      return 'Please choose a valid number of guests.';
+    }
+
+    return '';
+  };
+
   const handleBookTable = async () => {
+    const validationMessage = validateReservation();
+    if (validationMessage) {
+      setFormError(validationMessage);
+      return;
+    }
+
+    setFormError('');
     setIsSubmitting(true);
     try {
       const selectedAreaObj = SEATING_AREAS.find((s) => s.id === seatingArea);
@@ -61,6 +93,7 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
 
   const handleResetAndClose = () => {
     setConfirmedReservation(null);
+    setFormError('');
     onClose();
   };
 
@@ -174,6 +207,19 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            {formError && (
+              <div style={{
+                background: 'var(--status-error-bg)',
+                color: 'var(--status-error-text)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-2) var(--space-3)',
+                fontSize: 'var(--font-size-xs)',
+                fontWeight: 600,
+              }}>
+                {formError}
+              </div>
+            )}
+
             {/* Date & Guests */}
             <div className="grid-cols-2" style={{ gap: 'var(--space-3)' }}>
               <div>

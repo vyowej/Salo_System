@@ -26,6 +26,13 @@ export default function FavoritesPage() {
     }
 
     loadFavorites();
+
+    const handleFavoritesUpdated = () => {
+      loadFavorites();
+    };
+
+    window.addEventListener('salo:favoritesUpdated', handleFavoritesUpdated);
+    return () => window.removeEventListener('salo:favoritesUpdated', handleFavoritesUpdated);
   }, []);
 
   const handleToggleFavorite = (restaurantId) => {

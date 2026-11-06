@@ -23,10 +23,20 @@ export default function RestaurantDetailPage() {
       if (data) {
         setRestaurant(data);
         setActiveCategory(data.categories?.[0] || 'All');
+        setIsFavorite(customerService.getFavoriteRestaurants().includes(data.id));
       }
     }
     fetchRest();
   }, [id]);
+
+  useEffect(() => {
+    const syncFavoriteState = () => {
+      setIsFavorite(Boolean(restaurant && customerService.getFavoriteRestaurants().includes(restaurant.id)));
+    };
+
+    window.addEventListener('salo:favoritesUpdated', syncFavoriteState);
+    return () => window.removeEventListener('salo:favoritesUpdated', syncFavoriteState);
+  }, [restaurant]);
 
   if (!restaurant) {
     return (
@@ -82,7 +92,11 @@ export default function RestaurantDetailPage() {
         }}>
           <span>{restaurant.coverImage}</span>
           <button
-            onClick={() => setIsFavorite(!isFavorite)}
+            onClick={() => {
+              if (!restaurant) return;
+              const next = customerService.toggleFavoriteRestaurant(restaurant.id);
+              setIsFavorite(next.includes(restaurant.id));
+            }}
             style={{
               position: 'absolute',
               top: 16,

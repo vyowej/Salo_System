@@ -6,9 +6,15 @@ import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
 import { Input, Select } from '../../../components/forms';
 
+const phonePattern = /^(\+63|0)\d{10,11}$/;
+
 export default function AddressesPage() {
   const [addresses, setAddresses] = useState(() => customerService.getSavedAddresses());
   const [modalOpen, setModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState(null);
+  const [addressToDelete, setAddressToDelete] = useState(null);
+  const [formErrors, setFormErrors] = useState({});
   const [formData, setFormData] = useState({
     label: 'Home',
     recipientName: '',
@@ -19,7 +25,29 @@ export default function AddressesPage() {
     isDefault: false,
   });
 
+  const validateAddress = () => {
+    const nextErrors = {};
+
+    if (!formData.street.trim()) {
+      nextErrors.street = 'Street and unit details are required.';
+    }
+
+    if (!formData.recipientName.trim()) {
+      nextErrors.recipientName = 'Recipient name is required.';
+    }
+
+    if (!formData.phone.trim()) {
+      nextErrors.phone = 'Contact number is required.';
+    } else if (!phonePattern.test(formData.phone.replace(/\s+/g, ''))) {
+      nextErrors.phone = 'Use a valid Philippine mobile number.';
+    }
+
+    setFormErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
   const handleOpenAddModal = () => {
+    setEditingAddressId(null);
     setFormData({
       label: 'Home',
       recipientName: '',
@@ -29,45 +57,83 @@ export default function AddressesPage() {
       notes: '',
       isDefault: addresses.length === 0,
     });
+    setFormErrors({});
+    setModalOpen(true);
+  };
+
+  const handleOpenEditModal = (address) => {
+    setEditingAddressId(address.id);
+    setFormData({
+      label: address.label || 'Home',
+      recipientName: address.recipientName || '',
+      phone: address.phone || '',
+      street: address.street || '',
+      city: address.city || 'Metro Manila',
+      notes: address.notes || '',
+      isDefault: Boolean(address.isDefault),
+    });
+    setFormErrors({});
     setModalOpen(true);
   };
 
   const handleSaveAddress = (e) => {
     e.preventDefault();
-    if (!formData.street.trim()) return;
+    if (!validateAddress()) return;
 
-    const saved = customerService.saveAddress({
+    const payload = {
       ...formData,
-      isDefault: formData.isDefault || addresses.length === 0,
-    });
+      phone: formData.phone.trim(),
+      recipientName: formData.recipientName.trim(),
+      street: formData.street.trim(),
+      city: formData.city.trim(),
+      isDefault: formData.isDefault || (!editingAddressId && addresses.length === 0),
+    };
+
+    const saved = editingAddressId
+      ? customerService.updateAddress(editingAddressId, payload)
+      : customerService.saveAddress(payload);
 
     setAddresses(saved);
     setModalOpen(false);
+    setEditingAddressId(null);
+    setFormErrors({});
   };
 
   const handleSetDefault = (id) => {
-    const updated = addresses.map((a) => ({
-      ...a,
-      isDefault: a.id === id,
-    }));
-    localStorage.setItem('salo_addresses', JSON.stringify(updated));
+    const updated = customerService.setDefaultAddress(id);
     setAddresses(updated);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!addressToDelete) return;
+    const updated = customerService.deleteAddress(addressToDelete);
+    setAddresses(updated);
+    setAddressToDelete(null);
+    setDeleteModalOpen(false);
   };
 
   return (
     <CustomerLayout>
       <Modal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Add Delivery Address"
+        onClose={() => {
+          setModalOpen(false);
+          setEditingAddressId(null);
+          setFormErrors({});
+        }}
+        title={editingAddressId ? 'Edit Delivery Address' : 'Add Delivery Address'}
         size="md"
         footer={
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-            <Button variant="ghost" size="sm" onClick={() => setModalOpen(false)}>
+            <Button variant="ghost" size="sm" onClick={() => {
+              setModalOpen(false);
+              setEditingAddressId(null);
+              setFormErrors({});
+            }}>
               Cancel
             </Button>
             <Button variant="primary" size="sm" onClick={handleSaveAddress}>
-              Save Address
+              {editingAddressId ? 'Update Address' : 'Save Address'}
             </Button>
           </div>
         }
@@ -103,6 +169,7 @@ export default function AddressesPage() {
               placeholder="e.g. Cassidy Santos"
               value={formData.recipientName}
               onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })}
+              error={formErrors.recipientName}
             />
 
             <Input
@@ -111,6 +178,7 @@ export default function AddressesPage() {
               placeholder="09XX XXX XXXX"
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              error={formErrors.phone}
             />
           </div>
 
@@ -120,6 +188,7 @@ export default function AddressesPage() {
             placeholder="e.g. Unit 12B, Emerald Court, San Antonio"
             value={formData.street}
             onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+            error={formErrors.street}
             required
           />
 
@@ -142,6 +211,33 @@ export default function AddressesPage() {
         </form>
       </Modal>
 
+      <Modal
+        open={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setAddressToDelete(null);
+        }}
+        title="Delete address"
+        size="sm"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+            <Button variant="ghost" size="sm" onClick={() => {
+              setDeleteModalOpen(false);
+              setAddressToDelete(null);
+            }}>
+              Keep Address
+            </Button>
+            <Button variant="danger" size="sm" onClick={handleDeleteConfirm}>
+              Delete
+            </Button>
+          </div>
+        }
+      >
+        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+          This address will be permanently removed from your saved delivery list. This action cannot be undone.
+        </p>
+      </Modal>
+
       <div style={{ marginBottom: 'var(--space-6)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
           <div>
@@ -162,57 +258,85 @@ export default function AddressesPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--space-4)' }}>
-        {addresses.map((addr) => (
-          <div
-            key={addr.id}
-            style={{
-              background: 'var(--surface-primary)',
-              border: addr.isDefault ? '1.5px solid var(--accent)' : '1px solid var(--border-primary)',
-              borderRadius: 'var(--radius-xl)',
-              padding: 'var(--space-5)',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              boxShadow: 'var(--shadow-xs)',
-            }}
-          >
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                  <span style={{ fontSize: 18 }}>📍</span>
-                  <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {addr.label}
-                  </h3>
+      {addresses.length === 0 ? (
+        <div style={{
+          background: 'var(--surface-primary)',
+          border: '1px solid var(--border-primary)',
+          borderRadius: 'var(--radius-xl)',
+          padding: 'var(--space-8)',
+          textAlign: 'center',
+          boxShadow: 'var(--shadow-sm)',
+        }}>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 700 }}>No saved addresses yet</p>
+          <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--text-secondary)' }}>
+            Add your first delivery location to continue ordering from multiple restaurants.
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--space-4)' }}>
+          {addresses.map((addr) => (
+            <div
+              key={addr.id}
+              style={{
+                background: 'var(--surface-primary)',
+                border: addr.isDefault ? '1.5px solid var(--accent)' : '1px solid var(--border-primary)',
+                borderRadius: 'var(--radius-xl)',
+                padding: 'var(--space-5)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                boxShadow: 'var(--shadow-xs)',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <span style={{ fontSize: 18 }}>📍</span>
+                    <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {addr.label}
+                    </h3>
+                  </div>
+                  {addr.isDefault && (
+                    <Badge variant="primary" size="sm">Default</Badge>
+                  )}
                 </div>
-                {addr.isDefault && (
-                  <Badge variant="primary" size="sm">Default</Badge>
+
+                <p style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                  {addr.recipientName || 'Customer'}
+                </p>
+                <p style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                  {addr.street}
+                </p>
+                <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
+                  {addr.city} {addr.phone && `· ${addr.phone}`}
+                </p>
+                {addr.notes && (
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    &ldquo;{addr.notes}&rdquo;
+                  </p>
                 )}
               </div>
 
-              <p style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
-                {addr.street}
-              </p>
-              <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
-                {addr.city} {addr.phone && `· ${addr.phone}`}
-              </p>
-              {addr.notes && (
-                <p style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  &ldquo;{addr.notes}&rdquo;
-                </p>
-              )}
-            </div>
-
-            <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--border-secondary)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              {!addr.isDefault && (
-                <Button variant="ghost" size="sm" onClick={() => handleSetDefault(addr.id)}>
-                  Set Default
+              <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--border-secondary)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                {!addr.isDefault && (
+                  <Button variant="ghost" size="sm" onClick={() => handleSetDefault(addr.id)}>
+                    Set Default
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(addr)}>
+                  Edit
                 </Button>
-              )}
+                <Button variant="danger-outline" size="sm" onClick={() => {
+                  setAddressToDelete(addr.id);
+                  setDeleteModalOpen(true);
+                }}>
+                  Delete
+                </Button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </CustomerLayout>
   );
 }
