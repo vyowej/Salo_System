@@ -166,48 +166,8 @@ export default function CustomerDashboard() {
         </div>
       )}
 
-      {/* ── Search Bar & Cuisine Filters ───────────────────── */}
+      {/* ── Categories Strip ─────────────────────────────── */}
       <div style={{ marginBottom: 'var(--space-6)' }}>
-        <div style={{
-          background: 'var(--surface-primary)',
-          border: '1.5px solid var(--border-primary)',
-          borderRadius: 'var(--radius-xl)',
-          padding: 'var(--space-3) var(--space-4)',
-          display: 'flex',
-          alignItems: 'center',
-          boxShadow: 'var(--shadow-xs)',
-          maxWidth: 600,
-          marginBottom: 'var(--space-4)',
-        }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-muted)', marginRight: 12 }}>
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search restaurants, dishes, or cuisines..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              flex: 1,
-              border: 'none',
-              background: 'transparent',
-              outline: 'none',
-              fontSize: 'var(--font-size-sm)',
-              color: 'var(--text-primary)',
-            }}
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
-        {/* Categories Strip */}
         <div style={{ display: 'flex', gap: 'var(--space-2)', overflowX: 'auto', paddingBottom: 6 }}>
           {CATEGORIES.map((cat) => (
             <button

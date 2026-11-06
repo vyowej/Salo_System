@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
@@ -9,6 +10,12 @@ import { Input, Select } from '../../../components/forms';
 const phonePattern = /^(\+63|0)\d{10,11}$/;
 
 export default function AddressesPage() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    navigate('/customer/profile#saved-addresses', { replace: true });
+  }, [navigate]);
+
   const [addresses, setAddresses] = useState(() => customerService.getSavedAddresses());
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
