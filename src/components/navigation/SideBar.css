@@ -21,6 +21,7 @@
   padding: 0 var(--space-5);
   border-bottom: 1px solid var(--nav-border);
   flex-shrink: 0;
+  transition: padding var(--transition-normal);
 }
 
 .sidebar-logo {
@@ -31,11 +32,31 @@
   min-width: 0;
 }
 
-.sidebar-logo img {
-  height: 28px;
+.sidebar-full-logo {
+  height: 38px;
+  max-width: 145px;
   width: auto;
   object-fit: contain;
   flex-shrink: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.sidebar-favicon-icon {
+  height: 34px;
+  width: 34px;
+  object-fit: contain;
+  margin: 0 auto;
+}
+
+.sidebar.collapsed .sidebar-header {
+  padding: 0 var(--space-2);
+  justify-content: center;
+  position: relative;
+}
+
+.sidebar.collapsed .sidebar-logo {
+  justify-content: center;
+  flex: none;
 }
 
 .sidebar-logo-text {
@@ -49,7 +70,7 @@
   width: 28px;
   height: 28px;
   border-radius: var(--radius-sm);
-  color: var(--text-muted);
+  color: var(--nav-text-muted);
   transition:
     background var(--transition-fast),
     color var(--transition-fast),
@@ -58,8 +79,8 @@
 }
 
 .sidebar-collapse-btn:hover {
-  background: var(--surface-hover);
-  color: var(--text-primary);
+  background: var(--nav-item-hover);
+  color: var(--nav-text);
 }
 
 .sidebar.collapsed .sidebar-collapse-btn {
@@ -81,7 +102,7 @@
 .sidebar-section-label {
   font-size: 10px;
   font-weight: var(--font-weight-semibold);
-  color: var(--text-muted);
+  color: var(--nav-text-muted);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: var(--space-3) var(--space-3) var(--space-1);
@@ -102,7 +123,7 @@
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  color: var(--text-secondary);
+  color: var(--nav-text-muted);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   text-decoration: none;
@@ -118,7 +139,7 @@
 
 .sidebar-item:hover {
   background: var(--nav-item-hover);
-  color: var(--text-primary);
+  color: var(--nav-text);
 }
 
 .sidebar-item.active {
@@ -160,8 +181,8 @@
 .sidebar-item-badge {
   font-size: 11px;
   font-weight: var(--font-weight-semibold);
-  background: var(--accent);
-  color: #fff;
+  background: var(--nav-item-active-bg);
+  color: var(--nav-item-active-text);
   border-radius: var(--radius-full);
   padding: 1px 6px;
   min-width: 18px;
@@ -192,7 +213,7 @@
 /* ── Divider ─────────────────────────────────────────── */
 .sidebar-divider {
   height: 1px;
-  background: var(--border-secondary);
+  background: var(--nav-border);
   margin: var(--space-2) var(--space-3);
 }
 
@@ -203,7 +224,7 @@
   inset: 0;
   background: var(--overlay-bg);
   z-index: calc(var(--z-overlay) - 1);
-  animation: fadeIn var(--transition-fast) ease both;
+  animation: fadeIn var(--transition-fast) both;
 }
 
 @media (max-width: 1023px) {
