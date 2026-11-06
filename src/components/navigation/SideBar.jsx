@@ -1,5 +1,4 @@
-import { useState, useCallback } from 'react';
-import { useTheme } from '../../contexts/ThemeContext';
+import BrandMark from '../common/BrandMark';
 import './SideBar.css';
 
 /**
@@ -24,14 +23,6 @@ export default function SideBar({
   onMobileClose,
   footer,
 }) {
-  const { theme } = useTheme();
-
-  const logoSrc = theme === 'dark'
-    ? '/brand/salo-logo-dark.png'
-    : '/brand/salo-logo-light.png';
-
-  const iconSrc = '/brand/salo-icon.png';
-
   // Group items by section
   const sections = groupBySection(items);
 
@@ -52,16 +43,20 @@ export default function SideBar({
       >
         {/* Header */}
         <div className="sidebar-header">
-          <div className="sidebar-logo">
-            {collapsed
-              ? <img src={iconSrc} alt="SALO" style={{ height: 28 }} />
-              : <img src={logoSrc} alt="SALO" />}
+          <div className="sidebar-logo" title="SALO">
+            <BrandMark
+              size="sm"
+              showText={!collapsed}
+              dark
+              className="sidebar-brand-mark"
+            />
           </div>
           {onToggleCollapse && (
             <button
               className="sidebar-collapse-btn"
               onClick={onToggleCollapse}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               type="button"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
