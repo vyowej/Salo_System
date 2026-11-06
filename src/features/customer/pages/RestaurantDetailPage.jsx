@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
@@ -9,7 +9,6 @@ import ReservationModal from '../components/ReservationModal';
 
 export default function RestaurantDetailPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [restaurant, setRestaurant] = useState(null);
