@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
+import { useCart } from '../../../hooks/useCart';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
@@ -10,6 +11,8 @@ const STEPS = ['Pending Confirmation', 'Accepted', 'Preparing', 'Out for Deliver
 
 export default function OrderDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { addItem, setRestaurantFulfillment, setRestaurantAddress } = useCart();
 
   const [order, setOrder] = useState(null);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -42,6 +45,38 @@ export default function OrderDetailPage() {
       cancellationReason: cancelReason,
     }));
     setCancelModalOpen(false);
+  };
+
+  const handleReorder = () => {
+    const defaultAddress = customerService.getDefaultAddress();
+
+    (order.subOrders || []).forEach((subOrder) => {
+      const restaurantId = subOrder.restaurantId;
+      const fulfillment = subOrder.fulfillment || 'delivery';
+
+      setRestaurantFulfillment(restaurantId, fulfillment);
+      if (fulfillment === 'delivery' && defaultAddress) {
+        setRestaurantAddress(restaurantId, defaultAddress);
+      }
+
+      (subOrder.items || []).forEach((item) => {
+        addItem({
+          id: `${restaurantId}-${item.name}`,
+          name: item.name,
+          price: Number(item.price || 0),
+          quantity: Number(item.qty || item.quantity || 1),
+          restaurantId,
+          restaurantName: subOrder.restaurantName,
+          image: 'R',
+          deliveryFee: subOrder.deliveryFee || 49,
+          selectedAddOns: Array.isArray(item.addOns)
+            ? item.addOns.map((addOn) => (typeof addOn === 'string' ? { name: addOn, price: 0 } : addOn))
+            : [],
+        });
+      });
+    });
+
+    navigate('/customer/cart');
   };
 
   const isCancellable = order.overallStatus !== 'Completed' && order.overallStatus !== 'Cancelled';
@@ -107,11 +142,16 @@ export default function OrderDetailPage() {
             </p>
           </div>
 
-          {isCancellable && (
-            <Button variant="danger-outline" size="sm" onClick={() => setCancelModalOpen(true)}>
-              Cancel Order
+          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+            <Button variant="secondary" size="sm" onClick={handleReorder}>
+              Reorder
             </Button>
-          )}
+            {isCancellable && (
+              <Button variant="danger-outline" size="sm" onClick={() => setCancelModalOpen(true)}>
+                Cancel Order
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

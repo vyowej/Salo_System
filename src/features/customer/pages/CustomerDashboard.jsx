@@ -22,6 +22,7 @@ export default function CustomerDashboard() {
   const location = useLocation();
 
   const [restaurants, setRestaurants] = useState([]);
+  const [favoriteIds, setFavoriteIds] = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [search, setSearch] = useState('');
   const [activeOrders, setActiveOrders] = useState([]);
@@ -31,6 +32,7 @@ export default function CustomerDashboard() {
     async function loadData() {
       const rests = await customerService.getRestaurants();
       setRestaurants(rests);
+      setFavoriteIds(customerService.getFavoriteRestaurants());
 
       const ords = customerService.getOrders();
       setActiveOrders(ords.filter((o) => o.overallStatus !== 'Completed' && o.overallStatus !== 'Cancelled'));
@@ -39,6 +41,12 @@ export default function CustomerDashboard() {
       setUpcomingReservations(resvs.filter((r) => r.status === 'Confirmed'));
     }
     loadData();
+  }, []);
+
+  useEffect(() => {
+    const syncFavorites = () => setFavoriteIds(customerService.getFavoriteRestaurants());
+    window.addEventListener('salo:favoritesUpdated', syncFavorites);
+    return () => window.removeEventListener('salo:favoritesUpdated', syncFavorites);
   }, []);
 
   useEffect(() => {
@@ -53,6 +61,12 @@ export default function CustomerDashboard() {
     const matchesCat = activeCategory === 'All' || r.cuisine.includes(activeCategory.split(' ')[0]);
     return matchesSearch && matchesCat;
   });
+
+  const handleToggleFavorite = (restaurantId, event) => {
+    if (event) event.stopPropagation();
+    const next = customerService.toggleFavoriteRestaurant(restaurantId);
+    setFavoriteIds(next);
+  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -279,10 +293,35 @@ export default function CustomerDashboard() {
                   borderBottom: '1px solid var(--border-secondary)',
                 }}>
                   <span>{rest.coverImage}</span>
+                  <button
+                    type="button"
+                    onClick={(event) => handleToggleFavorite(rest.id, event)}
+                    aria-label={favoriteIds.includes(rest.id) ? 'Remove from favorites' : 'Add to favorites'}
+                    style={{
+                      position: 'absolute',
+                      top: 10,
+                      right: 10,
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      border: '1px solid var(--border-primary)',
+                      background: 'var(--surface-primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      color: favoriteIds.includes(rest.id) ? 'var(--salo-error)' : 'var(--text-muted)',
+                      fontSize: 16,
+                      boxShadow: 'var(--shadow-xs)',
+                      zIndex: 1,
+                    }}
+                  >
+                    {favoriteIds.includes(rest.id) ? '♥' : '♡'}
+                  </button>
                   <span style={{
                     position: 'absolute',
                     top: 10,
-                    right: 10,
+                    left: 10,
                     background: 'var(--surface-primary)',
                     padding: '2px 8px',
                     borderRadius: 'var(--radius-full)',

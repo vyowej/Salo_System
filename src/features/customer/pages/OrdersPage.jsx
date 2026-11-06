@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
+import { useCart } from '../../../hooks/useCart';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 
 export default function OrdersPage() {
   const navigate = useNavigate();
+  const { addItem, setRestaurantFulfillment, setRestaurantAddress } = useCart();
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState('all');
 
@@ -20,6 +22,38 @@ export default function OrdersPage() {
     if (filter === 'cancelled') return o.overallStatus === 'Cancelled';
     return true;
   });
+
+  const handleReorder = (order) => {
+    const defaultAddress = customerService.getDefaultAddress();
+
+    (order.subOrders || []).forEach((subOrder) => {
+      const restaurantId = subOrder.restaurantId;
+      const fulfillment = subOrder.fulfillment || 'delivery';
+
+      setRestaurantFulfillment(restaurantId, fulfillment);
+      if (fulfillment === 'delivery' && defaultAddress) {
+        setRestaurantAddress(restaurantId, defaultAddress);
+      }
+
+      (subOrder.items || []).forEach((item) => {
+        addItem({
+          id: `${restaurantId}-${item.name}`,
+          name: item.name,
+          price: Number(item.price || 0),
+          quantity: Number(item.qty || item.quantity || 1),
+          restaurantId,
+          restaurantName: subOrder.restaurantName,
+          image: 'R',
+          deliveryFee: subOrder.deliveryFee || 49,
+          selectedAddOns: Array.isArray(item.addOns)
+            ? item.addOns.map((addOn) => (typeof addOn === 'string' ? { name: addOn, price: 0 } : addOn))
+            : [],
+        });
+      });
+    });
+
+    navigate('/customer/cart');
+  };
 
   return (
     <CustomerLayout>
@@ -120,9 +154,21 @@ export default function OrdersPage() {
                   <p style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--text-primary)' }}>
                     ₱{order.totalAmount?.toLocaleString()}
                   </p>
-                  <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>
-                    Track Order →
-                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>
+                      Track Order →
+                    </span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleReorder(order);
+                      }}
+                    >
+                      Reorder
+                    </Button>
+                  </div>
                 </div>
               </div>
 

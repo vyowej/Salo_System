@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
 // ── Lazy-Loaded Pages for Code-Splitting ─────────────────────────
@@ -80,11 +80,96 @@ function PageLoader() {
  * SALO Master Route Map
  * Code-split with React.lazy(), wrapped in ErrorBoundary and Suspense fallback.
  */
-export default function App() {
+function AppShell() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const routeMeta = {
+      '/': {
+        title: 'SALO — Order. Reserve. Gather.',
+        description: 'Modern Filipino food ordering, reservations, and restaurant discovery.',
+      },
+      '/login': {
+        title: 'Login | SALO',
+        description: 'Sign in to your SALO account and continue ordering, booking, and tracking.',
+      },
+      '/register': {
+        title: 'Create an account | SALO',
+        description: 'Join SALO to order food, reserve tables, and manage restaurant experiences.',
+      },
+      '/forgot-password': {
+        title: 'Reset your password | SALO',
+        description: 'Recover your SALO password securely and get back to ordering.',
+      },
+      '/customer': {
+        title: 'Explore & Feed | SALO Customer',
+        description: 'Discover restaurants, browse menus, and place delivery orders in one checkout.',
+      },
+      '/customer/cart': {
+        title: 'Multi-Cart | SALO Customer',
+        description: 'Review grouped restaurant orders and complete checkout with flexible delivery options.',
+      },
+      '/customer/orders': {
+        title: 'My Orders | SALO Customer',
+        description: 'Track active deliveries, check order status, and review recent purchases.',
+      },
+      '/customer/favorites': {
+        title: 'My Favorites | SALO Customer',
+        description: 'Revisit your saved restaurants and favorite food spots.',
+      },
+      '/customer/notifications': {
+        title: 'Notifications | SALO Customer',
+        description: 'Stay updated on your order, reservation, and promo activity.',
+      },
+      '/customer/reservations': {
+        title: 'Reservations | SALO Customer',
+        description: 'Manage table bookings, dining plans, and reservation details.',
+      },
+      '/customer/addresses': {
+        title: 'Saved Addresses | SALO Customer',
+        description: 'Manage your home, office, and delivery locations for faster ordering.',
+      },
+      '/customer/profile': {
+        title: 'Profile & Settings | SALO Customer',
+        description: 'Update your account details, preferences, and delivery profile.',
+      },
+      '/customer/partner': {
+        title: 'Become a Partner | SALO',
+        description: 'Apply to grow your restaurant or food business with SALO.',
+      },
+      '/owner': {
+        title: 'Restaurant Dashboard | SALO Owner',
+        description: 'Manage orders, menus, reservations, and store performance from one dashboard.',
+      },
+      '/rider': {
+        title: 'Rider Dashboard | SALO',
+        description: 'Track deliveries, accept jobs, and view active order routes.',
+      },
+      '/admin': {
+        title: 'Admin Dashboard | SALO',
+        description: 'Monitor platform performance, partners, riders, and operational insights.',
+      },
+    };
+
+    const pathname = location.pathname;
+    const match = Object.keys(routeMeta)
+      .filter((key) => key !== '/' && pathname.startsWith(key))
+      .sort((a, b) => b.length - a.length)[0];
+    const page = routeMeta[match] || routeMeta[pathname] || routeMeta['/'];
+
+    document.title = page.title;
+
+    let meta = document.head.querySelector('meta[name="description"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'description';
+      document.head.appendChild(meta);
+    }
+    meta.content = page.description;
+  }, [location.pathname]);
+
   return (
-    <ErrorBoundary>
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
+    <Routes>
           {/* ── Public & Marketing (Phase 2) ── */}
           <Route path="/" element={<LandingPage />} />
 
@@ -140,6 +225,14 @@ export default function App() {
           {/* Catch-all redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <AppShell />
       </Suspense>
     </ErrorBoundary>
   );
