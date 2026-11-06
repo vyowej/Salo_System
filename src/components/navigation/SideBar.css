@@ -9,7 +9,7 @@
   background: var(--shell-bg);
   color: var(--shell-text);
   border-right: 1px solid var(--shell-border);
-  overflow: hidden;
+  overflow: visible;
   transition: width var(--transition-normal);
 }
 

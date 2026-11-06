@@ -24,20 +24,197 @@ const ICONS = {
   profile: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 3a4 4 0 100 8 4 4 0 000-8z',
 };
 
+function getInitials(name) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return 'C';
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+function CustomerProfileMenu({
+  open,
+  triggerRef,
+  placement,
+  onClose,
+  profileName,
+  profileEmail,
+  profileInitials,
+  theme,
+  menuItems = [],
+}) {
+  const popoverRef = useRef(null);
+  const [popoverStyle, setPopoverStyle] = useState({});
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const updatePosition = () => {
+      const trigger = triggerRef?.current;
+      const popover = popoverRef.current;
+      if (!(trigger && popover)) return;
+
+      const triggerRect = trigger.getBoundingClientRect();
+      const menuWidth = Math.min(280, window.innerWidth - 24);
+      const menuHeight = popover.offsetHeight || 280;
+      const margin = 12;
+
+      let left;
+      if (placement === 'sidebar') {
+        left = Math.min(
+          triggerRect.left + triggerRect.width + 12,
+          window.innerWidth - menuWidth - margin,
+        );
+      } else {
+        left = Math.min(
+          Math.max(margin, triggerRect.right - menuWidth),
+          window.innerWidth - menuWidth - margin,
+        );
+      }
+
+      const shouldOpenUpward = placement === 'sidebar'
+        ? triggerRect.top - menuHeight - 12 > margin
+        : triggerRect.bottom + menuHeight + 12 > window.innerHeight - margin;
+
+      const top = shouldOpenUpward
+        ? triggerRect.top - menuHeight - 12
+        : triggerRect.bottom + 12;
+
+      setPopoverStyle({
+        left: `${Math.max(margin, left)}px`,
+        top: `${Math.min(Math.max(margin, top), window.innerHeight - menuHeight - margin)}px`,
+        width: `${menuWidth}px`,
+      });
+    };
+
+    const frame = requestAnimationFrame(updatePosition);
+    const handleResize = () => updatePosition();
+    const handleScroll = () => updatePosition();
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleScroll, true);
+
+    const handlePointerDown = (event) => {
+      const trigger = triggerRef?.current;
+      const popover = popoverRef.current;
+      if (!trigger || !popover) return;
+
+      const clickedInside = popover.contains(event.target) || trigger.contains(event.target);
+      if (!clickedInside) {
+        onClose();
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleScroll, true);
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open, placement, triggerRef, onClose]);
+
+  const effectiveMenuItems = menuItems;
+
+  if (!open) return null;
+
+  return (
+    <div
+      ref={popoverRef}
+      className="customer-profile-popover"
+      role="menu"
+      aria-label="Profile menu"
+      style={popoverStyle}
+    >
+      <div className="customer-profile-popover-header">
+        <span className="customer-profile-avatar large" aria-hidden="true">{profileInitials || 'C'}</span>
+        <div className="customer-profile-popover-copy">
+          <span className="customer-profile-name">{profileName}</span>
+          <span className="customer-profile-email">{profileEmail}</span>
+        </div>
+      </div>
+
+      <div className="customer-profile-menu-list">
+        {effectiveMenuItems.map((item) => {
+          const sharedClassName = `customer-profile-menu-item ${item.danger ? 'danger' : ''} ${item.toggle ? 'customer-profile-theme-item' : ''}`.trim();
+
+          if (item.type === 'link') {
+            return (
+              <Link
+                key={item.id}
+                to={item.href}
+                className={sharedClassName}
+                onClick={() => onClose()}
+                role="menuitem"
+              >
+                <span className="customer-profile-menu-left">
+                  {item.icon}
+                  <span>{item.label}</span>
+                </span>
+              </Link>
+            );
+          }
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={sharedClassName}
+              onClick={() => {
+                onClose();
+                item.onClick?.();
+              }}
+              role="menuitem"
+            >
+              {item.toggle ? (
+                <>
+                  <span>{item.label}</span>
+                  <span className={`customer-profile-toggle ${theme === 'dark' ? 'checked' : ''}`} aria-hidden="true">
+                    <span className="customer-profile-toggle-thumb" />
+                  </span>
+                </>
+              ) : (
+                <span className="customer-profile-menu-left">
+                  {item.icon}
+                  <span>{item.label}</span>
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerLayout({ children }) {
   const { user, logout } = useAuth();
   const { totalItemCount } = useCart();
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  const profileTriggerRef = useRef(null);
-  const profilePopoverRef = useRef(null);
+  const sidebarProfileTriggerRef = useRef(null);
+  const topbarProfileTriggerRef = useRef(null);
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [favoriteCount, setFavoriteCount] = useState(0);
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [sidebarProfileMenuOpen, setSidebarProfileMenuOpen] = useState(false);
+  const [topbarProfileMenuOpen, setTopbarProfileMenuOpen] = useState(false);
   const [defaultAddress, setDefaultAddress] = useState(() => customerService.getDefaultAddress());
   const [searchQuery, setSearchQuery] = useState(() => new URLSearchParams(location.search).get('q') || '');
   const [recentSearches, setRecentSearches] = useState(() => customerService.getRecentSearches());
@@ -76,34 +253,21 @@ export default function CustomerLayout({ children }) {
   }, [location.pathname]);
 
   useEffect(() => {
-    if (!profileMenuOpen) return undefined;
-
-    const handlePointerDown = (event) => {
-      const trigger = profileTriggerRef.current;
-      const popover = profilePopoverRef.current;
-      if (!(popover && trigger)) return;
-
-      const clickedInside = popover.contains(event.target) || trigger.contains(event.target);
-      if (!clickedInside) {
-        setProfileMenuOpen(false);
-      }
-    };
+    if (!sidebarProfileMenuOpen && !topbarProfileMenuOpen) return undefined;
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
-        setProfileMenuOpen(false);
-        profileTriggerRef.current?.focus();
+        setSidebarProfileMenuOpen(false);
+        setTopbarProfileMenuOpen(false);
       }
     };
 
-    document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [profileMenuOpen]);
+  }, [sidebarProfileMenuOpen, topbarProfileMenuOpen]);
 
   useEffect(() => {
     if (!addressMenuOpen) return undefined;
@@ -144,8 +308,7 @@ export default function CustomerLayout({ children }) {
     { id: 'favorites', label: 'Favorites', icon: mkIcon('M12 21s-8.5-4.9-10-9.5C1.2 8.5 3 5 6.8 5c2.1 0 3.3 1.1 4.2 2.5.9-1.4 2.1-2.5 4.2-2.5 3.8 0 5.6 3.5 5.6 6.5C20.5 16.1 12 21 12 21z'), href: '/customer/favorites', badge: favoriteCount > 0 ? favoriteCount : null },
     { id: 'notifications', label: 'Notifications', icon: mkIcon('M12 22a2.5 2.5 0 002.45-2h-4.9A2.5 2.5 0 0012 22zm8-6V11a8 8 0 10-16 0v5l-2 2v1h20v-1l-2-2z'), href: '/customer/notifications', badge: notificationCount > 0 ? notificationCount : null },
     { id: 'reservations', label: 'Table Bookings', icon: mkIcon(ICONS.reservation), href: '/customer/reservations' },
-    { id: 'addresses', label: 'Saved Addresses', icon: mkIcon(ICONS.addresses), href: '/customer/addresses', section: 'Account' },
-    { id: 'partner', label: 'Become a Partner', icon: mkIcon('M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'), href: '/customer/partner' },
+    { id: 'settings', label: 'Settings', icon: mkIcon(ICONS.profile), href: '/customer/profile', section: 'Account' },
   ];
 
   // Resolve active nav item based on pathname
@@ -165,12 +328,69 @@ export default function CustomerLayout({ children }) {
 
   const profileName = user?.name || user?.username || 'Customer';
   const profileEmail = user?.email || user?.username || 'customer@salo.local';
-  const profileInitials = profileName
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .substring(0, 2);
+  const profileInitials = getInitials(profileName);
+
+  const sidebarProfileMenuItems = [
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: mkIcon(ICONS.profile),
+      onClick: () => navigate('/customer/profile'),
+    },
+    {
+      id: 'theme',
+      label: 'Dark Mode',
+      toggle: true,
+      onClick: toggleTheme,
+    },
+    {
+      id: 'logout',
+      label: 'Log out',
+      icon: mkIcon('M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7'),
+      onClick: async () => {
+        await logout();
+        navigate('/');
+      },
+      danger: true,
+    },
+  ];
+
+  const topbarProfileMenuItems = [
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: mkIcon(ICONS.profile),
+      onClick: () => navigate('/customer/profile'),
+    },
+    {
+      id: 'become-rider',
+      label: 'Become a Rider',
+      icon: mkIcon('M5 16l2-8h10l2 8M7 16l1 4h8l1-4M9 8V6a3 3 0 016 0v2'),
+      onClick: () => navigate('/rider'),
+    },
+    {
+      id: 'partner',
+      label: 'Partner with SALO',
+      icon: mkIcon('M3 21h18M7 17V7a2 2 0 012-2h6a2 2 0 012 2v10M9 11h6'),
+      onClick: () => navigate('/customer/partner'),
+    },
+    {
+      id: 'theme',
+      label: 'Dark Mode',
+      toggle: true,
+      onClick: toggleTheme,
+    },
+    {
+      id: 'logout',
+      label: 'Log out',
+      icon: mkIcon('M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7'),
+      onClick: async () => {
+        await logout();
+        navigate('/');
+      },
+      danger: true,
+    },
+  ];
 
   const handleSearchSubmit = (nextValue) => {
     const trimmed = String(nextValue || '').trim();
@@ -233,7 +453,7 @@ export default function CustomerLayout({ children }) {
               onMouseDown={(event) => {
                 event.preventDefault();
                 setAddressMenuOpen(false);
-                navigate('/customer/addresses');
+                navigate('/customer/profile#saved-addresses');
               }}
             >
               Manage saved addresses
@@ -304,15 +524,36 @@ export default function CustomerLayout({ children }) {
           footer={
             <div className="customer-profile-footer">
               <div className="customer-sidebar-divider" />
+
+              <button
+                type="button"
+                className={`customer-partner-promo ${collapsed ? 'collapsed' : ''}`}
+                onClick={() => navigate('/customer/partner')}
+                title={collapsed ? 'Become a Partner' : undefined}
+              >
+                <span className="customer-partner-promo-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M3 21h18M7 17V7a2 2 0 012-2h6a2 2 0 012 2v10M9 11h6" />
+                  </svg>
+                </span>
+                {!collapsed && (
+                  <span className="customer-partner-promo-copy">
+                    <span className="customer-partner-promo-title">Become a Partner</span>
+                    <span className="customer-partner-promo-text">Open your restaurant or start as a rider.</span>
+                    <span className="customer-partner-promo-link">Learn more</span>
+                  </span>
+                )}
+              </button>
+
               <div className="customer-profile-menu-wrap">
                 <button
-                  ref={profileTriggerRef}
+                  ref={sidebarProfileTriggerRef}
                   type="button"
-                  className={`customer-profile-trigger ${collapsed ? 'collapsed' : ''} ${profileMenuOpen ? 'open' : ''}`}
-                  aria-expanded={profileMenuOpen}
+                  className={`customer-profile-trigger ${collapsed ? 'collapsed' : ''} ${sidebarProfileMenuOpen ? 'open' : ''}`}
+                  aria-expanded={sidebarProfileMenuOpen}
                   aria-haspopup="menu"
                   title={collapsed ? profileName : undefined}
-                  onClick={() => setProfileMenuOpen((value) => !value)}
+                  onClick={() => setSidebarProfileMenuOpen((value) => !value)}
                 >
                   <span className="customer-profile-avatar" aria-hidden="true">{profileInitials || 'C'}</span>
                   {!collapsed && (
@@ -323,59 +564,18 @@ export default function CustomerLayout({ children }) {
                   )}
                 </button>
 
-                {profileMenuOpen && (
-                  <div ref={profilePopoverRef} className="customer-profile-popover" role="menu" aria-label="Profile menu">
-                    <div className="customer-profile-popover-header">
-                      <span className="customer-profile-avatar large" aria-hidden="true">{profileInitials || 'C'}</span>
-                      <div className="customer-profile-popover-copy">
-                        <span className="customer-profile-name">{profileName}</span>
-                        <span className="customer-profile-email">{profileEmail}</span>
-                      </div>
-                    </div>
-
-                    <div className="customer-profile-menu-list">
-                      <Link
-                        to="/customer/profile"
-                        className="customer-profile-menu-item"
-                        onClick={() => setProfileMenuOpen(false)}
-                        role="menuitem"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-                          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 3a4 4 0 100 8 4 4 0 000-8z" />
-                        </svg>
-                        <span>Settings</span>
-                      </Link>
-
-                      <button
-                        type="button"
-                        className="customer-profile-menu-item customer-profile-theme-item"
-                        onClick={() => toggleTheme()}
-                        role="menuitem"
-                      >
-                        <span>Dark mode</span>
-                        <span className={`customer-profile-toggle ${theme === 'dark' ? 'checked' : ''}`} aria-hidden="true">
-                          <span className="customer-profile-toggle-thumb" />
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className="customer-profile-menu-item danger"
-                        onClick={() => {
-                          logout();
-                          setProfileMenuOpen(false);
-                          navigate('/');
-                        }}
-                        role="menuitem"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-                          <path d="M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7" />
-                        </svg>
-                        <span>Log out</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <CustomerProfileMenu
+                  open={sidebarProfileMenuOpen}
+                  triggerRef={sidebarProfileTriggerRef}
+                  placement="sidebar"
+                  onClose={() => setSidebarProfileMenuOpen(false)}
+                  profileName={profileName}
+                  profileEmail={profileEmail}
+                  profileInitials={profileInitials}
+                  theme={theme}
+                  toggleTheme={toggleTheme}
+                  menuItems={sidebarProfileMenuItems}
+                />
               </div>
             </div>
           }
@@ -391,6 +591,21 @@ export default function CustomerLayout({ children }) {
           showThemeToggle={false}
           showUserInfo={false}
           search={topbarSearch}
+          profileButton={
+            <button
+              ref={topbarProfileTriggerRef}
+              type="button"
+              className={`topbar-profile-button ${topbarProfileMenuOpen ? 'open' : ''}`}
+              aria-label={`${profileName} profile menu`}
+              aria-expanded={topbarProfileMenuOpen}
+              aria-haspopup="menu"
+              onClick={() => setTopbarProfileMenuOpen((value) => !value)}
+            >
+              <span className="topbar-avatar" aria-hidden="true">
+                {user?.avatar ? <img src={user.avatar} alt="" /> : profileInitials}
+              </span>
+            </button>
+          }
           actions={
             <>
               <Link to="/customer/favorites" style={{ textDecoration: 'none' }} title="View favorites">
@@ -426,6 +641,19 @@ export default function CustomerLayout({ children }) {
               </Link>
             </>
           }
+        />
+
+        <CustomerProfileMenu
+          open={topbarProfileMenuOpen}
+          triggerRef={topbarProfileTriggerRef}
+          placement="topbar"
+          onClose={() => setTopbarProfileMenuOpen(false)}
+          profileName={profileName}
+          profileEmail={profileEmail}
+          profileInitials={profileInitials}
+          theme={theme}
+          toggleTheme={toggleTheme}
+          menuItems={topbarProfileMenuItems}
         />
 
         <main className="customer-content">

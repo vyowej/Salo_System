@@ -159,6 +159,27 @@
   background: var(--shell-hover);
 }
 
+.topbar-profile-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--shell-text);
+  padding: 0;
+  transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.topbar-profile-button:hover,
+.topbar-profile-button.open {
+  background: var(--shell-hover);
+  border-color: rgba(243, 107, 43, 0.18);
+  box-shadow: 0 0 0 3px rgba(243, 107, 43, 0.08);
+}
+
 .topbar-avatar {
   width: 36px;
   height: 36px;

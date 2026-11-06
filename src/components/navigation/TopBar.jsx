@@ -72,6 +72,7 @@ export default function TopBar({
   children,
   showThemeToggle = true,
   showUserInfo = true,
+  profileButton,
 }) {
   const { pathname } = useLocation();
 
@@ -121,6 +122,8 @@ export default function TopBar({
             )}
           </Link>
         )}
+
+        {profileButton}
 
         {showThemeToggle && <ThemeToggle />}
 
