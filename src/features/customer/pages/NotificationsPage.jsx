@@ -20,7 +20,7 @@ export default function NotificationsPage() {
     try {
       const items = customerService.getNotifications();
       setNotifications(items);
-    } catch (error) {
+    } catch {
       setNotifications([]);
     } finally {
       setLoading(false);

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useAuth } from '../../../hooks/useAuth';
 import customerService from '../../../services/customerService';
@@ -19,6 +19,7 @@ const CATEGORIES = [
 export default function CustomerDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [restaurants, setRestaurants] = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
@@ -39,6 +40,11 @@ export default function CustomerDashboard() {
     }
     loadData();
   }, []);
+
+  useEffect(() => {
+    const nextQuery = new URLSearchParams(location.search).get('q') || '';
+    setSearch(nextQuery);
+  }, [location.search]);
 
   const filteredRestaurants = restaurants.filter((r) => {
     const matchesSearch =
@@ -74,13 +80,6 @@ export default function CustomerDashboard() {
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-            <Link to="/customer/cart" style={{ textDecoration: 'none' }}>
-              <Button variant="primary" size="md">
-                View Multi-Cart
-              </Button>
-            </Link>
-          </div>
         </div>
       </div>
 

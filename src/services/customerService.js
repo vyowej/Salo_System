@@ -387,6 +387,39 @@ export const customerService = {
     return updated;
   },
 
+  getDefaultAddress() {
+    const addresses = this.getSavedAddresses();
+    return addresses.find((address) => address.isDefault) || addresses[0] || null;
+  },
+
+  setDefaultAddress(addressId) {
+    const addresses = this.getSavedAddresses();
+    const updated = addresses.map((address) => ({
+      ...address,
+      isDefault: address.id === addressId,
+    }));
+    localStorage.setItem('salo_addresses', JSON.stringify(updated));
+    return updated;
+  },
+
+  getRecentSearches() {
+    try {
+      const stored = localStorage.getItem('salo_recent_searches');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveRecentSearch(query) {
+    const trimmed = String(query || '').trim();
+    if (!trimmed) return [];
+    const searches = this.getRecentSearches();
+    const next = [trimmed, ...searches.filter((item) => item !== trimmed)].slice(0, 6);
+    localStorage.setItem('salo_recent_searches', JSON.stringify(next));
+    return next;
+  },
+
   // Orders
   getOrders() {
     try {

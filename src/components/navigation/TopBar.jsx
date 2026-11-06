@@ -70,6 +70,8 @@ export default function TopBar({
   onAvatarClick,
   title,
   children,
+  showThemeToggle = true,
+  showUserInfo = true,
 }) {
   const { pathname } = useLocation();
 
@@ -120,9 +122,9 @@ export default function TopBar({
           </Link>
         )}
 
-        <ThemeToggle />
+        {showThemeToggle && <ThemeToggle />}
 
-        {(userName || userInitials) && (
+        {showUserInfo && (userName || userInitials) && (
           <button
             className="topbar-user"
             onClick={onAvatarClick}

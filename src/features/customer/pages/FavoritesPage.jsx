@@ -17,7 +17,7 @@ export default function FavoritesPage() {
         const savedFavorites = allRestaurants.filter((restaurant) => favoriteIds.includes(restaurant.id));
         setRestaurants(allRestaurants);
         setFavorites(savedFavorites);
-      } catch (error) {
+      } catch {
         setFavorites([]);
         setRestaurants([]);
       } finally {
