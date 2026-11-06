@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
-import { useAuth } from '../../../hooks/useAuth';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
@@ -16,7 +15,6 @@ const PAYMENT_METHODS = [
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { restaurantGroups, itemsSubtotal, totalDeliveryFees, grandTotal, clearCart } = useCart();
 
   const [paymentMethod, setPaymentMethod] = useState('cod');
