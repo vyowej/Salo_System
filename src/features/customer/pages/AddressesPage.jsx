@@ -36,13 +36,6 @@ export default function AddressesPage() {
     e.preventDefault();
     if (!formData.street.trim()) return;
 
-    let updatedList;
-    if (formData.isDefault) {
-      updatedList = addresses.map((a) => ({ ...a, isDefault: false }));
-    } else {
-      updatedList = [...addresses];
-    }
-
     const saved = customerService.saveAddress({
       ...formData,
       isDefault: formData.isDefault || addresses.length === 0,

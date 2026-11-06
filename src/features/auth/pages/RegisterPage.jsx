@@ -6,28 +6,7 @@ import Button from '../../../components/common/Button';
 import { useAuth } from '../../../hooks/useAuth';
 import './RegisterPage.css';
 
-const ROLES = [
-  {
-    id: 'customer',
-    name: 'Customer',
-    icon: '🍽️',
-    desc: 'Order food & reserve tables',
-  },
-  {
-    id: 'owner',
-    name: 'Restaurant',
-    icon: '🏪',
-    desc: 'Sell food & manage bookings',
-  },
-  {
-    id: 'rider',
-    name: 'Rider',
-    icon: '🛵',
-    desc: 'Deliver & earn flexibly',
-  },
-];
-
-export default function RegisterPage() {
+export default function RegisterPage({ embedded = false, onSwitch }) {
   const navigate = useNavigate();
   const { register, loading } = useAuth();
 
@@ -37,7 +16,6 @@ export default function RegisterPage() {
     email: '',
     password: '',
     passwordConfirmation: '',
-    role: 'customer',
     agreeTerms: false,
   });
 
@@ -51,10 +29,6 @@ export default function RegisterPage() {
       [name]: type === 'checkbox' ? checked : value,
     }));
     if (error) setError(null);
-  };
-
-  const handleRoleSelect = (roleId) => {
-    setFormData((prev) => ({ ...prev, role: roleId }));
   };
 
   const handleSubmit = async (e) => {
@@ -93,26 +67,25 @@ export default function RegisterPage() {
         username: formData.username,
         email: formData.email,
         password: formData.password,
-        role: formData.role,
+        role: 'customer', // Default regular SALO user account
       });
 
-      // Redirect to onboarding welcome or dashboard
+      // Redirect to onboarding welcome
       navigate('/', { replace: true, state: { newlyRegistered: true } });
     } catch (err) {
       setError(err?.message || 'Registration failed. Please check your information and try again.');
     }
   };
 
-  return (
-    <AuthLayout maxWidth={500}>
+  const content = (
+    <>
       <div className="auth-header">
-        <span className="fiesta-pill" style={{ marginBottom: 8 }}>Kain tayo!</span>
-        <h1 className="auth-title">Join SALO</h1>
-        <p className="auth-subtitle">Create an account to order, reserve, or become a partner</p>
+        <h1 className="auth-title">Create your account</h1>
+        <p className="auth-subtitle">Join SALO to order food, reserve tables, and gather with family</p>
       </div>
 
       {error && (
-        <div className="auth-error-banner" role="alert" style={{ marginBottom: 'var(--space-4)' }}>
+        <div className="auth-error-banner" role="alert" style={{ marginBottom: 'var(--space-3)' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
@@ -121,30 +94,6 @@ export default function RegisterPage() {
           <span>{error}</span>
         </div>
       )}
-
-      {/* Role Picker */}
-      <div style={{ marginBottom: 'var(--space-2)' }}>
-        <label className="form-label" style={{ display: 'block', marginBottom: 'var(--space-2)' }}>
-          I want to register as
-        </label>
-        <div className="role-selector" role="radiogroup" aria-label="Select role">
-          {ROLES.map((r) => (
-            <div
-              key={r.id}
-              className={`role-card ${formData.role === r.id ? 'selected' : ''}`}
-              onClick={() => handleRoleSelect(r.id)}
-              role="radio"
-              aria-checked={formData.role === r.id}
-              tabIndex={0}
-              onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && handleRoleSelect(r.id)}
-            >
-              <span className="role-icon">{r.icon}</span>
-              <span className="role-name">{r.name}</span>
-              <span className="role-desc">{r.desc}</span>
-            </div>
-          ))}
-        </div>
-      </div>
 
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
         <div className="grid-cols-2" style={{ gap: 'var(--space-3)' }}>
@@ -209,7 +158,7 @@ export default function RegisterPage() {
           />
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-6px' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-4px' }}>
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
@@ -226,7 +175,7 @@ export default function RegisterPage() {
           </button>
         </div>
 
-        <label className="checkbox-group" style={{ fontSize: 'var(--font-size-xs)', alignItems: 'flex-start' }}>
+        <label className="checkbox-group" style={{ fontSize: 'var(--font-size-xs)', alignItems: 'flex-start', marginTop: 'var(--space-1)' }}>
           <input
             type="checkbox"
             name="agreeTerms"
@@ -250,16 +199,36 @@ export default function RegisterPage() {
           loading={loading}
           style={{ marginTop: 'var(--space-2)' }}
         >
-          Create {ROLES.find(r => r.id === formData.role)?.name} Account
+          Create Account
         </Button>
       </form>
 
       <div className="auth-footer-prompt">
         Already have an account?{' '}
-        <Link to="/login" className="auth-link" style={{ fontWeight: 'var(--font-weight-semibold)' }}>
-          Sign in
-        </Link>
+        {embedded ? (
+          <button type="button" className="auth-link" onClick={onSwitch} style={{ fontWeight: 'var(--font-weight-semibold)' }}>
+            Sign in
+          </button>
+        ) : (
+          <Link to="/login" className="auth-link" style={{ fontWeight: 'var(--font-weight-semibold)' }}>
+            Sign in
+          </Link>
+        )}
       </div>
+    </>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <AuthLayout
+      headline="Kain tayo!"
+      subheading="Good food, good company, great memories."
+      imageSrc="/images/auth/login-food.png"
+      imageAlt="Traditional Filipino Feast"
+      badgeText="Create Your Account"
+    >
+      {content}
     </AuthLayout>
   );
 }

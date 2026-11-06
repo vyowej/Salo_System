@@ -1,10 +1,8 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
-import Badge from '../../../components/common/Badge';
 
 export default function CartPage() {
   const navigate = useNavigate();

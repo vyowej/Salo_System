@@ -11,6 +11,15 @@ export default function ItemModal({ open, onClose, item, restaurant }) {
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [error, setError] = useState(null);
 
+  // Flattened list of selected add-ons
+  const flattenedAddOns = useMemo(() => {
+    return Object.values(selectedAddOns).flat();
+  }, [selectedAddOns]);
+
+  const addOnsTotal = useMemo(() => {
+    return flattenedAddOns.reduce((acc, opt) => acc + (opt.price || 0), 0);
+  }, [flattenedAddOns]);
+
   if (!item) return null;
 
   // Handle single-select (e.g. required radio group)
@@ -34,15 +43,6 @@ export default function ItemModal({ open, onClose, item, restaurant }) {
     });
     setError(null);
   };
-
-  // Flattened list of selected add-ons
-  const flattenedAddOns = useMemo(() => {
-    return Object.values(selectedAddOns).flat();
-  }, [selectedAddOns]);
-
-  const addOnsTotal = useMemo(() => {
-    return flattenedAddOns.reduce((acc, opt) => acc + (opt.price || 0), 0);
-  }, [flattenedAddOns]);
 
   const unitTotal = item.price + addOnsTotal;
   const grandItemTotal = unitTotal * quantity;
