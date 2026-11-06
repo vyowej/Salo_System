@@ -18,7 +18,6 @@ export default function RiderActiveDeliveryPage() {
   const navigate = useNavigate();
   const [delivery, setDelivery] = useState(riderService.getActiveDelivery());
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
-  const [cashCollected, setCashCollected] = useState(delivery?.cashToCollect || 0);
 
   if (!delivery) {
     return (

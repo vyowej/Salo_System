@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import TopBar from '../components/navigation/TopBar';
@@ -25,7 +24,6 @@ const ICONS = {
 };
 
 export default function CustomerLayout({ children }) {
-  const { theme } = useTheme();
   const { user, logout } = useAuth();
   const { totalItemCount } = useCart();
   const location = useLocation();
@@ -47,6 +45,7 @@ export default function CustomerLayout({ children }) {
     { id: 'orders', label: 'My Orders', icon: mkIcon(ICONS.orders), href: '/customer/orders', section: 'Activity' },
     { id: 'reservations', label: 'Table Bookings', icon: mkIcon(ICONS.reservation), href: '/customer/reservations' },
     { id: 'addresses', label: 'Saved Addresses', icon: mkIcon(ICONS.addresses), href: '/customer/addresses', section: 'Account' },
+    { id: 'partner', label: 'Become a Partner', icon: mkIcon('M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'), href: '/customer/partner' },
     { id: 'profile', label: 'Profile Settings', icon: mkIcon(ICONS.profile), href: '/customer/profile' },
   ];
 
@@ -101,7 +100,6 @@ export default function CustomerLayout({ children }) {
 
       {/* ── Main Area ──────────────────────────────────── */}
       <div className={`customer-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
-        <div className="fiesta-banderitas-strip" aria-hidden="true" />
         <TopBar
           userName={user?.name || 'Customer'}
           userInitials={userInitials}

@@ -1,6 +1,6 @@
 /* ============================================================
    SALO — Owner Layout Styles
-   Mirrors CustomerLayout structure; uses --salo-gold accent
+   Mirrors the shared dashboard layout
    ============================================================ */
 
 .owner-shell {
@@ -24,16 +24,6 @@
 
 .owner-sidebar.collapsed {
   width: var(--sidebar-collapsed-width);
-}
-
-/* Override active sidebar indicator to salo-gold for owner module */
-.owner-sidebar .sidebar-item.active {
-  background: var(--fiesta-gold-subtle, #FEF3C7);
-  color: var(--fiesta-gold, #F59E0B);
-}
-
-.owner-sidebar .sidebar-item.active .sidebar-item-icon {
-  color: var(--fiesta-gold, #F59E0B);
 }
 
 .owner-main {

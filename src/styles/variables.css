@@ -1,61 +1,66 @@
 /* ============================================================
-   SALO — Design Tokens
-   Official Filipino Fiesta-Inspired Brand Identity
-   Colors: Warm Fiesta Orange, Golden Yellow, Earthy Brown, Muted Green
+   SALO — Design Tokens v2
+   Official SALO color system
+   Fonts: Fraunces (display/headings) + DM Sans (body/UI)
    ============================================================ */
 
 :root {
-  /* ── Official SALO Logo & Fiesta Palette ─────────────── */
-  /* 1. Fiesta Orange (Primary Brand Action & Energy) */
-  --salo-orange:           #F36B2B;
-  --salo-orange-hover:     #E75B20;
-  --salo-orange-active:    #D94F19;
-  --salo-orange-light:     #FFF0E8;
-  --salo-orange-secondary: #FF8A45;
+  /* ── Core brand colors ──────────────────────────────── */
+  --salo-orange:        #F36B2B;
+  --salo-orange-hover:  #B54724;
+  --salo-orange-active: #9E3D1E;
+  --salo-orange-light:  #F9EDE7;
 
-  /* Aliased primary */
-  --salo-primary:          var(--salo-orange);
-  --salo-primary-hover:    var(--salo-orange-hover);
-  --salo-primary-active:   var(--salo-orange-active);
-  --salo-primary-light:    var(--salo-orange-light);
-  --salo-secondary-orange: var(--salo-orange-secondary);
+  --salo-gold:          #F59E0B;
+  --salo-gold-hover:    #C98E34;
+  --salo-gold-light:    #FBF3E2;
 
-  /* 2. Fiesta Golden Yellow (Sun, Warmth, Celebrations) */
-  --salo-gold:             #F59E0B;
-  --salo-gold-hover:       #D97706;
-  --salo-gold-light:       #FEF3C7;
-  --salo-gold-dark:        #B45309;
+  --salo-green:         #2E7D32;
+  --salo-green-hover:   #5A6133;
+  --salo-green-light:   #EEF3ED;
 
-  /* 3. Earthy Brown (Palayok, Clay Pot, Traditional Comfort) */
-  --salo-brown:            #5D4037;
-  --salo-brown-hover:      #4E342E;
-  --salo-brown-light:      #EFEBE9;
-  --salo-brown-dark:       #3E2723;
+  --salo-brown:         #5D4037;
+  --salo-brown-mid:     #55301C;
+  --salo-brown-hover:   #38200F;
 
-  /* 4. Muted Green (Dahon ng Saging, Freshness, Hospitality) */
-  --salo-green:            #2E7D32;
-  --salo-green-hover:      #1B5E20;
-  --salo-green-light:      #E8F5E9;
-  --salo-green-dark:       #1B5E20;
+  /* Legacy aliases retained for existing feature styles */
+  --salo-olive:         var(--salo-green);
+  --salo-olive-hover:   var(--salo-green-hover);
+  --salo-olive-light:   var(--salo-green-light);
 
-  /* Neutral extremes */
-  --salo-white:            #FFFFFF;
-  --salo-black:            #171717;
+  /* Semantic primary/accent aliases */
+  --salo-primary:        var(--salo-orange);
+  --salo-primary-hover:  var(--salo-orange-hover);
+  --salo-primary-active: var(--salo-orange-active);
+  --salo-primary-light:  var(--salo-orange-light);
 
-  /* Status Colors */
-  --salo-success:          #269B62;
-  --salo-warning:          #E6A23C;
-  --salo-error:            #DC4545;
+  /* ── Status colors (muted, harmonized) ───────────────── */
+  --salo-success:  var(--salo-green);
+  --salo-warning:  var(--salo-gold);
+  --salo-error:    #B84040;
+  --salo-info:     #3B6B8A;
 
-  /* ── Typography ─────────────────────────────────────── */
-  --font-family:
-    "Inter",
-    "Manrope",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  /* ── Typography ──────────────────────────────────────── */
+  /* Two families only. Manrope removed. DM Sans handles all UI. */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-heading: 'Fraunces', Georgia, serif;
+  --font-body:    'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-ui:      'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family:  var(--font-body);
 
+  /* Type scale */
+  --text-display:  clamp(40px, 5.5vw, 64px);
+  --text-h1:       clamp(32px, 4vw, 48px);
+  --text-h2:       clamp(26px, 3vw, 36px);
+  --text-h3:       clamp(20px, 2.2vw, 26px);
+  --text-h4:       20px;
+  --text-body-lg:  17px;
+  --text-body:     15px;
+  --text-sm:       13px;
+  --text-xs:       11px;
+  --text-caption:  11px;
+
+  /* Aliases kept for existing code */
   --font-size-xs:   11px;
   --font-size-sm:   13px;
   --font-size-base: 15px;
@@ -66,16 +71,19 @@
   --font-size-3xl:  30px;
   --font-size-4xl:  36px;
 
+  /* Weights */
   --font-weight-normal:   400;
   --font-weight-medium:   500;
   --font-weight-semibold: 600;
   --font-weight-bold:     700;
 
-  --line-height-tight:    1.2;
-  --line-height-normal:   1.5;
-  --line-height-relaxed:  1.65;
+  /* Line heights */
+  --line-height-tight:   1.2;
+  --line-height-snug:    1.35;
+  --line-height-normal:  1.55;
+  --line-height-relaxed: 1.70;
 
-  /* ── Spacing scale ──────────────────────────────────── */
+  /* ── Spacing scale ────────────────────────────────────── */
   --space-1:  4px;
   --space-2:  8px;
   --space-3:  12px;
@@ -87,28 +95,32 @@
   --space-12: 48px;
   --space-16: 64px;
   --space-20: 80px;
+  --space-24: 96px;
 
-  /* ── Border radius ──────────────────────────────────── */
-  --radius-xs:  4px;
-  --radius-sm:  6px;
-  --radius-md:  10px;
-  --radius-lg:  14px;
-  --radius-xl:  20px;
-  --radius-2xl: 26px;
+  /* ── Border radius (consistent system) ───────────────── */
+  --radius-xs:   3px;
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-2xl:  28px;
+  --radius-pill: 9999px;
   --radius-full: 9999px;
 
-  /* ── Layout ─────────────────────────────────────────── */
-  --topbar-height:           72px;
-  --sidebar-width:           250px;
-  --sidebar-collapsed-width: 76px;
-  --content-max-width:       1280px;
+  /* ── Layout ───────────────────────────────────────────── */
+  --topbar-height:           64px;
+  --navbar-height:           var(--topbar-height);
+  --sidebar-width:           240px;
+  --sidebar-collapsed-width: 68px;
+  --content-max-width:       1200px;
+  --content-narrow:          760px;
 
-  /* ── Transitions ────────────────────────────────────── */
+  /* ── Transitions ──────────────────────────────────────── */
   --transition-fast:   150ms ease;
   --transition-normal: 220ms ease;
-  --transition-slow:   350ms ease;
+  --transition-slow:   var(--transition-normal);
 
-  /* ── Layering ───────────────────────────────────────── */
+  /* ── Z-index ──────────────────────────────────────────── */
   --z-base:     0;
   --z-raised:   10;
   --z-dropdown: 100;

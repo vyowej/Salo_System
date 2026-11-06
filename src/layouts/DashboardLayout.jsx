@@ -49,7 +49,6 @@ export default function DashboardLayout({
           search={topbarSearch}
           actions={topbarActions}
           onMenuToggle={() => setMobileOpen((v) => !v)}
-          logo={<span />} {/* Logo lives in sidebar */}
         />
         <main className="dashboard-content">
           {children}

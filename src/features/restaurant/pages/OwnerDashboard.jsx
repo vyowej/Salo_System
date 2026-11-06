@@ -141,8 +141,6 @@ export default function OwnerDashboard() {
   const [recentOrders, setRecentOrders] = useState([]);
   const [upcomingReservations, setUpcomingReservations] = useState([]);
   const [restaurant, setRestaurant] = useState(null);
-  const [orderList, setOrderList] = useState([]);
-  const [reservationList, setReservationList] = useState([]);
 
   useEffect(() => {
     const rest = ownerService.getRestaurant();
@@ -152,8 +150,6 @@ export default function OwnerDashboard() {
 
     setRestaurant(rest);
     setStats(s);
-    setOrderList(orders);
-    setReservationList(reservations);
 
     // Last 5 orders (most recent first)
     setRecentOrders(orders.slice(0, 5));
@@ -166,7 +162,6 @@ export default function OwnerDashboard() {
   function handleOrderAction(orderId, newStatus) {
     ownerService.updateOrderStatus(orderId, newStatus);
     const updated = ownerService.getOrders();
-    setOrderList(updated);
     setRecentOrders(updated.slice(0, 5));
     setStats(ownerService.getDashboardStats());
   }
@@ -174,7 +169,6 @@ export default function OwnerDashboard() {
   function handleReservationAction(resId, newStatus) {
     ownerService.updateReservationStatus(resId, newStatus);
     const updated = ownerService.getReservations();
-    setReservationList(updated);
     const upcoming = updated.filter((r) => r.status === 'Pending' || r.status === 'Confirmed').slice(0, 3);
     setUpcomingReservations(upcoming);
     setStats(ownerService.getDashboardStats());

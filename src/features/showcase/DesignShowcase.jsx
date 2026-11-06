@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import ThemeToggle from '../../components/navigation/ThemeToggle';
+import BrandMark from '../../components/common/BrandMark';
 import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
 import { Card, CardHeader, CardTitle, CardBody, CardFooter, StatCard } from '../../components/common/Card';
-import { Input, Textarea, Select, FormGroup, Label, HelperText, ErrorMessage } from '../../components/forms/FormElements';
+import { Input, Textarea, Select, FormGroup, Label } from '../../components/forms/FormElements';
 import Modal from '../../components/common/Modal';
 import {
   Skeleton,
@@ -14,6 +15,7 @@ import {
   ErrorState,
   LoadingSpinner,
 } from '../../components/feedback/Feedback';
+import apiClient from '../../services/apiClient';
 import './DesignShowcase.css';
 
 /* ── Icons (inline SVG) ──────────────────────────────── */
@@ -48,6 +50,7 @@ const TABS = [
   { id: 'navigation', label: 'Navigation' },
   { id: 'states',     label: 'States' },
   { id: 'layouts',    label: 'Layouts' },
+  { id: 'api',        label: 'API Architecture' },
 ];
 
 export default function DesignShowcase() {
@@ -56,17 +59,13 @@ export default function DesignShowcase() {
   const [modalOpen, setModalOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const logoSrc = theme === 'dark'
-    ? '/brand/salo-logo-dark.png'
-    : '/brand/salo-logo-light.png';
-
   return (
     <div className="showcase">
-      <div className="fiesta-banderitas-strip" aria-hidden="true" />
+      {/* Rainbow strip removed — no decorative strip */}
       {/* ── TopBar ──────────────────────────────────── */}
       <header className="showcase-topbar">
         <div className="showcase-topbar-logo">
-          <img src={logoSrc} alt="SALO" />
+          <BrandMark size="sm" />
           <span className="showcase-topbar-badge">Design System</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -995,8 +994,7 @@ export default function DesignShowcase() {
                   boxShadow: 'var(--shadow-lg)',
                 }}>
                   <div style={{ textAlign: 'center', marginBottom: 'var(--space-8)' }}>
-                    <img src={theme === 'dark' ? '/brand/salo-logo-dark.png' : '/brand/salo-logo-light.png'}
-                      alt="SALO" style={{ height: 36, objectFit: 'contain', margin: '0 auto' }} />
+                    <BrandMark size="md" className="showcase-auth-brand" />
                   </div>
                   <h2 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, marginBottom: 'var(--space-1)', textAlign: 'center' }}>Welcome back</h2>
                   <p style={{ color: 'var(--text-secondary)', textAlign: 'center', marginBottom: 'var(--space-8)', fontSize: 'var(--font-size-sm)' }}>
@@ -1042,6 +1040,13 @@ export default function DesignShowcase() {
           </div>
         )}
 
+        {/* ════════════════════════════════════════════
+            API ARCHITECTURE TAB (PHASE 7)
+            ════════════════════════════════════════════ */}
+        {activeTab === 'api' && (
+          <ApiArchitectureSection />
+        )}
+
       </div>
     </div>
   );
@@ -1051,10 +1056,7 @@ export default function DesignShowcase() {
 function NavShellDemo({ role }) {
   const [activeId, setActiveId] = useState(NAV_CONFIGS[role]?.[0]?.id);
   const [collapsed, setCollapsed] = useState(false);
-  const { theme } = useTheme();
 
-  const logoSrc = theme === 'dark' ? '/brand/salo-logo-dark.png' : '/brand/salo-logo-light.png';
-  const iconSrc = '/brand/salo-icon.png';
   const items = NAV_CONFIGS[role] || [];
   const activeItem = items.find(i => i.id === activeId);
 
@@ -1067,7 +1069,7 @@ function NavShellDemo({ role }) {
           height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: collapsed ? '0 16px' : '0 16px', borderBottom: '1px solid var(--nav-border)', flexShrink: 0,
         }}>
-          <img src={collapsed ? iconSrc : logoSrc} alt="SALO" style={{ height: 24, objectFit: 'contain' }} />
+          <BrandMark size="sm" showText={!collapsed} dark />
           <button onClick={() => setCollapsed(v => !v)} style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points={collapsed ? '9 18 15 12 9 6' : '15 18 9 12 15 6'} />
@@ -1184,4 +1186,250 @@ const ROLE_BADGE = {
 
 function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/* ── API Architecture Section (Phase 7) ───────────────── */
+function ApiArchitectureSection() {
+  const [pingResult, setPingResult] = useState(null);
+  const [isPinging, setIsPinging] = useState(false);
+  const [activeSchema, setActiveSchema] = useState('checkout');
+
+  async function handlePing() {
+    setIsPinging(true);
+    const res = await apiClient.checkHealth();
+    setPingResult(res);
+    setIsPinging(false);
+  }
+
+  const SCHEMAS = {
+    checkout: {
+      title: 'Consolidated Multi-Restaurant Checkout',
+      endpoint: 'POST /api/customer/orders',
+      payload: {
+        payment_method: 'Cash on Delivery',
+        sub_orders: [
+          {
+            restaurant_id: 'dalisay-heritage',
+            delivery_address: 'Scout Gandia, QC',
+            items: [{ menu_item_id: 'dh-1', quantity: 2, options: ['Annatto Rice'] }],
+          },
+          {
+            restaurant_id: 'manila-pizza',
+            delivery_address: 'BGC Taguig',
+            items: [{ menu_item_id: 'mp-2', quantity: 1 }],
+          },
+        ],
+      },
+    },
+    reservation: {
+      title: 'Dine-In Table Reservation with Deposit',
+      endpoint: 'POST /api/customer/reservations',
+      payload: {
+        restaurant_id: 'dalisay-heritage',
+        party_size: 4,
+        date: '2026-11-08',
+        time: '19:30',
+        special_requests: 'Window seat preferred',
+        deposit_payment_method: 'GCash',
+        deposit_amount: 500,
+      },
+    },
+    remittance: {
+      title: 'Courier COD Cash Remittance',
+      endpoint: 'POST /api/rider/remittance',
+      payload: {
+        rider_id: 'rider-danilo',
+        amount: 1450,
+        channel: 'GCash Remittance',
+        reference_number: 'GC-994102831',
+      },
+    },
+    dispute: {
+      title: 'Admin Multi-Kitchen Dispute Resolution',
+      endpoint: 'POST /api/admin/orders/{id}/resolve-dispute',
+      payload: {
+        order_id: 'SALO-MNL-2032',
+        action: 'Refund Approved',
+        refund_amount: 480,
+        reason: 'Kitchen out of key fresh stock',
+      },
+    },
+  };
+
+  return (
+    <div>
+      {/* ── Header ── */}
+      <section className="showcase-section">
+        <div className="showcase-section-header">
+          <h2 className="showcase-section-title">Backend REST API & Architecture Readiness</h2>
+          <p className="showcase-section-desc">
+            Phase 7 connects the 4-role React frontend to the PHP Laravel REST API with unified bearer token authentication,
+            structured error parsing, and resilient offline fallback cache.
+          </p>
+        </div>
+
+        {/* ── Live Health & Connection Status Inspector ── */}
+        <Card style={{ marginBottom: 'var(--space-6)' }}>
+          <CardBody>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Target Endpoint Connectivity
+                </span>
+                <p style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)', margin: '4px 0 2px' }}>
+                  Base URL: <code style={{ background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: 4 }}>{apiClient.getBaseUrl()}</code>
+                </p>
+                <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                  Auth Scheme: Laravel Sanctum Bearer Token ({apiClient.getToken() ? 'Token Active' : 'No Token in Session'})
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                {pingResult && (
+                  <Badge variant={pingResult.online ? 'success' : 'warning'} size="md">
+                    {pingResult.online ? `Connected (${pingResult.latencyMs}ms)` : 'Backend Offline · Running Mock Fallback'}
+                  </Badge>
+                )}
+                <Button variant="primary" size="sm" onClick={handlePing} loading={isPinging}>
+                  Test API Ping
+                </Button>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+
+        {/* ── 5 API Domains Map ── */}
+        <div className="showcase-subsection">
+          <p className="showcase-subsection-label">API Endpoints Across the 4 User Roles</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
+            {[
+              {
+                title: 'Auth & Session (/api/auth)',
+                color: 'var(--accent)',
+                endpoints: ['POST /register', 'POST /login', 'GET /me', 'POST /logout'],
+              },
+              {
+                title: 'Customer & Food (/api/customer)',
+                color: 'var(--accent)',
+                endpoints: ['GET /restaurants', 'POST /orders (Multi-Cart)', 'POST /reservations', 'GET /addresses'],
+              },
+              {
+                title: 'Restaurant Owner (/api/owner)',
+                color: 'var(--fiesta-gold, #F59E0B)',
+                endpoints: ['GET /orders (Live)', 'PATCH /orders/:id/status', 'POST /menu (CRUD)', 'POST /payouts'],
+              },
+              {
+                title: 'Delivery Rider (/api/rider)',
+                color: 'var(--salo-green, #2E7D32)',
+                endpoints: ['POST /status (Online/Off)', 'PATCH /active-delivery/step', 'POST /jobs/:id/accept', 'POST /remittance'],
+              },
+              {
+                title: 'Central HQ Admin (/api/admin)',
+                color: 'var(--salo-brown, #5D4037)',
+                endpoints: ['GET /metrics (GMV)', 'PATCH /restaurants/:id', 'PATCH /riders/:id', 'POST /orders/:id/dispute'],
+              },
+            ].map((d) => (
+              <div
+                key={d.title}
+                style={{
+                  background: 'var(--surface-primary)',
+                  border: '1px solid var(--border-primary)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: 'var(--space-4)',
+                }}
+              >
+                <strong style={{ fontSize: 'var(--font-size-xs)', color: d.color, display: 'block', marginBottom: 8 }}>
+                  {d.title}
+                </strong>
+                <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  {d.endpoints.map((ep) => (
+                    <li key={ep}>
+                      <code>{ep}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Interactive Schema Payload Viewer ── */}
+        <div className="showcase-subsection" style={{ marginTop: 'var(--space-8)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+            <div>
+              <p className="showcase-subsection-label" style={{ margin: 0 }}>Payload Contract Inspector</p>
+              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                Inspect real JSON structures passed between React services and Laravel endpoints
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              {Object.keys(SCHEMAS).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setActiveSchema(key)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: activeSchema === key ? '1px solid var(--accent)' : '1px solid var(--border-primary)',
+                    background: activeSchema === key ? 'var(--accent)' : 'var(--surface-primary)',
+                    color: activeSchema === key ? '#fff' : 'var(--text-secondary)',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {SCHEMAS[key].title.split(' ')[0]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Card>
+            <CardBody>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <strong style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>
+                  {SCHEMAS[activeSchema].title}
+                </strong>
+                <Badge variant="primary" size="sm">
+                  {SCHEMAS[activeSchema].endpoint}
+                </Badge>
+              </div>
+              <pre style={{
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-secondary)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-4)',
+                fontSize: 12,
+                fontFamily: 'monospace',
+                color: 'var(--text-primary)',
+                overflowX: 'auto',
+                margin: 0,
+              }}>
+                {JSON.stringify(SCHEMAS[activeSchema].payload, null, 2)}
+              </pre>
+            </CardBody>
+          </Card>
+        </div>
+
+        {/* ── Official Documentation Callout ── */}
+        <div style={{
+          marginTop: 'var(--space-6)',
+          padding: 'var(--space-4)',
+          background: 'var(--surface-secondary)',
+          borderLeft: '4px solid var(--accent)',
+          borderRadius: 'var(--radius-md)',
+        }}>
+          <strong style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
+            Official Contract Documentation: docs/API_CONTRACT.md
+          </strong>
+          <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+            Exhaustive specifications for all 24 REST endpoints, authorization headers, validation rules, error handling envelopes,
+            and HTTP response codes are codified in the project root under <code>docs/API_CONTRACT.md</code>.
+          </p>
+        </div>
+      </section>
+    </div>
+  );
 }

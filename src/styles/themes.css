@@ -1,15 +1,13 @@
 /* ============================================================
-   SALO — Theme Definitions
-   Applied to <html data-theme="light|dark">
-   Modern Filipino Fiesta-Inspired Color Architecture
-   Light: PURE WHITE (#FFFFFF) backgrounds
-   Dark:  BLACK / NEAR-BLACK (#171717) backgrounds
+   SALO — Theme Definitions v2
+   Light: white and cool light-neutral surfaces
+   Dark: true charcoal neutrals
    ============================================================ */
 
 [data-theme="light"] {
   color-scheme: light;
 
-  /* Backgrounds — STRICTLY pure white, no beige, cream, or tan */
+  /* Backgrounds */
   --bg-primary:   #FFFFFF;
   --bg-secondary: #F8F9FA;
   --bg-tertiary:  #F1F3F5;
@@ -18,162 +16,215 @@
   --surface-primary:   #FFFFFF;
   --surface-secondary: #F8F9FA;
   --surface-hover:     #F1F3F5;
+  --surface-dark:      #171717;
 
   /* Text */
   --text-primary:   #171717;
-  --text-secondary: #595959;
-  --text-muted:     #8C8C8C;
+  --text-secondary: #525252;
+  --text-muted:     #737373;
   --text-inverse:   #FFFFFF;
+  --text-on-dark:   #F5F5F5;
 
   /* Borders */
-  --border-primary:   #EAECEF;
+  --border-primary:   #E5E7EB;
   --border-secondary: #F1F3F5;
-  --border-focus:     #F36B2B;
+  --border-focus:     var(--salo-orange);
 
-  /* Primary Brand Accent (Fiesta Orange) */
-  --accent:        #F36B2B;
-  --accent-hover:  #E75B20;
-  --accent-active: #D94F19;
-  --accent-subtle: #FFF0E8;
+  --accent:        var(--salo-orange);
+  --accent-hover:  var(--salo-orange-hover);
+  --accent-active: var(--salo-orange-active);
+  --accent-subtle: var(--salo-orange-light);
   --accent-text:   #FFFFFF;
 
-  /* ── Filipino Fiesta Brand Color System ──────────────── */
-  /* Fiesta Golden Yellow (Sun & Festivities) */
-  --fiesta-gold:         #F59E0B;
-  --fiesta-gold-hover:   #D97706;
-  --fiesta-gold-subtle:  #FEF3C7;
-  --fiesta-gold-text:    #92400E;
+  /* Gold accent */
+  --gold:          var(--salo-gold);
+  --gold-subtle:   var(--salo-gold-light);
+  --gold-text:     #7A4B0B;
 
-  /* Earthy Palayok Brown (Warm Clay & Cooking) */
-  --fiesta-brown:        #5D4037;
-  --fiesta-brown-hover:  #4E342E;
-  --fiesta-brown-subtle: #EFEBE9;
-  --fiesta-brown-text:   #3E2723;
-
-  /* Dahon ng Saging Green (Fresh Leaf & Table Spread) */
-  --fiesta-green:        #2E7D32;
-  --fiesta-green-hover:  #1B5E20;
-  --fiesta-green-subtle: #E8F5E9;
-  --fiesta-green-text:   #1B5E20;
+  /* Olive accent */
+  --olive:         var(--salo-green);
+  --olive-subtle:  var(--salo-green-light);
+  --olive-text:    #245B28;
 
   /* Status */
-  --status-success-bg:   #E8F5E9;
-  --status-success-text: #2E7D32;
-  --status-warning-bg:   #FEF3C7;
-  --status-warning-text: #92400E;
-  --status-error-bg:     #FEF2F2;
-  --status-error-text:   #DC4545;
-  --status-info-bg:      #EFF6FF;
-  --status-info-text:    #2563EB;
+  --status-success-bg:   var(--salo-green-light);
+  --status-success-text: var(--salo-green);
+  --status-warning-bg:   var(--salo-gold-light);
+  --status-warning-text: #7A4B0B;
+  --status-error-bg:     #FAEAEA;
+  --status-error-text:   #8A2C2C;
+  --status-info-bg:      #E8F0F5;
+  --status-info-text:    #2A5272;
 
-  /* Shadows */
-  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-sm:  0 2px 6px rgba(0, 0, 0, 0.06);
-  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.07);
-  --shadow-lg:  0 8px 30px rgba(0, 0, 0, 0.09);
-  --shadow-xl:  0 16px 50px rgba(0, 0, 0, 0.11);
+  --shadow-xs:  0 1px 2px rgba(23, 23, 23, 0.04);
+  --shadow-sm:  0 2px 6px rgba(23, 23, 23, 0.06);
+  --shadow-md:  0 4px 16px rgba(23, 23, 23, 0.08);
+  --shadow-lg:  0 8px 30px rgba(23, 23, 23, 0.10);
+  --shadow-xl:  0 16px 48px rgba(23, 23, 23, 0.12);
 
-  /* Overlays */
+  /* Overlay */
   --overlay-bg: rgba(23, 23, 23, 0.45);
 
-  /* Input */
-  --input-bg:           #FFFFFF;
-  --input-border:       #DCDCDC;
-  --input-border-focus: #F36B2B;
-  --input-text:         #171717;
-  --input-placeholder:  #8C8C8C;
+  /* Inputs */
+  --input-bg:            #FFFFFF;
+  --input-border:        #D1D5DB;
+  --input-border-focus:  var(--salo-orange);
+  --input-text:          var(--text-primary);
+  --input-placeholder:   #737373;
 
-  /* Navigation */
-  --nav-bg:               #FFFFFF;
-  --nav-border:           #EAECEF;
-  --nav-item-hover:       #F8F9FA;
-  --nav-item-active-bg:   #FFF0E8;
-  --nav-item-active-text: #F36B2B;
-  --nav-item-active-icon: #F36B2B;
+  /* Navigation (floating pill in public layout) */
+  --nav-pill-bg:          #FFFFFF;
+  --nav-pill-text:        #171717;
+  --nav-pill-link-hover:  #F1F3F5;
+  --nav-pill-badge-bg:    #FBF3E2;
+
+  /* Sidebar */
+  --nav-bg:               #171717;
+  --nav-border:           rgba(255,255,255,0.07);
+  --nav-item-hover:       rgba(255,255,255,0.08);
+  --nav-text:             #F5F5F5;
+  --nav-text-muted:       #A3A3A3;
+  --nav-item-active-bg:   rgba(243, 107, 43, 0.18);
+  --nav-item-active-text: var(--salo-orange);
+  --nav-item-active-icon: var(--salo-orange);
+
+  /* Glass for subtle nav on content layouts */
+  --glass-nav-bg:     rgba(255, 255, 255, 0.90);
+  --glass-nav-border: rgba(23, 23, 23, 0.10);
+  --glass-nav-shadow: 0 4px 20px rgba(23, 23, 23, 0.06);
+
+  /* Gradients */
+  --gradient-hero:    linear-gradient(160deg, #FFFFFF 0%, #F8F9FA 100%);
+  --gradient-card:    linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 100%);
+  --gradient-auth-brand: linear-gradient(145deg, #1E1E20 0%, #171717 100%);
+
+  /* Retained aliases for compatibility */
+  --fiesta-gold:         var(--salo-gold);
+  --fiesta-gold-hover:   var(--salo-gold-hover);
+  --fiesta-gold-subtle:  var(--salo-gold-light);
+  --fiesta-gold-text:    var(--gold-text);
+  --fiesta-brown:        var(--salo-brown);
+  --fiesta-brown-hover:  var(--salo-brown-hover);
+  --fiesta-brown-subtle: #F5F5F5;
+  --fiesta-brown-text:   var(--text-primary);
+  --fiesta-green:        var(--salo-green);
+  --fiesta-green-hover:  var(--salo-green-hover);
+  --fiesta-green-subtle: var(--salo-green-light);
+  --fiesta-green-text:   var(--olive-text);
+  --festive-border-subtle: rgba(243, 107, 43, 0.15);
+  --surface-glass: rgba(255,255,255,0.75);
+  --border-glass:  rgba(23,23,23,0.12);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
 
-  /* Backgrounds — STRICTLY near-black / true dark */
+  /* Dark neutrals */
   --bg-primary:   #171717;
-  --bg-secondary: #1F1F21;
+  --bg-secondary: #1E1E20;
   --bg-tertiary:  #262629;
 
   /* Surfaces */
   --surface-primary:   #1E1E20;
   --surface-secondary: #262629;
   --surface-hover:     #303034;
+  --surface-dark:      #171717;
 
   /* Text */
-  --text-primary:   #FFFFFF;
-  --text-secondary: #B5B5B5;
-  --text-muted:     #858585;
+  --text-primary:   #F5F5F5;
+  --text-secondary: #D4D4D4;
+  --text-muted:     #A3A3A3;
   --text-inverse:   #171717;
+  --text-on-dark:   #F5F5F5;
 
   /* Borders */
   --border-primary:   #353539;
-  --border-secondary: #2C2C30;
-  --border-focus:     #FF8045;
+  --border-secondary: #2A2A2D;
+  --border-focus:     var(--salo-orange);
 
-  /* Primary Brand Accent (Fiesta Orange in Dark) */
-  --accent:        #FF8045;
-  --accent-hover:  #FF965F;
-  --accent-active: #F36B2B;
-  --accent-subtle: #3A241A;
+  --accent:        var(--salo-orange);
+  --accent-hover:  var(--salo-orange-hover);
+  --accent-active: var(--salo-orange-active);
+  --accent-subtle: #3A241B;
   --accent-text:   #FFFFFF;
 
-  /* ── Filipino Fiesta Brand Color System in Dark ──────── */
-  /* Fiesta Golden Yellow */
-  --fiesta-gold:         #FBBF24;
-  --fiesta-gold-hover:   #FCD34D;
-  --fiesta-gold-subtle:  #332705;
-  --fiesta-gold-text:    #FDE68A;
+  /* Gold accent */
+  --gold:          var(--salo-gold);
+  --gold-subtle:   #3A2D18;
+  --gold-text:     #FCD34D;
 
-  /* Earthy Palayok Brown */
-  --fiesta-brown:        #A1887F;
-  --fiesta-brown-hover:  #BCAAA4;
-  --fiesta-brown-subtle: #2D2422;
-  --fiesta-brown-text:   #D7CCC8;
-
-  /* Dahon ng Saging Green */
-  --fiesta-green:        #4ADE80;
-  --fiesta-green-hover:  #86EFAC;
-  --fiesta-green-subtle: #0B2915;
-  --fiesta-green-text:   #BBF7D0;
+  /* Olive accent */
+  --olive:         #65A86A;
+  --olive-subtle:  #1E3020;
+  --olive-text:    #B7E2BA;
 
   /* Status */
-  --status-success-bg:   #0B2915;
-  --status-success-text: #4ADE80;
-  --status-warning-bg:   #332705;
+  --status-success-bg:   #1E3020;
+  --status-success-text: #B7E2BA;
+  --status-warning-bg:   #3A2D18;
   --status-warning-text: #FDE68A;
-  --status-error-bg:     #2D0808;
+  --status-error-bg:     #351D1D;
   --status-error-text:   #FCA5A5;
-  --status-info-bg:      #0D1B40;
+  --status-info-bg:      #1E2A35;
   --status-info-text:    #93C5FD;
 
   /* Shadows */
-  --shadow-xs:  0 1px 3px rgba(0, 0, 0, 0.35);
-  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-md:  0 4px 18px rgba(0, 0, 0, 0.45);
-  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.5);
-  --shadow-xl:  0 16px 54px rgba(0, 0, 0, 0.6);
+  --shadow-xs:  0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.55);
+  --shadow-md:  0 4px 18px rgba(0, 0, 0, 0.6);
+  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.65);
+  --shadow-xl:  0 16px 54px rgba(0, 0, 0, 0.7);
 
-  /* Overlays */
-  --overlay-bg: rgba(0, 0, 0, 0.7);
+  /* Overlay */
+  --overlay-bg: rgba(0, 0, 0, 0.75);
 
-  /* Input */
-  --input-bg:            #242427;
-  --input-border:        #3C3C42;
-  --input-border-focus:  #FF8045;
-  --input-text:          #FFFFFF;
-  --input-placeholder:   #686870;
+  /* Inputs */
+  --input-bg:            #1E1E20;
+  --input-border:        #353539;
+  --input-border-focus:  var(--salo-orange);
+  --input-text:          #F5F5F5;
+  --input-placeholder:   #A3A3A3;
 
-  /* Navigation */
-  --nav-bg:               #1E1E20;
-  --nav-border:           #323236;
-  --nav-item-hover:       #29292D;
-  --nav-item-active-bg:   #3A241A;
-  --nav-item-active-text: #FF8045;
-  --nav-item-active-icon: #FF8045;
+  /* Navigation pill */
+  --nav-pill-bg:          #171717;
+  --nav-pill-text:        #F5F5F5;
+  --nav-pill-link-hover:  #303034;
+  --nav-pill-badge-bg:    #3A2D18;
+
+  /* Sidebar */
+  --nav-bg:               #171717;
+  --nav-border:           rgba(255,255,255,0.06);
+  --nav-item-hover:       rgba(255,255,255,0.06);
+  --nav-text:             #F5F5F5;
+  --nav-text-muted:       #A3A3A3;
+  --nav-item-active-bg:   rgba(243, 107, 43, 0.18);
+  --nav-item-active-text: var(--salo-orange);
+  --nav-item-active-icon: var(--salo-orange);
+
+  /* Glass */
+  --glass-nav-bg:     rgba(23, 23, 23, 0.90);
+  --glass-nav-border: rgba(255, 255, 255, 0.08);
+  --glass-nav-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+
+  /* Gradients */
+  --gradient-hero:    linear-gradient(160deg, #171717 0%, #1E1E20 100%);
+  --gradient-card:    linear-gradient(180deg, #1E1E20 0%, #1E1E20 100%);
+  --gradient-auth-brand: linear-gradient(145deg, #1E1E20 0%, #171717 100%);
+
+  /* Retained aliases */
+  --fiesta-gold:         var(--salo-gold);
+  --fiesta-gold-hover:   var(--salo-gold-hover);
+  --fiesta-gold-subtle:  var(--gold-subtle);
+  --fiesta-gold-text:    #FCD34D;
+  --fiesta-brown:        var(--salo-brown);
+  --fiesta-brown-hover:  var(--salo-brown-hover);
+  --fiesta-brown-subtle: #2A2523;
+  --fiesta-brown-text:   #E8D5CC;
+  --fiesta-green:        var(--salo-green);
+  --fiesta-green-hover:  var(--salo-green-hover);
+  --fiesta-green-subtle: #1E3020;
+  --fiesta-green-text:   #B7E2BA;
+  --festive-border-subtle: rgba(243, 107, 43, 0.18);
+  --surface-glass: rgba(23, 23, 23, 0.75);
+  --border-glass:  rgba(255,255,255,0.08);
 }

@@ -26,13 +26,13 @@ export default function OwnerMenuPage() {
   // Delete confirmation
   const [deleteId, setDeleteId] = useState(null);
 
-  useEffect(() => {
-    loadMenu();
-  }, []);
-
   function loadMenu() {
     setMenuItems(ownerService.getMenuItems());
   }
+
+  useEffect(() => {
+    loadMenu();
+  }, []);
 
   // Categories list
   const categories = ['All', ...new Set(menuItems.map((item) => item.category))];

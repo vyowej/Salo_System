@@ -81,6 +81,36 @@ export const apiClient = {
   put: (endpoint, data, options = {}) => request(endpoint, { ...options, method: 'PUT', data }),
   patch: (endpoint, data, options = {}) => request(endpoint, { ...options, method: 'PATCH', data }),
   delete: (endpoint, options = {}) => request(endpoint, { ...options, method: 'DELETE' }),
+
+  // Utilities
+  getBaseUrl: () => API_BASE_URL,
+  getToken: () => localStorage.getItem('salo_token'),
+  setToken: (token) => localStorage.setItem('salo_token', token),
+  clearToken: () => localStorage.removeItem('salo_token'),
+
+  // Backend Health Ping
+  async checkHealth() {
+    try {
+      const start = Date.now();
+      const res = await fetch(`${API_BASE_URL.replace(/\/$/, '')}/health`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      const latency = Date.now() - start;
+      return {
+        online: res.ok,
+        status: res.status,
+        latencyMs: latency,
+      };
+    } catch (err) {
+      return {
+        online: false,
+        status: 0,
+        latencyMs: 0,
+        error: err.message,
+      };
+    }
+  },
 };
 
 export { ApiError };

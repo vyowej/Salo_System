@@ -1,80 +1,115 @@
 import { Link } from 'react-router-dom';
-import { useTheme } from '../contexts/ThemeContext';
+import BrandMark from '../components/common/BrandMark';
 import ThemeToggle from '../components/navigation/ThemeToggle';
+import './AuthLayout.css';
 
 /**
- * SALO Auth Layout
- * Centered panel layout for login, register, password reset, etc.
+ * SALO Two-Column Auth Layout
+ * Desktop: Warm brand presentation on left (with local food photography) + Form on right.
+ * Mobile: Clean stacked responsive experience.
  */
-export default function AuthLayout({ children, maxWidth = 460 }) {
-  const { theme } = useTheme();
+export default function AuthLayout({
+  children,
+  headline = 'Kain tayo!',
+  subheading = 'Good food, good company, great memories.',
+  imageSrc = '/images/auth/login-food.png',
+  imageAlt = 'Authentic Filipino Salo-salo Spread',
+  badgeText = 'Order. Reserve. Gather.',
+  compact = false,
+  maxWidth,
+}) {
 
-  const logoSrc = theme === 'dark'
-    ? '/brand/salo-logo-dark.png'
-    : '/brand/salo-logo-light.png';
+  // Compact mode for password reset or simple flows
+  if (compact || maxWidth) {
+    return (
+      <div className="auth-page-shell">
+        <header className="auth-topbar">
+          <Link to="/" className="auth-back-link" aria-label="Return to SALO Home">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            <span>Back to SALO</span>
+          </Link>
+          <div className="auth-topbar-actions">
+            <ThemeToggle />
+          </div>
+        </header>
 
-  return (
-    <div className="auth-shell">
-      {/* Subtle Filipino Fiesta Banderitas Accent Strip */}
-      <div className="fiesta-banderitas-strip" style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 'var(--z-sticky)' }} aria-hidden="true" />
-
-      {/* Top action bar: back to home + theme toggle */}
-      <div style={{
-        position: 'fixed',
-        top: 'var(--space-4)',
-        left: 'var(--space-6)',
-        right: 'var(--space-6)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        zIndex: 'var(--z-sticky)',
-        pointerEvents: 'none',
-      }}>
-        <Link
-          to="/"
-          style={{
-            pointerEvents: 'auto',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 'var(--space-2)',
-            fontSize: 'var(--font-size-sm)',
-            fontWeight: 'var(--font-weight-medium)',
-            color: 'var(--text-secondary)',
-            textDecoration: 'none',
-            padding: '6px 12px',
-            borderRadius: 'var(--radius-md)',
-            background: 'var(--surface-primary)',
-            border: '1px solid var(--border-primary)',
-            boxShadow: 'var(--shadow-xs)',
-            transition: 'color var(--transition-fast), border-color var(--transition-fast)',
-          }}
-          className="auth-back-link"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          Back to SALO
-        </Link>
-        <div style={{ pointerEvents: 'auto' }}>
-          <ThemeToggle />
+        <div className="auth-compact-card animate-fade-in" style={maxWidth ? { maxWidth: `${maxWidth}px` } : undefined}>
+          <div style={{ textAlign: 'center', marginBottom: 'var(--space-6)' }}>
+            <Link to="/" aria-label="SALO Home" style={{ display: 'inline-block' }}>
+              <BrandMark size="md" />
+            </Link>
+          </div>
+          {children}
         </div>
       </div>
+    );
+  }
 
-      <div
-        className="auth-panel animate-scale-in"
-        style={{ maxWidth: `${maxWidth}px`, margin: 'var(--space-12) auto var(--space-6)' }}
-      >
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 'var(--space-6)' }}>
-          <Link to="/" aria-label="SALO Home" style={{ display: 'inline-block' }}>
-            <img
-              src={logoSrc}
-              alt="SALO"
-              style={{ height: 36, width: 'auto', objectFit: 'contain', margin: '0 auto' }}
-            />
-          </Link>
+  // Full Two-Column Split Layout for Login and Registration
+  return (
+    <div className="auth-page-shell">
+      {/* Floating Topbar: Back to Home + Theme Toggle */}
+      <header className="auth-topbar">
+        <Link to="/" className="auth-back-link" aria-label="Return to SALO Home">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          <span>Back to SALO</span>
+        </Link>
+        <div className="auth-topbar-actions">
+          <ThemeToggle />
         </div>
-        {children}
+      </header>
+
+      {/* Main Two-Column Split Frame */}
+      <div className="auth-split-wrapper animate-fade-in">
+        {/* Left Side: Brand presentation */}
+        <aside className="auth-brand-pane">
+          <div className="auth-brand-header">
+            <Link to="/" aria-label="SALO Home">
+              <BrandMark size="md" dark />
+            </Link>
+            <div>
+              <span className="auth-brand-badge">{badgeText}</span>
+              <h1 className="auth-brand-title font-display">{headline}</h1>
+              <p className="auth-brand-tagline">{subheading}</p>
+            </div>
+          </div>
+
+          {/* High-res Filipino Food Showcase Image */}
+          <div className="auth-food-frame">
+            <img
+              src={imageSrc}
+              alt={imageAlt}
+              className="auth-food-img"
+              loading="eager"
+            />
+            <div className="auth-food-caption">
+              <span>Salo-salo sa sarap</span>
+              <span className="auth-food-badge">Authentic Comfort</span>
+            </div>
+          </div>
+
+          {/* Feature Highlights Row */}
+          <div className="auth-feature-row">
+            <span className="auth-feature-pill">
+              <span role="img" aria-label="food">🍛</span> Multi-Kitchen Cart
+            </span>
+            <span className="auth-feature-pill">
+              <span role="img" aria-label="table">🪑</span> Table Reservations
+            </span>
+            <span className="auth-feature-pill">
+              <span role="img" aria-label="delivery">🛵</span> Express Delivery
+            </span>
+          </div>
+        </aside>
+
+        {/* Right Side: Form pane */}
+        <main className="auth-form-pane">
+          {children}
+        </main>
       </div>
     </div>
   );

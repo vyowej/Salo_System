@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import Button from '../components/common/Button';
+import Badge from '../components/common/Badge';
 import './AdminLayout.css';
 
 const mkIcon = (path) => (
@@ -23,8 +23,7 @@ const ICONS = {
 };
 
 export default function AdminLayout({ children }) {
-  const { theme } = useTheme();
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -88,24 +87,14 @@ export default function AdminLayout({ children }) {
 
       {/* ── Main Area ──────────────────────────────────── */}
       <div className={`admin-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
-        <div className="fiesta-banderitas-strip" aria-hidden="true" />
         <TopBar
           userName="Super Administrator"
           userInitials="SA"
           onMenuToggle={() => setMobileOpen(!mobileOpen)}
           actions={
-            <span style={{
-              fontSize: 11,
-              fontWeight: 700,
-              padding: '4px 10px',
-              borderRadius: 'var(--radius-full)',
-              background: 'var(--fiesta-brown-subtle, #EFEBE9)',
-              color: 'var(--salo-brown, #5D4037)',
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-            }}>
+            <Badge size="sm" className="badge-on-nav">
               HQ Root Access
-            </span>
+            </Badge>
           }
         />
 

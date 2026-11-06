@@ -1,6 +1,6 @@
 /* ============================================================
    SALO — Rider Layout Styles
-   Mirrors Customer & Owner Layouts; uses --salo-green accent
+   Mirrors the shared dashboard layout
    ============================================================ */
 
 .rider-shell {
@@ -26,16 +26,6 @@
   width: var(--sidebar-collapsed-width);
 }
 
-/* Rider active sidebar indicator uses muted green (--salo-green) */
-.rider-sidebar .sidebar-item.active {
-  background: var(--status-success-bg, #E8F5E9);
-  color: var(--salo-green, #2E7D32);
-}
-
-.rider-sidebar .sidebar-item.active .sidebar-item-icon {
-  color: var(--salo-green, #2E7D32);
-}
-
 .rider-main {
   flex: 1;
   margin-left: var(--sidebar-width);
@@ -57,10 +47,31 @@
   margin: 0 auto;
 }
 
+.rider-online-toggle.btn-ghost {
+  color: var(--nav-text);
+}
+
+.rider-online-toggle.btn-ghost:hover {
+  background: var(--nav-item-hover);
+  color: var(--nav-text);
+}
+
+.rider-online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.rider-online-dot.is-online {
+  background: var(--salo-success);
+}
+
 @media (max-width: 1024px) {
   .rider-sidebar {
     transform: translateX(-100%);
     width: var(--sidebar-width) !important;
+    z-index: var(--z-overlay);
   }
 
   .rider-sidebar.mobile-open {
@@ -74,6 +85,6 @@
   }
 
   .rider-content {
-    padding: var(--space-4);
+    padding: var(--space-6) var(--space-4);
   }
 }

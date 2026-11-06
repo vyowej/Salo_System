@@ -100,7 +100,7 @@ export const authService = {
         this.setSession(response.token, response.user);
         return response;
       }
-    } catch (err) {
+    } catch {
       // Local fallback in development
       const newUser = {
         id: Date.now(),
@@ -122,7 +122,7 @@ export const authService = {
   async logout() {
     try {
       await apiClient.post('/auth/logout');
-    } catch (e) {
+    } catch {
       // Ignore network errors on logout
     } finally {
       this.clearSession();
@@ -135,7 +135,7 @@ export const authService = {
   async requestPasswordReset(email) {
     try {
       return await apiClient.post('/auth/forgot-password', { email }, { requiresAuth: false });
-    } catch (err) {
+    } catch {
       // Dev mock response
       return { message: 'If an account exists with this email, password reset instructions have been sent.' };
     }
@@ -152,7 +152,7 @@ export const authService = {
         password,
         password_confirmation,
       }, { requiresAuth: false });
-    } catch (err) {
+    } catch {
       return { message: 'Your password has been successfully reset.' };
     }
   },
@@ -167,7 +167,7 @@ export const authService = {
         localStorage.setItem(USER_KEY, JSON.stringify(response.user));
         return response.user;
       }
-    } catch (e) {
+    } catch {
       return this.getStoredUser();
     }
   },

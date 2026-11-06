@@ -26,13 +26,13 @@ export default function OwnerReservationsPage() {
   const [filter, setFilter] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
 
-  useEffect(() => {
-    loadReservations();
-  }, []);
-
   function loadReservations() {
     setReservations(ownerService.getReservations());
   }
+
+  useEffect(() => {
+    loadReservations();
+  }, []);
 
   function handleStatus(id, newStatus) {
     ownerService.updateReservationStatus(id, newStatus);

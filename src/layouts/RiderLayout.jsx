@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
@@ -24,8 +23,7 @@ const ICONS = {
 };
 
 export default function RiderLayout({ children }) {
-  const { theme } = useTheme();
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -95,40 +93,21 @@ export default function RiderLayout({ children }) {
 
       {/* ── Main Area ──────────────────────────────────── */}
       <div className={`rider-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
-        <div className="fiesta-banderitas-strip" aria-hidden="true" />
         <TopBar
           userName="Danilo Ramos"
           userInitials="DR"
           onMenuToggle={() => setMobileOpen(!mobileOpen)}
           actions={
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`rider-online-toggle ${isOnline ? 'is-online' : ''}`}
               onClick={handleToggleOnline}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-full)',
-                border: '1.5px solid',
-                borderColor: isOnline ? 'var(--salo-green)' : 'var(--border-primary)',
-                background: isOnline ? 'var(--status-success-bg, #E8F5E9)' : 'var(--bg-secondary)',
-                color: isOnline ? 'var(--salo-green)' : 'var(--text-muted)',
-                fontWeight: 700,
-                fontSize: 12,
-                cursor: 'pointer',
-                transition: 'all var(--transition-fast)',
-              }}
               title="Click to toggle dispatch availability"
             >
-              <span style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: isOnline ? 'var(--salo-green)' : 'var(--text-muted)',
-              }} />
+              <span className={`rider-online-dot ${isOnline ? 'is-online' : ''}`} aria-hidden="true" />
               <span>{isOnline ? 'Online · Receiving Jobs' : 'Offline · Paused'}</span>
-            </button>
+            </Button>
           }
         />
 

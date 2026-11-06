@@ -41,48 +41,6 @@ body {
 }
 .link:hover { color: var(--accent-hover); }
 
-/* ── Filipino Fiesta Decorative Elements ─────────────── */
-/* Subtle repeating 4-color banderitas accent strip */
-.fiesta-banderitas-strip {
-  height: 4px;
-  width: 100%;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--fiesta-orange, #F36B2B) 0px,
-    var(--fiesta-orange, #F36B2B) 24px,
-    var(--fiesta-gold, #F59E0B) 24px,
-    var(--fiesta-gold, #F59E0B) 48px,
-    var(--fiesta-green, #2E7D32) 48px,
-    var(--fiesta-green, #2E7D32) 72px,
-    var(--fiesta-brown, #5D4037) 72px,
-    var(--fiesta-brown, #5D4037) 96px
-  );
-  opacity: 0.9;
-}
-
-/* Tasteful pennant / scalloped border top for banners & cards */
-.fiesta-accent-border {
-  border-top: 3px solid var(--accent);
-  position: relative;
-}
-
-.fiesta-accent-border::before {
-  content: '';
-  position: absolute;
-  top: -3px;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(
-    90deg,
-    var(--fiesta-orange) 0%,
-    var(--fiesta-gold) 35%,
-    var(--fiesta-green) 70%,
-    var(--fiesta-brown) 100%
-  );
-  border-radius: var(--radius-full) var(--radius-full) 0 0;
-}
-
 /* Fiesta Pill / Cultural Tag */
 .fiesta-pill {
   display: inline-flex;
@@ -93,9 +51,9 @@ body {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   letter-spacing: 0.03em;
-  background: var(--accent-subtle);
-  color: var(--accent);
-  border: 1px solid rgba(243, 107, 43, 0.2);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
 }
 
 .fiesta-pill-gold {
@@ -116,7 +74,7 @@ body {
   font-weight: var(--font-weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--text-secondary);
 }
 
 /* ── Utility: spacing ────────────────────────────────── */

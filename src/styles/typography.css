@@ -1,55 +1,81 @@
 /* ============================================================
-   SALO — Typography
+   SALO — Typography System v2
+   Display/Headings: Fraunces (500–600, warm serif)
+   Body/UI:          DM Sans (400–700, clean sans-serif)
+   Two families only. No Manrope.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
 body {
-  font-family: var(--font-family);
+  font-family: var(--font-body);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-normal);
   color: var(--text-primary);
   line-height: var(--line-height-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Headings ─────────────────────────────────────────── */
+/* ── Headings — Fraunces, moderate weights ─────────────── */
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-family);
-  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-heading);
   color: var(--text-primary);
   line-height: var(--line-height-tight);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+  margin: 0;
 }
 
-h1 { font-size: var(--font-size-4xl); }
-h2 { font-size: var(--font-size-3xl); }
-h3 { font-size: var(--font-size-2xl); }
-h4 { font-size: var(--font-size-xl); }
-h5 { font-size: var(--font-size-lg); }
-h6 { font-size: var(--font-size-md); }
+h1 { font-size: var(--text-h1); font-weight: 600; }
+h2 { font-size: var(--text-h2); font-weight: 600; }
+h3 { font-size: var(--text-h3); font-weight: 600; }
+h4 { font-size: var(--text-h4); font-weight: 600; }
+h5 { font-size: var(--font-size-lg); font-weight: 500; }
+h6 { font-size: var(--font-size-md); font-weight: 500; }
 
-/* ── Utility classes ─────────────────────────────────── */
-.text-xs       { font-size: var(--font-size-xs); }
-.text-sm       { font-size: var(--font-size-sm); }
-.text-base     { font-size: var(--font-size-base); }
-.text-md       { font-size: var(--font-size-md); }
-.text-lg       { font-size: var(--font-size-lg); }
-.text-xl       { font-size: var(--font-size-xl); }
-.text-2xl      { font-size: var(--font-size-2xl); }
-.text-3xl      { font-size: var(--font-size-3xl); }
+/* ── UI Controls — DM Sans ─────────────────────────────── */
+button,
+input,
+select,
+textarea,
+nav,
+label,
+.form-label {
+  font-family: var(--font-body);
+}
 
-.font-normal   { font-weight: var(--font-weight-normal); }
-.font-medium   { font-weight: var(--font-weight-medium); }
-.font-semibold { font-weight: var(--font-weight-semibold); }
-.font-bold     { font-weight: var(--font-weight-bold); }
+/* ── Font class utilities ──────────────────────────────── */
+.font-display { font-family: var(--font-display); }
+.font-heading { font-family: var(--font-heading); }
+.font-body    { font-family: var(--font-body); }
+.font-ui      { font-family: var(--font-ui); }
+
+/* Brand expression — used sparingly for "Kain tayo!" etc. */
+.brand-expression {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--accent);
+  display: inline-block;
+  letter-spacing: -0.015em;
+}
+
+/* ── Size utilities ────────────────────────────────────── */
+.text-xs    { font-size: var(--font-size-xs); }
+.text-sm    { font-size: var(--font-size-sm); }
+.text-base  { font-size: var(--font-size-base); }
+.text-md    { font-size: var(--font-size-md); }
+.text-lg    { font-size: var(--font-size-lg); }
+.text-xl    { font-size: var(--font-size-xl); }
+.text-2xl   { font-size: var(--font-size-2xl); }
+.text-3xl   { font-size: var(--font-size-3xl); }
+
+.font-normal   { font-weight: 400; }
+.font-medium   { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold     { font-weight: 700; }
 
 .text-primary   { color: var(--text-primary); }
 .text-secondary { color: var(--text-secondary); }
 .text-muted     { color: var(--text-muted); }
 .text-accent    { color: var(--accent); }
-.text-success   { color: var(--salo-success); }
-.text-warning   { color: var(--salo-warning); }
-.text-error     { color: var(--salo-error); }
 
 .text-left   { text-align: left; }
 .text-center { text-align: center; }
@@ -61,43 +87,50 @@ h6 { font-size: var(--font-size-md); }
 
 .tracking-tight  { letter-spacing: -0.02em; }
 .tracking-normal { letter-spacing: 0; }
-.tracking-wide   { letter-spacing: 0.04em; }
+.tracking-wide   { letter-spacing: 0.05em; }
 
-.uppercase { text-transform: uppercase; }
-.lowercase  { text-transform: lowercase; }
+.uppercase  { text-transform: uppercase; }
 .capitalize { text-transform: capitalize; }
+.truncate   { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ── Page title pattern ──────────────────────────────── */
+/* ── Dashboard patterns ────────────────────────────────── */
 .page-title {
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-heading);
+  font-size: var(--text-h3);
+  font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: -0.025em;
+  letter-spacing: -0.015em;
 }
 
 .page-subtitle {
+  font-family: var(--font-body);
   font-size: var(--font-size-base);
   color: var(--text-secondary);
   margin-top: var(--space-1);
 }
 
 .section-title {
+  font-family: var(--font-heading);
   font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
+  font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: -0.015em;
+  letter-spacing: -0.01em;
 }
 
 .section-label {
+  font-family: var(--font-body);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
+  font-weight: 600;
   color: var(--text-muted);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+/* Legacy aliases — keep these so existing components don't break */
+.brand-script { font-family: var(--font-display); font-weight: 600; }
+.brand-expression-hero { font-family: var(--font-display); font-weight: 600; font-size: 1.1em; }
+.nav-link { font-family: var(--font-body); }
+.btn { font-family: var(--font-body); }
+.sidebar-item { font-family: var(--font-body); }
+.topbar { font-family: var(--font-body); }
+.table-header { font-family: var(--font-body); }

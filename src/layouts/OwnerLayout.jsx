@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
@@ -24,7 +23,6 @@ const ICONS = {
 };
 
 export default function OwnerLayout({ children }) {
-  const { theme } = useTheme();
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -93,7 +91,6 @@ export default function OwnerLayout({ children }) {
 
       {/* ── Main Area ──────────────────────────────────── */}
       <div className={`owner-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
-        <div className="fiesta-banderitas-strip" aria-hidden="true" />
         <TopBar
           userName={restaurant?.name || user?.name || 'Restaurant Owner'}
           userInitials={userInitials}

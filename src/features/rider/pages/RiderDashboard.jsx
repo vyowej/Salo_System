@@ -33,7 +33,7 @@ export default function RiderDashboard() {
       {/* ── Page Header ────────────────────────────────── */}
       <div style={{ marginBottom: 'var(--space-6)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
-          <span className="fiesta-pill fiesta-pill-green">🛵 Salo Rider Dispatch</span>
+          <span className="fiesta-pill">🛵 Salo Rider Dispatch</span>
           <span className="fiesta-pill">{profile.zone}</span>
         </div>
         <h1 className="page-title" style={{ fontSize: 'var(--font-size-3xl)', marginTop: 'var(--space-1)' }}>
