@@ -13,6 +13,7 @@ export default function DashboardLayout({
   activeNavId,
   onNavItemClick,
   userName,
+  userRole,
   userInitials,
   userAvatar,
   topbarSearch,
@@ -44,10 +45,12 @@ export default function DashboardLayout({
       <div className={`dashboard-main ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
         <TopBar
           userName={userName}
+          userRole={userRole}
           userInitials={userInitials}
           userAvatar={userAvatar}
           search={topbarSearch}
           actions={topbarActions}
+          mobileMenuOpen={mobileOpen}
           onMenuToggle={() => setMobileOpen((v) => !v)}
         />
         <main className="dashboard-content">

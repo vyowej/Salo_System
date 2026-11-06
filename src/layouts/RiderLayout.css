@@ -18,8 +18,10 @@
   bottom: 0;
   z-index: var(--z-sticky);
   transition: width var(--transition-normal);
-  background: var(--nav-bg);
-  border-right: 1px solid var(--nav-border);
+  background: var(--shell-bg);
+  border-right: 1px solid var(--shell-border);
+  overflow: hidden;
+  transition: width var(--transition-normal), transform var(--transition-normal);
 }
 
 .rider-sidebar.collapsed {
@@ -48,12 +50,12 @@
 }
 
 .rider-online-toggle.btn-ghost {
-  color: var(--nav-text);
+  color: var(--shell-text);
 }
 
 .rider-online-toggle.btn-ghost:hover {
-  background: var(--nav-item-hover);
-  color: var(--nav-text);
+  background: var(--shell-hover);
+  color: var(--shell-text);
 }
 
 .rider-online-dot {
@@ -72,6 +74,12 @@
     transform: translateX(-100%);
     width: var(--sidebar-width) !important;
     z-index: var(--z-overlay);
+  }
+
+  @media (max-width: 767px) {
+    .rider-online-toggle .rider-online-label {
+      display: none;
+    }
   }
 
   .rider-sidebar.mobile-open {

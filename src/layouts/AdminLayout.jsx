@@ -58,27 +58,37 @@ export default function AdminLayout({ children }) {
           onMobileClose={() => setMobileOpen(false)}
           footer={
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <Link to="/customer" style={{ textDecoration: 'none' }}>
-                <Button variant="ghost" size="sm" fullWidth style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  Switch to Customer View
-                </Button>
-              </Link>
-              <Link to="/owner" style={{ textDecoration: 'none' }}>
-                <Button variant="ghost" size="sm" fullWidth style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  Switch to Restaurant View
-                </Button>
-              </Link>
+              <Button as={Link} to="/customer" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link" title="Switch to Customer View" leftIcon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" />
+                  </svg>
+                }>
+                  <span className="sidebar-footer-label">Switch to Customer View</span>
+              </Button>
+              <Button as={Link} to="/owner" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link" title="Switch to Restaurant View" leftIcon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                    <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 12v.01M9 15v.01M9 18v.01" />
+                  </svg>
+                }>
+                  <span className="sidebar-footer-label">Switch to Restaurant View</span>
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 fullWidth
+                className="sidebar-footer-item"
+                title="Sign Out"
+                leftIcon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                    <path d="M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7" />
+                  </svg>
+                }
                 onClick={() => {
                   logout();
                   navigate('/');
                 }}
-                style={{ fontSize: 11, color: 'var(--salo-error)' }}
               >
-                Sign Out
+                <span className="sidebar-footer-label">Sign Out</span>
               </Button>
             </div>
           }
@@ -89,7 +99,9 @@ export default function AdminLayout({ children }) {
       <div className={`admin-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
         <TopBar
           userName="Super Administrator"
+          userRole="Administrator"
           userInitials="SA"
+          mobileMenuOpen={mobileOpen}
           onMenuToggle={() => setMobileOpen(!mobileOpen)}
           actions={
             <Badge size="sm" className="badge-on-nav">

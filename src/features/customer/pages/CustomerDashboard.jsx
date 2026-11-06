@@ -65,7 +65,6 @@ export default function CustomerDashboard() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
               <span className="fiesta-pill">Kain tayo!</span>
-              <span className="fiesta-pill fiesta-pill-gold">Order. Reserve. Gather.</span>
             </div>
             <h1 className="page-title" style={{ fontSize: 'var(--font-size-3xl)', marginTop: 'var(--space-1)' }}>
               {getGreeting()}

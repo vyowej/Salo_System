@@ -76,22 +76,30 @@ export default function CustomerLayout({ children }) {
           onMobileClose={() => setMobileOpen(false)}
           footer={
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <Link to="/showcase" style={{ textDecoration: 'none' }}>
-                <Button variant="ghost" size="sm" fullWidth style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  Design System Showcase
-                </Button>
-              </Link>
+              <Button as={Link} to="/showcase" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link" title="Design System Showcase" leftIcon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                    <path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" />
+                  </svg>
+                }>
+                  <span className="sidebar-footer-label">Design System Showcase</span>
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 fullWidth
+                className="sidebar-footer-item"
+                title="Sign Out"
+                leftIcon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                    <path d="M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7" />
+                  </svg>
+                }
                 onClick={() => {
                   logout();
                   navigate('/');
                 }}
-                style={{ fontSize: 11, color: 'var(--salo-error)' }}
               >
-                Sign Out
+                <span className="sidebar-footer-label">Sign Out</span>
               </Button>
             </div>
           }
@@ -102,37 +110,22 @@ export default function CustomerLayout({ children }) {
       <div className={`customer-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
         <TopBar
           userName={user?.name || 'Customer'}
+          userRole="Customer"
           userInitials={userInitials}
+          mobileMenuOpen={mobileOpen}
           onMenuToggle={() => setMobileOpen(!mobileOpen)}
           actions={
             <Link to="/customer/cart" style={{ textDecoration: 'none' }} title="View Multi-Cart">
               <button
                 type="button"
-                className="topbar-btn"
-                style={{ position: 'relative' }}
+                className="topbar-btn topbar-cart-action"
                 aria-label={`Shopping cart with ${totalItemCount} items`}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z M3 6h18 M16 10a4 4 0 01-8 0" />
                 </svg>
                 {totalItemCount > 0 && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: 4,
-                      right: 4,
-                      background: 'var(--accent)',
-                      color: '#fff',
-                      fontSize: 10,
-                      fontWeight: 700,
-                      borderRadius: '50%',
-                      width: 16,
-                      height: 16,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
+                  <span className="topbar-cart-count">
                     {totalItemCount}
                   </span>
                 )}

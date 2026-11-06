@@ -18,8 +18,10 @@
   bottom: 0;
   z-index: var(--z-sticky);
   transition: width var(--transition-normal);
-  background: var(--nav-bg);
-  border-right: 1px solid var(--nav-border);
+  background: var(--shell-bg);
+  border-right: 1px solid var(--shell-border);
+  overflow: hidden;
+  transition: width var(--transition-normal), transform var(--transition-normal);
 }
 
 .admin-sidebar.collapsed {

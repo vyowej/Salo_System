@@ -44,12 +44,7 @@ export default function SideBar({
         {/* Header */}
         <div className="sidebar-header">
           <div className="sidebar-logo" title="SALO">
-            <BrandMark
-              size="sm"
-              showText={!collapsed}
-              dark
-              className="sidebar-brand-mark"
-            />
+            <BrandMark size="sm" className="sidebar-brand-mark" />
           </div>
           {onToggleCollapse && (
             <button
@@ -90,7 +85,11 @@ export default function SideBar({
         </div>
 
         {/* Footer slot */}
-        {footer && <div className="sidebar-footer">{footer}</div>}
+        {footer && (
+          <div className={`sidebar-footer ${collapsed ? 'collapsed' : ''}`}>
+            {footer}
+          </div>
+        )}
       </nav>
     </>
   );

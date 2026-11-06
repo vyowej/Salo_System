@@ -69,22 +69,30 @@ export default function RiderLayout({ children }) {
           onMobileClose={() => setMobileOpen(false)}
           footer={
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <Link to="/customer" style={{ textDecoration: 'none' }}>
-                <Button variant="ghost" size="sm" fullWidth style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  Switch to Customer View
-                </Button>
-              </Link>
+              <Button as={Link} to="/customer" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link" title="Switch to Customer View" leftIcon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" />
+                  </svg>
+                }>
+                  <span className="sidebar-footer-label">Switch to Customer View</span>
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 fullWidth
+                className="sidebar-footer-item"
+                title="Sign Out"
+                leftIcon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                    <path d="M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7" />
+                  </svg>
+                }
                 onClick={() => {
                   logout();
                   navigate('/');
                 }}
-                style={{ fontSize: 11, color: 'var(--salo-error)' }}
               >
-                Sign Out
+                <span className="sidebar-footer-label">Sign Out</span>
               </Button>
             </div>
           }
@@ -95,18 +103,23 @@ export default function RiderLayout({ children }) {
       <div className={`rider-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
         <TopBar
           userName="Danilo Ramos"
+          userRole="Rider"
           userInitials="DR"
+          mobileMenuOpen={mobileOpen}
           onMenuToggle={() => setMobileOpen(!mobileOpen)}
           actions={
             <Button
               variant="ghost"
               size="sm"
               className={`rider-online-toggle ${isOnline ? 'is-online' : ''}`}
+              aria-label={isOnline ? 'Go offline; currently receiving jobs' : 'Go online to receive jobs'}
+              leftIcon={
+                <span className={`rider-online-dot ${isOnline ? 'is-online' : ''}`} aria-hidden="true" />
+              }
               onClick={handleToggleOnline}
               title="Click to toggle dispatch availability"
             >
-              <span className={`rider-online-dot ${isOnline ? 'is-online' : ''}`} aria-hidden="true" />
-              <span>{isOnline ? 'Online · Receiving Jobs' : 'Offline · Paused'}</span>
+              <span className="rider-online-label">{isOnline ? 'Online · Receiving Jobs' : 'Offline · Paused'}</span>
             </Button>
           }
         />

@@ -88,6 +88,16 @@
   --nav-item-active-text: var(--salo-orange);
   --nav-item-active-icon: var(--salo-orange);
 
+  /* Logged-in application shell */
+  --shell-bg:               var(--surface-primary);
+  --shell-border:           var(--border-primary);
+  --shell-hover:            var(--surface-hover);
+  --shell-text:             var(--text-primary);
+  --shell-text-muted:       var(--text-secondary);
+  --shell-section-text:     var(--text-muted);
+  --shell-active-bg:        var(--accent-subtle);
+  --shell-active-text:      var(--accent);
+
   /* Glass for subtle nav on content layouts */
   --glass-nav-bg:     rgba(255, 255, 255, 0.90);
   --glass-nav-border: rgba(23, 23, 23, 0.10);
@@ -200,6 +210,16 @@
   --nav-item-active-bg:   rgba(243, 107, 43, 0.18);
   --nav-item-active-text: var(--salo-orange);
   --nav-item-active-icon: var(--salo-orange);
+
+  /* Logged-in application shell */
+  --shell-bg:               var(--surface-primary);
+  --shell-border:           var(--border-primary);
+  --shell-hover:            var(--surface-hover);
+  --shell-text:             var(--text-primary);
+  --shell-text-muted:       var(--text-secondary);
+  --shell-section-text:     var(--text-muted);
+  --shell-active-bg:        var(--accent-subtle);
+  --shell-active-text:      var(--salo-orange);
 
   /* Glass */
   --glass-nav-bg:     rgba(23, 23, 23, 0.90);
