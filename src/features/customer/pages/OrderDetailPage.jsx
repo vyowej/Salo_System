@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
@@ -10,7 +10,6 @@ const STEPS = ['Pending Confirmation', 'Accepted', 'Preparing', 'Out for Deliver
 
 export default function OrderDetailPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
 
   const [order, setOrder] = useState(null);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
