@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useAuth } from '../../../hooks/useAuth';
-import customerService, { INITIAL_RESTAURANTS } from '../../../services/customerService';
+import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import { Card, CardBody } from '../../../components/common/Card';
 
 const CATEGORIES = [
   'All',
