@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import Button from '../components/common/Button';
+import customerService from '../services/customerService';
 import './CustomerLayout.css';
 
 const mkIcon = (path) => (
@@ -31,6 +32,21 @@ export default function CustomerLayout({ children }) {
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  useEffect(() => {
+    const syncNotificationCount = () => {
+      const unreadCount = customerService.getNotifications().filter((item) => !item.read).length;
+      setNotificationCount(unreadCount);
+    };
+
+    syncNotificationCount();
+    window.addEventListener('salo:notificationsUpdated', syncNotificationCount);
+
+    return () => {
+      window.removeEventListener('salo:notificationsUpdated', syncNotificationCount);
+    };
+  }, [location.pathname]);
 
   const navItems = [
     { id: 'home', label: 'Explore & Feed', icon: mkIcon(ICONS.home), href: '/customer', section: 'Dining' },
@@ -43,6 +59,8 @@ export default function CustomerLayout({ children }) {
       badge: totalItemCount > 0 ? totalItemCount : null,
     },
     { id: 'orders', label: 'My Orders', icon: mkIcon(ICONS.orders), href: '/customer/orders', section: 'Activity' },
+    { id: 'favorites', label: 'Favorites', icon: mkIcon('M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'), href: '/customer/favorites' },
+    { id: 'notifications', label: 'Notifications', icon: mkIcon('M12 22a2.5 2.5 0 002.45-2h-4.9A2.5 2.5 0 0012 22zm8-6V11a8 8 0 10-16 0v5l-2 2v1h20v-1l-2-2z'), href: '/customer/notifications', badge: notificationCount > 0 ? notificationCount : null },
     { id: 'reservations', label: 'Table Bookings', icon: mkIcon(ICONS.reservation), href: '/customer/reservations' },
     { id: 'addresses', label: 'Saved Addresses', icon: mkIcon(ICONS.addresses), href: '/customer/addresses', section: 'Account' },
     { id: 'partner', label: 'Become a Partner', icon: mkIcon('M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'), href: '/customer/partner' },
@@ -114,6 +132,7 @@ export default function CustomerLayout({ children }) {
           userInitials={userInitials}
           mobileMenuOpen={mobileOpen}
           onMenuToggle={() => setMobileOpen(!mobileOpen)}
+          notificationCount={notificationCount}
           actions={
             <Link to="/customer/cart" style={{ textDecoration: 'none' }} title="View Multi-Cart">
               <button

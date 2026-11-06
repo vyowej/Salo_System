@@ -217,7 +217,21 @@ export default function CartPage() {
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: 24 }}>{item.image || '🍽️'}</span>
+                        <div style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid var(--border-primary)',
+                          background: 'var(--surface-secondary)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 14,
+                          fontWeight: 700,
+                          color: 'var(--text-secondary)',
+                        }}>
+                          {item.image || 'R'}
+                        </div>
                         <div>
                           <p style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>
                             {item.name}

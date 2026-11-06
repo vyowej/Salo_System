@@ -21,7 +21,7 @@ export const INITIAL_RESTAURANTS = [
     isOpen: true,
     operatingHours: '10:00 AM – 10:00 PM',
     address: '42 Scout Gandia St., Tomas Morato, Quezon City',
-    coverImage: '🔥',
+    coverImage: 'DH',
     reservationDeposit: 500, // ₱500 deposit applied to dining bill
     categories: ['Best Sellers', 'Grilled Mains', 'Silog & Rice', 'Soups', 'Desserts & Beverages'],
     menu: [
@@ -32,7 +32,7 @@ export const INITIAL_RESTAURANTS = [
         price: 195,
         category: 'Best Sellers',
         isAvailable: true,
-        image: '🍗',
+        image: 'I',
         addOns: [
           {
             name: 'Choice of Rice',
@@ -61,7 +61,7 @@ export const INITIAL_RESTAURANTS = [
         price: 320,
         category: 'Best Sellers',
         isAvailable: true,
-        image: '🥓',
+        image: 'L',
         addOns: [
           {
             name: 'Dip Selection',
@@ -80,7 +80,7 @@ export const INITIAL_RESTAURANTS = [
         price: 380,
         category: 'Soups',
         isAvailable: true,
-        image: '🍲',
+        image: 'S',
       },
       {
         id: 'dh-4',
@@ -89,7 +89,7 @@ export const INITIAL_RESTAURANTS = [
         price: 260,
         category: 'Grilled Mains',
         isAvailable: true,
-        image: '🍳',
+        image: 'S',
       },
       {
         id: 'dh-5',
@@ -98,7 +98,7 @@ export const INITIAL_RESTAURANTS = [
         price: 145,
         category: 'Desserts & Beverages',
         isAvailable: false, // Sold out demonstration
-        image: '🍨',
+        image: 'H',
       },
     ],
   },
@@ -115,7 +115,7 @@ export const INITIAL_RESTAURANTS = [
     isOpen: true,
     operatingHours: '11:00 AM – 11:00 PM',
     address: 'High Street South Block, BGC, Taguig City',
-    coverImage: '🍕',
+    coverImage: 'MP',
     reservationDeposit: 600,
     categories: ['Pizzas', 'Pasta', 'Sides & Drinks'],
     menu: [
@@ -126,7 +126,7 @@ export const INITIAL_RESTAURANTS = [
         price: 520,
         category: 'Pizzas',
         isAvailable: true,
-        image: '🍕',
+        image: 'P',
         addOns: [
           {
             name: 'Crust Finish',
@@ -146,7 +146,7 @@ export const INITIAL_RESTAURANTS = [
         price: 360,
         category: 'Pasta',
         isAvailable: true,
-        image: '🍝',
+        image: 'F',
       },
       {
         id: 'mp-3',
@@ -155,7 +155,7 @@ export const INITIAL_RESTAURANTS = [
         price: 290,
         category: 'Sides & Drinks',
         isAvailable: true,
-        image: '🦑',
+        image: 'C',
       },
     ],
   },
@@ -172,7 +172,7 @@ export const INITIAL_RESTAURANTS = [
     isOpen: true,
     operatingHours: '6:00 AM – 10:00 PM',
     address: '88 Katipunan Ave., Loyola Heights, Quezon City',
-    coverImage: '🍳',
+    coverImage: 'CS',
     reservationDeposit: 300,
     categories: ['Silog Specials', 'Breakfast Platters', 'Beverages'],
     menu: [
@@ -183,7 +183,7 @@ export const INITIAL_RESTAURANTS = [
         price: 165,
         category: 'Silog Specials',
         isAvailable: true,
-        image: '🍳',
+        image: 'V',
         addOns: [
           {
             name: 'Egg Preparation',
@@ -211,7 +211,7 @@ export const INITIAL_RESTAURANTS = [
         price: 185,
         category: 'Silog Specials',
         isAvailable: true,
-        image: '🥩',
+        image: 'T',
       },
       {
         id: 'cs-3',
@@ -220,7 +220,7 @@ export const INITIAL_RESTAURANTS = [
         price: 75,
         category: 'Beverages',
         isAvailable: true,
-        image: '☕',
+        image: 'K',
       },
     ],
   },
@@ -315,6 +315,35 @@ export const INITIAL_RESERVATIONS = [
     status: 'Confirmed',
     cancellationDeadline: '2026-11-13 7:30 PM (24h before)',
     specialRequests: 'Near window if possible. Celebrating a birthday.',
+  },
+];
+
+export const INITIAL_FAVORITES = ['dalisay-heritage', 'manila-artisan-pizza'];
+
+export const INITIAL_NOTIFICATIONS = [
+  {
+    id: 'notif-1',
+    type: 'order',
+    title: 'Your order is on the way',
+    description: 'Dalisay Heritage Grill is preparing your food and rider assignment is in progress.',
+    time: '3 minutes ago',
+    read: false,
+  },
+  {
+    id: 'notif-2',
+    type: 'reservation',
+    title: 'Reservation confirmation',
+    description: 'Your table at Dalisay Heritage Grill has been confirmed for Friday at 7:30 PM.',
+    time: 'Today, 9:15 AM',
+    read: true,
+  },
+  {
+    id: 'notif-3',
+    type: 'promo',
+    title: 'Weekend meal deal',
+    description: 'Enjoy ₱150 off on selected Filipino combos when you order before 11:59 PM.',
+    time: 'Yesterday',
+    read: false,
   },
 ];
 
@@ -436,6 +465,52 @@ export const customerService = {
     });
     localStorage.setItem('salo_reservations', JSON.stringify(updated));
     return updated;
+  },
+
+  // Favorites
+  getFavoriteRestaurants() {
+    try {
+      const stored = localStorage.getItem('salo_favorites');
+      return stored ? JSON.parse(stored) : INITIAL_FAVORITES;
+    } catch {
+      return INITIAL_FAVORITES;
+    }
+  },
+
+  toggleFavoriteRestaurant(restaurantId) {
+    const favorites = this.getFavoriteRestaurants();
+    const next = favorites.includes(restaurantId)
+      ? favorites.filter((id) => id !== restaurantId)
+      : [...favorites, restaurantId];
+    localStorage.setItem('salo_favorites', JSON.stringify(next));
+    window.dispatchEvent(new Event('salo:favoritesUpdated'));
+    return next;
+  },
+
+  // Notifications
+  getNotifications() {
+    try {
+      const stored = localStorage.getItem('salo_notifications');
+      return stored ? JSON.parse(stored) : INITIAL_NOTIFICATIONS;
+    } catch {
+      return INITIAL_NOTIFICATIONS;
+    }
+  },
+
+  markNotificationRead(notificationId) {
+    const notifications = this.getNotifications();
+    const updated = notifications.map((item) => (
+      item.id === notificationId ? { ...item, read: true } : item
+    ));
+    localStorage.setItem('salo_notifications', JSON.stringify(updated));
+    window.dispatchEvent(new Event('salo:notificationsUpdated'));
+    return updated;
+  },
+
+  clearNotifications() {
+    localStorage.setItem('salo_notifications', JSON.stringify([]));
+    window.dispatchEvent(new Event('salo:notificationsUpdated'));
+    return [];
   },
 };
 

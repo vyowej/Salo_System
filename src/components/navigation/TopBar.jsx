@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
 import BrandMark from '../common/BrandMark';
 import './TopBar.css';
@@ -9,6 +9,8 @@ const PAGE_TITLES = {
   '/customer/cart': 'Multi-Cart',
   '/customer/checkout': 'Checkout',
   '/customer/orders': 'My Orders',
+  '/customer/favorites': 'Favorites',
+  '/customer/notifications': 'Notifications',
   '/customer/reservations': 'Table Bookings',
   '/customer/addresses': 'Saved Addresses',
   '/customer/partner': 'Become a Partner',
@@ -105,11 +107,7 @@ export default function TopBar({
         {actions}
 
         {showNotifications && (
-          <button
-            className="topbar-btn"
-            aria-label={`Notifications${notificationCount ? ` (${notificationCount})` : ''}`}
-            type="button"
-          >
+          <Link to="/customer/notifications" className="topbar-btn" aria-label={`Notifications${notificationCount ? ` (${notificationCount})` : ''}`} title="View notifications" style={{ textDecoration: 'none' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
               <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
               <path d="M13.73 21a2 2 0 01-3.46 0"/>
@@ -119,7 +117,7 @@ export default function TopBar({
                 {notificationCount > 9 ? '9+' : notificationCount}
               </span>
             )}
-          </button>
+          </Link>
         )}
 
         <ThemeToggle />

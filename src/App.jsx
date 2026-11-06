@@ -16,6 +16,8 @@ const CartPage = lazy(() => import('./features/customer/pages/CartPage'));
 const CheckoutPage = lazy(() => import('./features/customer/pages/CheckoutPage'));
 const OrdersPage = lazy(() => import('./features/customer/pages/OrdersPage'));
 const OrderDetailPage = lazy(() => import('./features/customer/pages/OrderDetailPage'));
+const FavoritesPage = lazy(() => import('./features/customer/pages/FavoritesPage'));
+const NotificationsPage = lazy(() => import('./features/customer/pages/NotificationsPage'));
 const ReservationsPage = lazy(() => import('./features/customer/pages/ReservationsPage'));
 const AddressesPage = lazy(() => import('./features/customer/pages/AddressesPage'));
 const ProfilePage = lazy(() => import('./features/customer/pages/ProfilePage'));
@@ -100,6 +102,8 @@ export default function App() {
           <Route path="/customer/checkout" element={<CheckoutPage />} />
           <Route path="/customer/orders" element={<OrdersPage />} />
           <Route path="/customer/orders/:id" element={<OrderDetailPage />} />
+          <Route path="/customer/favorites" element={<FavoritesPage />} />
+          <Route path="/customer/notifications" element={<NotificationsPage />} />
           <Route path="/customer/reservations" element={<ReservationsPage />} />
           <Route path="/customer/addresses" element={<AddressesPage />} />
           <Route path="/customer/profile" element={<ProfilePage />} />
