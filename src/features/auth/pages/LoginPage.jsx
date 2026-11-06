@@ -6,7 +6,7 @@ import Button from '../../../components/common/Button';
 import { useAuth } from '../../../hooks/useAuth';
 import './LoginPage.css';
 
-export default function LoginPage() {
+export default function LoginPage({ embedded = false, onSwitch }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, loading } = useAuth();
@@ -18,6 +18,7 @@ export default function LoginPage() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedDemo, setSelectedDemo] = useState('');
 
   const getDestination = (resUser) => {
     if (location.state?.from?.pathname) return location.state.from.pathname;
@@ -58,19 +59,22 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickLogin = (email, password = 'password123') => {
+  const handleQuickLogin = (event) => {
+    const email = event.target.value;
+    setSelectedDemo(email);
+    if (!email) return;
+
     setFormData({
       email,
-      password,
+      password: 'password123',
       rememberMe: true,
     });
     setError(null);
   };
 
-  return (
-    <AuthLayout maxWidth={440}>
+  const content = (
+    <>
       <div className="auth-header">
-        <span className="fiesta-pill" style={{ marginBottom: 8 }}>Kain tayo!</span>
         <h1 className="auth-title">Welcome back</h1>
         <p className="auth-subtitle">Sign in to your SALO account</p>
       </div>
@@ -169,54 +173,43 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      {/* Demo helper */}
-      <div className="demo-accounts-card">
-        <div className="demo-accounts-title">
-          <span>Demo Role Switcher</span>
-          <span style={{ fontSize: 10, color: 'var(--accent)' }}>One-click fill</span>
-        </div>
-        <div className="demo-account-pills">
-          <button
-            type="button"
-            className="demo-pill-btn"
-            onClick={() => handleQuickLogin('customer@salo.ph')}
-          >
-            <span className="demo-pill-role">Customer</span>
-            <span className="demo-pill-email">customer@salo.ph</span>
-          </button>
-          <button
-            type="button"
-            className="demo-pill-btn"
-            onClick={() => handleQuickLogin('owner@salo.ph')}
-          >
-            <span className="demo-pill-role">Restaurant Owner</span>
-            <span className="demo-pill-email">owner@salo.ph</span>
-          </button>
-          <button
-            type="button"
-            className="demo-pill-btn"
-            onClick={() => handleQuickLogin('rider@salo.ph')}
-          >
-            <span className="demo-pill-role">Rider</span>
-            <span className="demo-pill-email">rider@salo.ph</span>
-          </button>
-          <button
-            type="button"
-            className="demo-pill-btn"
-            onClick={() => handleQuickLogin('admin@salo.ph')}
-          >
-            <span className="demo-pill-role">Admin</span>
-            <span className="demo-pill-email">admin@salo.ph</span>
-          </button>
-        </div>
+      <div className="demo-account-picker">
+        <label htmlFor="demo-account">Demo account</label>
+        <select id="demo-account" value={selectedDemo} onChange={handleQuickLogin}>
+          <option value="">Choose an account to fill sign-in fields</option>
+          <option value="customer@salo.ph">Customer — customer@salo.ph</option>
+          <option value="owner@salo.ph">Restaurant Owner — owner@salo.ph</option>
+          <option value="rider@salo.ph">Rider — rider@salo.ph</option>
+          <option value="admin@salo.ph">Admin — admin@salo.ph</option>
+        </select>
       </div>
 
       <div className="auth-footer-prompt">
         Don&apos;t have an account?{' '}
-        <Link to="/register" className="auth-link" style={{ fontWeight: 'var(--font-weight-semibold)' }}>
-          Sign up
-        </Link>
+        {embedded ? (
+          <button type="button" className="auth-link" onClick={onSwitch} style={{ fontWeight: 'var(--font-weight-semibold)' }}>
+            Sign up
+          </button>
+        ) : (
+          <Link to="/register" className="auth-link" style={{ fontWeight: 'var(--font-weight-semibold)' }}>
+            Sign up
+          </Link>
+        )}
       </div>
+    </>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <AuthLayout
+      headline="Kain tayo!"
+      subheading="Good food, good company, great memories."
+      imageSrc="/images/auth/login-food.png"
+      imageAlt="Authentic Filipino Feast"
+      badgeText="Order. Reserve. Gather."
+    >
+      {content}
     </AuthLayout>
   );
 }
