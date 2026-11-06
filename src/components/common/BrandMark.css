@@ -1,0 +1,49 @@
+/* ============================================================
+   BrandMark — SALO Icon + Live Text
+   ============================================================ */
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.brand-mark__icon {
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  flex-shrink: 0;
+  /* Never distort the icon */
+  max-width: none;
+}
+
+.brand-mark__text-col {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.brand-mark__name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.brand-mark--dark .brand-mark__name {
+  color: var(--nav-text);
+}
+
+.brand-mark__tagline {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  margin-top: 2px;
+}
+
+.brand-mark--dark .brand-mark__tagline {
+  color: var(--nav-text-muted);
+}
