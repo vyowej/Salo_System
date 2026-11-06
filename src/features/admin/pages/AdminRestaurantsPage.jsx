@@ -17,13 +17,13 @@ export default function AdminRestaurantsPage() {
   const [editingRest, setEditingRest] = useState(null);
   const [newRate, setNewRate] = useState(10);
 
-  useEffect(() => {
-    loadRestaurants();
-  }, []);
-
   function loadRestaurants() {
     setRestaurants(adminService.getRestaurants());
   }
+
+  useEffect(() => {
+    loadRestaurants();
+  }, []);
 
   function handleStatus(id, newStatus) {
     adminService.updateRestaurantStatus(id, newStatus);

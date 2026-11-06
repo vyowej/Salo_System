@@ -1,5 +1,5 @@
-import { useTheme } from '../../contexts/ThemeContext';
 import ThemeToggle from './ThemeToggle';
+import BrandMark from '../common/BrandMark';
 import './TopBar.css';
 
 /**
@@ -29,12 +29,6 @@ export default function TopBar({
   onAvatarClick,
   children,
 }) {
-  const { theme } = useTheme();
-
-  const logoSrc = theme === 'dark'
-    ? '/brand/salo-logo-dark.png'
-    : '/brand/salo-logo-light.png';
-
   return (
     <header className="topbar">
       {/* Mobile hamburger */}
@@ -56,7 +50,7 @@ export default function TopBar({
       {/* Logo */}
       {logo || (
         <a href="/" className="topbar-logo" aria-label="SALO home">
-          <img src={logoSrc} alt="SALO" />
+          <BrandMark size="sm" dark />
         </a>
       )}
 

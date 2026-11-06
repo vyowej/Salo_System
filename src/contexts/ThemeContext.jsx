@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 const ThemeContext = createContext(null);
+const PUBLIC_LIGHT_ROUTES = new Set(['/', '/login', '/register']);
 
 /** Reads theme preference: manual override → system → default light */
 function getInitialTheme() {
@@ -17,12 +19,13 @@ function applyTheme(theme) {
 
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(getInitialTheme);
+  const location = useLocation();
 
   // Apply on mount + every change
   useEffect(() => {
-    applyTheme(theme);
+    applyTheme(PUBLIC_LIGHT_ROUTES.has(location.pathname) ? 'light' : theme);
     localStorage.setItem('salo-theme', theme);
-  }, [theme]);
+  }, [theme, location.pathname]);
 
   // Listen to OS preference changes (only when no manual override)
   useEffect(() => {
@@ -32,7 +35,6 @@ export function ThemeProvider({ children }) {
       if (!stored) {
         const next = e.matches ? 'dark' : 'light';
         setThemeState(next);
-        applyTheme(next);
       }
     };
     mq.addEventListener('change', handleChange);

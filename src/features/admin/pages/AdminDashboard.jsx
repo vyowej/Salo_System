@@ -40,10 +40,10 @@ export default function AdminDashboard() {
       {/* ── Page Header ────────────────────────────────── */}
       <div style={{ marginBottom: 'var(--space-6)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
-          <span className="fiesta-pill" style={{ background: 'var(--fiesta-brown-subtle, #EFEBE9)', color: 'var(--salo-brown, #5D4037)' }}>
+          <Badge size="sm">
             🏛️ Central Operations Command
-          </span>
-          <span className="fiesta-pill fiesta-pill-gold">Metro Manila Zone 1</span>
+          </Badge>
+          <Badge size="sm">Metro Manila Zone 1</Badge>
         </div>
         <h1 className="page-title" style={{ fontSize: 'var(--font-size-3xl)', marginTop: 'var(--space-1)' }}>
           Platform Overview & HQ Analytics
