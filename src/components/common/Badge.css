@@ -7,7 +7,7 @@
   align-items: center;
   gap: var(--space-1);
   padding: 3px var(--space-2);
-  font-family: var(--font-family);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   line-height: 1;
@@ -34,6 +34,11 @@
 .badge-primary {
   background: var(--accent-subtle);
   color: var(--accent);
+}
+
+.badge-on-nav {
+  background: var(--nav-item-hover);
+  color: var(--nav-text);
 }
 
 .badge-success {
