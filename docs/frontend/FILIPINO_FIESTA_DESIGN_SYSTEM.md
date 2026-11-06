@@ -16,10 +16,10 @@ These colors represent traditional Filipino dining culture — the clay cooking 
 
 | Token | Name | Hex | Meaning & Application |
 |---|---|---|---|
-| `--salo-orange` / `--accent` | **Fiesta Orange** | `#F36B2B` | Primary call-to-action buttons, key highlights, active nav indicators. Never used as a full-page background wash. |
+| `--salo-orange` / `--accent` | **Fiesta Orange** | `#F36B2B` | Primary actions and selected navigation or control states. Do not use for decorative accents or large backgrounds. |
 | `--salo-gold` / `--fiesta-gold` | **Golden Yellow** | `#F59E0B` | Sun, celebration, handaan, table reservations, ratings, festive highlights. |
-| `--salo-brown` / `--fiesta-brown` | **Earthy Brown** | `#5D4037` | Traditional clay pot (*palayok*), comfort, heritage cooking, grounding borders. |
-| `--salo-green` / `--fiesta-green` | **Muted Leaf Green** | `#2E7D32` | Banana leaf table lining (*dahon ng saging*), fresh ingredients, verified status, success indicators. |
+| `--salo-brown` / `--fiesta-brown` | **Earthy Brown** | `#5D4037` | Traditional clay pot (*palayok*) and brand imagery; do not use as a role-specific UI accent. |
+| `--salo-green` / `--fiesta-green` | **Muted Leaf Green** | `#2E7D32` | Semantic success and verification indicators. |
 
 ### Strict Neutral Background Rules (Non-Negotiable)
 
@@ -34,30 +34,42 @@ These colors represent traditional Filipino dining culture — the clay cooking 
 
 ---
 
-## 2. Tasteful Filipino Decorative Elements
+## 2. Shared Component and Cross-Role Consistency
+
+SALO must use one visual language across the public site and the Customer, Restaurant Owner, Rider, and Admin interfaces. Differences between roles come from content and information density, not separate visual styles.
+
+- Reuse shared components for buttons, inputs, cards, badges, modals, dropdowns, navigation, and other common UI. Extend an existing component or pattern before creating a new one-off style.
+- Use the existing design tokens for colors, spacing, border radii, shadows, and typography. Do not invent values; add or change tokens only through an intentional design-system update.
+- Use Fiesta Orange (`#F36B2B`) for primary actions and selected states, never as a large background. Other palette colors remain shared tokens and should be used only for their established or semantic purpose, not as role-specific accent systems.
+- Keep top-bar and sidebar structure, height, spacing, logo treatment, and button styling consistent across roles.
+- Prefer open layouts with clear hierarchy over unnecessary nested cards.
+- Keep hover, focus, active, and loading states consistent across the application. Use the existing motion tokens (`150ms` / `220ms`) and do not introduce new motion styles.
+- Keep image fit, aspect ratio, radius, hover behavior, and placeholder treatment consistent across the application.
+
+Before creating or changing UI, check for an existing shared component or pattern and compare the intended treatment with the public landing page and this design system.
+
+---
+
+## 3. Tasteful Filipino Decorative Elements
 
 Festive accents must be restrained and purposeful to avoid a cluttered "carnival" look while evoking authentic Philippine hospitality:
 
-### 1. Subtle Banderitas Accent Strip (`.fiesta-banderitas-strip`)
-A 4px micro-ribbon alternating SALO's 4 colors (Orange `#F36B2B` → Gold `#F59E0B` → Green `#2E7D32` → Brown `#5D4037`):
-```html
-<div className="fiesta-banderitas-strip" aria-hidden="true" />
-```
-- Placed above the main navigation bar, at the top of the hero banner, and on dashboard header sections.
-- Thin, subtle, and elegant.
+### Decorative Color Use
+
+Multicolor accent strips are not part of the baseline navigation or dashboard design. Do not add them to new screens; preserve the shared SALO logo and navigation treatment instead.
 
 ### 2. Fiesta Cultural Pills (`.fiesta-pill`)
 Small rounded pill badges used for cultural highlights:
-- `.fiesta-pill` (Fiesta Orange tint)
-- `.fiesta-pill-gold` (Golden celebration tint)
-- `.fiesta-pill-green` (Banana leaf green tint)
+- `.fiesta-pill` uses a neutral surface and text treatment.
+- Gold and green variants are reserved for their established semantic meanings.
+- Orange is reserved for primary actions and selected states, not decorative pills.
 
 ### 3. Open Layouts over Card Clutter
 In Philippine dining, a feast (*salo-salo*) is expansive and shared. Layouts must prioritize open white space, generous line-heights, and clear typographic hierarchy over putting every single item inside nested boxes.
 
 ---
 
-## 3. Language & Brand Voice Policy
+## 4. Language & Brand Voice Policy
 
 > **SALO's interface language is English.** Filipino/Taglish phrases are used selectively as brand expressions only.
 
@@ -108,14 +120,14 @@ Use Filipino phrases naturally in:
 
 ---
 
-## 4. Role Application Rules for Upcoming Phases
+## 5. Role Application Rules for Upcoming Phases
 
 When implementing Phase 4 (Restaurant Owner), Phase 5 (Rider), and Phase 6 (Admin):
 1. **Restaurant Owner Module (Phase 4):**
    - Interface: English throughout. Optional brand greeting: *"Magandang umaga! Here's your business overview."*
-   - Use earthy brown & gold accents for kitchen readiness and menu management.
+   - Use the shared SALO palette and components; represent kitchen readiness and menu status with existing semantic tokens.
 2. **Delivery Rider Module (Phase 5):**
    - Interface: English throughout. Optional brand tagline: *"Kain tayo — let's get it there!"*
-   - Use muted green & orange for active dispatch, safety, and delivery progress.
+   - Use the shared SALO palette and components; represent dispatch, safety, and delivery progress with existing semantic tokens.
 3. **Admin Module (Phase 6):**
-   - Clean, trustworthy, efficient, English-only. Subtle banderitas header strip and SALO branding preserved.
+   - Clean, trustworthy, efficient, English-only. SALO branding and shared navigation treatment preserved.
