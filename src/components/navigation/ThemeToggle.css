@@ -2,8 +2,5 @@
 .theme-toggle {
   transition:
     background var(--transition-fast),
-    color var(--transition-fast),
-    transform var(--transition-fast);
+    color var(--transition-fast);
 }
-
-.theme-toggle:active { transform: scale(0.9); }
