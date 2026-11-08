@@ -57,14 +57,21 @@ export default function CheckoutPage() {
           ? (group.deliveryAddress?.street || 'Default Delivery Address')
           : 'Pickup at Restaurant Counter',
         fulfillment: group.fulfillment,
+        pickupInformation: group.fulfillment === 'pickup'
+          ? 'Pickup at the selected restaurant counter.'
+          : null,
         deliveryFee: group.fulfillment === 'delivery' ? group.deliveryFee : 0,
+        deliveryInstructions: group.fulfillment === 'delivery' ? group.deliveryAddress?.notes || '' : '',
         subtotal: group.subtotal,
         status: 'Pending Confirmation',
         items: group.items.map((i) => ({
+          menuItemId: i.id,
           name: i.name,
           qty: i.quantity,
           price: i.unitTotal,
-          addOns: (i.selectedAddOns || []).map((a) => a.name),
+          basePrice: i.price,
+          addOns: (i.selectedAddOns || []).map((a) => ({ name: a.name, price: Number(a.price || 0) })),
+          image: i.image,
         })),
         rider: {
           name: 'Assigning rider upon preparation...',
@@ -79,6 +86,7 @@ export default function CheckoutPage() {
         paymentMethod: PAYMENT_METHODS.find((p) => p.id === paymentMethod)?.name || 'Cash on Delivery',
         paymentStatus: paymentMethod === 'cod' ? 'Pending COD Collection' : 'Paid Online (Verified)',
         orderNotes: orderNotes.trim(),
+        priority: false,
         subOrders,
         overallStatus: 'Confirmed',
       });

@@ -3,6 +3,7 @@ import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
+import RestaurantImage from '../components/RestaurantImage';
 
 export default function CartPage() {
   const navigate = useNavigate();
@@ -236,21 +237,22 @@ export default function CartPage() {
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flex: 1, minWidth: 0 }}>
-                        <div style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: 'var(--radius-md)',
-                          border: '1px solid var(--border-primary)',
-                          background: 'var(--surface-secondary)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 14,
-                          fontWeight: 700,
-                          color: 'var(--text-secondary)',
-                        }}>
-                          {item.image || 'R'}
-                        </div>
+                        <RestaurantImage
+                          image={item.image}
+                          alt={`${item.name} photo`}
+                          fallback={typeof item.image === 'string' ? item.image : '🍽️'}
+                          style={{
+                            width: 40,
+                            height: 40,
+                            flex: '0 0 40px',
+                            borderRadius: 'var(--radius-md)',
+                            border: '1px solid var(--border-primary)',
+                            background: 'var(--surface-secondary)',
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: 'var(--text-secondary)',
+                          }}
+                        />
                         <div>
                           <p style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>
                             {item.name}

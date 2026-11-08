@@ -5,6 +5,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
+import RestaurantImage from '../components/RestaurantImage';
 
 const CATEGORIES = [
   'All',
@@ -252,7 +253,12 @@ export default function CustomerDashboard() {
                   position: 'relative',
                   borderBottom: '1px solid var(--border-secondary)',
                 }}>
-                  <span>{rest.coverImage}</span>
+                  <RestaurantImage
+                    image={rest.coverPhoto}
+                    alt={`${rest.name} cover photo`}
+                    fallback={rest.coverImage || rest.name?.[0] || 'R'}
+                    style={{ position: 'absolute', inset: 0 }}
+                  />
                   <button
                     type="button"
                     onClick={(event) => handleToggleFavorite(rest.id, event)}

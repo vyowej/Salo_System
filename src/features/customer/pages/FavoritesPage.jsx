@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
+import RestaurantImage from '../components/RestaurantImage';
 
 export default function FavoritesPage() {
   const [restaurants, setRestaurants] = useState([]);
@@ -100,7 +101,12 @@ export default function FavoritesPage() {
                 borderBottom: '1px solid var(--border-secondary)',
                 color: 'var(--text-primary)',
               }}>
-                {restaurant.coverImage || 'R'}
+                <RestaurantImage
+                  image={restaurant.coverPhoto}
+                  alt={`${restaurant.name} cover photo`}
+                  fallback={restaurant.coverImage || restaurant.name?.[0] || 'R'}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
               </div>
 
               <div style={{ padding: 'var(--space-4)' }}>
