@@ -6,6 +6,8 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import ItemModal from '../components/ItemModal';
 import ReservationModal from '../components/ReservationModal';
+import RestaurantImage from '../components/RestaurantImage';
+import { getMenuCustomerPrice, normalizeMenuCategories, normalizeMenuItem } from '../../restaurant/menu/menuData';
 
 export default function RestaurantDetailPage() {
   const { id } = useParams();
@@ -21,8 +23,13 @@ export default function RestaurantDetailPage() {
     async function fetchRest() {
       const data = await customerService.getRestaurantById(id);
       if (data) {
-        setRestaurant(data);
-        setActiveCategory(data.categories?.[0] || 'All');
+        const categories = normalizeMenuCategories(data).filter((category) => category.visible);
+        const visibleCategoryNames = new Set(categories.map((category) => category.name));
+        const menu = (data.menu || [])
+          .map(normalizeMenuItem)
+          .filter((item) => item.availability !== 'hidden' && visibleCategoryNames.has(item.category));
+        setRestaurant({ ...data, categories: categories.map((category) => category.name), menu });
+        setActiveCategory(categories[0]?.name || 'All');
         setIsFavorite(customerService.getFavoriteRestaurants().includes(data.id));
       }
     }
@@ -48,9 +55,21 @@ export default function RestaurantDetailPage() {
     );
   }
 
-  const filteredMenuItems = activeCategory
+  const filteredMenuItems = activeCategory && activeCategory !== 'All'
     ? restaurant.menu?.filter((item) => item.category === activeCategory)
     : restaurant.menu;
+  const offersDelivery = restaurant.fulfillment?.delivery !== false;
+  const offersPickup = restaurant.fulfillment?.pickup !== false;
+  const coverage = restaurant.deliveryCoverage || {};
+  const coverageText = coverage.method === 'cities'
+    ? coverage.cities?.join(', ')
+    : coverage.method === 'barangays'
+      ? coverage.barangays?.join(', ')
+      : coverage.method === 'zones' || coverage.method === 'other'
+        ? coverage.zones
+        : coverage.method === 'radius' && coverage.radiusKm
+          ? `${coverage.radiusKm} km`
+          : '';
 
   return (
     <CustomerLayout>
@@ -90,7 +109,12 @@ export default function RestaurantDetailPage() {
           borderBottom: '1px solid var(--border-secondary)',
           position: 'relative',
         }}>
-          <span>{restaurant.coverImage}</span>
+          <RestaurantImage
+            image={restaurant.coverPhoto}
+            alt={`${restaurant.name} cover photo`}
+            fallback={restaurant.coverImage || restaurant.name?.[0] || 'R'}
+            style={{ position: 'absolute', inset: 0 }}
+          />
           <button
             onClick={() => {
               if (!restaurant) return;
@@ -123,23 +147,40 @@ export default function RestaurantDetailPage() {
         {/* Info row */}
         <div style={{ padding: 'var(--space-6)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-1)' }}>
-                <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {restaurant.name}
-                </h1>
-                <Badge variant={restaurant.isOpen ? 'success' : 'default'} dot size="sm">
-                  {restaurant.isOpen ? 'Open Now' : 'Closed'}
-                </Badge>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
+              {restaurant.logoImage && (
+                <RestaurantImage
+                  image={restaurant.logoImage}
+                  alt={`${restaurant.name} logo`}
+                  style={{ width: 52, height: 52, borderRadius: 'var(--radius-lg)', flex: '0 0 52px' }}
+                />
+              )}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-1)', flexWrap: 'wrap' }}>
+                  <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {restaurant.name}
+                  </h1>
+                  <Badge variant={restaurant.isOpen ? 'success' : 'default'} dot size="sm">
+                    {restaurant.isOpen ? 'Open Now' : 'Closed'}
+                  </Badge>
+                </div>
+
+                <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
+                  {restaurant.cuisine}
+                </p>
+                <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
+                  {restaurant.description || restaurant.bio || restaurant.tagline}
+                </p>
+
+                <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                  📍 {restaurant.address} · 🕒 {restaurant.operatingHours}
+                </p>
+                {(restaurant.contactEmail || restaurant.phone) && (
+                  <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                    {[restaurant.phone, restaurant.contactEmail].filter(Boolean).join(' · ')}
+                  </p>
+                )}
               </div>
-
-              <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
-                {restaurant.tagline}
-              </p>
-
-              <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-                📍 {restaurant.address} · 🕒 {restaurant.operatingHours}
-              </p>
             </div>
 
             {/* Quick Actions */}
@@ -147,12 +188,13 @@ export default function RestaurantDetailPage() {
               <Button
                 variant="primary"
                 size="md"
+                disabled={!offersDelivery && !offersPickup}
                 onClick={() => {
                   const menuEl = document.getElementById('restaurant-menu-section');
                   menuEl?.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
-                Order Food
+                {offersDelivery || offersPickup ? 'Order Food' : 'Ordering unavailable'}
               </Button>
 
               <Button
@@ -191,9 +233,45 @@ export default function RestaurantDetailPage() {
               <span style={{ color: 'var(--text-muted)' }}>Min. Order: </span>
               <strong>₱{restaurant.minOrder}</strong>
             </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>Services: </span>
+              <strong>{[
+                offersDelivery && 'Delivery',
+                offersPickup && 'Pickup',
+              ].filter(Boolean).join(' · ') || 'Unavailable'}</strong>
+            </div>
+            {coverageText && (
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Delivery area: </span>
+                <strong>{coverageText}</strong>
+              </div>
+            )}
           </div>
+          {restaurant.foodCategories?.length > 0 && (
+            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-4)' }} aria-label="Food categories">
+              {restaurant.foodCategories.map((category) => (
+                <Badge key={category} variant="default" size="sm">{category}</Badge>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
+      {restaurant.profilePhotos?.length > 0 && (
+        <section style={{ marginBottom: 'var(--space-8)' }} aria-labelledby="restaurant-gallery-title">
+          <h2 id="restaurant-gallery-title" className="section-title">Restaurant photos</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--space-3)' }}>
+            {restaurant.profilePhotos.map((image, index) => (
+              <RestaurantImage
+                key={image.id || index}
+                image={image}
+                alt={image.alt || `${restaurant.name} photo ${index + 1}`}
+                style={{ aspectRatio: '1 / 1', borderRadius: 'var(--radius-lg)' }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Menu Section ──────────────────────────────────── */}
       <div id="restaurant-menu-section">
@@ -206,7 +284,7 @@ export default function RestaurantDetailPage() {
           marginBottom: 'var(--space-6)',
           borderBottom: '1px solid var(--border-secondary)',
         }}>
-          {restaurant.categories?.map((cat) => (
+          {['All', ...(restaurant.categories || [])].map((cat) => (
             <button
               key={cat}
               type="button"
@@ -230,10 +308,10 @@ export default function RestaurantDetailPage() {
 
         {/* Items List (Open food presentation, clean and uncrowded) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          {filteredMenuItems?.map((item) => (
+          {filteredMenuItems?.length ? filteredMenuItems.map((item) => (
             <div
               key={item.id}
-              onClick={() => item.isAvailable && setSelectedItem(item)}
+              onClick={() => item.availability === 'available' && setSelectedItem(item)}
               style={{
                 background: 'var(--surface-primary)',
                 border: '1px solid var(--border-primary)',
@@ -242,18 +320,18 @@ export default function RestaurantDetailPage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 'var(--space-5)',
-                cursor: item.isAvailable ? 'pointer' : 'not-allowed',
-                opacity: item.isAvailable ? 1 : 0.6,
+                cursor: item.availability === 'available' ? 'pointer' : 'not-allowed',
+                opacity: item.availability === 'available' ? 1 : 0.65,
                 transition: 'border-color var(--transition-fast), transform var(--transition-fast)',
               }}
               onMouseEnter={(e) => {
-                if (item.isAvailable) {
+                if (item.availability === 'available') {
                   e.currentTarget.style.borderColor = 'var(--accent)';
                   e.currentTarget.style.transform = 'translateY(-1px)';
                 }
               }}
               onMouseLeave={(e) => {
-                if (item.isAvailable) {
+                if (item.availability === 'available') {
                   e.currentTarget.style.borderColor = 'var(--border-primary)';
                   e.currentTarget.style.transform = 'none';
                 }
@@ -270,8 +348,12 @@ export default function RestaurantDetailPage() {
                 justifyContent: 'center',
                 fontSize: 36,
                 flexShrink: 0,
+                position: 'relative',
+                overflow: 'hidden',
               }}>
-                {item.image}
+                {item.photo ? (
+                  <RestaurantImage image={item.photo} alt={item.photo.alt || item.name} style={{ position: 'absolute', inset: 0, borderRadius: 'var(--radius-md)' }} />
+                ) : (item.image || '🍲')}
               </div>
 
               {/* Item Details */}
@@ -280,8 +362,10 @@ export default function RestaurantDetailPage() {
                   <h3 style={{ fontSize: 'var(--font-size-base)', fontWeight: 600, color: 'var(--text-primary)' }}>
                     {item.name}
                   </h3>
-                  {!item.isAvailable && (
-                    <Badge variant="default" size="sm">Sold Out</Badge>
+                  {item.availability !== 'available' && (
+                    <Badge variant="default" size="sm">
+                      {item.availability === 'sold_out' ? 'Sold Out' : 'Temporarily Unavailable'}
+                    </Badge>
                   )}
                 </div>
 
@@ -297,27 +381,34 @@ export default function RestaurantDetailPage() {
                   {item.description}
                 </p>
 
-                <p style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--accent)', marginTop: 4 }}>
-                  ₱{item.price.toLocaleString()}
-                </p>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+                  {item.discountedPrice && <del style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>₱{item.price.toLocaleString()}</del>}
+                  <p style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--accent)', margin: 0 }}>
+                    ₱{getMenuCustomerPrice(item).toLocaleString()}
+                  </p>
+                </div>
               </div>
 
               {/* Add Button */}
               <div>
                 <Button
-                  variant={item.isAvailable ? 'outline' : 'secondary'}
+                  variant={item.availability === 'available' ? 'outline' : 'secondary'}
                   size="sm"
-                  disabled={!item.isAvailable}
+                  disabled={item.availability !== 'available'}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (item.isAvailable) setSelectedItem(item);
+                    if (item.availability === 'available') setSelectedItem(item);
                   }}
                 >
-                  {item.isAvailable ? '+ Add' : 'Sold Out'}
+                  {item.availability === 'available' ? '+ Add' : item.availability === 'sold_out' ? 'Sold Out' : 'Unavailable'}
                 </Button>
               </div>
             </div>
-          ))}
+          )) : (
+            <p style={{ padding: 'var(--space-6)', color: 'var(--text-muted)', textAlign: 'center' }}>
+              No menu items are available in this category yet.
+            </p>
+          )}
         </div>
       </div>
     </CustomerLayout>
