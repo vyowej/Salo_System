@@ -1,3 +1,5 @@
+import { createDefaultOperatingHours } from './operatingHours.js';
+
 export const DEMO_SEED = {
   selectedRestaurantId: 'dalisay-heritage',
   reservationDurationMinutes: 120,
@@ -18,6 +20,7 @@ export const DEMO_SEED = {
       minOrder: 150,
       isOpen: true,
       operatingHours: '10:00 AM – 10:00 PM',
+      operatingSchedule: createDefaultOperatingHours(),
       address: '42 Scout Gandia St., Tomas Morato, Quezon City',
       phone: '(02) 8-234-5678',
       contactEmail: '',

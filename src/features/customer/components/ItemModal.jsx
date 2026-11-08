@@ -5,7 +5,7 @@ import { useCart } from '../../../hooks/useCart';
 import RestaurantImage from './RestaurantImage';
 import { getMenuCustomerPrice, normalizeMenuItem } from '../../restaurant/menu/menuData';
 
-export default function ItemModal({ open, onClose, item, restaurant }) {
+export default function ItemModal({ open, onClose, item, restaurant, orderingDisabled = false, orderingDisabledMessage = '' }) {
   const { addItem } = useCart();
 
   const [quantity, setQuantity] = useState(1);
@@ -130,14 +130,20 @@ export default function ItemModal({ open, onClose, item, restaurant }) {
             variant="primary"
             size="md"
             onClick={handleAddToCart}
+            disabled={orderingDisabled}
             style={{ flex: 1, maxWidth: 260 }}
           >
-            Add to Multi-Cart · ₱{grandItemTotal.toLocaleString()}
+            {orderingDisabled ? 'Ordering unavailable' : `Add to Multi-Cart · ₱${grandItemTotal.toLocaleString()}`}
           </Button>
         </div>
       }
     >
       <div>
+        {orderingDisabled && (
+          <p role="status" style={{ margin: '0 0 var(--space-3)', color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)' }}>
+            {orderingDisabledMessage}
+          </p>
+        )}
         <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start', marginBottom: 'var(--space-4)' }}>
           <div style={{
             width: 64,

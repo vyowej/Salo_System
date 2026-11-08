@@ -3,14 +3,23 @@ import test from 'node:test';
 import { DEMO_SEED } from './seedData.js';
 import { canPerformRestaurantAction, demoAdapter } from './demoAdapter.js';
 import { classifyInventoryItem, createStockAdjustment, createStockMovement } from './inventoryRules.js';
+import { createDefaultOperatingHours } from './operatingHours.js';
 
 const STORAGE_KEY = 'salo_demo_store_v1';
 const OWNER = { id: 2, email: 'owner@salo.ph', name: 'Demo Owner', role: 'owner' };
 
-function installDemoSession(user = OWNER) {
+function installDemoSession(user = OWNER, seed = DEMO_SEED) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const testSeed = structuredClone(seed);
+  testSeed.restaurants.forEach((restaurant) => {
+    const hours = createDefaultOperatingHours();
+    Object.values(hours.weeklySchedule).forEach((day) => {
+      day.periods = [{ id: 'test-all-day', open: '00:00', close: '23:59' }];
+    });
+    restaurant.operatingSchedule = hours;
+  });
   const storage = new Map([
-    [STORAGE_KEY, JSON.stringify(DEMO_SEED)],
+    [STORAGE_KEY, JSON.stringify(testSeed)],
     ['salo_user', JSON.stringify(user)],
   ]);
   Object.defineProperty(globalThis, 'localStorage', {
@@ -119,6 +128,28 @@ test('manual deduction is the default and on-completion deductions run once with
     demoAdapter.updateOrderStatus(tooLarge.subOrders[0].id, 'Ready for Pickup', 'dalisay-heritage');
     assert.throws(() => demoAdapter.updateOrderStatus(tooLarge.subOrders[0].id, 'Completed', 'dalisay-heritage'), /Not enough/);
     assert.equal(menuItem().stockQuantity, 7);
+  } finally {
+    restore();
+  }
+});
+
+test('legacy demo stores preserve seeded menu stock tracking without overriding explicit values', () => {
+  const legacyStore = structuredClone(DEMO_SEED);
+  const chicken = legacyStore.restaurants[0].menu.find((item) => item.id === 'menu-1');
+  delete chicken.stockQuantity;
+  legacyStore.restaurants[0].menu.find((item) => item.id === 'menu-2').stockQuantity = null;
+  const restore = installDemoSession(OWNER, legacyStore);
+
+  try {
+    const menuItems = () => demoAdapter.getMenuItems('dalisay-heritage');
+    assert.equal(menuItems().find((item) => item.id === 'menu-1').stockQuantity, 10);
+    assert.equal(menuItems().find((item) => item.id === 'menu-2').stockQuantity, null);
+
+    demoAdapter.updateMenuItemStock('menu-1', 0, 'Audit sold-out transition', 'dalisay-heritage');
+    const soldOutItem = menuItems().find((item) => item.id === 'menu-1');
+    assert.equal(soldOutItem.stockQuantity, 0);
+    assert.equal(soldOutItem.availability, 'sold_out');
+    assert.equal(demoAdapter.getInventoryItems('dalisay-heritage').find((item) => item.id === 'menu-1').quantity, 0);
   } finally {
     restore();
   }

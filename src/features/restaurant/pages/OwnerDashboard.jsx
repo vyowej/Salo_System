@@ -6,6 +6,8 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import { ErrorState, LoadingSpinner } from '../../../components/feedback';
+import { DASHBOARD_ACTIVITY_SAMPLES } from './team/dashboardSamples';
+import './team/r7Dashboard.css';
 
 // ── Helpers ──────────────────────────────────────────────────────
 function getGreeting() {
@@ -55,9 +57,12 @@ function getReservationStatusBadge(status) {
 }
 
 // ── Stat Card ────────────────────────────────────────────────────
-function StatCard({ label, value, sub, accentColor, accentBg, icon, trend }) {
+function StatCard({ label, value, sub, accentColor, accentBg, icon, trend, to }) {
+  const Wrapper = to ? Link : 'div';
   return (
-    <div
+    <Wrapper
+      {...(to ? { to } : {})}
+      aria-label={to ? `${label}: ${value}. Open ${to === '/owner/reports' ? 'Reports' : to === '/owner/orders' ? 'Orders' : to === '/owner/reservations' ? 'Reservations' : 'Inventory'}` : undefined}
       style={{
         background: 'var(--surface-primary)',
         border: '1px solid var(--border-primary)',
@@ -69,6 +74,9 @@ function StatCard({ label, value, sub, accentColor, accentBg, icon, trend }) {
         gap: 'var(--space-2)',
         position: 'relative',
         overflow: 'hidden',
+        color: 'inherit',
+        textDecoration: 'none',
+        cursor: to ? 'pointer' : undefined,
       }}
     >
       {/* Top accent bar */}
@@ -137,7 +145,7 @@ function StatCard({ label, value, sub, accentColor, accentBg, icon, trend }) {
           {sub}
         </p>
       )}
-    </div>
+    </Wrapper>
   );
 }
 
@@ -150,6 +158,8 @@ export default function OwnerDashboard() {
   const [recentOrders, setRecentOrders] = useState([]);
   const [upcomingReservations, setUpcomingReservations] = useState([]);
   const [restaurant, setRestaurant] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [summaryWarnings, setSummaryWarnings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -163,9 +173,36 @@ export default function OwnerDashboard() {
         canViewCustomer: access.canAccess(['orders.customer.view']),
       });
       const reservations = ownerService.getReservations(selectedRestaurantId);
+      const earnings = ownerService.getEarningsOverview(selectedRestaurantId);
+      const localToday = new Date();
+      const todayKey = `${localToday.getFullYear()}-${String(localToday.getMonth() + 1).padStart(2, '0')}-${String(localToday.getDate()).padStart(2, '0')}`;
+      const nextSummary = {
+        weeklyRevenue: earnings.thisWeek,
+        monthlyRevenue: earnings.thisMonth,
+        todayReservations: reservations.filter((reservation) => reservation.date === todayKey).length,
+        availableTables: null,
+        lowStockItems: null,
+        soldOutItems: null,
+      };
+      const warnings = [];
+      try {
+        nextSummary.availableTables = ownerService.getTables(selectedRestaurantId, todayKey)
+          .filter((table) => table.status === 'Available').length;
+      } catch {
+        warnings.push('Table availability');
+      }
+      try {
+        const inventory = ownerService.getInventoryItems(selectedRestaurantId);
+        nextSummary.lowStockItems = inventory.filter((item) => item.stockStatus === 'Low Stock').length;
+        nextSummary.soldOutItems = inventory.filter((item) => item.kind === 'menu' && item.stockStatus === 'Out of Stock').length;
+      } catch {
+        warnings.push('Inventory summaries');
+      }
 
       setRestaurant(rest);
       setStats(s);
+      setSummary(nextSummary);
+      setSummaryWarnings(warnings);
       setRecentOrders(orders.slice(0, 5));
       setUpcomingReservations(reservations
         .filter((r) => r.status === 'Pending' || r.status === 'Confirmed')
@@ -248,6 +285,7 @@ export default function OwnerDashboard() {
           accentColor="var(--fiesta-gold, #F59E0B)"
           accentBg="var(--fiesta-gold-subtle, #FEF3C7)"
           icon="💰"
+          to="/owner/reports"
         />
         <StatCard
           label="Orders Today"
@@ -256,6 +294,7 @@ export default function OwnerDashboard() {
           accentColor="var(--accent, #F36B2B)"
           accentBg="var(--accent-subtle, #FFF0E8)"
           icon="🧾"
+          to="/owner/orders"
         />
         <StatCard
           label="Pending Reservations"
@@ -264,6 +303,7 @@ export default function OwnerDashboard() {
           accentColor="var(--fiesta-green, #2E7D32)"
           accentBg="var(--fiesta-green-subtle, #E8F5E9)"
           icon="📅"
+          to="/owner/reservations"
         />
         <StatCard
           label="Avg Order Value"
@@ -274,6 +314,21 @@ export default function OwnerDashboard() {
           icon="📊"
         />
       </div>
+
+      <section className="r7-dashboard-additions" aria-label="Additional restaurant summaries">
+        <div className="r7-dashboard-additions-heading"><div><p className="r7-eyebrow">QUICK HEALTH CHECK</p><h2 className="section-title">More at a glance</h2></div><span>Live demo summaries</span></div>
+        <div className="r7-dashboard-summary-grid">
+          <StatCard label="Today's Sales" value={formatPeso(stats.todayRevenue)} sub="Open sales reports" accentColor="var(--fiesta-gold, #F59E0B)" accentBg="var(--fiesta-gold-subtle, #FEF3C7)" icon="₱" to="/owner/reports" />
+          <StatCard label="This Week" value={formatPeso(summary?.weeklyRevenue ?? 0)} sub="Sales total · open reports" accentColor="var(--accent)" accentBg="var(--accent-subtle)" icon="↗" to="/owner/reports" />
+          <StatCard label="This Month" value={formatPeso(summary?.monthlyRevenue ?? 0)} sub="Sales total · open reports" accentColor="var(--fiesta-brown, #5D4037)" accentBg="var(--fiesta-brown-subtle, #EFEBE9)" icon="▦" to="/owner/reports" />
+          <StatCard label="Pending Orders" value={stats.pendingOrders} sub="Review orders needing a decision" accentColor="var(--accent)" accentBg="var(--accent-subtle)" icon="!" to="/owner/orders" />
+          <StatCard label="Today's Reservations" value={summary?.todayReservations ?? 0} sub="Reservations scheduled today" accentColor="var(--fiesta-green, #2E7D32)" accentBg="var(--fiesta-green-subtle, #E8F5E9)" icon="⌂" to="/owner/reservations" />
+          <StatCard label="Available Tables" value={summary?.availableTables ?? '—'} sub="Current table availability" accentColor="var(--fiesta-green, #2E7D32)" accentBg="var(--fiesta-green-subtle, #E8F5E9)" icon="▤" to="/owner/tables" />
+          <StatCard label="Low-Stock Items" value={summary?.lowStockItems ?? '—'} sub={summary?.lowStockItems > 0 ? 'Review items needing attention' : 'Inventory summary' } accentColor="var(--fiesta-gold, #F59E0B)" accentBg="var(--fiesta-gold-subtle, #FEF3C7)" icon="⚠" to="/owner/inventory" />
+          <StatCard label="Sold-Out Items" value={summary?.soldOutItems ?? '—'} sub="Menu items with zero tracked stock" accentColor="var(--salo-error, #DC4545)" accentBg="var(--status-error-bg)" icon="∅" to="/owner/menu" />
+        </div>
+        {summaryWarnings.length > 0 && <p className="r7-dashboard-warning" role="status">Some live summary values are unavailable for this account: {summaryWarnings.join(', ')}.</p>}
+      </section>
 
       {/* ── Live Orders Quick Strip ───────────────────── */}
       <section style={{ marginBottom: 'var(--space-8)' }}>
@@ -460,6 +515,11 @@ export default function OwnerDashboard() {
             ))
           )}
         </div>
+      </section>
+
+      <section className="r7-dashboard-activity" aria-labelledby="r7-dashboard-activity-title">
+        <div className="r7-dashboard-additions-heading"><div><p className="r7-eyebrow">SAMPLE PREVIEW</p><h2 id="r7-dashboard-activity-title" className="section-title">Recent Activities</h2></div><span>Not a live activity feed</span></div>
+        <div className="r7-dashboard-activity-list">{DASHBOARD_ACTIVITY_SAMPLES.map((item) => <article key={item.id}><span className="r7-dashboard-activity-icon" aria-hidden="true">✦</span><span><strong>{item.title}</strong><small>{item.detail} · {item.module}</small></span><time>{item.time}</time></article>)}</div>
       </section>
 
       {/* ── Upcoming Reservations Strip ───────────────── */}

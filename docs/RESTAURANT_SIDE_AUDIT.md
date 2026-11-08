@@ -1,5 +1,7 @@
 # Restaurant Owner Side Completeness Audit
 
+> **OUTDATED:** This is the pre-R1 baseline audit. It does not reflect R5–R8 or R2b work. For the current demo/design-only status, see [RESTAURANT_OWNER_FOUNDATION.md](./RESTAURANT_OWNER_FOUNDATION.md).
+
 **Compared against:** `documentation/requirements/RESTAURANT_SIDE.md`  
 **Reference format:** `docs/CUSTOMER_FRONTEND_STATUS.md`  
 **Audit scope:** React frontend, Laravel source tree, API contract, and schema documentation; read-only except for this audit.

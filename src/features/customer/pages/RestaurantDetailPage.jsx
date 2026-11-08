@@ -8,6 +8,7 @@ import ItemModal from '../components/ItemModal';
 import ReservationModal from '../components/ReservationModal';
 import RestaurantImage from '../components/RestaurantImage';
 import { getMenuCustomerPrice, normalizeMenuCategories, normalizeMenuItem } from '../../restaurant/menu/menuData';
+import { getLocalDateKey } from '../../../services/demo/operatingHours';
 
 export default function RestaurantDetailPage() {
   const { id } = useParams();
@@ -20,9 +21,10 @@ export default function RestaurantDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
+    let active = true;
     async function fetchRest() {
       const data = await customerService.getRestaurantById(id);
-      if (data) {
+      if (active && data) {
         const categories = normalizeMenuCategories(data).filter((category) => category.visible);
         const visibleCategoryNames = new Set(categories.map((category) => category.name));
         const menu = (data.menu || [])
@@ -34,6 +36,11 @@ export default function RestaurantDetailPage() {
       }
     }
     fetchRest();
+    window.addEventListener('salo:demoStoreUpdated', fetchRest);
+    return () => {
+      active = false;
+      window.removeEventListener('salo:demoStoreUpdated', fetchRest);
+    };
   }, [id]);
 
   useEffect(() => {
@@ -60,6 +67,11 @@ export default function RestaurantDetailPage() {
     : restaurant.menu;
   const offersDelivery = restaurant.fulfillment?.delivery !== false;
   const offersPickup = restaurant.fulfillment?.pickup !== false;
+  const acceptingOrders = restaurant.operatingSchedule?.acceptingOrders !== false;
+  const acceptingReservations = restaurant.operatingSchedule?.acceptingReservations !== false;
+  const canStartOrder = acceptingOrders && restaurant.isOpen;
+  const upcomingClosures = (restaurant.operatingSchedule?.temporaryClosures || [])
+    .filter((closure) => closure.endDate >= getLocalDateKey());
   const coverage = restaurant.deliveryCoverage || {};
   const coverageText = coverage.method === 'cities'
     ? coverage.cities?.join(', ')
@@ -79,6 +91,8 @@ export default function RestaurantDetailPage() {
         onClose={() => setSelectedItem(null)}
         item={selectedItem}
         restaurant={restaurant}
+        orderingDisabled={!canStartOrder}
+        orderingDisabledMessage={!acceptingOrders ? 'This restaurant is not accepting orders right now.' : 'Ordering is unavailable while the restaurant is closed.'}
       />
 
       {/* ── Table Reservation Modal ───────────────────────── */}
@@ -188,23 +202,34 @@ export default function RestaurantDetailPage() {
               <Button
                 variant="primary"
                 size="md"
-                disabled={!offersDelivery && !offersPickup}
+                disabled={!canStartOrder || (!offersDelivery && !offersPickup)}
                 onClick={() => {
                   const menuEl = document.getElementById('restaurant-menu-section');
                   menuEl?.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
-                {offersDelivery || offersPickup ? 'Order Food' : 'Ordering unavailable'}
+                {canStartOrder && (offersDelivery || offersPickup) ? 'Order Food' : 'Ordering unavailable'}
               </Button>
 
               <Button
                 variant="secondary"
                 size="md"
+                disabled={!acceptingReservations}
                 onClick={() => setReservationOpen(true)}
               >
-                Reserve a Table
+                {acceptingReservations ? 'Reserve a Table' : 'Reservations unavailable'}
               </Button>
             </div>
+            {!canStartOrder && (
+              <p role="status" style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)', margin: 'var(--space-2) 0 0' }}>
+                {!acceptingOrders ? 'This restaurant is not accepting orders right now.' : 'Orders are unavailable while the restaurant is closed.'}
+              </p>
+            )}
+            {!acceptingReservations && (
+              <p role="status" style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)', margin: 'var(--space-2) 0 0' }}>
+                This restaurant is not accepting reservation requests right now.
+              </p>
+            )}
           </div>
 
           <div style={{
@@ -256,6 +281,49 @@ export default function RestaurantDetailPage() {
           )}
         </div>
       </div>
+
+      <section
+        aria-labelledby="restaurant-hours-title"
+        style={{
+          margin: '0 0 var(--space-8)',
+          padding: 'var(--space-5)',
+          border: '1px solid var(--border-primary)',
+          borderRadius: 'var(--radius-xl)',
+          background: 'var(--surface-primary)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+          <h2 id="restaurant-hours-title" className="section-title" style={{ margin: 0 }}>Hours and availability</h2>
+          <Badge variant={restaurant.isOpen ? 'success' : 'default'} dot>{restaurant.isOpen ? 'Open now' : 'Closed now'}</Badge>
+        </div>
+        <ul style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 'var(--space-2) var(--space-4)', padding: 0, margin: 'var(--space-4) 0 0', listStyle: 'none' }}>
+          {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
+            const schedule = restaurant.operatingSchedule?.weeklySchedule?.[day];
+            const label = `${day[0].toUpperCase()}${day.slice(1)}`;
+            const periods = schedule?.periods || [];
+            return (
+              <li key={day} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-2)', color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)' }}>
+                <strong style={{ color: 'var(--text-primary)' }}>{label}</strong>
+                <span>{schedule?.closed ? 'Closed' : periods.map((period) => `${period.open}–${period.close}`).join(', ') || 'Hours not set'}</span>
+              </li>
+            );
+          })}
+        </ul>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)', marginTop: 'var(--space-4)', color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)' }}>
+          <span>Orders: <strong>{acceptingOrders ? 'Accepting' : 'Paused'}</strong></span>
+          <span>Reservations: <strong>{acceptingReservations ? 'Accepting' : 'Paused'}</strong></span>
+        </div>
+        {upcomingClosures.length > 0 && (
+          <div role="status" style={{ marginTop: 'var(--space-4)', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', background: 'var(--status-warning-bg)', color: 'var(--status-warning-text)' }}>
+            <strong>Temporary closure notice</strong>
+            {upcomingClosures.map((closure) => (
+              <p key={closure.id} style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-sm)' }}>
+                {closure.type}: {closure.startDate}{closure.endDate !== closure.startDate ? ` – ${closure.endDate}` : ''} · {closure.reason}
+              </p>
+            ))}
+          </div>
+        )}
+      </section>
 
       {restaurant.profilePhotos?.length > 0 && (
         <section style={{ marginBottom: 'var(--space-8)' }} aria-labelledby="restaurant-gallery-title">

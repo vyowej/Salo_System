@@ -10,6 +10,7 @@ import { Input, Select, Textarea } from '../../../components/forms';
 import { ErrorState, LoadingSpinner } from '../../../components/feedback';
 import RestaurantImage from '../../customer/components/RestaurantImage';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
+import OperatingHoursEditor from './OperatingHoursEditor';
 import {
   createBusinessProfilePatch,
   formatBusinessAddress,
@@ -124,6 +125,7 @@ export default function OwnerProfilePage() {
     canEditProfile: access.canAccess(['business.profile.edit']),
     canManageLocation: access.canAccess(['business.location.manage']),
     canManagePhotos: access.canAccess(['business.photos.manage']),
+    canManageHours: access.canAccess(['business.hours.manage']),
   }), [access]);
   const [initial, setInitial] = useState(null);
   const [formData, setFormData] = useState(null);
@@ -294,7 +296,7 @@ export default function OwnerProfilePage() {
     return <OwnerLayout><ErrorState description={error || 'Restaurant profile data is unavailable.'} onRetry={loadProfile} /></OwnerLayout>;
   }
 
-  const hasEditAccess = permissions.canEditProfile || permissions.canManageLocation || permissions.canManagePhotos;
+  const hasEditAccess = permissions.canEditProfile || permissions.canManageLocation || permissions.canManagePhotos || permissions.canManageHours;
   const address = formatBusinessAddress(formData.location);
 
   return (
@@ -528,7 +530,7 @@ export default function OwnerProfilePage() {
                 <div className="owner-profile-operating-hours">
                   <strong>Operating hours</strong>
                   <span>{formData.operatingHours || 'Not set'}</span>
-                  <small>Hours are displayed here but managed in the Operating Hours feature.</small>
+                  <small>Manage the weekly schedule, closures, and customer acceptance controls in the Operating Hours panel.</small>
                 </div>
               </section>
             )}
@@ -559,6 +561,7 @@ export default function OwnerProfilePage() {
           </form>
 
           <div className="owner-profile-aside">
+            <OperatingHoursEditor key={selectedRestaurantId} restaurantId={selectedRestaurantId} />
             <OwnerProfilePreview profile={formData} />
             <section className="owner-profile-card owner-profile-note-card">
               <h2>Public page preview</h2>

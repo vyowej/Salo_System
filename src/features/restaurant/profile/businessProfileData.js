@@ -1,3 +1,5 @@
+import { formatOperatingHours } from '../../../services/demo/operatingHours.js';
+
 function listFromValue(value) {
   if (Array.isArray(value)) return value.map((entry) => String(entry).trim()).filter(Boolean);
   return String(value || '').split(/[\n,]/).map((entry) => entry.trim()).filter(Boolean);
@@ -68,7 +70,9 @@ export function toBusinessProfileForm(restaurant = {}) {
     logoImage: restaurant.logoImage || null,
     coverPhoto: restaurant.coverPhoto || null,
     profilePhotos: Array.isArray(restaurant.profilePhotos) ? restaurant.profilePhotos : [],
-    operatingHours: restaurant.operatingHours || '',
+    operatingHours: restaurant.operatingSchedule
+      ? formatOperatingHours(restaurant.operatingSchedule)
+      : restaurant.operatingHours || '',
     rating: restaurant.rating ?? null,
     reviewCount: restaurant.reviewCount ?? 0,
     categories: listFromValue(restaurant.categories),

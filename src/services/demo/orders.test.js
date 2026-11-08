@@ -1,10 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { DEMO_SEED } from './seedData.js';
 import { demoAdapter } from './demoAdapter.js';
+import { createDefaultOperatingHours } from './operatingHours.js';
 
 function useDemoUser(user = { id: 2, email: 'owner@salo.ph', role: 'owner' }) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
-  const storage = new Map();
+  const seed = structuredClone(DEMO_SEED);
+  seed.restaurants.forEach((restaurant) => {
+    const hours = createDefaultOperatingHours();
+    Object.values(hours.weeklySchedule).forEach((day) => {
+      day.periods = [{ id: 'test-all-day', open: '00:00', close: '23:59' }];
+    });
+    restaurant.operatingSchedule = hours;
+  });
+  const storage = new Map([['salo_demo_store_v1', JSON.stringify(seed)]]);
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
     value: {
@@ -19,6 +29,15 @@ function useDemoUser(user = { id: 2, email: 'owner@salo.ph', role: 'owner' }) {
     else delete globalThis.localStorage;
   };
 }
+
+let restoreTestStorage;
+test.beforeEach(() => {
+  restoreTestStorage = useDemoUser();
+});
+test.afterEach(() => {
+  restoreTestStorage?.();
+  restoreTestStorage = null;
+});
 
 function createOrderFixture() {
   return demoAdapter.createCustomerOrder({

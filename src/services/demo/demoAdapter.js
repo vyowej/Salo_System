@@ -1,6 +1,14 @@
 import { DEMO_SEED } from './seedData.js';
 import { createStockAdjustment, createStockMovement, classifyInventoryItem, validateStockQuantity } from './inventoryRules.js';
 import { deriveTableStatus, getTableEditConflicts, getTableReservations } from './tableRules.js';
+import {
+  createDefaultOperatingHours,
+  createOperatingDateTime,
+  formatOperatingHours,
+  isRestaurantOpen,
+  normalizeOperatingHours,
+  validateOperatingHours,
+} from './operatingHours.js';
 
 const STORAGE_KEY = 'salo_demo_store_v1';
 const IMAGE_DB_NAME = 'salo_demo_images';
@@ -107,8 +115,18 @@ function readStore() {
     store.inventoryExpiringSoonDays ??= DEMO_SEED.inventoryExpiringSoonDays;
     store.restaurants = (store.restaurants || []).map((restaurant) => {
       const seedRestaurant = DEMO_SEED.restaurants.find((seed) => seed.id === restaurant.id);
+      const seedMenuItems = new Map((seedRestaurant?.menu || []).map((item) => [item.id, item]));
+      const menu = (restaurant.menu || []).map((item) => {
+        const seedItem = seedMenuItems.get(item.id);
+        if (seedItem && Object.hasOwn(seedItem, 'stockQuantity') && !Object.hasOwn(item, 'stockQuantity')) {
+          return { ...item, stockQuantity: seedItem.stockQuantity };
+        }
+        return item;
+      });
       return {
         ...restaurant,
+        operatingSchedule: normalizeOperatingHours(restaurant.operatingSchedule || seedRestaurant?.operatingSchedule || createDefaultOperatingHours()),
+        menu,
         diningAreas: restaurant.diningAreas || clone(seedRestaurant?.diningAreas || []),
         tables: (restaurant.tables || seedRestaurant?.tables || []).map((table) => ({
           ...table,
@@ -198,6 +216,7 @@ function assertReservationPermission(store, restaurantId, action) {
 }
 
 const SERVICE_PERMISSION_ACTION = Object.freeze({
+    'business.hours.manage': 'manage operating hours',
     'tables.view': 'view tables',
     'tables.add': 'add tables',
     'tables.edit': 'edit tables',
@@ -650,11 +669,48 @@ export const demoAdapter = {
   active: true,
 
   getRestaurants() {
-    return clone(readStore().restaurants);
+    return readStore().restaurants.map((restaurant) => ({
+      ...clone(restaurant),
+      isOpen: isRestaurantOpen(restaurant.operatingSchedule, restaurant.operatingSchedule?.temporaryClosures),
+    }));
   },
 
   getRestaurant(id) {
-    return clone(findRestaurant(id));
+    const restaurant = findRestaurant(id);
+    return restaurant ? {
+      ...clone(restaurant),
+      isOpen: isRestaurantOpen(restaurant.operatingSchedule, restaurant.operatingSchedule?.temporaryClosures),
+    } : null;
+  },
+
+  getOperatingHours(id) {
+    const restaurant = findRestaurant(id);
+    if (!restaurant) throw new Error('The selected restaurant could not be found.');
+    return clone(normalizeOperatingHours(restaurant.operatingSchedule));
+  },
+
+  updateOperatingHours(data, id) {
+    return updateStore((store) => {
+      const restaurant = findRestaurant(id, store);
+      if (!restaurant) throw new Error('The selected restaurant could not be found.');
+      assertServicePermission(store, restaurant.id, 'business.hours.manage');
+      const before = normalizeOperatingHours(restaurant.operatingSchedule);
+      const next = normalizeOperatingHours(data);
+      const validationError = validateOperatingHours(next);
+      if (validationError) throw new Error(validationError);
+      restaurant.operatingSchedule = next;
+      restaurant.operatingHours = formatOperatingHours(next);
+      const after = normalizeOperatingHours(restaurant.operatingSchedule);
+      appendActivity(store, {
+        module: 'business-profile',
+        action: 'operating-hours-updated',
+        targetId: restaurant.id,
+        before,
+        after,
+        restaurantId: restaurant.id,
+      });
+      return next;
+    });
   },
 
   getSelectedRestaurantId() {
@@ -934,6 +990,17 @@ export const demoAdapter = {
     return updateStore((store) => {
       const restaurant = findRestaurant(reservationPayload.restaurantId, store);
       if (!restaurant) throw new Error('The selected restaurant is not available for reservations.');
+      if (restaurant.operatingSchedule?.acceptingReservations === false) {
+        throw new Error('This restaurant is not accepting reservations right now.');
+      }
+      const reservationDateTime = createOperatingDateTime(reservationPayload.date, reservationPayload.time);
+      if (!reservationDateTime || !isRestaurantOpen(
+        restaurant.operatingSchedule,
+        restaurant.operatingSchedule?.temporaryClosures,
+        reservationDateTime,
+      )) {
+        throw new Error('The restaurant is closed at the selected reservation time.');
+      }
       const normalized = normalizeReservation({
         ...reservationPayload,
         restaurantId: restaurant.id,
@@ -1009,6 +1076,10 @@ export const demoAdapter = {
       const subOrders = orderPayload.subOrders.map((subOrder, index) => {
         const restaurant = findRestaurant(subOrder.restaurantId, store);
         if (!restaurant) throw new Error('An order contains a restaurant that is unavailable in the demo data.');
+        if (restaurant.operatingSchedule?.acceptingOrders === false
+          || !isRestaurantOpen(restaurant.operatingSchedule, restaurant.operatingSchedule?.temporaryClosures)) {
+          throw new Error(`${restaurant.name} is not accepting orders right now.`);
+        }
         return {
           ...clone(subOrder),
           id: subOrder.id || `${id}-SUB-${index + 1}`,

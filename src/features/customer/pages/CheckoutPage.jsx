@@ -48,6 +48,17 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
+      for (const group of restaurantGroups) {
+        const restaurant = await customerService.getRestaurantById(group.restaurantId);
+        if (!restaurant) throw new Error(`${group.restaurantName} is unavailable for ordering.`);
+        if (restaurant.operatingSchedule?.acceptingOrders === false) {
+          throw new Error(`${restaurant.name} is not accepting orders right now. Your cart has been kept.`);
+        }
+        if (!restaurant.isOpen) {
+          throw new Error(`${restaurant.name} is currently closed. Your cart has been kept.`);
+        }
+      }
+
       // Build sub-orders structure compliant with SALO Business Rules Part II
       const subOrders = restaurantGroups.map((group, idx) => ({
         id: `SUB-${Date.now().toString().slice(-4)}-${String.fromCharCode(65 + idx)}`,

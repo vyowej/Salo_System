@@ -11,6 +11,14 @@ const USER_KEY = 'salo_user';
 // TODO: Turn off/remove VITE_ENABLE_DEMO_AUTH before any real deployment.
 export const DEMO_AUTH_ENABLED = import.meta.env.VITE_ENABLE_DEMO_AUTH !== 'false';
 
+function createDemoToken(user) {
+  return `salo_demo_token_${user.role || 'customer'}_${Date.now()}`;
+}
+
+function isDemoToken(token) {
+  return token?.startsWith('salo_demo_token_') || token?.startsWith('salo_token_');
+}
+
 // Mock users for development/showcase demonstration when backend is not live
 const DEMO_USERS = {
   'customer@salo.ph': {
@@ -88,7 +96,7 @@ export const authService = {
     const email = credentials.email?.toLowerCase().trim();
     if (DEMO_AUTH_ENABLED && DEMO_USERS[email]) {
       const mockUser = DEMO_USERS[email];
-      const mockToken = `salo_demo_token_${mockUser.role}_${Date.now()}`;
+      const mockToken = createDemoToken(mockUser);
       this.setSession(mockToken, mockUser);
       return { user: mockUser, token: mockToken, isDemo: true };
     }
@@ -105,7 +113,7 @@ export const authService = {
       // If network fails (backend not running yet), allow demo credentials in dev environment
       if (DEMO_USERS[email]) {
         const mockUser = DEMO_USERS[email];
-        const mockToken = `salo_demo_token_${mockUser.role}_${Date.now()}`;
+        const mockToken = createDemoToken(mockUser);
         this.setSession(mockToken, mockUser);
         return { user: mockUser, token: mockToken, isDemo: true };
       }
@@ -119,7 +127,7 @@ export const authService = {
           email: credentials.email,
           role: credentials.role || 'customer',
         };
-        const mockToken = `salo_token_${Date.now()}`;
+        const mockToken = createDemoToken(fallbackUser);
         this.setSession(mockToken, fallbackUser);
         return { user: fallbackUser, token: mockToken, isDemo: true };
       }
@@ -150,7 +158,7 @@ export const authService = {
         role: userData.role || 'customer',
         phone: userData.phone || null,
       };
-      const mockToken = `salo_token_${Date.now()}`;
+      const mockToken = createDemoToken(newUser);
       this.setSession(mockToken, newUser);
       return { user: newUser, token: mockToken, isDemo: true };
     }
@@ -202,7 +210,7 @@ export const authService = {
    */
   async getCurrentUser() {
     const token = this.getToken();
-    if (DEMO_AUTH_ENABLED && token?.startsWith('salo_demo_token_')) {
+    if (DEMO_AUTH_ENABLED && isDemoToken(token)) {
       return this.getStoredUser();
     }
 

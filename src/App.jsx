@@ -24,17 +24,21 @@ const ReservationsPage = lazy(() => import('./features/customer/pages/Reservatio
 const AddressesPage = lazy(() => import('./features/customer/pages/AddressesPage'));
 const ProfilePage = lazy(() => import('./features/customer/pages/ProfilePage'));
 const PartnerApplicationPage = lazy(() => import('./features/customer/pages/PartnerApplicationPage'));
+const InvitationsInboxPage = lazy(() => import('./features/customer/pages/InvitationsInboxPage'));
 
 // Owner Module (Phase 4)
 const OwnerDashboard = lazy(() => import('./features/restaurant/pages/OwnerDashboard'));
 const OwnerOrdersPage = lazy(() => import('./features/restaurant/pages/OwnerOrdersPage'));
 const OwnerMenuPage = lazy(() => import('./features/restaurant/pages/OwnerMenuPage'));
 const OwnerReservationsPage = lazy(() => import('./features/restaurant/pages/OwnerReservationsPage'));
-const OwnerEarningsPage = lazy(() => import('./features/restaurant/pages/OwnerEarningsPage'));
+const OwnerPromotionsPage = lazy(() => import('./features/restaurant/pages/OwnerPromotionsPage'));
+const OwnerReportsPage = lazy(() => import('./features/restaurant/pages/OwnerReportsPage'));
+const OwnerActivityPage = lazy(() => import('./features/restaurant/pages/OwnerActivityPage'));
+const OwnerSettingsPage = lazy(() => import('./features/restaurant/pages/OwnerSettingsPage'));
 const OwnerProfilePage = lazy(() => import('./features/restaurant/pages/OwnerProfilePage'));
-const OwnerNotAvailablePage = lazy(() => import('./features/restaurant/pages/OwnerNotAvailablePage'));
 const OwnerTablesPage = lazy(() => import('./features/restaurant/pages/OwnerTablesPage'));
 const OwnerInventoryPage = lazy(() => import('./features/restaurant/pages/OwnerInventoryPage'));
+const TeamAndStaffPage = lazy(() => import('./features/restaurant/pages/TeamAndStaffPage'));
 
 // Rider Module (Phase 5)
 const RiderDashboard = lazy(() => import('./features/rider/pages/RiderDashboard'));
@@ -135,6 +139,10 @@ function AppShell() {
         title: 'Profile & Settings | SALO Customer',
         description: 'Update your account details, preferences, and delivery profile.',
       },
+      '/customer/invitations': {
+        title: 'Invitations | SALO Customer',
+        description: 'Review restaurant team and ownership invitations sent to your SALO account.',
+      },
       '/customer/partner': {
         title: 'Become a Partner | SALO',
         description: 'Apply to grow your restaurant or food business with SALO.',
@@ -205,6 +213,7 @@ function AppShell() {
           <Route path="/customer/reservations" element={<ReservationsPage />} />
           <Route path="/customer/addresses" element={<AddressesPage />} />
           <Route path="/customer/profile" element={<ProfilePage />} />
+          <Route path="/customer/invitations" element={<InvitationsInboxPage />} />
           <Route path="/customer/partner" element={<PartnerApplicationPage />} />
           <Route path="/partner" element={<PartnerApplicationPage />} />
 
@@ -217,11 +226,11 @@ function AppShell() {
             <Route path="reservations" element={<RequireAccess itemId="reservations"><OwnerReservationsPage /></RequireAccess>} />
             <Route path="tables" element={<RequireAccess itemId="tables"><OwnerTablesPage /></RequireAccess>} />
             <Route path="inventory" element={<RequireAccess itemId="inventory"><OwnerInventoryPage /></RequireAccess>} />
-            <Route path="promotions" element={<RequireAccess itemId="promotions"><OwnerNotAvailablePage title="Promotions" /></RequireAccess>} />
-            <Route path="team" element={<RequireAccess itemId="team"><OwnerNotAvailablePage title="Team and Staff" /></RequireAccess>} />
-            <Route path="reports" element={<RequireAccess itemId="reports"><OwnerEarningsPage /></RequireAccess>} />
-            <Route path="activity" element={<RequireAccess itemId="activity"><OwnerNotAvailablePage title="Activity Logs" /></RequireAccess>} />
-            <Route path="settings" element={<RequireAccess itemId="settings"><OwnerNotAvailablePage title="Settings" /></RequireAccess>} />
+            <Route path="promotions" element={<RequireAccess itemId="promotions"><OwnerPromotionsPage /></RequireAccess>} />
+            <Route path="team" element={<RequireAccess itemId="team"><TeamAndStaffPage /></RequireAccess>} />
+            <Route path="reports" element={<RequireAccess itemId="reports"><OwnerReportsPage /></RequireAccess>} />
+            <Route path="activity" element={<RequireAccess itemId="activity"><OwnerActivityPage /></RequireAccess>} />
+            <Route path="settings" element={<RequireAccess itemId="settings"><OwnerSettingsPage /></RequireAccess>} />
             <Route path="earnings" element={<RequireAccess itemId="reports"><Navigate to="/owner/reports" replace /></RequireAccess>} />
             <Route path="*" element={<RequireAccess><Navigate to="/owner" replace /></RequireAccess>} />
           </Route>

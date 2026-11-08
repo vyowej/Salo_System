@@ -3,6 +3,7 @@ import Modal from '../../../components/common/Modal';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import customerService from '../../../services/customerService';
+import { createOperatingDateTime, isRestaurantOpen } from '../../../services/demo/operatingHours';
 
 const SEATING_AREAS = [
   { id: 'indoor', name: 'Main Indoor Hall', desc: 'Air-conditioned, cozy ambient lighting' },
@@ -34,6 +35,7 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
   const depositAmount = restaurant.reservationDeposit || 500;
   const serviceFee = 50; // transparent platform reservation fee
   const totalPayable = depositAmount + serviceFee;
+  const acceptingReservations = restaurant.operatingSchedule?.acceptingReservations !== false;
 
   const validateReservation = () => {
     if (!date) {
@@ -50,6 +52,19 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
 
     if (!time) {
       return 'Please select an arrival time slot.';
+    }
+
+    if (!acceptingReservations) {
+      return 'This restaurant is not accepting reservations right now.';
+    }
+
+    const reservationDateTime = createOperatingDateTime(date, time);
+    if (!reservationDateTime || !isRestaurantOpen(
+      restaurant.operatingSchedule,
+      restaurant.operatingSchedule?.temporaryClosures,
+      reservationDateTime,
+    )) {
+      return 'The restaurant is closed at the selected reservation time.';
     }
 
     if (!Number.isFinite(Number(guests)) || Number(guests) <= 0) {
@@ -107,6 +122,10 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
         confirmedReservation ? (
           <Button variant="primary" fullWidth onClick={handleResetAndClose}>
             Done & View My Bookings
+          </Button>
+        ) : !acceptingReservations ? (
+          <Button variant="primary" fullWidth disabled>
+            Reservations unavailable
           </Button>
         ) : (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 'var(--space-3)' }}>
@@ -191,6 +210,11 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
           <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>
             The restaurant must approve the request and confirm any payment requirements before your reservation is confirmed.
           </p>
+        </div>
+      ) : !acceptingReservations ? (
+        <div role="status" style={{ padding: 'var(--space-5)', borderRadius: 'var(--radius-lg)', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', textAlign: 'center' }}>
+          <h2 style={{ margin: '0 0 var(--space-2)', color: 'var(--text-primary)', fontSize: 'var(--font-size-lg)' }}>Reservations are paused</h2>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)' }}>This restaurant is not accepting reservation requests right now. Please check back later.</p>
         </div>
       ) : (
         <div>

@@ -1,0 +1,52 @@
+.r7-report-filterbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-bottom: 18px; padding: 14px; border: 1px solid var(--border-primary); border-radius: var(--radius-lg); background: var(--surface-primary); }
+.r7-report-filter { display: grid; flex: 1 1 130px; gap: 5px; color: var(--text-secondary); font-size: var(--font-size-xs); font-weight: 700; }
+.r7-report-filter select, .r7-report-filter input { min-width: 0; min-height: 38px; padding: 7px 9px; border: 1px solid var(--input-border); border-radius: var(--radius-md); background: var(--input-bg); color: var(--input-text); font: inherit; font-weight: 400; }
+.r7-custom-range { display: flex; flex: 1 1 260px; gap: 9px; }
+.r7-export-actions { display: flex; gap: 8px; }
+.r7-report-tabs { width: fit-content; margin: 0 0 18px; }
+.r7-metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; margin-bottom: 16px; }
+.r7-metric-grid-four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.r7-metric-grid-five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.r7-metric-card { display: grid; gap: 7px; padding: 17px; border: 1px solid var(--border-primary); border-radius: var(--radius-lg); background: var(--surface-primary); }
+.r7-metric-card > span { color: var(--text-secondary); font-size: var(--font-size-xs); font-weight: 700; }
+.r7-metric-card > strong { color: var(--text-primary); font-size: var(--font-size-2xl); line-height: 1; }
+.r7-metric-card > small { color: var(--text-muted); font-size: var(--font-size-xs); }
+.r7-metric-card.is-accent { border-color: color-mix(in srgb, var(--accent) 45%, var(--border-primary)); background: var(--accent-subtle); }
+.r7-report-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.r7-report-card { min-width: 0; padding: 18px; border: 1px solid var(--border-primary); border-radius: var(--radius-lg); background: var(--surface-primary); box-shadow: var(--shadow-sm); }
+.r7-report-grid > .r7-chart-card { grid-column: span 2; }
+.r7-card-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; color: var(--text-secondary); font-size: var(--font-size-xs); }
+.r7-card-heading h2, .r7-report-card h2 { margin: 3px 0 0; color: var(--text-primary); font-family: var(--font-heading); font-size: var(--font-size-lg); }
+.r7-report-card h3 { margin: 20px 0 8px; color: var(--text-primary); font-size: var(--font-size-sm); }
+.r7-chart-legend { display: flex; align-items: center; gap: 6px; }
+.r7-chart-legend i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.r7-chart-summary { margin: 0 0 7px; color: var(--text-muted); font-size: var(--font-size-xs); }
+.r7-chart-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.r7-line-chart { display: block; width: 100%; min-width: 520px; height: 200px; overflow: visible; }
+.r7-chart-grid { stroke: var(--border-secondary); stroke-width: .7; }
+.r7-chart-line { fill: none; stroke: var(--accent); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.r7-chart-point { fill: var(--accent); }
+.r7-chart-labels { display: flex; justify-content: space-between; min-width: 520px; margin-top: 5px; color: var(--text-muted); font-size: 10px; }
+.r7-chart-data-fallback { display: grid; gap: 6px; margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--border-secondary); color: var(--text-secondary); font-size: var(--font-size-xs); }
+.r7-chart-data-fallback > div { display: flex; flex-wrap: wrap; gap: 6px 13px; }
+.r7-ranked-list { display: grid; gap: 15px; margin-top: 16px; }
+.r7-ranked-row { display: flex; align-items: center; gap: 10px; color: var(--text-primary); font-size: var(--font-size-sm); }
+.r7-rank-number { color: var(--text-muted); font-size: var(--font-size-xs); font-weight: 800; }
+.r7-rank-detail { display: grid; flex: 1; min-width: 0; gap: 6px; }
+.r7-rank-detail strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r7-rank-detail i, .r7-utilization-list i { display: block; height: 6px; overflow: hidden; border-radius: 99px; background: var(--surface-secondary); }
+.r7-rank-detail i b, .r7-utilization-list i b { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.r7-report-emphasis { margin: 8px 0 0 !important; color: var(--accent) !important; font-size: 32px !important; }
+.r7-muted, .r7-report-disclaimer { color: var(--text-muted); font-size: var(--font-size-xs); }
+.r7-popular-list { display: grid; gap: 9px; padding-left: 20px; color: var(--text-primary); font-size: var(--font-size-sm); }
+.r7-utilization-list { display: grid; gap: 13px; margin: 20px 0; }
+.r7-utilization-list > div { display: grid; grid-template-columns: 35px 1fr 38px; align-items: center; gap: 9px; color: var(--text-secondary); font-size: var(--font-size-xs); }
+.r7-utilization-list i b { background: var(--olive); }
+.r7-utilization-list strong { color: var(--text-primary); text-align: right; }
+.r7-stock-list, .r7-movement-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.r7-stock-list li, .r7-movement-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border-secondary); color: var(--text-primary); font-size: var(--font-size-sm); }
+.r7-movement-list li > span { display: grid; gap: 4px; }
+.r7-movement-list small { color: var(--text-muted); font-size: var(--font-size-xs); }
+.r7-report-disclaimer { margin: 16px 0 0; }
+@media (max-width: 900px) { .r7-metric-grid-five { grid-template-columns: repeat(3, minmax(0, 1fr)); } .r7-metric-grid-four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .r7-report-grid { grid-template-columns: 1fr; } .r7-report-grid > .r7-chart-card { grid-column: auto; } .r7-metric-grid, .r7-metric-grid-five { grid-template-columns: repeat(2, minmax(0, 1fr)); } .r7-report-tabs { width: 100%; overflow-x: auto; } .r7-report-filterbar { align-items: stretch; } .r7-report-filter { flex-basis: 100%; } .r7-custom-range { flex-basis: 100%; } .r7-export-actions { width: 100%; } .r7-export-actions > button { flex: 1; } .r7-report-card { padding: 14px; } }

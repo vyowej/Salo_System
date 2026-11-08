@@ -47,6 +47,20 @@ test('permission map grants owners all access and filters staff navigation', asy
     assert.equal(canAccessNavigationItem(staff, 'orders'), false);
     assert.equal(canAccessNavigationItem(staff, 'overview'), false);
     assert.equal(canAccessNavigationItem(staff, 'activity'), false);
+    const hoursManager = buildRestaurantAccess(
+      { id: 8 },
+      {
+        ownershipMemberships: [],
+        staffMemberships: [{
+          restaurantId: restaurant.id,
+          status: 'active',
+          permissions: ['business.hours.manage'],
+        }],
+      },
+      [restaurant],
+      restaurant.id,
+    );
+    assert.equal(canAccessNavigationItem(hoursManager, 'profile'), true);
     const reservationHandler = buildRestaurantAccess(
       { id: 6 },
       {

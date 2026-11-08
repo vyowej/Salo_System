@@ -1,0 +1,344 @@
+.hours-editor-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.hours-editor-heading {
+  align-items: flex-start;
+}
+
+.hours-editor-heading > .salo-badge,
+.hours-editor-heading > [class*="badge"] {
+  flex-shrink: 0;
+}
+
+.hours-weekly-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.hours-day-row {
+  display: grid;
+  grid-template-columns: minmax(74px, 0.55fr) auto minmax(0, 2fr);
+  align-items: start;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+}
+
+.hours-day-row.is-today {
+  border-color: var(--accent);
+}
+
+.hours-day-name {
+  padding: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.hours-day-name span {
+  display: block;
+  margin-top: 2px;
+  color: var(--accent);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.hours-closed-toggle,
+.hours-acceptance-controls label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.hours-closed-toggle {
+  align-items: center;
+  white-space: nowrap;
+}
+
+.hours-closed-toggle input,
+.hours-acceptance-controls input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.hours-periods {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.hours-period-row {
+  display: flex;
+  align-items: end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.hours-period-row label,
+.hours-closure-editor > label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.hours-period-row input,
+.hours-closure-editor input,
+.hours-closure-editor select {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.hours-period-separator {
+  padding-bottom: 10px;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.hours-remove-period,
+.hours-add-period,
+.hours-closure-actions button {
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hours-remove-period {
+  color: var(--text-danger, #9b1c1c);
+}
+
+.hours-acceptance-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.hours-acceptance-controls label {
+  padding: var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+}
+
+.hours-acceptance-controls span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hours-acceptance-controls strong {
+  color: var(--text-primary);
+}
+
+.hours-acceptance-controls small {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+.hours-closures-section {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-secondary);
+}
+
+.hours-closures-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.hours-closures-heading h3,
+.hours-closures-heading p {
+  margin: 0;
+}
+
+.hours-closures-heading h3 {
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+}
+
+.hours-closures-heading p,
+.hours-empty-state {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.hours-closure-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hours-closure-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+}
+
+.hours-closure-list li.is-expired {
+  opacity: 0.68;
+}
+
+.hours-closure-list li > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.hours-closure-list li strong {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.hours-closure-list li p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hours-closure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.hours-closure-editor {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+}
+
+.hours-closure-editor legend {
+  padding: 0 var(--space-1);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.hours-closure-editor .hours-closure-reason {
+  grid-column: 1 / -1;
+}
+
+.hours-editor-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.hours-save-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+
+.hours-editor-card :focus-visible {
+  outline: 3px solid var(--focus-ring, var(--accent));
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .hours-day-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .hours-day-name {
+    grid-column: 1;
+  }
+
+  .hours-closed-toggle {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .hours-periods {
+    grid-column: 1 / -1;
+  }
+
+  .hours-period-row {
+    flex-wrap: wrap;
+  }
+
+  .hours-period-row label {
+    flex: 1 1 110px;
+  }
+
+  .hours-period-separator {
+    display: none;
+  }
+
+  .hours-remove-period {
+    align-self: end;
+  }
+
+  .hours-acceptance-controls,
+  .hours-closure-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .hours-closure-list li {
+    flex-direction: column;
+  }
+
+  .hours-closure-actions {
+    justify-content: flex-start;
+  }
+
+  .hours-closure-editor .hours-closure-reason,
+  .hours-editor-actions {
+    grid-column: auto;
+  }
+
+  .hours-closures-heading {
+    flex-direction: column;
+  }
+}

@@ -8,6 +8,7 @@ import { OWNER_NAV_ITEMS } from '../features/restaurant/access/permissionMap';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import customerService from '../services/customerService';
+import { CUSTOMER_INVITATION_COUNT } from '../features/restaurant/pages/team/teamSamples';
 import './CustomerLayout.css';
 
 const mkIcon = (path) => (
@@ -166,6 +167,7 @@ function CustomerProfileMenu({
                   {item.icon}
                   <span>{item.label}</span>
                 </span>
+                {item.badge > 0 && <span className="customer-profile-menu-badge" aria-label={`${item.badge} invitations`}>{item.badge}</span>}
               </Link>
             );
           }
@@ -194,6 +196,7 @@ function CustomerProfileMenu({
                   <span>{item.label}</span>
                 </span>
               )}
+              {item.badge > 0 && <span className="customer-profile-menu-badge" aria-label={`${item.badge} invitations`}>{item.badge}</span>}
             </button>
           );
         })}
@@ -312,6 +315,7 @@ export default function CustomerLayout({ children }) {
     { id: 'favorites', label: 'Favorites', icon: mkIcon('M12 21s-8.5-4.9-10-9.5C1.2 8.5 3 5 6.8 5c2.1 0 3.3 1.1 4.2 2.5.9-1.4 2.1-2.5 4.2-2.5 3.8 0 5.6 3.5 5.6 6.5C20.5 16.1 12 21 12 21z'), href: '/customer/favorites', badge: favoriteCount > 0 ? favoriteCount : null },
     { id: 'notifications', label: 'Notifications', icon: mkIcon('M12 22a2.5 2.5 0 002.45-2h-4.9A2.5 2.5 0 0012 22zm8-6V11a8 8 0 10-16 0v5l-2 2v1h20v-1l-2-2z'), href: '/customer/notifications', badge: notificationCount > 0 ? notificationCount : null },
     { id: 'reservations', label: 'Table Bookings', icon: mkIcon(ICONS.reservation), href: '/customer/reservations' },
+    { id: 'invitations', label: 'Invitations', icon: mkIcon('M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m16-11a4 4 0 010 8m4 3v-2a4 4 0 00-3-3.87M9 11a4 4 0 100-8 4 4 0 000 8z'), href: '/customer/invitations', badge: CUSTOMER_INVITATION_COUNT, section: 'Account' },
     { id: 'settings', label: 'Settings', icon: mkIcon(ICONS.profile), href: '/customer/profile', section: 'Account' },
   ];
 
@@ -335,6 +339,14 @@ export default function CustomerLayout({ children }) {
   const profileInitials = getInitials(profileName);
 
   const sidebarProfileMenuItems = [
+    {
+      id: 'invitations',
+      type: 'link',
+      label: 'Invitations',
+      href: '/customer/invitations',
+      badge: CUSTOMER_INVITATION_COUNT,
+      icon: mkIcon('M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m16-11a4 4 0 010 8m4 3v-2a4 4 0 00-3-3.87M9 11a4 4 0 100-8 4 4 0 000 8z'),
+    },
     {
       id: 'settings',
       label: 'Settings',
@@ -366,6 +378,14 @@ export default function CustomerLayout({ children }) {
   ];
 
   const topbarProfileMenuItems = [
+    {
+      id: 'invitations',
+      type: 'link',
+      label: 'Invitations',
+      href: '/customer/invitations',
+      badge: CUSTOMER_INVITATION_COUNT,
+      icon: mkIcon('M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m16-11a4 4 0 010 8m4 3v-2a4 4 0 00-3-3.87M9 11a4 4 0 100-8 4 4 0 000 8z'),
+    },
     {
       id: 'settings',
       label: 'Settings',
