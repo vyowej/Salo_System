@@ -10,9 +10,23 @@ export default function ReservationsPage() {
   const [reservations, setReservations] = useState([]);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [selectedResId, setSelectedResId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    setReservations(customerService.getReservations());
+    const refresh = () => {
+      try {
+        setError('');
+        setReservations(customerService.getReservations());
+      } catch (loadError) {
+        setError(loadError.message || 'Unable to load your reservations.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    refresh();
+    window.addEventListener('salo:demoStoreUpdated', refresh);
+    return () => window.removeEventListener('salo:demoStoreUpdated', refresh);
   }, []);
 
   const handleCancelClick = (id) => {
@@ -22,9 +36,14 @@ export default function ReservationsPage() {
 
   const handleConfirmCancel = () => {
     if (selectedResId) {
-      const updated = customerService.cancelReservation(selectedResId);
-      setReservations(updated);
-      setCancelModalOpen(false);
+      try {
+        setError('');
+        const updated = customerService.cancelReservation(selectedResId);
+        setReservations(updated);
+        setCancelModalOpen(false);
+      } catch (cancelError) {
+        setError(cancelError.message || 'Unable to request cancellation.');
+      }
     }
   };
 
@@ -33,7 +52,7 @@ export default function ReservationsPage() {
       <Modal
         open={cancelModalOpen}
         onClose={() => setCancelModalOpen(false)}
-        title="Cancel Table Reservation"
+        title="Request Reservation Cancellation"
         size="sm"
         footer={
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
@@ -47,7 +66,7 @@ export default function ReservationsPage() {
         }
       >
         <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-          Are you sure you want to cancel this booking? If cancelled before the 24-hour deadline, your dining deposit of ₱500 will be refunded to your original payment method.
+          This sends a cancellation request to the restaurant. Your reservation remains active until the restaurant reviews it. Any fee or refund will be confirmed after review.
         </p>
       </Modal>
 
@@ -61,7 +80,7 @@ export default function ReservationsPage() {
               My Table Reservations
             </h1>
             <p className="page-subtitle">
-              Guaranteed restaurant table seating with transparent deposit tracking.
+              Review request status and reservation payment updates from each restaurant.
             </p>
           </div>
 
@@ -73,7 +92,10 @@ export default function ReservationsPage() {
         </div>
       </div>
 
-      {reservations.length === 0 ? (
+      {error && <div role="alert" className="form-error" style={{ marginBottom: 'var(--space-4)' }}>{error}</div>}
+      {loading ? (
+        <p role="status">Loading reservations…</p>
+      ) : reservations.length === 0 ? (
         <div style={{
           textAlign: 'center',
           padding: 'var(--space-12) 0',
@@ -109,7 +131,7 @@ export default function ReservationsPage() {
                     <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>
                       {res.restaurantName}
                     </h2>
-                    <Badge variant={res.status === 'Confirmed' ? 'success' : 'error'} dot size="sm">
+                    <Badge variant={['Approved', 'Confirmed', 'Arrived', 'Seated', 'Completed'].includes(res.status) ? 'success' : res.status === 'Pending' ? 'warning' : 'default'} dot size="sm">
                       {res.status}
                     </Badge>
                   </div>
@@ -119,11 +141,12 @@ export default function ReservationsPage() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                  {res.status === 'Confirmed' && (
+                  {!['Cancelled', 'Rejected', 'Completed', 'No-Show', 'Expired'].includes(res.status) && !['requested', 'approved'].includes(res.cancellationRequest?.status) && (
                     <Button variant="danger-outline" size="sm" onClick={() => handleCancelClick(res.id)}>
-                      Cancel Booking
+                      Request cancellation
                     </Button>
                   )}
+                  {res.cancellationRequest?.status === 'requested' && <Badge variant="warning" size="sm">Cancellation under review</Badge>}
                 </div>
               </div>
 
@@ -152,24 +175,29 @@ export default function ReservationsPage() {
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }}>Deposit Paid</span>
-                  <p style={{ fontWeight: 600, color: 'var(--salo-success)' }}>
-                    ₱{res.depositAmount} (Deductible on bill)
+                  <span style={{ color: 'var(--text-muted)' }}>Reservation fee / payment</span>
+                  <p style={{ fontWeight: 600, color: res.paymentStatus === 'Paid' ? 'var(--salo-success)' : 'var(--text-secondary)' }}>
+                    ₱{res.fee ?? res.depositAmount ?? 0} · {res.paymentStatus || 'Pending'}
                   </p>
                 </div>
 
+                {res.cancellationDeadline && (
                 <div>
                   <span style={{ color: 'var(--text-muted)' }}>Cancellation Deadline</span>
-                  <p style={{ color: 'var(--text-secondary)' }}>
-                    {res.cancellationDeadline}
-                  </p>
+                  <p style={{ color: 'var(--text-secondary)' }}>{res.cancellationDeadline}</p>
                 </div>
+                )}
               </div>
 
               {res.specialRequests && (
                 <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
                   <span style={{ fontWeight: 600 }}>Note to restaurant:</span> {res.specialRequests}
                 </div>
+              )}
+              {res.cancellationRequest?.resolutionReason && (
+                <p style={{ marginTop: 'var(--space-3)', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                  Cancellation update: {res.cancellationRequest.resolutionReason}
+                </p>
               )}
             </div>
           ))}
