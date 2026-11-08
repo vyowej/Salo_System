@@ -13,11 +13,14 @@ export default function OrdersPage() {
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    setOrders(customerService.getOrders());
+    const refreshOrders = () => setOrders(customerService.getOrders());
+    refreshOrders();
+    window.addEventListener('salo:demoStoreUpdated', refreshOrders);
+    return () => window.removeEventListener('salo:demoStoreUpdated', refreshOrders);
   }, []);
 
   const filteredOrders = orders.filter((o) => {
-    if (filter === 'active') return o.overallStatus !== 'Completed' && o.overallStatus !== 'Cancelled';
+    if (filter === 'active') return !['Completed', 'Cancelled', 'Rejected', 'Partially Completed'].includes(o.overallStatus);
     if (filter === 'completed') return o.overallStatus === 'Completed';
     if (filter === 'cancelled') return o.overallStatus === 'Cancelled';
     return true;
@@ -141,7 +144,7 @@ export default function OrdersPage() {
                     <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>
                       Order #{order.id}
                     </h2>
-                    <Badge variant={order.overallStatus === 'Completed' ? 'success' : order.overallStatus === 'Cancelled' ? 'error' : 'primary'} dot size="sm">
+                    <Badge variant={order.overallStatus === 'Completed' ? 'success' : ['Cancelled', 'Rejected'].includes(order.overallStatus) ? 'error' : order.overallStatus === 'Cancellation Requested' || order.overallStatus === 'Partially Completed' ? 'warning' : 'primary'} dot size="sm">
                       {order.overallStatus}
                     </Badge>
                   </div>
