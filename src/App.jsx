@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import RequireAccess from './routes/RequireAccess';
+import { RestaurantAccessProvider } from './features/restaurant/access/RestaurantAccessContext.jsx';
 
 // ── Lazy-Loaded Pages for Code-Splitting ─────────────────────────
 
@@ -30,6 +32,9 @@ const OwnerMenuPage = lazy(() => import('./features/restaurant/pages/OwnerMenuPa
 const OwnerReservationsPage = lazy(() => import('./features/restaurant/pages/OwnerReservationsPage'));
 const OwnerEarningsPage = lazy(() => import('./features/restaurant/pages/OwnerEarningsPage'));
 const OwnerProfilePage = lazy(() => import('./features/restaurant/pages/OwnerProfilePage'));
+const OwnerNotAvailablePage = lazy(() => import('./features/restaurant/pages/OwnerNotAvailablePage'));
+const OwnerTablesPage = lazy(() => import('./features/restaurant/pages/OwnerTablesPage'));
+const OwnerInventoryPage = lazy(() => import('./features/restaurant/pages/OwnerInventoryPage'));
 
 // Rider Module (Phase 5)
 const RiderDashboard = lazy(() => import('./features/rider/pages/RiderDashboard'));
@@ -46,9 +51,6 @@ const AdminRidersPage = lazy(() => import('./features/admin/pages/AdminRidersPag
 const AdminOrdersPage = lazy(() => import('./features/admin/pages/AdminOrdersPage'));
 const AdminUsersPage = lazy(() => import('./features/admin/pages/AdminUsersPage'));
 const AdminSettingsPage = lazy(() => import('./features/admin/pages/AdminSettingsPage'));
-
-// Showcase (Phase 1 & 7)
-const DesignShowcase = lazy(() => import('./features/showcase/DesignShowcase'));
 
 // ── Lightweight Suspense Loading Screen ──────────────────────────
 function PageLoader() {
@@ -141,6 +143,17 @@ function AppShell() {
         title: 'Restaurant Dashboard | SALO Owner',
         description: 'Manage orders, menus, reservations, and store performance from one dashboard.',
       },
+      '/owner/profile': { title: 'Business Profile | SALO Owner', description: 'Manage restaurant profile information.' },
+      '/owner/menu': { title: 'Menu Management | SALO Owner', description: 'Manage restaurant menu information.' },
+      '/owner/orders': { title: 'Orders | SALO Owner', description: 'Review restaurant orders.' },
+      '/owner/reservations': { title: 'Reservations | SALO Owner', description: 'Review restaurant reservations.' },
+      '/owner/tables': { title: 'Tables | SALO Owner', description: 'Restaurant table management.' },
+      '/owner/inventory': { title: 'Inventory | SALO Owner', description: 'Restaurant inventory management.' },
+      '/owner/promotions': { title: 'Promotions | SALO Owner', description: 'Restaurant promotions.' },
+      '/owner/team': { title: 'Team and Staff | SALO Owner', description: 'Restaurant team access.' },
+      '/owner/reports': { title: 'Reports and Statistics | SALO Owner', description: 'Restaurant reports and earnings.' },
+      '/owner/activity': { title: 'Activity Logs | SALO Owner', description: 'Restaurant activity history.' },
+      '/owner/settings': { title: 'Settings | SALO Owner', description: 'Restaurant settings.' },
       '/rider': {
         title: 'Rider Dashboard | SALO',
         description: 'Track deliveries, accept jobs, and view active order routes.',
@@ -195,13 +208,23 @@ function AppShell() {
           <Route path="/customer/partner" element={<PartnerApplicationPage />} />
           <Route path="/partner" element={<PartnerApplicationPage />} />
 
-          {/* ── Owner Module (Phase 4) ── */}
-          <Route path="/owner" element={<OwnerDashboard />} />
-          <Route path="/owner/orders" element={<OwnerOrdersPage />} />
-          <Route path="/owner/menu" element={<OwnerMenuPage />} />
-          <Route path="/owner/reservations" element={<OwnerReservationsPage />} />
-          <Route path="/owner/earnings" element={<OwnerEarningsPage />} />
-          <Route path="/owner/profile" element={<OwnerProfilePage />} />
+          {/* ── Owner Module: every destination checks restaurant membership and permissions ── */}
+          <Route path="/owner" element={<RestaurantAccessProvider><Outlet /></RestaurantAccessProvider>}>
+            <Route index element={<RequireAccess itemId="overview"><OwnerDashboard /></RequireAccess>} />
+            <Route path="profile" element={<RequireAccess itemId="profile"><OwnerProfilePage /></RequireAccess>} />
+            <Route path="menu" element={<RequireAccess itemId="menu"><OwnerMenuPage /></RequireAccess>} />
+            <Route path="orders" element={<RequireAccess itemId="orders"><OwnerOrdersPage /></RequireAccess>} />
+            <Route path="reservations" element={<RequireAccess itemId="reservations"><OwnerReservationsPage /></RequireAccess>} />
+            <Route path="tables" element={<RequireAccess itemId="tables"><OwnerTablesPage /></RequireAccess>} />
+            <Route path="inventory" element={<RequireAccess itemId="inventory"><OwnerInventoryPage /></RequireAccess>} />
+            <Route path="promotions" element={<RequireAccess itemId="promotions"><OwnerNotAvailablePage title="Promotions" /></RequireAccess>} />
+            <Route path="team" element={<RequireAccess itemId="team"><OwnerNotAvailablePage title="Team and Staff" /></RequireAccess>} />
+            <Route path="reports" element={<RequireAccess itemId="reports"><OwnerEarningsPage /></RequireAccess>} />
+            <Route path="activity" element={<RequireAccess itemId="activity"><OwnerNotAvailablePage title="Activity Logs" /></RequireAccess>} />
+            <Route path="settings" element={<RequireAccess itemId="settings"><OwnerNotAvailablePage title="Settings" /></RequireAccess>} />
+            <Route path="earnings" element={<RequireAccess itemId="reports"><Navigate to="/owner/reports" replace /></RequireAccess>} />
+            <Route path="*" element={<RequireAccess><Navigate to="/owner" replace /></RequireAccess>} />
+          </Route>
 
           {/* ── Rider Module (Phase 5) ── */}
           <Route path="/rider" element={<RiderDashboard />} />
@@ -218,9 +241,6 @@ function AppShell() {
           <Route path="/admin/orders" element={<AdminOrdersPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
-
-          {/* ── Design System Showcase (Phase 1 & 7) ── */}
-          <Route path="/showcase" element={<DesignShowcase />} />
 
           {/* Catch-all redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
