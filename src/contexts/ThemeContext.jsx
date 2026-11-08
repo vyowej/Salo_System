@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 const ThemeContext = createContext(null);
@@ -57,8 +57,4 @@ export function ThemeProvider({ children }) {
   );
 }
 
-export function useTheme() {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error('useTheme must be used inside <ThemeProvider>');
-  return ctx;
-}
+export default ThemeContext;

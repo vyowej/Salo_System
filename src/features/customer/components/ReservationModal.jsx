@@ -79,13 +79,13 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
         seatingArea: selectedAreaObj?.name || 'Main Indoor Hall',
         depositAmount,
         serviceFee,
-        totalPaid: totalPayable,
         specialRequests: specialRequests.trim(),
-        cancellationDeadline: `24h before dining time (${date} ${time})`,
       });
 
       setConfirmedReservation(res);
       onSuccess?.(res);
+    } catch (submitError) {
+      setFormError(submitError.message || 'Unable to submit your reservation request.');
     } finally {
       setIsSubmitting(false);
     }
@@ -111,7 +111,7 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
         ) : (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 'var(--space-3)' }}>
             <div style={{ lineHeight: 1.2 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Deposit</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Demo estimate · not charged</span>
               <p style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>
                 ₱{totalPayable.toLocaleString()}
               </p>
@@ -124,7 +124,7 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
               onClick={handleBookTable}
               style={{ minWidth: 200 }}
             >
-              Confirm Table Reservation
+              Submit reservation request
             </Button>
           </div>
         )
@@ -147,12 +147,12 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
             ✓
           </div>
 
-          <Badge variant="success" dot size="sm" style={{ marginBottom: 'var(--space-2)' }}>
-            Confirmed & Guaranteed
+          <Badge variant="warning" dot size="sm" style={{ marginBottom: 'var(--space-2)' }}>
+            Pending restaurant review
           </Badge>
 
           <h3 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>
-            Table Booked at {restaurant.name}
+            Request sent to {restaurant.name}
           </h3>
 
           <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-6)' }}>
@@ -183,26 +183,26 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
               <strong>{confirmedReservation.seatingArea}</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Bill Deduction:</span>
-              <strong style={{ color: 'var(--salo-success)' }}>-₱{depositAmount} applied on final bill</strong>
+              <span style={{ color: 'var(--text-muted)' }}>Reservation status:</span>
+              <strong>{confirmedReservation.status}</strong>
             </div>
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            Free cancellation available up to 24 hours before your booking schedule.
+            The restaurant must approve the request and confirm any payment requirements before your reservation is confirmed.
           </p>
         </div>
       ) : (
         <div>
           <div style={{ marginBottom: 'var(--space-5)' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Guaranteed Table Booking
+              Reservation request
             </span>
             <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>
               Reserve a Table at {restaurant.name}
             </h2>
             <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-              Real-time table allocation. The ₱{depositAmount} deposit will be fully credited against your dining bill.
+              Submit your preferred date and party size. The restaurant will review the request and confirm availability.
             </p>
           </div>
 
@@ -343,15 +343,15 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
               lineHeight: 1.5,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span>Dining Deposit (fully deductible from bill):</span>
+                <span>Reservation fee (demo estimate):</span>
                 <strong>₱{depositAmount}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span>Reservation Service Fee:</span>
+                <span>Additional fee (demo estimate):</span>
                 <strong>₱{serviceFee}</strong>
               </div>
               <div style={{ borderTop: '1px solid var(--border-secondary)', paddingTop: 4, marginTop: 4, display: 'flex', justifyContent: 'space-between', color: 'var(--text-primary)', fontWeight: 700 }}>
-                <span>Total advance payment:</span>
+                <span>Estimated total (not charged):</span>
                 <span style={{ color: 'var(--accent)' }}>₱{totalPayable}</span>
               </div>
             </div>

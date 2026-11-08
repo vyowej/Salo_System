@@ -21,7 +21,10 @@ export default function LoginPage({ embedded = false, onSwitch }) {
   const [selectedDemo, setSelectedDemo] = useState('');
 
   const getDestination = (resUser) => {
-    if (location.state?.from?.pathname) return location.state.from.pathname;
+    if (location.state?.from?.pathname) {
+      const { pathname, search = '', hash = '' } = location.state.from;
+      return `${pathname}${search}${hash}`;
+    }
     if (resUser?.role === 'customer') return '/customer';
     if (resUser?.role === 'owner') return '/owner';
     if (resUser?.role === 'rider') return '/rider';
@@ -179,6 +182,9 @@ export default function LoginPage({ embedded = false, onSwitch }) {
           <option value="">Choose an account to fill sign-in fields</option>
           <option value="customer@salo.ph">Customer — customer@salo.ph</option>
           <option value="owner@salo.ph">Restaurant Owner — owner@salo.ph</option>
+          <option value="staff@salo.ph">Restaurant Staff — staff@salo.ph</option>
+          <option value="reservation.staff@salo.ph">Reservation Handler — reservation.staff@salo.ph</option>
+          <option value="inventory.staff@salo.ph">Inventory Manager — inventory.staff@salo.ph</option>
           <option value="rider@salo.ph">Rider — rider@salo.ph</option>
           <option value="admin@salo.ph">Admin — admin@salo.ph</option>
         </select>
