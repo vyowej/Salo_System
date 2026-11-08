@@ -1,24 +1,45 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import OwnerLayout from '../../../layouts/OwnerLayout';
 import ownerService from '../../../services/ownerService';
-import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import Modal from '../../../components/common/Modal';
+import { EmptyState, ErrorState, LoadingSpinner } from '../../../components/feedback';
+import { useRestaurantAccess } from '../access/useRestaurantAccess';
 
 export default function OwnerEarningsPage() {
-  const earnings = ownerService.getEarningsOverview();
-  const [payoutModalOpen, setPayoutModalOpen] = useState(false);
-  const [payoutSuccess, setPayoutSuccess] = useState(false);
+  const { selectedRestaurantId } = useRestaurantAccess();
+  const [earnings, setEarnings] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  function handleRequestPayout() {
-    setPayoutSuccess(true);
-    setTimeout(() => {
-      setPayoutSuccess(false);
-      setPayoutModalOpen(false);
-    }, 2000);
+  const loadEarnings = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    try {
+      setEarnings(ownerService.getEarningsOverview(selectedRestaurantId));
+    } catch (loadError) {
+      setError(loadError.message || 'Unable to load earnings.');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedRestaurantId]);
+
+  useEffect(() => {
+    loadEarnings();
+  }, [loadEarnings]);
+
+  if (loading) {
+    return <OwnerLayout><LoadingSpinner size="lg" label="Loading earnings..." /></OwnerLayout>;
+  }
+  if (error) {
+    return <OwnerLayout><ErrorState description={error} onRetry={loadEarnings} /></OwnerLayout>;
+  }
+  if (!earnings) {
+    return <OwnerLayout><ErrorState description="Earnings data is unavailable." onRetry={loadEarnings} /></OwnerLayout>;
   }
 
-  const maxDaily = Math.max(...earnings.recentSales.map((s) => s.amount));
+  const recentSales = Array.isArray(earnings.recentSales) ? earnings.recentSales : [];
+  const settlements = Array.isArray(earnings.settlements) ? earnings.settlements : [];
+  const maxDaily = Math.max(0, ...recentSales.map((sale) => sale.amount));
 
   return (
     <OwnerLayout>
@@ -37,16 +58,12 @@ export default function OwnerEarningsPage() {
             Financial Performance
           </span>
           <h1 className="page-title" style={{ fontSize: 'var(--font-size-2xl)', marginTop: 'var(--space-1)' }}>
-            Earnings & Payouts
+            Earnings Summary
           </h1>
           <p className="page-subtitle">
-            Track daily gross revenue, platform settlements, and bank disbursements
+            Demo earnings data for the selected restaurant. No payouts are processed here.
           </p>
         </div>
-
-        <Button variant="primary" size="md" onClick={() => setPayoutModalOpen(true)}>
-          Request Payout (₱{earnings.pendingPayout.toLocaleString('en-PH')})
-        </Button>
       </div>
 
       {/* ── Top Metrics Grid ────────────────────────────── */}
@@ -71,7 +88,7 @@ export default function OwnerEarningsPage() {
             ₱{earnings.today.toLocaleString('en-PH')}
           </p>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--salo-green)', fontWeight: 600 }}>
-            ↑ 14% higher than yesterday
+            Demo data
           </span>
         </div>
 
@@ -90,7 +107,7 @@ export default function OwnerEarningsPage() {
             ₱{earnings.thisWeek.toLocaleString('en-PH')}
           </p>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-            Across 58 completed orders
+            Demo data
           </span>
         </div>
 
@@ -109,7 +126,7 @@ export default function OwnerEarningsPage() {
             ₱{earnings.thisMonth.toLocaleString('en-PH')}
           </p>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-            Avg Order: ₱{earnings.avgOrderValue}
+            Total orders: {earnings.totalOrders}
           </span>
         </div>
 
@@ -122,13 +139,13 @@ export default function OwnerEarningsPage() {
           boxShadow: 'var(--shadow-sm)',
         }}>
           <span style={{ fontSize: 11, color: 'var(--salo-green)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.06em' }}>
-            Available Payout
+            Pending payout (demo)
           </span>
           <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--salo-green)', margin: 'var(--space-2) 0' }}>
             ₱{earnings.pendingPayout.toLocaleString('en-PH')}
           </p>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-            Next scheduled: Monday 10:00 AM
+            Not connected to a payment or payout service
           </span>
         </div>
       </div>
@@ -144,16 +161,16 @@ export default function OwnerEarningsPage() {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-6)' }}>
           <div>
-            <h2 className="section-title" style={{ margin: 0 }}>Recent 7-Day Performance</h2>
+            <h2 className="section-title" style={{ margin: 0 }}>Recent Daily Performance</h2>
             <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-              Daily gross sales from dine-in reservation deposits and multi-order deliveries
+              Daily gross sales from demo data
             </p>
           </div>
-          <Badge variant="primary">Updated Real-Time</Badge>
+          <Badge variant="warning">Demo Data</Badge>
         </div>
 
         {/* Bar chart representation */}
-        <div style={{
+        {recentSales.length === 0 ? <EmptyState title="No sales data yet" description="No daily earnings data is available for this restaurant." /> : <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-end',
@@ -162,8 +179,8 @@ export default function OwnerEarningsPage() {
           paddingBottom: 'var(--space-4)',
           borderBottom: '1px solid var(--border-secondary)',
         }}>
-          {earnings.recentSales.map((item) => {
-            const heightPercent = Math.round((item.amount / maxDaily) * 100);
+          {recentSales.map((item) => {
+            const heightPercent = maxDaily ? Math.round((item.amount / maxDaily) * 100) : 0;
 
             return (
               <div
@@ -199,7 +216,7 @@ export default function OwnerEarningsPage() {
               </div>
             );
           })}
-        </div>
+        </div>}
       </div>
 
       {/* ── Transaction History Table ────────────────────── */}
@@ -211,7 +228,7 @@ export default function OwnerEarningsPage() {
         boxShadow: 'var(--shadow-sm)',
       }}>
         <h2 className="section-title" style={{ marginBottom: 'var(--space-4)' }}>
-          Recent Settlements & Disbursals
+          Settlement History
         </h2>
 
         <div style={{ overflowX: 'auto' }}>
@@ -222,90 +239,30 @@ export default function OwnerEarningsPage() {
                 <th style={{ padding: '12px 16px' }}>Date</th>
                 <th style={{ padding: '12px 16px' }}>Method</th>
                 <th style={{ padding: '12px 16px' }}>Gross Sales</th>
-                <th style={{ padding: '12px 16px' }}>Commission (10%)</th>
-                <th style={{ padding: '12px 16px' }}>Net Payout</th>
+                <th style={{ padding: '12px 16px' }}>Fees</th>
+                <th style={{ padding: '12px 16px' }}>Net Amount</th>
                 <th style={{ padding: '12px 16px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
-              {[
-                { id: 'PAY-8821', date: 'Nov 03, 2026', method: 'BDO Unibank (••4190)', gross: 24500, fee: 2450, net: 22050, status: 'Completed' },
-                { id: 'PAY-8815', date: 'Oct 27, 2026', method: 'BDO Unibank (••4190)', gross: 29800, fee: 2980, net: 26820, status: 'Completed' },
-                { id: 'PAY-8809', date: 'Oct 20, 2026', method: 'BDO Unibank (••4190)', gross: 21300, fee: 2130, net: 19170, status: 'Completed' },
-                { id: 'PAY-8794', date: 'Oct 13, 2026', method: 'BDO Unibank (••4190)', gross: 31200, fee: 3120, net: 28080, status: 'Completed' },
-              ].map((row) => (
+              {settlements.map((row) => (
                 <tr key={row.id} style={{ borderBottom: '1px solid var(--border-secondary)' }}>
                   <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--text-primary)' }}>{row.id}</td>
                   <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.date}</td>
                   <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.method}</td>
-                  <td style={{ padding: '14px 16px', color: 'var(--text-primary)' }}>₱{row.gross.toLocaleString()}</td>
-                  <td style={{ padding: '14px 16px', color: 'var(--salo-error)' }}>-₱{row.fee.toLocaleString()}</td>
-                  <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--salo-green)' }}>₱{row.net.toLocaleString()}</td>
+                  <td style={{ padding: '14px 16px', color: 'var(--text-primary)' }}>₱{(row.gross || 0).toLocaleString()}</td>
+                  <td style={{ padding: '14px 16px', color: 'var(--salo-error)' }}>-₱{(row.fee || 0).toLocaleString()}</td>
+                  <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--salo-green)' }}>₱{(row.net || 0).toLocaleString()}</td>
                   <td style={{ padding: '14px 16px' }}>
-                    <Badge variant="success" size="sm" dot>Disbursed</Badge>
+                    <Badge variant={row.status === 'Completed' ? 'success' : 'default'} size="sm" dot>{row.status || 'Unknown'}</Badge>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {settlements.length === 0 && <EmptyState title="No settlement history" description="Settlement records are not available in the demo data." />}
         </div>
       </div>
-
-      {/* ── Request Payout Modal ─────────────────────────── */}
-      <Modal
-        open={payoutModalOpen}
-        onClose={() => setPayoutModalOpen(false)}
-        title="Request Bank Payout"
-        size="sm"
-        footer={
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', width: '100%' }}>
-            <Button variant="ghost" onClick={() => setPayoutModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleRequestPayout} disabled={payoutSuccess}>
-              {payoutSuccess ? 'Submitted!' : 'Confirm Disbursement'}
-            </Button>
-          </div>
-        }
-      >
-        {payoutSuccess ? (
-          <div style={{ textAlign: 'center', padding: 'var(--space-6) 0' }}>
-            <span style={{ fontSize: 40 }}>✅</span>
-            <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, marginTop: 8 }}>Payout Initiated</h3>
-            <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginTop: 4 }}>
-              ₱{earnings.pendingPayout.toLocaleString('en-PH')} will be credited to your verified BDO account within 24 hours.
-            </p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)' }}>
-              Transfer your available restaurant earnings directly to your registered bank account:
-            </p>
-
-            <div style={{
-              padding: 'var(--space-4)',
-              background: 'var(--bg-secondary)',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid var(--border-primary)',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>Disbursement Amount</span>
-                <strong style={{ fontSize: 'var(--font-size-md)', color: 'var(--salo-green)' }}>
-                  ₱{earnings.pendingPayout.toLocaleString('en-PH')}
-                </strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>Destination</span>
-                <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>BDO Unibank ••••4190</span>
-              </div>
-            </div>
-
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              SALO delivers payouts automatically on Mondays, or immediately upon on-demand request. No hidden withdrawal fees.
-            </p>
-          </div>
-        )}
-      </Modal>
     </OwnerLayout>
   );
 }
