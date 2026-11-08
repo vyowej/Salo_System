@@ -1,116 +1,138 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useRestaurantAccess } from '../features/restaurant/access/useRestaurantAccess';
+import { OWNER_NAV_ITEMS } from '../features/restaurant/access/permissionMap';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import Button from '../components/common/Button';
-import ownerService from '../services/ownerService';
+import restaurantService from '../services/restaurantService';
 import './OwnerLayout.css';
 
-const mkIcon = (path) => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <path d={path} />
-  </svg>
-);
-
-const ICONS = {
+const ICON_PATHS = {
   dashboard: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z',
-  orders: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
-  menu: 'M4 6h16M4 10h16M4 14h16M4 18h16',
+  profile: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 3a4 4 0 100 8 4 4 0 000-8z',
+  menu: 'M4 6h16M4 12h16M4 18h16',
+  orders: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2',
   reservation: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-  earnings: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-4H9l3-3 3 3h-2v4z',
-  profile: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
+  tables: 'M3 10h18M5 10V5h14v5M7 10v10m10-10v10',
+  inventory: 'M21 8l-9-5-9 5m18 0v8l-9 5m9-13l-9 5m-9-5v8l9 5m0-8v8',
+  promotions: 'M20.59 13.41L11 3.83V3H4v7h.83l9.58 9.59a2 2 0 002.83 0l3.35-3.35a2 2 0 000-2.83zM7 7h.01',
+  team: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m16-11a4 4 0 010 8m4 3v-2a4 4 0 00-3-3.87M9 11a4 4 0 100-8 4 4 0 000 8z',
+  reports: 'M4 19V5m0 14h17M8 15v-4m5 4V7m5 8v-6',
+  activity: 'M3 12h4l3-8 4 16 3-8h4',
+  settings: 'M12 8a4 4 0 100 8 4 4 0 000-8zm8.2 4a8.4 8.4 0 00-.1-1.3l1.5-1.2-1.5-2.6-1.8.7a8.2 8.2 0 00-2.2-1.3L15.8 4h-3.1l-.3 2.3a8.2 8.2 0 00-2.2 1.3l-1.8-.7-1.5 2.6 1.5 1.2a8.4 8.4 0 000 2.6l-1.5 1.2 1.5 2.6 1.8-.7a8.2 8.2 0 002.2 1.3l.3 2.3h3.1l.3-2.3a8.2 8.2 0 002.2-1.3l1.8.7 1.5-2.6-1.5-1.2c.1-.4.1-.8.1-1.3z',
 };
+
+function icon(name) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d={ICON_PATHS[name]} />
+    </svg>
+  );
+}
+
+function getInitials(name) {
+  return (name || 'Owner').split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+}
 
 export default function OwnerLayout({ children }) {
   const { user, logout } = useAuth();
+  const access = useRestaurantAccess();
   const location = useLocation();
   const navigate = useNavigate();
-
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const restaurant = ownerService.getRestaurant();
+  const navItems = OWNER_NAV_ITEMS
+    .filter((item) => access.canAccessNavigationItem(item.id))
+    .map((item) => ({ ...item, icon: icon(item.icon) }));
+  const activeItem = OWNER_NAV_ITEMS.find((item) => (
+    item.href === '/owner'
+      ? location.pathname === item.href
+      : location.pathname.startsWith(item.href)
+  ))?.id || 'overview';
+  const initials = getInitials(user?.name || user?.username);
+  const selectedRestaurant = access.selectedRestaurant;
+  const visibleMobileItems = navItems.filter((item) => ['overview', 'orders', 'menu', 'reservations'].includes(item.id));
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: mkIcon(ICONS.dashboard), href: '/owner', section: 'Overview' },
-    { id: 'orders', label: 'Live Orders', icon: mkIcon(ICONS.orders), href: '/owner/orders', section: 'Operations' },
-    { id: 'menu', label: 'Menu Management', icon: mkIcon(ICONS.menu), href: '/owner/menu' },
-    { id: 'reservations', label: 'Reservations', icon: mkIcon(ICONS.reservation), href: '/owner/reservations' },
-    { id: 'earnings', label: 'Earnings', icon: mkIcon(ICONS.earnings), href: '/owner/earnings', section: 'Finance' },
-    { id: 'profile', label: 'Restaurant Profile', icon: mkIcon(ICONS.profile), href: '/owner/profile', section: 'Settings' },
-  ];
-
-  const activeItem = navItems.find((item) => {
-    if (item.href === '/owner' && location.pathname === '/owner') return true;
-    if (item.href !== '/owner' && location.pathname.startsWith(item.href)) return true;
-    return false;
-  })?.id || 'dashboard';
-
-  const userInitials = (user?.name || user?.username || 'OW')
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .substring(0, 2);
+  const restaurantSelector = (
+    <label className="owner-restaurant-selector">
+      <span>Managing</span>
+      <select
+        aria-label="Select restaurant"
+        value={access.selectedRestaurantId || ''}
+        onChange={(event) => access.selectRestaurant(event.target.value)}
+      >
+        {access.restaurants.map((restaurant) => (
+          <option key={restaurant.id} value={restaurant.id}>{restaurant.name}</option>
+        ))}
+      </select>
+    </label>
+  );
 
   return (
     <div className="owner-shell">
-      {/* ── Sidebar ────────────────────────────────────── */}
       <div className={`owner-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <SideBar
           items={navItems}
           activeId={activeItem}
           collapsed={collapsed}
-          onToggleCollapse={() => setCollapsed(!collapsed)}
+          onToggleCollapse={() => setCollapsed((value) => !value)}
           mobileOpen={mobileOpen}
           onMobileClose={() => setMobileOpen(false)}
-          footer={
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <Button as={Link} to="/customer" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link" title="Switch to Customer View" leftIcon={
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" />
-                  </svg>
-                }>
-                  <span className="sidebar-footer-label">Switch to Customer View</span>
+          footer={(
+            <div className="owner-sidebar-footer">
+              <Button as={Link} to="/customer" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link">
+                Switch to Customer View
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 fullWidth
                 className="sidebar-footer-item"
-                title="Sign Out"
-                leftIcon={
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-                    <path d="M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7" />
-                  </svg>
-                }
-                onClick={() => {
-                  logout();
+                onClick={async () => {
+                  await logout();
                   navigate('/');
                 }}
               >
-                <span className="sidebar-footer-label">Sign Out</span>
+                Sign Out
               </Button>
             </div>
-          }
+          )}
         />
       </div>
 
-      {/* ── Main Area ──────────────────────────────────── */}
       <div className={`owner-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
         <TopBar
-          userName={restaurant?.name || user?.name || 'Restaurant Owner'}
-          userRole="Restaurant Owner"
-          userInitials={userInitials}
+          userName={user?.name || selectedRestaurant?.name || 'Restaurant Team'}
+          userRole={access.isOwner ? (access.actorType === 'co-owner' ? 'Co-owner' : 'Restaurant Owner') : access.membership?.position || 'Restaurant Staff'}
+          userInitials={initials}
           mobileMenuOpen={mobileOpen}
-          onMenuToggle={() => setMobileOpen(!mobileOpen)}
-          notificationCount={2}
+          onMenuToggle={() => setMobileOpen((value) => !value)}
+          notificationCount={0}
+          showNotifications={false}
+          actions={restaurantSelector}
         />
-
+        {restaurantService.dataSource === 'demo' && <div className="owner-demo-status" role="status">Demo Data</div>}
         <main className="owner-content">
+          {!restaurantService.dataSource && (
+            <div className="owner-data-state" role="status">Loading restaurant workspace…</div>
+          )}
           {children}
         </main>
+        <nav className="owner-mobile-bottom-nav" aria-label="Quick restaurant navigation">
+          {visibleMobileItems.map((item) => (
+            <Link key={item.id} to={item.href} className={item.id === activeItem ? 'active' : ''} aria-current={item.id === activeItem ? 'page' : undefined}>
+              {icon(item.icon)}
+              <span>{item.label}</span>
+            </Link>
+          ))}
+          <Link to="/customer" aria-label="Switch to customer side">
+            <span aria-hidden="true">↗</span>
+            <span>Customer</span>
+          </Link>
+        </nav>
       </div>
     </div>
   );

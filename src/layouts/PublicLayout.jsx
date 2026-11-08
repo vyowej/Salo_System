@@ -42,10 +42,6 @@ export default function PublicLayout({ children }) {
                 {link.label}
               </a>
             ))}
-            {/* Showcase kept — has active route. Limitation: visible in production. */}
-            <Link to="/showcase" className="public-nav-link public-nav-showcase">
-              Showcase <span className="showcase-dev-pill">Dev</span>
-            </Link>
           </nav>
 
           {/* Right: Actions */}
@@ -130,10 +126,6 @@ export default function PublicLayout({ children }) {
                   {link.label}
                 </a>
               ))}
-              <Link to="/showcase" className="mobile-menu-link"
-                onClick={() => setMobileOpen(false)}>
-                Design Showcase
-              </Link>
             </div>
 
             <div className="mobile-menu-footer">

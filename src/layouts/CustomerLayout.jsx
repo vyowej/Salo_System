@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme } from '../hooks/useTheme';
+import { useRestaurantAccess } from '../features/restaurant/access/useRestaurantAccess';
+import { OWNER_NAV_ITEMS } from '../features/restaurant/access/permissionMap';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import customerService from '../services/customerService';
@@ -204,6 +206,8 @@ export default function CustomerLayout({ children }) {
   const { user, logout } = useAuth();
   const { totalItemCount } = useCart();
   const { theme, toggleTheme } = useTheme();
+  const restaurantAccess = useRestaurantAccess();
+  const ownerDestination = OWNER_NAV_ITEMS.find((item) => restaurantAccess.canAccessNavigationItem(item.id))?.href || '/owner';
   const location = useLocation();
   const navigate = useNavigate();
   const sidebarProfileTriggerRef = useRef(null);
@@ -337,6 +341,12 @@ export default function CustomerLayout({ children }) {
       icon: mkIcon(ICONS.profile),
       onClick: () => navigate('/customer/profile'),
     },
+    ...(restaurantAccess.hasRestaurantAccess ? [{
+      id: 'owner-workspace',
+      label: 'Restaurant workspace',
+      icon: mkIcon(ICONS.restaurants),
+      onClick: () => navigate(ownerDestination),
+    }] : []),
     {
       id: 'theme',
       label: 'Dark Mode',
@@ -362,6 +372,12 @@ export default function CustomerLayout({ children }) {
       icon: mkIcon(ICONS.profile),
       onClick: () => navigate('/customer/profile'),
     },
+    ...(restaurantAccess.hasRestaurantAccess ? [{
+      id: 'owner-workspace',
+      label: 'Restaurant workspace',
+      icon: mkIcon(ICONS.restaurants),
+      onClick: () => navigate(ownerDestination),
+    }] : []),
     {
       id: 'become-rider',
       label: 'Become a Rider',

@@ -1,0 +1,242 @@
+.owner-tables-page {
+  display: grid;
+  gap: 22px;
+  max-width: 1440px;
+  margin: 0 auto;
+  color: var(--text-primary);
+}
+
+.owner-tables-header,
+.owner-section-heading,
+.owner-table-card-heading,
+.owner-table-form-actions,
+.owner-table-card-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.owner-tables-header h1 {
+  margin: 0;
+  font-size: clamp(26px, 3vw, 36px);
+}
+
+.owner-tables-header p,
+.owner-section-heading p {
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+}
+
+.owner-tables-eyebrow,
+.owner-table-number {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.owner-section-heading h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.owner-tables-error {
+  border: 1px solid var(--status-error-border, #e8b3b3);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--status-error-text, #9d2929);
+  background: var(--status-error-bg, #fff4f4);
+}
+
+.owner-dining-areas,
+.owner-table-form,
+.owner-table-card,
+.owner-table-filters {
+  border: 1px solid var(--border-primary);
+  border-radius: 16px;
+  padding: 18px;
+  background: var(--surface-primary);
+}
+
+.owner-area-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.owner-area-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 7px 11px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  font-size: 13px;
+}
+
+.owner-area-chip button {
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.owner-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.owner-inline-form input,
+.owner-table-filters input,
+.owner-table-filters select,
+.owner-table-form input,
+.owner-table-form select,
+.owner-table-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border-primary);
+  border-radius: 9px;
+  padding: 10px 11px;
+  color: var(--text-primary);
+  background: var(--surface-primary);
+  font: inherit;
+}
+
+.owner-inline-form input {
+  width: 160px;
+}
+
+.owner-table-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.owner-table-filters label,
+.owner-table-form-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.owner-table-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.owner-table-description {
+  grid-column: span 2;
+}
+
+.owner-table-form-actions {
+  justify-content: flex-start;
+  margin-top: 15px;
+}
+
+.owner-table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 14px;
+}
+
+.owner-table-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.owner-table-card-heading h2 {
+  margin: 3px 0 0;
+  font-size: 17px;
+}
+
+.owner-table-card > p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.owner-table-description-text {
+  line-height: 1.45;
+}
+
+.owner-table-card-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+
+.owner-table-schedule {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--border-primary);
+  padding-top: 12px;
+}
+
+.owner-table-schedule h3,
+.owner-table-schedule p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.owner-table-schedule > div {
+  display: grid;
+  gap: 2px;
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  font-size: 12px;
+}
+
+.owner-table-schedule span {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 700px) {
+  .owner-tables-header,
+  .owner-section-heading {
+    align-items: flex-start;
+  }
+
+  .owner-tables-header {
+    flex-direction: column;
+  }
+
+  .owner-table-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .owner-dining-areas,
+  .owner-table-form,
+  .owner-table-card,
+  .owner-table-filters {
+    padding: 13px;
+  }
+
+  .owner-table-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .owner-table-description {
+    grid-column: auto;
+  }
+
+  .owner-table-card-heading {
+    align-items: flex-start;
+  }
+}

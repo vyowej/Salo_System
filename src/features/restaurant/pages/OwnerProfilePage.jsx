@@ -1,261 +1,575 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import OwnerLayout from '../../../layouts/OwnerLayout';
 import ownerService from '../../../services/ownerService';
+import restaurantService from '../../../services/restaurantService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import { Input, Textarea } from '../../../components/forms';
+import ImageUploader, { ImageGalleryUploader } from '../../../components/common/ImageUploader';
+import { Input, Select, Textarea } from '../../../components/forms';
+import { ErrorState, LoadingSpinner } from '../../../components/feedback';
+import RestaurantImage from '../../customer/components/RestaurantImage';
+import { useRestaurantAccess } from '../access/useRestaurantAccess';
+import {
+  createBusinessProfilePatch,
+  formatBusinessAddress,
+  getRemovedImageReferences,
+  getStagedImageIds,
+  toBusinessProfileForm,
+  validateBusinessProfile,
+} from '../profile/businessProfileData';
+import './OwnerProfilePage.css';
+
+function copy(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function OwnerProfilePreview({ profile }) {
+  const address = formatBusinessAddress(profile.location);
+  const coverage = profile.deliveryCoverage;
+  const coverageDescription = coverage.method === 'cities'
+    ? coverage.cities.join(', ')
+    : coverage.method === 'barangays'
+      ? coverage.barangays.join(', ')
+      : coverage.method === 'zones' || coverage.method === 'other'
+        ? coverage.zones
+        : coverage.method === 'radius' && coverage.radiusKm
+          ? `${coverage.radiusKm} km`
+          : '';
+  const services = [
+    profile.fulfillment.delivery && 'Delivery',
+    profile.fulfillment.pickup && 'Pickup',
+  ].filter(Boolean);
+
+  return (
+    <section className="owner-profile-card owner-profile-preview" aria-labelledby="profile-preview-title">
+      <div className="owner-profile-preview-cover">
+        <RestaurantImage
+          image={profile.coverPhoto}
+          alt="Restaurant cover photo"
+          fallback="Customer storefront preview"
+        />
+        {profile.logoImage && (
+          <div className="owner-profile-preview-logo">
+            <RestaurantImage image={profile.logoImage} alt="Restaurant logo" fallback="Logo" />
+          </div>
+        )}
+      </div>
+      <div className="owner-profile-preview-body">
+        <div className="owner-profile-preview-heading">
+          <div>
+            <p className="owner-profile-eyebrow">Draft storefront preview</p>
+            <h2 id="profile-preview-title">{profile.name || 'Restaurant name'}</h2>
+            <p className="owner-profile-preview-cuisine">{profile.cuisine || 'Cuisine type'}</p>
+          </div>
+          {profile.rating !== null && (
+            <Badge variant="default">★ {profile.rating} · {profile.reviewCount} reviews</Badge>
+          )}
+        </div>
+
+        <p>{profile.description || 'Add a description to introduce your restaurant to customers.'}</p>
+        <div className="owner-profile-preview-facts">
+          {address && <span>📍 {address}</span>}
+          {profile.operatingHours && <span>🕒 {profile.operatingHours}</span>}
+          {profile.phone && <span>☎ {profile.phone}</span>}
+          {profile.contactEmail && <span>✉ {profile.contactEmail}</span>}
+          <span>
+            {services.length ? services.join(' · ') : 'Ordering services not selected'}
+          </span>
+          {coverageDescription && <span>Delivery coverage: {coverageDescription}</span>}
+        </div>
+        {profile.foodCategories.length > 0 && (
+          <div className="owner-profile-preview-tags" aria-label="Food categories">
+            {profile.foodCategories.map((category) => <span key={category}>{category}</span>)}
+          </div>
+        )}
+        {profile.profilePhotos.length > 0 && (
+          <div className="owner-profile-preview-gallery" aria-label="Restaurant gallery preview">
+            {profile.profilePhotos.map((image, index) => (
+              <RestaurantImage
+                key={image.id || `${image.src}-${index}`}
+                image={image}
+                alt={image.alt || `Restaurant photo ${index + 1}`}
+                fallback="Photo"
+              />
+            ))}
+          </div>
+        )}
+        {profile.categories.length > 0 && (
+          <div className="owner-profile-preview-menu">
+            <h3>Menu categories</h3>
+            <div className="owner-profile-preview-tags">
+              {profile.categories.map((category) => <span key={category}>{category}</span>)}
+            </div>
+            {profile.menu.slice(0, 3).map((item) => (
+              <p key={item.id}>
+                <strong>{item.name}</strong>
+                {item.price != null && <span> · ₱{item.price}</span>}
+              </p>
+            ))}
+          </div>
+        )}
+        <p className="owner-profile-preview-note">
+          This preview reflects the current form. Save the profile, then open the customer page to review its menu and other public sections.
+        </p>
+      </div>
+    </section>
+  );
+}
 
 export default function OwnerProfilePage() {
-  const initial = ownerService.getRestaurant();
-  const [formData, setFormData] = useState({
-    name: initial.name || '',
-    tagline: initial.tagline || '',
-    cuisine: initial.cuisine || '',
-    phone: initial.phone || '',
-    address: initial.address || '',
-    operatingHours: initial.operatingHours || '',
-    deliveryTime: initial.deliveryTime || '25–35 min',
-    deliveryFee: initial.deliveryFee || 49,
-    minOrder: initial.minOrder || 150,
-    reservationDeposit: initial.reservationDeposit || 500,
-    isOpen: initial.isOpen !== undefined ? initial.isOpen : true,
-    bio: initial.bio || '',
-  });
-
+  const access = useRestaurantAccess();
+  const { selectedRestaurantId } = access;
+  const permissions = useMemo(() => ({
+    canEditProfile: access.canAccess(['business.profile.edit']),
+    canManageLocation: access.canAccess(['business.location.manage']),
+    canManagePhotos: access.canAccess(['business.photos.manage']),
+  }), [access]);
+  const [initial, setInitial] = useState(null);
+  const [formData, setFormData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saved, setSaved] = useState(false);
+  const stagedImageIds = useRef(new Set());
+  const activeRestaurantId = useRef(selectedRestaurantId);
 
-  function handleChange(field, value) {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    setSaved(false);
-  }
+  useLayoutEffect(() => {
+    activeRestaurantId.current = selectedRestaurantId;
+  }, [selectedRestaurantId]);
 
-  function handleSave(e) {
-    e.preventDefault();
-    ownerService.updateRestaurant({
-      ...formData,
-      deliveryFee: parseFloat(formData.deliveryFee),
-      minOrder: parseFloat(formData.minOrder),
-      reservationDeposit: parseFloat(formData.reservationDeposit),
+  const loadProfile = useCallback(() => {
+    setLoading(true);
+    setError('');
+    setFieldErrors({});
+    const pendingImages = [...stagedImageIds.current];
+    stagedImageIds.current.clear();
+    if (pendingImages.length) {
+      Promise.allSettled(pendingImages.map((id) => restaurantService.removeImage({ id }))).then((results) => {
+        if (results.some((result) => result.status === 'rejected')) {
+          setError('The selected restaurant loaded, but one or more unsaved images could not be removed from demo storage.');
+        }
+      });
+    }
+    try {
+      const restaurant = ownerService.getRestaurant(selectedRestaurantId);
+      if (!restaurant) throw new Error('Restaurant profile is unavailable.');
+      const data = toBusinessProfileForm(restaurant);
+      setInitial(data);
+      setFormData(data);
+      setSaved(false);
+    } catch (loadError) {
+      setInitial(null);
+      setFormData(null);
+      setError(loadError.message || 'Unable to load restaurant profile.');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedRestaurantId]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  useEffect(() => () => {
+    const cleanup = [...stagedImageIds.current].map((id) => restaurantService.removeImage({ id }));
+    Promise.allSettled(cleanup).then((results) => {
+      results.forEach((result) => {
+        if (result.status === 'rejected') console.error('Unable to remove an unsaved demo profile image.', result.reason);
+      });
     });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  }, []);
+
+  function updateProfile(update) {
+    setFormData((previous) => {
+      const next = typeof update === 'function' ? update(previous) : { ...previous, ...update };
+      if (initial) {
+        getStagedImageIds(next, initial).forEach((id) => stagedImageIds.current.add(id));
+      }
+      return next;
+    });
+    setSaved(false);
+    setError('');
+    setFieldErrors({});
   }
+
+  async function resetForm() {
+    if (!initial) return;
+    setSaving(true);
+    setError('');
+    const cleanupResults = await Promise.allSettled(
+      [...stagedImageIds.current].map((id) => restaurantService.removeImage({ id })),
+    );
+    const failedCleanup = cleanupResults.filter((result) => result.status === 'rejected');
+    stagedImageIds.current.clear();
+    setFormData(copy(initial));
+    setFieldErrors({});
+    setSaved(false);
+    if (failedCleanup.length) {
+      setError('The form was reset, but one or more temporary images could not be removed from demo storage.');
+    }
+    setSaving(false);
+  }
+
+  async function handleSave(event) {
+    event.preventDefault();
+    const nextFieldErrors = validateBusinessProfile(formData, permissions);
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length) {
+      setError('Review the highlighted fields before saving.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      const patch = createBusinessProfilePatch(formData, permissions);
+      ownerService.updateBusinessProfile(patch, selectedRestaurantId);
+      const currentImageIds = new Set([
+        formData.logoImage?.id,
+        formData.coverPhoto?.id,
+        ...formData.profilePhotos.map((image) => image.id),
+      ].filter(Boolean));
+      const stagedImagesToRemove = [...stagedImageIds.current]
+        .filter((id) => !currentImageIds.has(id))
+        .map((id) => ({ id }));
+      const removedImages = permissions.canManagePhotos
+        ? [...getRemovedImageReferences(formData, initial), ...stagedImagesToRemove]
+        : [];
+      const nextInitial = copy(formData);
+      setInitial(nextInitial);
+      setFormData(nextInitial);
+      stagedImageIds.current.clear();
+      setSaved(true);
+
+      const cleanupResults = await Promise.allSettled(
+        removedImages.map((image) => restaurantService.removeImage(image)),
+      );
+      if (cleanupResults.some((result) => result.status === 'rejected')) {
+        setError('Profile saved, but one or more replaced or removed images could not be cleaned up.');
+      }
+    } catch (saveError) {
+      setError(saveError.message || 'Unable to save the business profile.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function updateLocation(field, value) {
+    updateProfile((previous) => ({
+      ...previous,
+      location: { ...previous.location, [field]: value },
+    }));
+  }
+
+  function updateCoverage(field, value) {
+    const nextValue = ['cities', 'barangays'].includes(field)
+      ? value.split(/[,\n]/).map((entry) => entry.trim()).filter(Boolean)
+      : value;
+    updateProfile((previous) => ({
+      ...previous,
+      deliveryCoverage: { ...previous.deliveryCoverage, [field]: nextValue },
+    }));
+  }
+
+  function handlePhotoChange(field, value, restaurantId, currentProfile, savedProfile) {
+    const nextProfile = { ...currentProfile, [field]: value };
+    if (activeRestaurantId.current !== restaurantId) {
+      const staleUploads = getStagedImageIds(nextProfile, savedProfile);
+      Promise.allSettled(staleUploads.map((id) => restaurantService.removeImage({ id }))).then((results) => {
+        if (results.some((result) => result.status === 'rejected')) {
+          console.error('Unable to remove a profile image uploaded for a restaurant that is no longer selected.');
+        }
+      });
+      return;
+    }
+    updateProfile(nextProfile);
+  }
+
+  if (loading) {
+    return <OwnerLayout><LoadingSpinner size="lg" label="Loading business profile..." /></OwnerLayout>;
+  }
+  if (!formData || !initial) {
+    return <OwnerLayout><ErrorState description={error || 'Restaurant profile data is unavailable.'} onRetry={loadProfile} /></OwnerLayout>;
+  }
+
+  const hasEditAccess = permissions.canEditProfile || permissions.canManageLocation || permissions.canManagePhotos;
+  const address = formatBusinessAddress(formData.location);
 
   return (
     <OwnerLayout>
-      {/* ── Page Header ────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: 'var(--accent)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-            }}
-          >
-            Store Settings
-          </span>
-          <h1 className="page-title" style={{ fontSize: 'var(--font-size-2xl)', marginTop: 'var(--space-1)' }}>
-            Restaurant Profile & Operations
-          </h1>
-          <p className="page-subtitle">
-            Configure your public storefront, live opening status, delivery rates, and dining policies
-          </p>
-        </div>
+      <div className="owner-profile-page">
+        <header className="owner-profile-header">
+          <div>
+            <p className="owner-profile-eyebrow">Restaurant workspace</p>
+            <h1 className="page-title">Business Profile</h1>
+            <p className="page-subtitle">Manage the information customers see about this restaurant.</p>
+          </div>
+          <div className="owner-profile-header-actions">
+            <Link to={`/customer/restaurants/${selectedRestaurantId}`} target="_blank" rel="noreferrer">
+              <Button type="button" variant="outline">Open customer page</Button>
+            </Link>
+          </div>
+        </header>
 
-        {saved && (
-          <Badge variant="success" size="lg">
-            ✓ Changes saved successfully!
-          </Badge>
+        {saved && <p className="owner-profile-success" role="status">Profile changes saved.</p>}
+        {error && <p className="owner-profile-error" role="alert">{error}</p>}
+
+        {!hasEditAccess && (
+          <p className="owner-profile-readonly" role="status">
+            You have view-only access. An owner or authorized staff member must make profile changes.
+          </p>
         )}
-      </div>
 
-      <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
-        {/* ── Section 1: Storefront Identity & Status ─────── */}
-        <div style={{
-          background: 'var(--surface-primary)',
-          border: '1px solid var(--border-primary)',
-          borderRadius: 'var(--radius-xl)',
-          padding: 'var(--space-6)',
-          boxShadow: 'var(--shadow-sm)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-5)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-            <div>
-              <h2 className="section-title" style={{ margin: 0 }}>Store Identity & Operating Status</h2>
-              <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-                Control how customers see your restaurant across the SALO platform
-              </p>
-            </div>
-
-            {/* Live Store Toggle */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-3)',
-              padding: '6px 14px',
-              background: formData.isOpen ? 'var(--status-success-bg, #E8F5E9)' : 'var(--bg-secondary)',
-              borderRadius: 'var(--radius-full)',
-              border: '1px solid var(--border-primary)',
-            }}>
-              <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: formData.isOpen ? 'var(--salo-green)' : 'var(--text-muted)' }}>
-                {formData.isOpen ? '● Currently Accepting Orders' : '○ Store Closed (Paused)'}
-              </span>
-              <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                <input
-                  type="checkbox"
-                  checked={formData.isOpen}
-                  onChange={(e) => handleChange('isOpen', e.target.checked)}
-                  style={{ display: 'none' }}
-                />
-                <div style={{
-                  width: 36,
-                  height: 20,
-                  borderRadius: 12,
-                  background: formData.isOpen ? 'var(--salo-green)' : 'var(--border-primary)',
-                  position: 'relative',
-                  transition: 'background var(--transition-fast)',
-                }}>
-                  <div style={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: '50%',
-                    background: '#fff',
-                    position: 'absolute',
-                    top: 2,
-                    left: formData.isOpen ? 18 : 2,
-                    transition: 'left var(--transition-fast)',
-                  }} />
+        <div className="owner-profile-layout">
+          <form className="owner-profile-form" onSubmit={handleSave}>
+            {!permissions.canEditProfile && (
+              <section className="owner-profile-card">
+                <div className="owner-profile-section-heading">
+                  <div>
+                    <h2>{formData.name}</h2>
+                    <p>{formData.cuisine || 'Cuisine type not set'}</p>
+                  </div>
                 </div>
-              </label>
+                <p>{formData.description || 'No public description has been provided.'}</p>
+                <p className="owner-profile-preview-facts">
+                  {formData.phone && <span>☎ {formData.phone}</span>}
+                  {formData.contactEmail && <span>✉ {formData.contactEmail}</span>}
+                </p>
+                {formData.foodCategories.length > 0 && (
+                  <div className="owner-profile-preview-tags">
+                    {formData.foodCategories.map((category) => <span key={category}>{category}</span>)}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {permissions.canEditProfile && (
+              <section className="owner-profile-card">
+                <div className="owner-profile-section-heading">
+                  <div>
+                    <h2>Restaurant information</h2>
+                    <p>These details are shown on the public restaurant page.</p>
+                  </div>
+                </div>
+                <div className="owner-profile-fields">
+                  <Input
+                    id="profile-name"
+                    label="Restaurant name"
+                    value={formData.name}
+                    onChange={(event) => updateProfile({ name: event.target.value })}
+                    error={fieldErrors.name}
+                    required
+                    disabled={saving}
+                  />
+                  <Input
+                    id="profile-cuisine"
+                    label="Cuisine type"
+                    value={formData.cuisine}
+                    onChange={(event) => updateProfile({ cuisine: event.target.value })}
+                    disabled={saving}
+                  />
+                  <Input
+                    id="profile-email"
+                    label="Public contact email"
+                    type="email"
+                    value={formData.contactEmail}
+                    onChange={(event) => updateProfile({ contactEmail: event.target.value })}
+                    error={fieldErrors.contactEmail}
+                    disabled={saving}
+                  />
+                  <Input
+                    id="profile-phone"
+                    label="Public contact phone"
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(event) => updateProfile({ phone: event.target.value })}
+                    disabled={saving}
+                  />
+                </div>
+                <Textarea
+                  id="profile-description"
+                  label="Description"
+                  rows={4}
+                  value={formData.description}
+                  onChange={(event) => updateProfile({ description: event.target.value })}
+                  disabled={saving}
+                />
+                <Textarea
+                  id="profile-food-categories"
+                  label="Food categories"
+                  rows={2}
+                  value={formData.foodCategories.join(', ')}
+                  helper="Separate categories with commas or new lines."
+                  onChange={(event) => updateProfile({
+                    foodCategories: event.target.value.split(/[,\n]/).map((value) => value.trim()).filter(Boolean),
+                  })}
+                  disabled={saving}
+                />
+              </section>
+            )}
+
+            {permissions.canManagePhotos && (
+              <section className="owner-profile-card">
+                <div className="owner-profile-section-heading">
+                  <div>
+                    <h2>Restaurant photos</h2>
+                    <p>Images are optimized and stored locally in the demo adapter.</p>
+                  </div>
+                </div>
+                <div className="owner-profile-media-fields">
+                  <ImageUploader
+                    id="profile-logo"
+                    key={`profile-logo-${selectedRestaurantId}`}
+                    label="Restaurant logo"
+                    value={formData.logoImage}
+                    onChange={(logoImage) => handlePhotoChange('logoImage', logoImage, selectedRestaurantId, formData, initial)}
+                    deferCleanup
+                  />
+                  <ImageUploader
+                    id="profile-cover"
+                    key={`profile-cover-${selectedRestaurantId}`}
+                    label="Restaurant cover photo"
+                    value={formData.coverPhoto}
+                    onChange={(coverPhoto) => handlePhotoChange('coverPhoto', coverPhoto, selectedRestaurantId, formData, initial)}
+                    deferCleanup
+                  />
+                </div>
+                <ImageGalleryUploader
+                  id="profile-gallery"
+                  key={`profile-gallery-${selectedRestaurantId}`}
+                  label="Restaurant photo gallery"
+                  value={formData.profilePhotos}
+                  onChange={(profilePhotos) => handlePhotoChange('profilePhotos', profilePhotos, selectedRestaurantId, formData, initial)}
+                  deferCleanup
+                />
+              </section>
+            )}
+            {!permissions.canManagePhotos && (formData.logoImage || formData.coverPhoto || formData.profilePhotos.length > 0) && (
+              <section className="owner-profile-card">
+                <div className="owner-profile-section-heading">
+                  <div>
+                    <h2>Restaurant photos</h2>
+                    <p>Photo editing permission is required to change these images.</p>
+                  </div>
+                </div>
+                <div className="owner-profile-preview-gallery">
+                  {[formData.logoImage, formData.coverPhoto, ...formData.profilePhotos]
+                    .filter(Boolean)
+                    .map((image, index) => (
+                      <RestaurantImage key={image.id || index} image={image} alt={image.alt || 'Restaurant photo'} fallback="Photo" />
+                    ))}
+                </div>
+              </section>
+            )}
+
+            {permissions.canManageLocation && (
+              <section className="owner-profile-card">
+                <div className="owner-profile-section-heading">
+                  <div>
+                    <h2>Location and delivery coverage</h2>
+                    <p>Restaurant address and delivery coverage are separate public/business settings.</p>
+                  </div>
+                </div>
+                <div className="owner-profile-fields">
+                  <Input id="location-country" label="Country" value={formData.location.country} onChange={(event) => updateLocation('country', event.target.value)} disabled={saving} />
+                  <Input id="location-region" label="Region" value={formData.location.region} onChange={(event) => updateLocation('region', event.target.value)} disabled={saving} />
+                  <Input id="location-province" label="Province" value={formData.location.province} onChange={(event) => updateLocation('province', event.target.value)} disabled={saving} />
+                  <Input id="location-city" label="City or municipality" value={formData.location.city} onChange={(event) => updateLocation('city', event.target.value)} error={fieldErrors.city} required disabled={saving} />
+                  <Input id="location-barangay" label="Barangay" value={formData.location.barangay} onChange={(event) => updateLocation('barangay', event.target.value)} disabled={saving} />
+                  <Input id="location-building" label="Building or house number" value={formData.location.buildingNumber} onChange={(event) => updateLocation('buildingNumber', event.target.value)} disabled={saving} />
+                  <Input id="location-street" label="Street address" value={formData.location.streetAddress} onChange={(event) => updateLocation('streetAddress', event.target.value)} error={fieldErrors.streetAddress} required disabled={saving} />
+                  <Input id="location-landmark" label="Landmark" value={formData.location.landmark} onChange={(event) => updateLocation('landmark', event.target.value)} disabled={saving} />
+                  <Input id="location-postal" label="Postal code" value={formData.location.postalCode} onChange={(event) => updateLocation('postalCode', event.target.value)} disabled={saving} />
+                </div>
+                <div className="owner-profile-fields">
+                  <Input id="location-latitude" label="Map pin latitude" type="number" step="any" value={formData.location.latitude} onChange={(event) => updateLocation('latitude', event.target.value)} error={fieldErrors.coordinates} helper="No map provider is configured; enter coordinates manually if known." disabled={saving} />
+                  <Input id="location-longitude" label="Map pin longitude" type="number" step="any" value={formData.location.longitude} onChange={(event) => updateLocation('longitude', event.target.value)} error={fieldErrors.coordinates} disabled={saving} />
+                </div>
+                <Select
+                  id="coverage-method"
+                  label="Delivery coverage method"
+                  value={formData.deliveryCoverage.method}
+                  onChange={(event) => updateCoverage('method', event.target.value)}
+                  helper="Coverage is saved for display only; demo mode does not validate customer addresses against it."
+                  disabled={saving}
+                >
+                  <option value="">Not configured</option>
+                  <option value="cities">Selected cities or municipalities</option>
+                  <option value="barangays">Selected barangays</option>
+                  <option value="zones">Delivery zones</option>
+                  <option value="radius">Delivery radius</option>
+                  <option value="other">Other supported area</option>
+                </Select>
+                {formData.deliveryCoverage.method === 'cities' && (
+                  <Textarea id="coverage-cities" label="Cities or municipalities served" rows={2} value={formData.deliveryCoverage.cities.join(', ')} onChange={(event) => updateCoverage('cities', event.target.value)} disabled={saving} />
+                )}
+                {formData.deliveryCoverage.method === 'barangays' && (
+                  <Textarea id="coverage-barangays" label="Barangays served" rows={2} value={formData.deliveryCoverage.barangays.join(', ')} onChange={(event) => updateCoverage('barangays', event.target.value)} disabled={saving} />
+                )}
+                {(formData.deliveryCoverage.method === 'zones' || formData.deliveryCoverage.method === 'other') && (
+                  <Textarea id="coverage-zones" label="Coverage area details" rows={2} value={formData.deliveryCoverage.zones} onChange={(event) => updateCoverage('zones', event.target.value)} disabled={saving} />
+                )}
+                {formData.deliveryCoverage.method === 'radius' && (
+                  <Input id="coverage-radius" label="Delivery radius (km)" type="number" min="0" step="any" value={formData.deliveryCoverage.radiusKm} onChange={(event) => updateCoverage('radiusKm', event.target.value)} error={fieldErrors.radiusKm} disabled={saving} />
+                )}
+                <fieldset className="owner-profile-services" disabled={saving}>
+                  <legend>Services offered</legend>
+                  <label>
+                    <input type="checkbox" checked={formData.fulfillment.delivery} onChange={(event) => updateProfile((previous) => ({ ...previous, fulfillment: { ...previous.fulfillment, delivery: event.target.checked } }))} />
+                    Delivery
+                  </label>
+                  <label>
+                    <input type="checkbox" checked={formData.fulfillment.pickup} onChange={(event) => updateProfile((previous) => ({ ...previous, fulfillment: { ...previous.fulfillment, pickup: event.target.checked } }))} />
+                    Pickup
+                  </label>
+                </fieldset>
+                <div className="owner-profile-operating-hours">
+                  <strong>Operating hours</strong>
+                  <span>{formData.operatingHours || 'Not set'}</span>
+                  <small>Hours are displayed here but managed in the Operating Hours feature.</small>
+                </div>
+              </section>
+            )}
+
+            {!permissions.canManageLocation && (
+              <section className="owner-profile-card">
+                <div className="owner-profile-section-heading">
+                  <div>
+                    <h2>Restaurant location</h2>
+                    <p>{address || 'No public address has been provided.'}</p>
+                  </div>
+                </div>
+                <p className="owner-profile-operating-hours">
+                  Services: {[
+                    formData.fulfillment.delivery && 'Delivery',
+                    formData.fulfillment.pickup && 'Pickup',
+                  ].filter(Boolean).join(' · ') || 'Not available'}
+                </p>
+              </section>
+            )}
+
+            <div className="owner-profile-form-actions">
+              <Button type="button" variant="ghost" onClick={resetForm} disabled={saving}>Reset</Button>
+              {hasEditAccess && (
+                <Button type="submit" variant="primary" loading={saving}>Save profile</Button>
+              )}
             </div>
-          </div>
+          </form>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
-            <Input
-              id="rest-name"
-              label="Restaurant Public Name"
-              value={formData.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-              required
-            />
-            <Input
-              id="rest-tagline"
-              label="Tagline / Short Hook"
-              value={formData.tagline}
-              onChange={(e) => handleChange('tagline', e.target.value)}
-            />
-            <Input
-              id="rest-cuisine"
-              label="Primary Cuisine Tags"
-              value={formData.cuisine}
-              onChange={(e) => handleChange('cuisine', e.target.value)}
-              placeholder="e.g. Filipino · Grill & BBQ"
-            />
-            <Input
-              id="rest-phone"
-              label="Contact Landline / Hotline"
-              value={formData.phone}
-              onChange={(e) => handleChange('phone', e.target.value)}
-            />
-          </div>
-
-          <div style={{ marginTop: 'var(--space-4)' }}>
-            <Input
-              id="rest-address"
-              label="Physical Kitchen / Dining Address"
-              value={formData.address}
-              onChange={(e) => handleChange('address', e.target.value)}
-              required
-            />
-          </div>
-
-          <div style={{ marginTop: 'var(--space-4)' }}>
-            <Textarea
-              id="rest-bio"
-              label="Restaurant Story / Bio"
-              rows={3}
-              value={formData.bio}
-              onChange={(e) => handleChange('bio', e.target.value)}
-              placeholder="Tell customers about your kitchen's history, culinary roots, and specialty dishes..."
-            />
+          <div className="owner-profile-aside">
+            <OwnerProfilePreview profile={formData} />
+            <section className="owner-profile-card owner-profile-note-card">
+              <h2>Public page preview</h2>
+              <p>Customer storefront data comes from this same shared restaurant record. Save your changes before opening the customer page.</p>
+              <Link to={`/customer/restaurants/${selectedRestaurantId}`} target="_blank" rel="noreferrer">
+                <Button type="button" variant="outline" fullWidth>Preview saved customer page</Button>
+              </Link>
+            </section>
           </div>
         </div>
-
-        {/* ── Section 2: Fulfillment & Reservation Rates ─── */}
-        <div style={{
-          background: 'var(--surface-primary)',
-          border: '1px solid var(--border-primary)',
-          borderRadius: 'var(--radius-xl)',
-          padding: 'var(--space-6)',
-          boxShadow: 'var(--shadow-sm)',
-        }}>
-          <h2 className="section-title" style={{ margin: '0 0 var(--space-1) 0' }}>
-            Ordering, Delivery & Table Policies
-          </h2>
-          <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginBottom: 'var(--space-5)' }}>
-            Set accurate fulfillment estimates to maintain high customer satisfaction ratings
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
-            <Input
-              id="rest-hours"
-              label="Operating Schedule"
-              value={formData.operatingHours}
-              onChange={(e) => handleChange('operatingHours', e.target.value)}
-              placeholder="10:00 AM – 10:00 PM"
-            />
-            <Input
-              id="rest-delivery-time"
-              label="Estimated Prep & Delivery Time"
-              value={formData.deliveryTime}
-              onChange={(e) => handleChange('deliveryTime', e.target.value)}
-              placeholder="25–35 min"
-            />
-            <Input
-              id="rest-fee"
-              label="Base Delivery Fee (₱)"
-              type="number"
-              value={formData.deliveryFee}
-              onChange={(e) => handleChange('deliveryFee', e.target.value)}
-            />
-            <Input
-              id="rest-min-order"
-              label="Minimum Order Amount (₱)"
-              type="number"
-              value={formData.minOrder}
-              onChange={(e) => handleChange('minOrder', e.target.value)}
-            />
-            <Input
-              id="rest-deposit"
-              label="Table Booking Deposit (₱)"
-              type="number"
-              value={formData.reservationDeposit}
-              onChange={(e) => handleChange('reservationDeposit', e.target.value)}
-              helper="Deducted from the customer's dining bill upon arrival"
-            />
-          </div>
-        </div>
-
-        {/* ── Submit Strip ───────────────────────────────── */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setFormData(initial)}
-          >
-            Reset Form
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-          >
-            Save Profile Changes
-          </Button>
-        </div>
-      </form>
+      </div>
     </OwnerLayout>
   );
 }

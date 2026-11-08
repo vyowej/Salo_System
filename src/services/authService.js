@@ -8,6 +8,8 @@ import apiClient from './apiClient';
 
 const TOKEN_KEY = 'salo_token';
 const USER_KEY = 'salo_user';
+// TODO: Turn off/remove VITE_ENABLE_DEMO_AUTH before any real deployment.
+export const DEMO_AUTH_ENABLED = import.meta.env.VITE_ENABLE_DEMO_AUTH !== 'false';
 
 // Mock users for development/showcase demonstration when backend is not live
 const DEMO_USERS = {
@@ -49,6 +51,33 @@ const DEMO_USERS = {
     phone: '09201234567',
     avatar: null,
   },
+  'staff@salo.ph': {
+    id: 5,
+    name: 'Sam Rivera',
+    username: 'samrivera',
+    email: 'staff@salo.ph',
+    role: 'customer',
+    phone: null,
+    avatar: null,
+  },
+  'reservation.staff@salo.ph': {
+    id: 6,
+    name: 'Alex Cruz',
+    username: 'alexcruz',
+    email: 'reservation.staff@salo.ph',
+    role: 'customer',
+    phone: null,
+    avatar: null,
+  },
+  'inventory.staff@salo.ph': {
+    id: 7,
+    name: 'Jamie Santos',
+    username: 'jamiesantos',
+    email: 'inventory.staff@salo.ph',
+    role: 'customer',
+    phone: null,
+    avatar: null,
+  },
 };
 
 export const authService = {
@@ -56,6 +85,14 @@ export const authService = {
    * Log in user with email/username and password
    */
   async login(credentials) {
+    const email = credentials.email?.toLowerCase().trim();
+    if (DEMO_AUTH_ENABLED && DEMO_USERS[email]) {
+      const mockUser = DEMO_USERS[email];
+      const mockToken = `salo_demo_token_${mockUser.role}_${Date.now()}`;
+      this.setSession(mockToken, mockUser);
+      return { user: mockUser, token: mockToken, isDemo: true };
+    }
+
     try {
       const response = await apiClient.post('/auth/login', credentials, { requiresAuth: false });
       if (response?.token && response?.user) {
@@ -63,8 +100,9 @@ export const authService = {
         return response;
       }
     } catch (err) {
+      if (!DEMO_AUTH_ENABLED) throw err;
+
       // If network fails (backend not running yet), allow demo credentials in dev environment
-      const email = credentials.email?.toLowerCase().trim();
       if (DEMO_USERS[email]) {
         const mockUser = DEMO_USERS[email];
         const mockToken = `salo_demo_token_${mockUser.role}_${Date.now()}`;
@@ -101,6 +139,8 @@ export const authService = {
         return response;
       }
     } catch {
+      if (!DEMO_AUTH_ENABLED) throw new Error('Registration is unavailable while demo authentication is disabled.');
+
       // Local fallback in development
       const newUser = {
         id: Date.now(),
@@ -161,6 +201,11 @@ export const authService = {
    * Get current authenticated user details
    */
   async getCurrentUser() {
+    const token = this.getToken();
+    if (DEMO_AUTH_ENABLED && token?.startsWith('salo_demo_token_')) {
+      return this.getStoredUser();
+    }
+
     try {
       const response = await apiClient.get('/auth/me');
       if (response?.user) {

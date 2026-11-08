@@ -4,7 +4,7 @@
  * Ready for Laravel backend endpoints with rich mock dataset for seamless UI experience.
  */
 
-import apiClient from './apiClient';
+import restaurantService from './restaurantService';
 
 // ── Realistic Philippine Restaurant Dataset ───────────────────
 export const INITIAL_RESTAURANTS = [
@@ -364,21 +364,11 @@ const ensureSingleDefaultAddress = (addresses, preferredId = null) => {
 export const customerService = {
   // Restaurants
   async getRestaurants() {
-    try {
-      const res = await apiClient.get('/customer/restaurants');
-      return res?.data || INITIAL_RESTAURANTS;
-    } catch {
-      return INITIAL_RESTAURANTS;
-    }
+    return restaurantService.getRestaurants();
   },
 
   async getRestaurantById(id) {
-    try {
-      const res = await apiClient.get(`/customer/restaurants/${id}`);
-      return res?.data || INITIAL_RESTAURANTS.find((r) => r.id === id);
-    } catch {
-      return INITIAL_RESTAURANTS.find((r) => r.id === id);
-    }
+    return restaurantService.getRestaurant(id);
   },
 
   // Saved Addresses
@@ -487,82 +477,37 @@ export const customerService = {
 
   // Orders
   getOrders() {
-    try {
-      const stored = localStorage.getItem('salo_orders');
-      return stored ? JSON.parse(stored) : INITIAL_ORDERS;
-    } catch {
-      return INITIAL_ORDERS;
-    }
+    return restaurantService.getCustomerOrders(INITIAL_ORDERS);
   },
 
   createOrder(orderPayload) {
-    const orders = this.getOrders();
-    const newOrder = {
-      ...orderPayload,
-      id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      overallStatus: 'Pending Confirmation',
-    };
-    const updated = [newOrder, ...orders];
-    localStorage.setItem('salo_orders', JSON.stringify(updated));
-    return newOrder;
+    return restaurantService.createCustomerOrder(orderPayload, INITIAL_ORDERS);
   },
 
   cancelOrder(orderId, reason = 'Customer requested cancellation') {
-    const orders = this.getOrders();
-    const updated = orders.map((ord) => {
-      if (ord.id === orderId) {
-        return {
-          ...ord,
-          overallStatus: 'Cancelled',
-          cancellationReason: reason,
-          cancelledAt: new Date().toISOString(),
-          subOrders: ord.subOrders.map((so) => ({ ...so, status: 'Cancelled' })),
-        };
-      }
-      return ord;
-    });
-    localStorage.setItem('salo_orders', JSON.stringify(updated));
-    return updated;
+    return restaurantService.requestOrderCancellation(orderId, reason, INITIAL_ORDERS);
   },
 
   // Reservations
   getReservations() {
-    try {
-      const stored = localStorage.getItem('salo_reservations');
-      return stored ? JSON.parse(stored) : INITIAL_RESERVATIONS;
-    } catch {
-      return INITIAL_RESERVATIONS;
-    }
+    return restaurantService.getCustomerReservations();
   },
 
   createReservation(reservationPayload) {
-    const reservations = this.getReservations();
-    const newReservation = {
+    return restaurantService.createCustomerReservation({
       ...reservationPayload,
-      id: `RES-${Math.floor(1000 + Math.random() * 9000)}`,
-      status: 'Confirmed',
-      createdAt: new Date().toISOString(),
-    };
-    const updated = [newReservation, ...reservations];
-    localStorage.setItem('salo_reservations', JSON.stringify(updated));
-    return newReservation;
+      guestName: reservationPayload.guestName || reservationPayload.customerName || 'Guest',
+      guestEmail: reservationPayload.guestEmail || reservationPayload.customerEmail || '',
+      guestPhone: reservationPayload.guestPhone || reservationPayload.customerPhone || '',
+      partySize: Number(reservationPayload.partySize ?? reservationPayload.guests ?? 2),
+      guests: Number(reservationPayload.guests ?? reservationPayload.partySize ?? 2),
+      status: 'Pending',
+    });
   },
 
   cancelReservation(reservationId) {
-    const reservations = this.getReservations();
-    const updated = reservations.map((res) => {
-      if (res.id === reservationId) {
-        return {
-          ...res,
-          status: 'Cancelled',
-          cancelledAt: new Date().toISOString(),
-        };
-      }
-      return res;
-    });
-    localStorage.setItem('salo_reservations', JSON.stringify(updated));
-    return updated;
+    restaurantService.cancelCustomerReservation(reservationId);
+    return this.getReservations();
   },
 
   // Favorites

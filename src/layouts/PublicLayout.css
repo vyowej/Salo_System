@@ -82,29 +82,6 @@
   background: var(--nav-pill-link-hover);
 }
 
-.public-nav-showcase {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--gold-text);
-}
-
-.public-nav-showcase:hover {
-  color: var(--gold-text);
-  background: var(--nav-pill-link-hover);
-}
-
-.showcase-dev-pill {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  background: var(--nav-pill-badge-bg);
-  color: var(--gold-text);
-  padding: 1px 5px;
-  border-radius: var(--radius-pill);
-}
-
 /* ── Right actions ────────────────────────────────────── */
 .public-nav-actions {
   display: flex;
