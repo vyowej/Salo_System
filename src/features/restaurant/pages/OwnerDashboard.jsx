@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import OwnerLayout from '../../../layouts/OwnerLayout';
 import ownerService from '../../../services/ownerService';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
+import { useRestaurantAccess } from '../access/useRestaurantAccess';
+import { ErrorState, LoadingSpinner } from '../../../components/feedback';
 
 // ── Helpers ──────────────────────────────────────────────────────
 function getGreeting() {
@@ -29,10 +31,14 @@ function formatPeso(amount) {
 function getOrderStatusBadge(status) {
   const map = {
     Pending: 'warning',
+    'Pending Confirmation': 'warning',
+    Accepted: 'info',
     Preparing: 'primary',
     'Ready for Pickup': 'success',
+    'Ready for Dispatch': 'success',
     'Out for Delivery': 'info',
     Completed: 'success',
+    Rejected: 'error',
     Cancelled: 'default',
   };
   return map[status] || 'default';
@@ -137,44 +143,63 @@ function StatCard({ label, value, sub, accentColor, accentBg, icon, trend }) {
 
 // ── Main Dashboard ───────────────────────────────────────────────
 export default function OwnerDashboard() {
+  const access = useRestaurantAccess();
+  const { selectedRestaurantId } = access;
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
   const [upcomingReservations, setUpcomingReservations] = useState([]);
   const [restaurant, setRestaurant] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const loadDashboard = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    try {
+      const rest = ownerService.getRestaurant(selectedRestaurantId);
+      const s = ownerService.getDashboardStats(selectedRestaurantId);
+      const orders = ownerService.getOrders(selectedRestaurantId, {
+        canViewCustomer: access.canAccess(['orders.customer.view']),
+      });
+      const reservations = ownerService.getReservations(selectedRestaurantId);
+
+      setRestaurant(rest);
+      setStats(s);
+      setRecentOrders(orders.slice(0, 5));
+      setUpcomingReservations(reservations
+        .filter((r) => r.status === 'Pending' || r.status === 'Confirmed')
+        .slice(0, 3));
+    } catch (loadError) {
+      setError(loadError.message || 'Unable to load restaurant overview.');
+    } finally {
+      setLoading(false);
+    }
+  }, [access, selectedRestaurantId]);
 
   useEffect(() => {
-    const rest = ownerService.getRestaurant();
-    const s = ownerService.getDashboardStats();
-    const orders = ownerService.getOrders();
-    const reservations = ownerService.getReservations();
-
-    setRestaurant(rest);
-    setStats(s);
-
-    // Last 5 orders (most recent first)
-    setRecentOrders(orders.slice(0, 5));
-
-    // Next 3 pending or confirmed reservations
-    const upcoming = reservations.filter((r) => r.status === 'Pending' || r.status === 'Confirmed').slice(0, 3);
-    setUpcomingReservations(upcoming);
-  }, []);
+    loadDashboard();
+    window.addEventListener('salo:demoStoreUpdated', loadDashboard);
+    return () => window.removeEventListener('salo:demoStoreUpdated', loadDashboard);
+  }, [loadDashboard]);
 
   function handleOrderAction(orderId, newStatus) {
-    ownerService.updateOrderStatus(orderId, newStatus);
-    const updated = ownerService.getOrders();
-    setRecentOrders(updated.slice(0, 5));
-    setStats(ownerService.getDashboardStats());
+    try {
+      ownerService.updateOrderStatus(orderId, newStatus, selectedRestaurantId);
+    } catch (actionError) {
+      setError(actionError.message || 'Unable to update order status.');
+    }
   }
 
-  function handleReservationAction(resId, newStatus) {
-    ownerService.updateReservationStatus(resId, newStatus);
-    const updated = ownerService.getReservations();
-    const upcoming = updated.filter((r) => r.status === 'Pending' || r.status === 'Confirmed').slice(0, 3);
-    setUpcomingReservations(upcoming);
-    setStats(ownerService.getDashboardStats());
+  if (loading) {
+    return <OwnerLayout><LoadingSpinner size="lg" label="Loading restaurant overview..." /></OwnerLayout>;
   }
-
-  if (!stats) return null;
+  if (error) {
+    return <OwnerLayout><ErrorState description={error} onRetry={loadDashboard} /></OwnerLayout>;
+  }
+  if (!stats || !restaurant) {
+    return <OwnerLayout><ErrorState description="Restaurant overview data is unavailable." onRetry={loadDashboard} /></OwnerLayout>;
+  }
 
   return (
     <OwnerLayout>
@@ -357,10 +382,10 @@ export default function OwnerDashboard() {
                   </Badge>
                 </span>
                 <span style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                  {order.status === 'Pending' && (
+                  {(order.status === 'Pending' || order.status === 'Pending Confirmation') && (
                     <>
                       <button
-                        onClick={() => handleOrderAction(order.id, 'Preparing')}
+                        onClick={() => handleOrderAction(order.id, 'Accepted')}
                         style={{
                           padding: '4px 10px',
                           fontSize: 11,
@@ -375,7 +400,7 @@ export default function OwnerDashboard() {
                         Accept
                       </button>
                       <button
-                        onClick={() => handleOrderAction(order.id, 'Cancelled')}
+                        onClick={() => navigate('/owner/orders')}
                         style={{
                           padding: '4px 10px',
                           fontSize: 11,
@@ -387,13 +412,30 @@ export default function OwnerDashboard() {
                           cursor: 'pointer',
                         }}
                       >
-                        Reject
+                        Review
                       </button>
                     </>
                   )}
+                  {order.status === 'Accepted' && (
+                    <button
+                      onClick={() => handleOrderAction(order.id, 'Preparing')}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background: 'var(--accent)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Start Prep
+                    </button>
+                  )}
                   {order.status === 'Preparing' && (
                     <button
-                      onClick={() => handleOrderAction(order.id, 'Ready for Pickup')}
+                      onClick={() => handleOrderAction(order.id, order.fulfillment === 'pickup' ? 'Ready for Pickup' : 'Ready for Dispatch')}
                       style={{
                         padding: '4px 10px',
                         fontSize: 11,
@@ -405,12 +447,12 @@ export default function OwnerDashboard() {
                         cursor: 'pointer',
                       }}
                     >
-                      Mark Ready
+                      {order.fulfillment === 'pickup' ? 'Ready for Pickup' : 'Ready for Dispatch'}
                     </button>
                   )}
-                  {(order.status === 'Ready for Pickup' || order.status === 'Out for Delivery' || order.status === 'Completed' || order.status === 'Cancelled') && (
+                  {(order.status === 'Ready for Pickup' || order.status === 'Ready for Dispatch' || order.status === 'Out for Delivery' || order.status === 'Completed' || order.status === 'Cancelled' || order.status === 'Rejected') && (
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>
-                      {order.status === 'Completed' ? '✓ Done' : order.status === 'Cancelled' ? '✕ Cancelled' : '—'}
+                      {order.status === 'Completed' ? '✓ Done' : ['Cancelled', 'Rejected'].includes(order.status) ? `✕ ${order.status}` : '—'}
                     </span>
                   )}
                 </span>
@@ -526,47 +568,9 @@ export default function OwnerDashboard() {
                     {res.status}
                   </Badge>
                 </span>
-                <span style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                  {res.status === 'Pending' && (
-                    <>
-                      <button
-                        onClick={() => handleReservationAction(res.id, 'Confirmed')}
-                        style={{
-                          padding: '4px 10px',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          background: 'var(--fiesta-green, #2E7D32)',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: 'var(--radius-sm)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        onClick={() => handleReservationAction(res.id, 'Cancelled')}
-                        style={{
-                          padding: '4px 10px',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          background: 'var(--status-error-bg)',
-                          color: 'var(--salo-error, #DC4545)',
-                          border: '1px solid var(--salo-error, #DC4545)',
-                          borderRadius: 'var(--radius-sm)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Decline
-                      </button>
-                    </>
-                  )}
-                  {res.status === 'Confirmed' && (
-                    <span style={{ fontSize: 11, color: 'var(--status-success-text)', fontWeight: 600 }}>
-                      ✓ Confirmed
-                    </span>
-                  )}
-                </span>
+                <Link to="/owner/reservations" style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)' }}>
+                  Review details
+                </Link>
               </div>
             ))
           )}
