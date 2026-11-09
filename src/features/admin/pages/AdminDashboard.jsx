@@ -4,9 +4,12 @@ import AdminLayout from '../../../layouts/AdminLayout';
 import adminService from '../../../services/adminService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
+import { formatPeso } from '../utils/format';
+import { getOrderBreakdown } from '../mocks';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(adminService.getPlatformStats());
+  const [financialTotals, setFinancialTotals] = useState(adminService.getFinancialTotals());
   const [restaurants, setRestaurants] = useState(adminService.getRestaurants());
   const [riders, setRiders] = useState(adminService.getRiders());
   const [orders, setOrders] = useState(adminService.getOrders());
@@ -17,6 +20,7 @@ export default function AdminDashboard() {
 
   function refresh() {
     setStats(adminService.getPlatformStats());
+    setFinancialTotals(adminService.getFinancialTotals());
     setRestaurants(adminService.getRestaurants());
     setRiders(adminService.getRiders());
     setOrders(adminService.getOrders());
@@ -69,10 +73,10 @@ export default function AdminDashboard() {
           boxShadow: 'var(--shadow-sm)',
         }}>
           <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.06em' }}>
-            Total Platform GMV
+            Order GMV · Demo snapshots
           </span>
           <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--accent)', margin: 'var(--space-2) 0' }}>
-            ₱{stats.totalRevenue.toLocaleString('en-PH')}
+            {formatPeso(financialTotals.gmv)}
           </p>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--salo-green)', fontWeight: 600 }}>
             ↑ 22.4% vs last calendar month
@@ -88,13 +92,13 @@ export default function AdminDashboard() {
           boxShadow: 'var(--shadow-sm)',
         }}>
           <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.06em' }}>
-            Commission Net Revenue
+            Platform Revenue · Demo snapshots
           </span>
           <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--salo-green)', margin: 'var(--space-2) 0' }}>
-            ₱{stats.platformCommissionEarned.toLocaleString('en-PH')}
+            {formatPeso(financialTotals.platformRevenue)}
           </p>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-            10.0% effective take rate
+            Commission, fees, discount funding, and reservation fees
           </span>
         </div>
 
@@ -106,14 +110,14 @@ export default function AdminDashboard() {
           padding: 'var(--space-5)',
           boxShadow: 'var(--shadow-sm)',
         }}>
-          <span style={{ fontSize: 11, color: 'var(--fiesta-gold, #F59E0B)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.06em' }}>
-            Active Orders Today
+          <span style={{ fontSize: 11, color: 'var(--salo-gold)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.06em' }}>
+            Active Orders
           </span>
-          <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--fiesta-gold, #F59E0B)', margin: 'var(--space-2) 0' }}>
-            {stats.ordersToday}
+          <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--salo-gold)', margin: 'var(--space-2) 0' }}>
+            {stats.activeOrders}
           </p>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-            Across {stats.totalRestaurants} active restaurants
+            Across {stats.approvedRestaurants} active restaurants
           </span>
         </div>
 
@@ -125,14 +129,14 @@ export default function AdminDashboard() {
           padding: 'var(--space-5)',
           boxShadow: 'var(--shadow-sm)',
         }}>
-          <span style={{ fontSize: 11, color: 'var(--salo-brown, #5D4037)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.06em' }}>
+          <span style={{ fontSize: 11, color: 'var(--salo-brown)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.06em' }}>
             Couriers on the Road
           </span>
-          <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--salo-brown, #5D4037)', margin: 'var(--space-2) 0' }}>
-            {stats.activeRidersOnRoad} / {stats.totalRiders}
+          <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--salo-brown)', margin: 'var(--space-2) 0' }}>
+            {stats.activeRiders} / {stats.totalRiders}
           </p>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--salo-green)', fontWeight: 600 }}>
-            94% fulfillment capacity
+            Active riders / registered riders
           </span>
         </div>
       </div>
@@ -300,7 +304,7 @@ export default function AdminDashboard() {
                     )}
                   </td>
                   <td style={{ padding: '14px', fontWeight: 700, color: 'var(--accent)' }}>
-                    ₱{o.totalAmount.toLocaleString('en-PH')}
+                    {formatPeso(getOrderBreakdown(o.id).orderTotal)}
                   </td>
                   <td style={{ padding: '14px' }}>
                     <Badge variant={o.status === 'Completed' ? 'success' : o.status === 'Cancelled' ? 'error' : 'primary'} size="sm" dot>
