@@ -1,0 +1,31 @@
+// MOCK DATA ONLY — replace with real data later.
+export const offers = [
+  {
+    id: 'SAMPLE-OFFER-01',
+    restaurant: 'Sample Kitchen',
+    pickup: 'Sample pickup point',
+    deliveryArea: 'Sample delivery district',
+    distance: 'Sample distance',
+    eta: 'Estimate unavailable',
+    compensation: '₱—',
+    paymentType: 'Online paid',
+    cod: null,
+    instructions: 'Sample handling instructions appear here.',
+    countdown: 'Offer countdown preview',
+    status: 'Available preview',
+  },
+  {
+    id: 'SAMPLE-OFFER-02',
+    restaurant: 'Sample Café',
+    pickup: 'Sample pickup point',
+    deliveryArea: 'Sample delivery district',
+    distance: 'Sample distance',
+    eta: 'Estimate unavailable',
+    compensation: '₱—',
+    paymentType: 'Cash on Delivery',
+    cod: '₱— · read-only amount preview',
+    instructions: 'Sample customer instructions appear here.',
+    countdown: 'Offer countdown preview',
+    status: 'Expired preview',
+  },
+];
