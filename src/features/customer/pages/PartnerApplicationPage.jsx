@@ -4,8 +4,6 @@ import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useAuth } from '../../../hooks/useAuth';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import Modal from '../../../components/common/Modal';
-import { Input, FormGroup, Label, Select } from '../../../components/forms';
 import { adminService } from '../../../services/adminService';
 import './PartnerApplicationPage.css';
 
@@ -24,18 +22,19 @@ export default function PartnerApplicationPage() {
     }
   });
 
-  const [restaurantModalOpen, setRestaurantModalOpen] = useState(false);
-
-  const [restaurantForm, setRestaurantForm] = useState({
-    restaurantName: '',
-    cuisine: 'Filipino · Grill & BBQ',
-    address: '',
-    phone: '',
-    seatingCapacity: '30',
-    dtiNumber: '',
+  const [riderApp] = useState(() => {
+    try {
+      const stored = localStorage.getItem('salo_rider_applications');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return Array.isArray(parsed) ? parsed[0] : parsed;
+      }
+    } catch {
+      return null;
+    }
+    return null;
   });
 
-  const [submitting, setSubmitting] = useState(false);
   const [notification, setNotification] = useState(null);
 
   // Synchronize live status with adminService
@@ -64,52 +63,6 @@ export default function PartnerApplicationPage() {
       return next;
     });
   }, [user]);
-
-  // Submit Restaurant Partner Application
-  const handleRestaurantSubmit = (e) => {
-    e.preventDefault();
-    if (!restaurantForm.restaurantName.trim() || !restaurantForm.address.trim()) {
-      alert('Please fill in your restaurant name and address.');
-      return;
-    }
-
-    setSubmitting(true);
-
-    const newRest = {
-      id: `rest-${Date.now().toString().slice(-4)}`,
-      name: restaurantForm.restaurantName,
-      cuisine: restaurantForm.cuisine,
-      ownerName: user?.name || user?.username || 'Partner Applicant',
-      ownerEmail: user?.email || 'applicant@salo.ph',
-      address: restaurantForm.address,
-      phone: restaurantForm.phone || '(02) 8-000-0000',
-      status: 'Pending Approval',
-      commissionRate: 10,
-      rating: 0,
-      joinedDate: new Date().toISOString().split('T')[0],
-      dtiNumber: restaurantForm.dtiNumber,
-    };
-
-    // Push to adminService so Admin sees it in AdminRestaurantsPage!
-    const currentRests = adminService.getRestaurants();
-    adminService.saveRestaurants([newRest, ...currentRests]);
-
-    const updatedApps = {
-      ...applications,
-      restaurant: {
-        id: newRest.id,
-        name: newRest.name,
-        status: 'Pending Review',
-        submittedAt: newRest.joinedDate,
-      },
-    };
-
-    setApplications(updatedApps);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedApps));
-    setSubmitting(false);
-    setRestaurantModalOpen(false);
-    setNotification('Restaurant Partner application submitted! Platform administrators will review your credentials.');
-  };
 
   // Submit Rider Partner Application
   const getStatusBadge = (status) => {
@@ -190,24 +143,41 @@ export default function PartnerApplicationPage() {
 
               <div className="partner-card-action">
                 {applications.restaurant?.status === 'Approved' ? (
-                  <a href="/owner" style={{ textDecoration: 'none', width: '100%' }}>
-                    <Button variant="primary" size="lg" fullWidth>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                    <Button as={Link} to="/owner" variant="primary" size="lg" fullWidth>
                       Open Merchant Portal →
                     </Button>
-                  </a>
-                ) : applications.restaurant?.status === 'Pending Review' ? (
-                  <div className="partner-status-box pending">
-                    <p style={{ fontWeight: 700, margin: '0 0 4px', color: 'var(--salo-warning)' }}>Application Under Review</p>
-                    <p style={{ fontSize: 12, margin: 0, color: 'var(--text-secondary)' }}>
-                      Submitted on {applications.restaurant.submittedAt}. Our partner onboarding team is verifying your kitchen address and documents.
-                    </p>
+                    <Button as={Link} to="/business-application/status" variant="outline" size="sm" fullWidth>
+                      View Onboarding Status
+                    </Button>
+                  </div>
+                ) : applications.restaurant?.status ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+                    <div className="partner-status-box pending">
+                      <p style={{ fontWeight: 700, margin: '0 0 4px', color: 'var(--salo-warning)' }}>
+                        Application: {applications.restaurant.status}
+                      </p>
+                      <p style={{ fontSize: 12, margin: 0, color: 'var(--text-secondary)' }}>
+                        {applications.restaurant.submittedAt ? `Submitted on ${applications.restaurant.submittedAt}. ` : ''}
+                        Review in progress by SALO Onboarding Operations.
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                      <Button as={Link} to="/business-application/status" variant="primary" size="md" fullWidth>
+                        Check Status
+                      </Button>
+                      <Button as={Link} to="/become-a-partner" variant="outline" size="md" fullWidth>
+                        Edit Form
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <Button
+                    as={Link}
+                    to="/become-a-partner"
                     variant="primary"
                     size="lg"
                     fullWidth
-                    onClick={() => setRestaurantModalOpen(true)}
                   >
                     Apply as a Restaurant Partner
                   </Button>
@@ -225,7 +195,7 @@ export default function PartnerApplicationPage() {
                 className="partner-card-img"
               />
               <div className="partner-card-status-pill">
-                <Badge variant="info" size="md">{'Application preview'}</Badge>
+                {riderApp ? getStatusBadge(riderApp.applicationStatus || 'Pending Review') : <Badge variant="neutral" size="md">Not Applied</Badge>}
               </div>
             </div>
 
@@ -233,118 +203,58 @@ export default function PartnerApplicationPage() {
               <span className="partner-type-tag">Fleet & Courier</span>
               <h2 className="partner-card-title">Rider Partner</h2>
               <p className="partner-card-desc">
-                Review the rider application preview, required information, and account status screens.
+                Deliver food with SALO and earn on your schedule. Choose from motorcycle, bicycle, e-bike, e-scooter, or walking delivery with transparent payouts and road safety support.
               </p>
 
               <div className="partner-perks-list">
                 <div className="partner-perk-item">
                   <span className="perk-bullet">✓</span>
-                  <span>Complete an application preview with personal and vehicle details</span>
+                  <span>5 transport modes: Motorcycle, Bicycle, E-bike, E-scooter, & Walking</span>
                 </div>
                 <div className="partner-perk-item">
                   <span className="perk-bullet">✓</span>
-                  <span>Review the application status and account activation designs</span>
+                  <span>Weekly automated payouts directly to GCash, Maya, or bank account</span>
                 </div>
                 <div className="partner-perk-item">
                   <span className="perk-bullet">✓</span>
-                  <span>Submitted sample information is not stored or transmitted</span>
+                  <span>Free thermal delivery gear and rider accident coverage</span>
                 </div>
               </div>
 
               <div className="partner-card-action">
-                <div className="rider-partner-actions">
-                  <Button as={Link} to="/rider/application" variant="primary" size="lg" fullWidth>{'Open rider application preview'}</Button>
-                  <Button as={Link} to="/rider/application/status" variant="outline" size="lg" fullWidth>{'View application status preview'}</Button>
-                </div>
+                {riderApp ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+                    <div className="partner-status-box pending">
+                      <p style={{ fontWeight: 700, margin: '0 0 4px', color: 'var(--salo-warning)' }}>
+                        Application: {riderApp.applicationStatus || 'Pending Review'}
+                      </p>
+                      <p style={{ fontSize: 12, margin: 0, color: 'var(--text-secondary)' }}>
+                        Ref: {riderApp.referenceNumber || riderApp.id} · Mode: {riderApp.deliveryMethod || 'motorcycle'}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                      <Button as={Link} to="/rider-application/status" variant="primary" size="md" fullWidth>
+                        Check Status
+                      </Button>
+                      <Button as={Link} to="/become-a-rider" variant="outline" size="md" fullWidth>
+                        Edit Application
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rider-partner-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                    <Button as={Link} to="/become-a-rider" variant="primary" size="lg" fullWidth>
+                      Apply as a Delivery Rider
+                    </Button>
+                    <Button as={Link} to="/rider-application/status" variant="outline" size="md" fullWidth>
+                      View Application Status
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
-
-        {/* ── Restaurant Application Modal ───────────────── */}
-        <Modal
-          open={restaurantModalOpen}
-          onClose={() => setRestaurantModalOpen(false)}
-          title="Restaurant Partner Application"
-          size="md"
-        >
-          <form onSubmit={handleRestaurantSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', margin: 0 }}>
-              Complete this application for your dining establishment. Our operations team reviews all submissions within 24–48 business hours.
-            </p>
-
-            <Input
-              id="app-rest-name"
-              label="Restaurant or Kitchen Name"
-              placeholder="e.g. Barrio Fiesta Bistro"
-              value={restaurantForm.restaurantName}
-              onChange={(e) => setRestaurantForm({ ...restaurantForm, restaurantName: e.target.value })}
-              required
-            />
-
-            <FormGroup>
-              <Label htmlFor="app-rest-cuisine">Cuisine Category</Label>
-              <Select
-                id="app-rest-cuisine"
-                value={restaurantForm.cuisine}
-                onChange={(e) => setRestaurantForm({ ...restaurantForm, cuisine: e.target.value })}
-              >
-                <option value="Filipino · Grill & BBQ">Filipino · Grill & BBQ</option>
-                <option value="Filipino · Breakfast & Bowls">Filipino · Breakfast & Bowls (Silog)</option>
-                <option value="Street Food · Charcoal BBQ">Street Food · Charcoal BBQ</option>
-                <option value="Seafood & Regional Delicacies">Seafood & Regional Delicacies</option>
-                <option value="Pizza & Pasta · Italian">Pizza & Pasta · Italian</option>
-                <option value="Burgers & Chicken Wings">Burgers & Chicken Wings</option>
-                <option value="Café & Pastries">Café & Pastries</option>
-              </Select>
-            </FormGroup>
-
-            <Input
-              id="app-rest-address"
-              label="Kitchen / Dining Address"
-              placeholder="Street, Barangay, City (e.g. 15 Scout Rallos, Quezon City)"
-              value={restaurantForm.address}
-              onChange={(e) => setRestaurantForm({ ...restaurantForm, address: e.target.value })}
-              required
-            />
-
-            <div className="grid-cols-2" style={{ gap: 'var(--space-3)' }}>
-              <Input
-                id="app-rest-phone"
-                label="Business Phone"
-                placeholder="(02) 8-123-4567"
-                value={restaurantForm.phone}
-                onChange={(e) => setRestaurantForm({ ...restaurantForm, phone: e.target.value })}
-                required
-              />
-              <Input
-                id="app-rest-seats"
-                type="number"
-                label="Dining Table Capacity"
-                placeholder="Number of seats"
-                value={restaurantForm.seatingCapacity}
-                onChange={(e) => setRestaurantForm({ ...restaurantForm, seatingCapacity: e.target.value })}
-              />
-            </div>
-
-            <Input
-              id="app-rest-dti"
-              label="DTI / Mayor's Permit Reference #"
-              placeholder="e.g. DTI-NCR-2026-94812"
-              value={restaurantForm.dtiNumber}
-              onChange={(e) => setRestaurantForm({ ...restaurantForm, dtiNumber: e.target.value })}
-            />
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-              <Button variant="ghost" type="button" onClick={() => setRestaurantModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button variant="primary" type="submit" loading={submitting}>
-                Submit Application
-              </Button>
-            </div>
-          </form>
-        </Modal>
 
       </div>
     </CustomerLayout>
