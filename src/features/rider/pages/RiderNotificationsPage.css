@@ -1,0 +1,86 @@
+.rider-notification-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.rider-notification-filters button {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-pill);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.rider-notification-filters button.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rider-notification-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.rider-notification-card.is-unread {
+  border-left: 4px solid var(--accent);
+}
+
+.rider-notification-card .card-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.rider-notification-state,
+.rider-notification-type {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.rider-notification-copy {
+  min-width: 0;
+}
+
+.rider-notification-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.rider-notification-copy p {
+  margin: var(--space-2) 0;
+  color: var(--text-secondary);
+}
+
+.rider-notification-copy small {
+  color: var(--text-muted);
+}
+
+.rider-notifications-empty {
+  padding: var(--space-6);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+@media (max-width: 540px) {
+  .rider-notification-title-row {
+    flex-direction: column;
+  }
+}
