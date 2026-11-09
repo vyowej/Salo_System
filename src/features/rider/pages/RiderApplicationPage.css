@@ -14,6 +14,13 @@
 .rider-account-state.tone-info { border-left-color: var(--salo-info); }
 .rider-account-state.tone-success { border-left-color: var(--salo-success); }
 .rider-account-state.tone-danger { border-left-color: var(--salo-error); }
+.rider-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.rider-status-actions .btn { min-height: 44px; }
 @media (max-width: 600px) {
   .rider-application-stepper { grid-template-columns: 1fr; }
   .rider-application-review dl div { grid-template-columns: 1fr; gap: var(--space-1); }

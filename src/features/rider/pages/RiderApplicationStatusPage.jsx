@@ -5,7 +5,8 @@ import PageHeader from '../components/PageHeader';
 import StateView from '../components/StateView';
 import StatusBadge from '../components/StatusBadge';
 import Timeline from '../components/Timeline';
-import { riderMockData } from '../mocks';
+import ScenarioLink from '../components/ScenarioLink';
+import { getRiderMock } from '../mocks';
 import useScenario from '../hooks/useScenario';
 import { applicationStatuses, accountStates } from '../constants/statusConfig';
 import './RiderApplicationPage.css';
@@ -13,21 +14,21 @@ import './RiderApplicationPage.css';
 export default function RiderApplicationStatusPage() {
   const scenario = useScenario();
   const { pathname } = useLocation();
+  const profile = getRiderMock('riderProfile', scenario);
+  const application = getRiderMock('application', scenario);
   const isAccountState = pathname === '/rider/account' || pathname === '/rider/account-status' || pathname === '/rider/activate';
-  const currentStatus = riderMockData.profile.applicationStatus || 'under_review';
-  const currentAccount = riderMockData.profile.accountStatus || 'active';
+  const currentStatus = profile.applicationStatus || 'under_review';
+  const currentAccount = accountStates.find(
+    (status) => status.key === profile.accountStatus || status.label.toLowerCase() === profile.accountStatus.toLowerCase(),
+  )?.key || 'pending_approval';
 
-  const timelineItems = riderMockData.application.statuses.map((item) => ({
-    label: item.status,
-    time: item.date,
-    note: item.note,
-  }));
+  const timelineItems = application.statuses;
 
   return (
     <div className="rider-page-shell">
       <PageHeader
         title={isAccountState ? 'Account status' : 'Application status'}
-        subtitle={riderMockData.previewCopy.notConnected}
+        subtitle="Review your application progress and next account steps."
         eyebrow={isAccountState ? 'Account overview' : 'Onboarding'}
       />
 
@@ -53,7 +54,7 @@ export default function RiderApplicationStatusPage() {
                 <div className="rider-status-summary">
                   <div>
                     <h3>Current application status</h3>
-                    <p>{riderMockData.profile.email}</p>
+                    <p>{profile.email}</p>
                   </div>
                   <StatusBadge status={currentStatus} config={applicationStatuses} />
                 </div>
@@ -72,7 +73,11 @@ export default function RiderApplicationStatusPage() {
                     </div>
                   ))}
                 </div>
-                <Button variant="outline" as="a" href="/rider/application">Review application</Button>
+                <div className="rider-status-actions">
+                  <Button variant="outline" as={ScenarioLink} to="/rider/application-form">Start or continue application</Button>
+                  <Button variant="outline" as={ScenarioLink} to="/rider/activate">Activate account</Button>
+                  <Button variant="outline" as={ScenarioLink} to="/rider/account-status">View account status</Button>
+                </div>
               </CardBody>
             </Card>
           </div>

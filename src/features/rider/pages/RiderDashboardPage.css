@@ -1,93 +1,224 @@
-.rider-dashboard-grid,
+.rider-dashboard-page {
+  min-width: 0;
+  width: 100%;
+  gap: var(--space-5);
+}
+
+.rider-dashboard-page .card-body {
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+.rider-dashboard-profile-row,
+.rider-stats-grid,
 .rider-dashboard-columns,
-.rider-stats-grid {
+.rider-dashboard-lower-columns {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
+  min-width: 0;
 }
 
-.rider-dashboard-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.rider-dashboard-columns {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.rider-stats-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.rider-dashboard-profile-body,
+.rider-dashboard-profile-main,
+.rider-dashboard-availability,
 .rider-dashboard-section-head,
-.rider-profile-summary,
-.rider-profile-meta,
-.rider-toggle-row,
-.rider-sub-card-meta,
-.rider-inline-actions,
-.rider-mini-list-row {
+.rider-dashboard-delivery-status,
+.rider-notification-title {
   display: flex;
   align-items: center;
-}
-
-.rider-dashboard-profile-body,
-.rider-mini-list-row {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.rider-profile-summary {
+  justify-content: space-between;
   gap: var(--space-3);
+  min-width: 0;
+}
+
+.rider-dashboard-profile-main {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.rider-dashboard-profile-main > .badge {
+  margin-left: auto;
+}
+
+.rider-dashboard-profile-copy {
+  min-width: 0;
+}
+
+.rider-dashboard-profile-copy h2,
+.rider-dashboard-profile-copy p,
+.rider-dashboard-section-head h2,
+.rider-dashboard-section-head p {
+  margin: 0;
+}
+
+.rider-dashboard-profile-copy h2 {
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+}
+
+.rider-dashboard-profile-copy p,
+.rider-dashboard-section-head p,
+.rider-dashboard-muted {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .rider-avatar-round {
   display: inline-flex;
   width: 52px;
   height: 52px;
+  flex: 0 0 52px;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full);
-  background: var(--salo-orange-light);
+  background: var(--surface-secondary);
   color: var(--text-primary);
   font-weight: var(--font-weight-bold);
 }
 
-.rider-profile-meta,
-.rider-toggle-row,
-.rider-dashboard-section-head,
-.rider-sub-card-meta,
-.rider-inline-actions {
+.rider-dashboard-availability {
   justify-content: space-between;
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-secondary);
+}
+
+.rider-mode-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
 }
 
 .rider-mode-toggle {
-  appearance: none;
+  display: inline-flex;
+  min-width: 104px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-pill);
   background: var(--surface-secondary);
   color: var(--text-primary);
-  min-width: 62px;
-  min-height: 32px;
+  font: inherit;
+  cursor: pointer;
 }
 
 .rider-mode-toggle.is-on {
-  background: var(--salo-green-light);
   border-color: var(--salo-success);
-  color: var(--salo-success);
+  background: var(--status-success-bg);
+  color: var(--status-success-text);
+}
+
+.rider-mode-toggle-track {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  flex: 0 0 28px;
+  border-radius: var(--radius-pill);
+  background: var(--border-primary);
+}
+
+.rider-mode-toggle-track::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  background: var(--surface-primary);
+  content: '';
+  transition: transform var(--transition-fast);
+}
+
+.rider-mode-toggle.is-on .rider-mode-toggle-track {
+  background: var(--status-success-text);
+}
+
+.rider-mode-toggle.is-on .rider-mode-toggle-track::after {
+  transform: translateX(12px);
+}
+
+.rider-stats-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rider-stats-grid > * {
+  min-width: 0;
+}
+
+.rider-dashboard-section-head {
+  align-items: flex-start;
+  margin-bottom: var(--space-4);
+}
+
+.rider-dashboard-section-head h2 {
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+}
+
+.rider-dashboard-section-head > .btn {
+  flex: 0 0 auto;
+}
+
+.rider-dashboard-delivery-status {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.rider-active-preview {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.rider-active-preview p {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.rider-active-preview p span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
 }
 
 .rider-empty-box {
   display: grid;
   justify-items: center;
-  gap: var(--space-2);
-  padding: var(--space-6) 0;
+  gap: var(--space-3);
+  padding: var(--space-4);
   border: 1px dashed var(--border-primary);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--surface-secondary);
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  text-align: center;
 }
 
-.rider-empty-box span {
-  font-size: 28px;
+.rider-empty-box > span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xl);
+}
+
+.rider-location-status {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+
+.rider-location-status p,
+.rider-location-status small {
+  margin: 0;
+  color: var(--text-secondary);
 }
 
 .rider-list-stack {
@@ -96,42 +227,98 @@
 }
 
 .rider-mini-list-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
   gap: var(--space-2);
+  min-width: 0;
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border-secondary);
 }
 
 .rider-mini-list-row:last-child {
-  border-bottom: 0;
   padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .rider-mini-list-row strong,
 .rider-mini-list-row p,
-.rider-mini-list-row small,
-.rider-dashboard-section-head h3,
-.rider-dashboard-profile-body h2 {
+.rider-mini-list-row small {
   margin: 0;
 }
 
 .rider-mini-list-row p,
-.rider-mini-list-row small,
-.rider-dashboard-profile-body p,
-.rider-dashboard-profile-body small {
+.rider-mini-list-row small {
   color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.rider-notification-title {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  color: var(--text-primary);
+}
+
+.rider-notification-title > span {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
 }
 
 .rider-inline-actions {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
 }
 
-@media (max-width: 860px) {
-  .rider-dashboard-grid,
+.rider-dashboard-eligibility .rider-eligibility-checklist {
+  margin-top: var(--space-3);
+}
+
+.rider-dashboard-go-online {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  margin-top: var(--space-4);
+}
+
+.rider-dashboard-go-online .btn,
+.rider-dashboard-page .btn {
+  min-height: 44px;
+}
+
+.rider-dashboard-go-online p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.rider-dashboard-page :focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+@media (min-width: 600px) {
+  .rider-dashboard-page .card-body {
+    padding: var(--space-5);
+  }
+
+  .rider-inline-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
   .rider-dashboard-columns,
+  .rider-dashboard-lower-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+}
+
+@media (min-width: 1024px) {
   .rider-stats-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

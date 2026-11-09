@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import Button from '../../../components/common/Button';
-import RiderLayout from '../../../layouts/RiderLayout';
 import { RiderCard, RiderPageHeading, RiderUploadField } from '../components/RiderUI';
 import { RIDER_APPLICATION_FIELDS, VEHICLE_TYPES, RIDER_PAGE_META } from '../constants/riderConstants';
 import { riderMockData, riderPreviewState } from '../mocks';
+import StateView from '../components/StateView';
+import useScenario from '../hooks/useScenario';
+import ScenarioLink from '../components/ScenarioLink';
 import './RiderApplicationPage.css';
 
 const EMPTY_FORM = Object.fromEntries(RIDER_APPLICATION_FIELDS.map((field) => [field.key, '']));
 
 export default function RiderApplicationPage() {
+  const scenario = useScenario();
   const [step, setStep] = useState(0);
   const [vehicleType, setVehicleType] = useState(VEHICLE_TYPES[0]);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -21,17 +24,23 @@ export default function RiderApplicationPage() {
   }
 
   return (
-    <RiderLayout>
+    <>
       <RiderPageHeading
         eyebrow={RIDER_PAGE_META['/rider/application'].eyebrow}
         title={RIDER_PAGE_META['/rider/application'].title}
         description={riderMockData.applicationPreview.intro}
       />
+      <StateView
+        state={scenario === 'active' || scenario === 'default' ? 'ready' : scenario}
+        emptyTitle="Application preview unavailable"
+        emptyMessage="No rider application details are available in this preview."
+        onRetry={() => setStep(0)}
+      >
       {success ? (
         <RiderCard title={riderMockData.applicationPreview.submittedTitle} description={riderMockData.applicationPreview.submittedMessage}>
           <div className="rider-application-success">
             <span aria-hidden="true">✓</span>
-            <Button as="a" href="/rider/application/status" variant="primary">{'View application status preview'}</Button>
+            <Button as={ScenarioLink} to="/rider/application" variant="primary">{'View application status preview'}</Button>
           </div>
         </RiderCard>
       ) : (
@@ -67,6 +76,7 @@ export default function RiderApplicationPage() {
           <p className="rider-application-footnote">{riderPreviewState.sample} · this form does not submit or persist information.</p>
         </RiderCard>
       )}
-    </RiderLayout>
+      </StateView>
+    </>
   );
 }
