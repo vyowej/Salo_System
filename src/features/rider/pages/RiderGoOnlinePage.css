@@ -1,0 +1,33 @@
+.rider-go-online-body {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.rider-go-online-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.rider-go-online-header h2,
+.rider-go-online-header p {
+  margin: 0;
+}
+
+.rider-go-online-header p {
+  color: var(--text-secondary);
+}
+
+.rider-go-online-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.rider-go-online-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
