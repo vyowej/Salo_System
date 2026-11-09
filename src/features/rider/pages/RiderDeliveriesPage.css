@@ -1,0 +1,145 @@
+.rider-page-shell {
+  width: min(100%, 1200px);
+  margin: 0 auto;
+  padding: 1rem 0 2rem;
+}
+
+.rider-offer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.rider-offer-card {
+  min-height: 100%;
+}
+
+.rider-offer-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.rider-offer-topline h3 {
+  margin: 0.25rem 0 0;
+  font-size: var(--font-size-lg);
+}
+
+.rider-caption {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.rider-offer-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.rider-offer-meta-grid div,
+.rider-offer-summary-row,
+.rider-offer-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.rider-offer-meta-grid span,
+.rider-offer-summary-row span {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.rider-offer-meta-grid strong,
+.rider-offer-summary-row strong {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+.rider-offer-summary-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border-primary);
+}
+
+.rider-offer-cod {
+  padding-top: 0;
+  border-top: none;
+}
+
+.rider-offer-details {
+  padding: 0.75rem 0 0;
+  border-top: 1px solid var(--border-primary);
+  color: var(--text-primary);
+}
+
+.rider-offer-details summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.rider-offer-details p {
+  margin: 0.75rem 0 0;
+  color: var(--text-secondary);
+}
+
+.rider-offer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  margin-top: 1rem;
+  border-top: 1px solid var(--border-primary);
+}
+
+.rider-offer-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.rider-empty-state-block {
+  display: grid;
+  place-items: center;
+  gap: 0.75rem;
+  min-height: 210px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.rider-empty-state-block span {
+  font-size: 2rem;
+}
+
+@media (max-width: 640px) {
+  .rider-offer-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rider-offer-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rider-offer-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .rider-offer-actions button {
+    flex: 1;
+  }
+}

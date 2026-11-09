@@ -1,0 +1,191 @@
+.rider-earnings-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.rider-earnings-columns {
+  display: grid;
+  grid-template-columns: 1.3fr 0.9fr;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.rider-earnings-section-title,
+.rider-earnings-subtitle {
+  margin: 0 0 var(--space-4);
+  color: var(--text-primary);
+}
+
+.rider-earnings-subtitle {
+  margin-top: var(--space-5);
+  font-size: var(--font-size-md);
+}
+
+.rider-earnings-chart {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--space-2);
+  align-items: end;
+  min-height: 220px;
+  padding: var(--space-3) 0;
+}
+
+.rider-earnings-chart-column {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  justify-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  height: 190px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.rider-earnings-chart-column strong {
+  color: var(--text-primary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.rider-earnings-bar-track {
+  display: flex;
+  align-items: flex-end;
+  width: min(100%, 30px);
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-secondary);
+}
+
+.rider-earnings-bar {
+  display: block;
+  width: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+.rider-earnings-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-primary);
+}
+
+.rider-earnings-breakdown div,
+.rider-payout-row,
+.rider-payout-row > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.rider-earnings-breakdown span,
+.rider-payout-row span,
+.rider-payout-method small {
+  color: var(--text-secondary);
+}
+
+.rider-payout-method {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-secondary);
+}
+
+.rider-payout-history {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.rider-payout-row {
+  align-items: center;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-secondary);
+}
+
+.rider-payout-row > div {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.rider-payout-row > div:first-child {
+  align-items: flex-start;
+}
+
+.rider-earnings-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.rider-earnings-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.rider-earnings-table th,
+.rider-earnings-table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-secondary);
+}
+
+.rider-earnings-table th {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.rider-earnings-records {
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 760px) {
+  .rider-earnings-summary-grid,
+  .rider-earnings-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .rider-earnings-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .rider-earnings-table,
+  .rider-earnings-table tbody,
+  .rider-earnings-table tr,
+  .rider-earnings-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .rider-earnings-table tr {
+    margin-bottom: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+  }
+
+  .rider-earnings-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 0;
+    text-align: right;
+  }
+
+  .rider-earnings-table td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-weight: var(--font-weight-semibold);
+    text-align: left;
+  }
+}
