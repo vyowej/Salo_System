@@ -38,6 +38,33 @@ export const riderPreviewState = {
   success: 'Success',
 };
 
+export function getRiderMock(topic, scenario = 'default') {
+  const base = topic ? riderMockData[topic] : riderMockData;
+  if (base === undefined) return null;
+
+  if (scenario === 'default') return base;
+
+  if (scenario === 'loading') {
+    if (Array.isArray(base)) return [];
+    if (typeof base === 'object') return { ...base, isLoading: true, status: 'loading' };
+    return { value: null, status: 'loading' };
+  }
+
+  if (scenario === 'empty') {
+    if (Array.isArray(base)) return [];
+    if (typeof base === 'object') return { ...base, items: [], list: [], results: [], status: 'empty' };
+    return null;
+  }
+
+  if (scenario === 'error') {
+    if (Array.isArray(base)) return [{ id: 'error', title: 'Unable to load rider data', error: true }];
+    if (typeof base === 'object') return { ...base, error: true, status: 'error', message: 'Unable to load rider data preview.' };
+    return { error: true, message: 'Unable to load rider data preview.' };
+  }
+
+  return base;
+}
+
 export function getRiderMockData() {
   return riderMockData;
 }
