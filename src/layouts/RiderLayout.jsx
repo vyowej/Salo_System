@@ -33,8 +33,16 @@ export default function RiderLayout({ children }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [online, setOnline] = useState(false);
-  const items = RIDER_NAV_ITEMS.map((item) => ({ ...item, icon: icon(iconPaths[item.id]) }));
-  const current = items.find((item) => item.href === location.pathname)?.id || 'dashboard';
+  const items = RIDER_NAV_ITEMS.map((item) => ({
+    ...item,
+    id: item.key || item.id,
+    href: item.href || item.path,
+    icon: icon(iconPaths[item.key || item.id] || iconPaths.dashboard),
+  }));
+
+  const activePath = location.pathname;
+  const current = items.find((item) => item.href === activePath || (item.href !== '/rider' && activePath.startsWith(`${item.href}/`)))?.key || 'dashboard';
+  const unreadNotifications = riderMockData.notifications.filter((item) => item.unread).length;
 
   return (
     <div className="rider-shell">
@@ -60,7 +68,7 @@ export default function RiderLayout({ children }) {
           userName={riderMockData.profile.name}
           userRole={riderMockData.profile.accountStatus}
           userInitials={riderMockData.profile.initials}
-          showNotifications={false}
+              showNotifications={unreadNotifications > 0}
           onMenuToggle={() => setMobileOpen((value) => !value)}
           actions={(
             <div className="rider-top-actions">
@@ -74,18 +82,20 @@ export default function RiderLayout({ children }) {
               </Button>
               <Button as={Link} to="/rider/notifications" variant="ghost" size="sm" aria-label="Rider notifications">
                 {'Notifications'}
-                <Badge variant="primary" size="sm">{riderMockData.notifications.filter((item) => item.unread).length}</Badge>
+                    {unreadNotifications > 0 && <Badge variant="primary" size="sm">{unreadNotifications}</Badge>}
               </Button>
             </div>
           )}
         />
         <main className="rider-content">
-          <div className="rider-active-shortcut">
-            <span>{'Active delivery shortcut'}</span>
-            <Button as={Link} to="/rider/active" variant={location.pathname === '/rider/active' ? 'primary' : 'outline'} size="sm">
-              {riderMockData.activeDelivery ? riderMockData.activeDelivery.id : 'Open delivery workspace'}
-            </Button>
-          </div>
+              {(riderMockData.activeDelivery || riderMockData.deliveryPreview?.id) && (
+                <div className="rider-active-shortcut">
+                  <span>{'Active delivery shortcut'}</span>
+                  <Button as={Link} to="/rider/deliveries/active" variant={location.pathname === '/rider/deliveries/active' || location.pathname === '/rider/active' ? 'primary' : 'outline'} size="sm">
+                    {riderMockData.activeDelivery ? riderMockData.activeDelivery.id : riderMockData.deliveryPreview?.id || 'Open delivery workspace'}
+                  </Button>
+                </div>
+              )}
           {children}
         </main>
       </div>
