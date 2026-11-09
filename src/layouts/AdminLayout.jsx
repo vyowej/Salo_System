@@ -5,114 +5,111 @@ import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
+import { getAdminNavItems } from '../features/admin/constants';
+import useAdminSession from '../features/admin/contexts/useAdminSession';
 import './AdminLayout.css';
 
-const mkIcon = (path) => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <path d={path} />
-  </svg>
-);
-
-const ICONS = {
+const ICON_PATHS = {
   dashboard: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z',
-  restaurants: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
+  accounts: 'M17 20h5v-2a3 3 0 00-5.3-1.9M7 20H2v-2a3 3 0 015.3-1.9m1.7 3.9v-2a5 5 0 0110 0v2m-5-9a3 3 0 110-6 3 3 0 010 6z',
+  administrators: 'M12 15l-3.5 2 1-4-3-2.5 4-.3L12 6l1.5 4.2 4 .3-3 2.5 1 4z',
+  restaurants: 'M3 21h18M5 21V7l7-4v18m7 0V11l-7-4M9 9v.01M9 12v.01M9 15v.01',
   riders: 'M13 10V3L4 14h7v7l9-11h-7z',
   orders: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
-  users: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z',
-  settings: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
+  reservations: 'M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 012 2v14H3V6a2 2 0 012-2z',
+  finance: 'M12 2v20m5-15H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
+  fees: 'M20 7H4m16 0l-3-3m3 3l-3 3M4 17h16m-16 0l3-3m-3 3l3 3',
+  discounts: 'M20.5 13.5L13 21l-10-10V3h8l9.5 10.5zM7 7h.01',
+  serviceAreas: 'M12 21s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12zm0-9a3 3 0 110-6 3 3 0 010 6z',
+  reports: 'M4 19V5m0 14h17M8 15l3-4 3 2 5-7',
+  support: 'M4 4h16v12H8l-4 4V4zm4 5h8m-8 3h5',
+  content: 'M4 5h16v14H4zM8 9h8m-8 4h8m-8 3h4',
+  activity: 'M3 12h4l3-8 4 16 3-8h4',
+  settings: 'M12 8a4 4 0 100 8 4 4 0 000-8zm0-6v3m0 14v3m10-10h-3M5 12H2m17.1-7.1L17 7m-10 10l-2.1 2.1m14.2 0L17 17M7 7L4.9 4.9',
 };
+
+function icon(path) {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d={path} /></svg>;
+}
 
 export default function AdminLayout({ children }) {
   const { logout } = useAuth();
+  const { currentAdmin, admins, isDemoMode, selectDemoAdmin, resetMfa } = useAdminSession();
   const location = useLocation();
   const navigate = useNavigate();
-
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const navItems = [
-    { id: 'dashboard', label: 'Platform Overview', icon: mkIcon(ICONS.dashboard), href: '/admin', section: 'HQ Analytics' },
-    { id: 'restaurants', label: 'Restaurants & Partners', icon: mkIcon(ICONS.restaurants), href: '/admin/restaurants', section: 'Operations' },
-    { id: 'riders', label: 'Courier Fleet', icon: mkIcon(ICONS.riders), href: '/admin/riders' },
-    { id: 'orders', label: 'Orders & Disputes', icon: mkIcon(ICONS.orders), href: '/admin/orders' },
-    { id: 'users', label: 'User Directory', icon: mkIcon(ICONS.users), href: '/admin/users', section: 'Administration' },
-    { id: 'settings', label: 'System Configuration', icon: mkIcon(ICONS.settings), href: '/admin/settings' },
-  ];
-
-  const activeItem = navItems.find((item) => {
-    if (item.href === '/admin' && location.pathname === '/admin') return true;
-    if (item.href !== '/admin' && location.pathname.startsWith(item.href)) return true;
-    return false;
-  })?.id || 'dashboard';
+  const navItems = getAdminNavItems(currentAdmin.role).map((item) => ({
+    ...item,
+    icon: icon(ICON_PATHS[item.id]),
+  }));
+  const activeItem = navItems.find((item) => (
+    item.href === '/admin'
+      ? location.pathname === item.href
+      : location.pathname === item.href || location.pathname.startsWith(`${item.href}/`)
+  ))?.id || 'dashboard';
+  const topBarTitle = location.pathname === '/admin/settings/security'
+    ? 'Security and Sessions'
+    : navItems.find((item) => item.id === activeItem)?.label || 'Admin';
+  const initials = currentAdmin.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase();
 
   return (
     <div className="admin-shell">
-      {/* ── Sidebar ────────────────────────────────────── */}
       <div className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <SideBar
           items={navItems}
           activeId={activeItem}
           collapsed={collapsed}
-          onToggleCollapse={() => setCollapsed(!collapsed)}
+          onToggleCollapse={() => setCollapsed((value) => !value)}
           mobileOpen={mobileOpen}
+          onItemClick={() => setMobileOpen(false)}
           onMobileClose={() => setMobileOpen(false)}
-          footer={
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <Button as={Link} to="/customer" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link" title="Switch to Customer View" leftIcon={
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" />
-                  </svg>
-                }>
-                  <span className="sidebar-footer-label">Switch to Customer View</span>
+          useRouterLinks
+          footer={(
+            <div className="admin-sidebar-footer">
+              {isDemoMode && (
+                <div className="admin-demo-switcher">
+                  <label htmlFor="admin-demo-role">Demo role switcher</label>
+                  <select id="admin-demo-role" value={currentAdmin.id} onChange={(event) => selectDemoAdmin(event.target.value)} aria-label="Switch demo administrator role">
+                    {admins.filter((admin) => admin.status === 'Active').map((admin) => (
+                      <option key={admin.id} value={admin.id}>{admin.role}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <Button as={Link} to="/customer" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link">
+                <span className="sidebar-footer-label">Switch to Customer View</span>
               </Button>
-              <Button as={Link} to="/owner" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link" title="Switch to Restaurant View" leftIcon={
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-                    <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 12v.01M9 15v.01M9 18v.01" />
-                  </svg>
-                }>
-                  <span className="sidebar-footer-label">Switch to Restaurant View</span>
+              <Button as={Link} to="/owner" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link">
+                <span className="sidebar-footer-label">Switch to Restaurant View</span>
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 fullWidth
                 className="sidebar-footer-item"
-                title="Sign Out"
-                leftIcon={
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-                    <path d="M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7" />
-                  </svg>
-                }
-                onClick={() => {
-                  logout();
-                  navigate('/');
-                }}
+                onClick={() => { resetMfa(); logout(); navigate('/'); }}
               >
                 <span className="sidebar-footer-label">Sign Out</span>
               </Button>
             </div>
-          }
+          )}
         />
       </div>
 
-      {/* ── Main Area ──────────────────────────────────── */}
       <div className={`admin-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
         <TopBar
-          userName="Super Administrator"
-          userRole="Administrator"
-          userInitials="SA"
+          title={topBarTitle}
+          userName={currentAdmin.name}
+          userRole={currentAdmin.role}
+          userInitials={initials}
           mobileMenuOpen={mobileOpen}
-          onMenuToggle={() => setMobileOpen(!mobileOpen)}
-          actions={
-            <Badge size="sm" className="badge-on-nav">
-              HQ Root Access
-            </Badge>
-          }
+          onMenuToggle={() => setMobileOpen((value) => !value)}
+          showNotifications={false}
+          actions={isDemoMode ? <Badge size="sm" variant="warning">Demo</Badge> : null}
         />
-
-        <main className="admin-content">
-          {children}
-        </main>
+        <main className="admin-content">{children}</main>
       </div>
     </div>
   );

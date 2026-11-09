@@ -402,7 +402,7 @@ export default function CustomerLayout({ children }) {
       id: 'become-rider',
       label: 'Become a Rider',
       icon: mkIcon('M5 16l2-8h10l2 8M7 16l1 4h8l1-4M9 8V6a3 3 0 016 0v2'),
-      onClick: () => navigate('/rider'),
+      onClick: () => navigate('/become-a-rider'),
     },
     {
       id: 'partner',
