@@ -1,0 +1,44 @@
+.rider-form-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.rider-form-steps span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-pill);
+  background: var(--surface-primary);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+}
+
+.rider-form-steps span.active {
+  background: var(--salo-orange-light);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.rider-form-steps span.complete {
+  border-color: var(--salo-success);
+  color: var(--salo-success);
+}
+
+@media (max-width: 420px) {
+  .rider-form-steps {
+    gap: var(--space-1);
+  }
+
+  .rider-form-steps span {
+    font-size: 10px;
+    line-height: var(--line-height-tight);
+  }
+}
