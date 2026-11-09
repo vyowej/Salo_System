@@ -6,4 +6,12 @@ export const deliverySteps = [
   { key: 'delivered', label: 'Delivered', description: 'Order handed over and completion recorded.' },
 ];
 
+export const deliveryActionLabels = {
+  accepted: 'Arrived at restaurant',
+  arrived: 'Confirm pickup',
+  picked_up: 'Start delivery',
+  on_the_way: 'Complete delivery',
+  delivered: 'Delivered',
+};
+
 export default deliverySteps;

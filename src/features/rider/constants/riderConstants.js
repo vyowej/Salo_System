@@ -1,6 +1,6 @@
-export { RIDER_NAV_ITEMS } from './riderNavItems';
-export { applicationStatuses, accountStates, availabilityStatuses, deliveryStatuses, codStatuses, ticketStatuses, shiftStatuses, statusConfig } from './statusConfig';
-export { deliverySteps } from './deliverySteps';
+export { RIDER_NAV_ITEMS, MOBILE_PRIMARY_NAV_KEYS } from './riderNavItems';
+export { applicationStatuses, accountStates, availabilityStatuses, deliveryStatuses, codStatuses, paymentStatuses, documentStatuses, ticketStatuses, shiftStatuses, statusConfig } from './statusConfig';
+export { deliverySteps, deliveryActionLabels } from './deliverySteps';
 export { vehicleTypes } from './vehicleTypes';
 export { applicationDocuments } from './applicationDocuments';
 export { eligibilityConditions } from './eligibilityConditions';
@@ -59,4 +59,10 @@ export const RIDER_APPLICATION_FIELDS = [
   { key: 'governmentId', label: 'Government ID type / reference', placeholder: 'Select or enter ID details', type: 'text' },
 ];
 
+export const RIDER_APPLICATION_STEPS = ['Personal info', 'Address', 'Vehicle & documents', 'Review & submit'];
 export const SETTINGS_SECTIONS = ['Notification preferences', 'Password & security', 'Location guidance', 'Privacy', 'Terms & rider agreement', 'Sign out'];
+export const OTP_DIGIT_COUNT = 6;
+
+export function createEmptyOtp() {
+  return Array(OTP_DIGIT_COUNT).fill('');
+}

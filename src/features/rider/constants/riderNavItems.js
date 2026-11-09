@@ -11,4 +11,6 @@ export const RIDER_NAV_ITEMS = [
   { key: 'settings', label: 'Settings', path: '/rider/settings', href: '/rider/settings', icon: 'settings' },
 ];
 
+export const MOBILE_PRIMARY_NAV_KEYS = ['dashboard', 'deliveries', 'map', 'earnings'];
+
 export default RIDER_NAV_ITEMS;

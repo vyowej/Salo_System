@@ -43,6 +43,17 @@ export const codStatuses = [
   { key: 'remittance_confirmed', label: 'Remittance confirmed', tone: 'success' },
 ];
 
+export const paymentStatuses = [
+  { key: 'paid', label: 'Paid', tone: 'success', icon: '✓' },
+  { key: 'payment_pending', label: 'Payment pending', tone: 'warning', icon: '!' },
+];
+
+export const documentStatuses = [
+  { key: 'approved', label: 'Approved', tone: 'success' },
+  { key: 'under_review', label: 'Under review', tone: 'warning' },
+  { key: 'pending', label: 'Pending', tone: 'neutral' },
+];
+
 export const ticketStatuses = [
   { key: 'submitted', label: 'Submitted', tone: 'info' },
   { key: 'under_review', label: 'Under review', tone: 'warning' },
@@ -59,12 +70,22 @@ export const shiftStatuses = [
   { key: 'cancelled', label: 'Cancelled', tone: 'danger' },
 ];
 
+export const statusBadgeVariants = {
+  neutral: 'default',
+  info: 'primary',
+  success: 'success',
+  warning: 'warning',
+  danger: 'error',
+  primary: 'primary',
+};
+
 export const statusConfig = {
   applicationStatuses,
   accountStates,
   availabilityStatuses,
   deliveryStatuses,
   codStatuses,
+  paymentStatuses,
   ticketStatuses,
   shiftStatuses,
 };
