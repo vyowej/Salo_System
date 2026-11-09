@@ -41,15 +41,24 @@ const OwnerInventoryPage = lazy(() => import('./features/restaurant/pages/OwnerI
 const TeamAndStaffPage = lazy(() => import('./features/restaurant/pages/TeamAndStaffPage'));
 
 // Rider Module (Phase 5)
-const RiderWorkspacePage = lazy(() => import('./features/rider/pages/RiderWorkspacePage'));
+import RiderLayout from './layouts/RiderLayout';
 const RiderDashboardPage = lazy(() => import('./features/rider/pages/RiderDashboardPage'));
-const RiderApplicationPage = lazy(() => import('./features/rider/pages/RiderApplicationPage'));
+const RiderDeliveriesPage = lazy(() => import('./features/rider/pages/RiderDeliveriesPage'));
+const RiderActiveDeliveryPage = lazy(() => import('./features/rider/pages/RiderActiveDeliveryPage'));
+const RiderMapPage = lazy(() => import('./features/rider/pages/RiderMapPage'));
+const RiderEarningsPage = lazy(() => import('./features/rider/pages/RiderEarningsPage'));
 const RiderApplicationFormPage = lazy(() => import('./features/rider/pages/RiderApplicationFormPage'));
 const RiderApplicationStatusPage = lazy(() => import('./features/rider/pages/RiderApplicationStatusPage'));
 const RiderActivationPage = lazy(() => import('./features/rider/pages/RiderActivationPage'));
 const RiderAccountStatusPage = lazy(() => import('./features/rider/pages/RiderAccountStatusPage'));
 const RiderGoOnlinePage = lazy(() => import('./features/rider/pages/RiderGoOnlinePage'));
 const RiderSchedulePage = lazy(() => import('./features/rider/pages/RiderSchedulePage'));
+const RiderHistoryPage = lazy(() => import('./features/rider/pages/RiderHistoryPage'));
+const RiderNotificationsPage = lazy(() => import('./features/rider/pages/RiderNotificationsPage'));
+const RiderSupportPage = lazy(() => import('./features/rider/pages/RiderSupportPage'));
+const RiderProfilePage = lazy(() => import('./features/rider/pages/RiderProfilePage'));
+const RiderSettingsPage = lazy(() => import('./features/rider/pages/RiderSettingsPage'));
+const RiderSafetyPage = lazy(() => import('./features/rider/pages/RiderSafetyPage'));
 
 // Admin Module (Phase 6)
 const AdminDashboard = lazy(() => import('./features/admin/pages/AdminDashboard'));
@@ -271,29 +280,31 @@ function AppShell() {
           </Route>
 
           {/* ── Rider Module (Phase 5) ── */}
-          <Route path="/rider" element={<RiderDashboardPage />} />
-          <Route path="/rider/jobs" element={<RiderWorkspacePage />} />
-          <Route path="/rider/deliveries" element={<RiderWorkspacePage />} />
-          <Route path="/rider/deliveries/active" element={<RiderWorkspacePage />} />
-          <Route path="/rider/active" element={<RiderWorkspacePage />} />
-          <Route path="/rider/map" element={<RiderWorkspacePage />} />
-          <Route path="/rider/schedule" element={<RiderSchedulePage />} />
-          <Route path="/rider/earnings" element={<RiderWorkspacePage />} />
-          <Route path="/rider/history" element={<RiderWorkspacePage />} />
-          <Route path="/rider/history/:id" element={<RiderWorkspacePage />} />
-          <Route path="/rider/notifications" element={<RiderWorkspacePage />} />
-          <Route path="/rider/support" element={<RiderWorkspacePage />} />
-          <Route path="/rider/support/:id" element={<RiderWorkspacePage />} />
-          <Route path="/rider/profile" element={<RiderWorkspacePage />} />
-          <Route path="/rider/settings" element={<RiderWorkspacePage />} />
-          <Route path="/rider/safety" element={<RiderWorkspacePage />} />
-          <Route path="/rider/application" element={<RiderApplicationPage />} />
-          <Route path="/rider/application-form" element={<RiderApplicationFormPage />} />
-          <Route path="/rider/application/status" element={<RiderApplicationStatusPage />} />
-          <Route path="/rider/go-online" element={<RiderGoOnlinePage />} />
-          <Route path="/rider/account" element={<RiderAccountStatusPage />} />
-          <Route path="/rider/activate" element={<RiderActivationPage />} />
-          <Route path="/rider/account-status" element={<RiderAccountStatusPage />} />
+          <Route path="/rider" element={<RiderLayout><Outlet /></RiderLayout>}>
+            <Route index element={<RiderDashboardPage />} />
+            <Route path="jobs" element={<RiderDeliveriesPage />} />
+            <Route path="deliveries" element={<RiderDeliveriesPage />} />
+            <Route path="deliveries/active" element={<RiderActiveDeliveryPage />} />
+            <Route path="active" element={<RiderActiveDeliveryPage />} />
+            <Route path="map" element={<RiderMapPage />} />
+            <Route path="schedule" element={<RiderSchedulePage />} />
+            <Route path="earnings" element={<RiderEarningsPage />} />
+            <Route path="history" element={<RiderHistoryPage />} />
+            <Route path="history/:id" element={<RiderHistoryPage />} />
+            <Route path="notifications" element={<RiderNotificationsPage />} />
+            <Route path="support" element={<RiderSupportPage />} />
+            <Route path="support/:id" element={<RiderSupportPage />} />
+            <Route path="profile" element={<RiderProfilePage />} />
+            <Route path="settings" element={<RiderSettingsPage />} />
+            <Route path="safety" element={<RiderSafetyPage />} />
+            <Route path="application" element={<RiderApplicationStatusPage />} />
+            <Route path="application-form" element={<RiderApplicationFormPage />} />
+            <Route path="application/status" element={<RiderApplicationStatusPage />} />
+            <Route path="go-online" element={<RiderGoOnlinePage />} />
+            <Route path="account" element={<RiderAccountStatusPage />} />
+            <Route path="activate" element={<RiderActivationPage />} />
+            <Route path="account-status" element={<RiderAccountStatusPage />} />
+          </Route>
 
           {/* ── Admin Module (Phase 6) ── */}
           <Route path="/admin" element={<AdminDashboard />} />
