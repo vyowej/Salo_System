@@ -1,0 +1,22 @@
+.rider-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+}
+
+.rider-filter-field {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rider-filter-field select {
+  min-height: 44px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  padding: 0 var(--space-3);
+}

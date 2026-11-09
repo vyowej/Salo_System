@@ -1,0 +1,48 @@
+.rider-stat-card {
+  border-top: 3px solid var(--accent);
+}
+
+.rider-stat-card.tone-success { border-top-color: var(--salo-success); }
+.rider-stat-card.tone-warning { border-top-color: var(--salo-warning); }
+.rider-stat-card.tone-info { border-top-color: var(--salo-info); }
+
+.rider-stat-card-body {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.rider-stat-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rider-stat-card-icon {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--surface-secondary);
+  color: var(--accent);
+}
+
+.rider-stat-card-label {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rider-stat-card-value {
+  font-size: clamp(24px, 3vw, 30px);
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.rider-stat-card-helper {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
