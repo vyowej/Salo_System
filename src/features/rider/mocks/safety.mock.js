@@ -1,4 +1,4 @@
-// MOCK DATA ONLY — replace with real data later.
+// MOCK DATA ONLY - replace with real data later.
 export const safety = {
   guidelines: [
     { title: 'Ride attentively', detail: 'Follow road rules and keep attention on the road.' },

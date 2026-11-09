@@ -40,6 +40,17 @@
   color: var(--text-primary);
 }
 
+.rider-account-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.rider-account-status-actions .btn {
+  min-height: 44px;
+}
+
 @media (max-width: 760px) {
   .rider-account-status-grid {
     grid-template-columns: 1fr;

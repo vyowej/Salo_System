@@ -1,4 +1,4 @@
-// MOCK DATA ONLY — replace with real data later.
+// MOCK DATA ONLY - replace with real data later.
 export const previewCopy = {
   emptyTitle: 'Nothing to show yet',
   emptyMessage: 'This preview has no records for the selected state.',
