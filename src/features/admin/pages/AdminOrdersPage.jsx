@@ -1,209 +1,74 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
-import adminService from '../../../services/adminService';
-import Button from '../../../components/common/Button';
-import Badge from '../../../components/common/Badge';
+import { DataTable, FilterBar, PageHeader, StatusBadge } from '../components';
+import { ADMIN_MOCK_DATA, getOrderBreakdown, getOrdersWithFinancials } from '../mocks';
+import { formatDateTime, formatPeso } from '../utils/format';
 
-const TABS = ['All', 'Refund Requested', 'In Transit', 'Preparing', 'Completed', 'Cancelled'];
+const INITIAL_FILTERS = { status: '', paymentMethod: '', restaurantId: '', riderId: '', city: '', from: '', to: '' };
 
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState([]);
-  const [tab, setTab] = useState('All');
+  const [orders] = useState(getOrdersWithFinancials);
   const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState(INITIAL_FILTERS);
+  const restaurants = ADMIN_MOCK_DATA.restaurants.filter((restaurant) => (
+    orders.some((order) => order.restaurantIds.includes(restaurant.id))
+  ));
+  const riders = ADMIN_MOCK_DATA.riders.filter((rider) => orders.some((order) => order.riderId === rider.id));
+  const paymentMethods = [...new Set(orders.map((order) => order.paymentMethod))];
+  const statuses = [...new Set(orders.map((order) => order.status))];
 
-  function loadOrders() {
-    setOrders(adminService.getOrders());
+  const filteredOrders = useMemo(() => orders.filter((order) => {
+    const date = order.createdAt.slice(0, 10);
+    return order.id.toLowerCase().includes(search.trim().toLowerCase())
+      && (!filters.status || order.status === filters.status)
+      && (!filters.paymentMethod || order.paymentMethod === filters.paymentMethod)
+      && (!filters.restaurantId || order.restaurantIds.includes(filters.restaurantId))
+      && (!filters.riderId || order.riderId === filters.riderId)
+      && (!filters.city || order.city === filters.city)
+      && (!filters.from || date >= filters.from)
+      && (!filters.to || date <= filters.to);
+  }), [filters, orders, search]);
+
+  const columns = [
+    { key: 'id', label: 'Reference', render: (order) => <Link to={`/admin/orders/${order.id}`}>{order.id}</Link> },
+    { key: 'customerName', label: 'Customer' },
+    { key: 'restaurants', label: 'Restaurant', render: (order) => order.restaurants.join(', ') },
+    { key: 'riderName', label: 'Rider' },
+    { key: 'total', label: 'Total', render: (order) => formatPeso(getOrderBreakdown(order.id).orderTotal) },
+    { key: 'payment', label: 'Payment', render: (order) => <>{order.paymentMethod}<br /><StatusBadge status={order.paymentStatus} /></> },
+    { key: 'status', label: 'Order status', render: (order) => <StatusBadge status={order.status} /> },
+    { key: 'createdAt', label: 'Date', render: (order) => formatDateTime(order.createdAt) },
+  ];
+
+  function updateFilter(key, value) {
+    setFilters((previous) => ({ ...previous, [key]: value }));
   }
-
-  useEffect(() => {
-    loadOrders();
-  }, []);
-
-  function handleDisputeAction(id, action) {
-    adminService.resolveOrderDispute(id, action);
-    loadOrders();
-  }
-
-  const filtered = orders.filter((o) => {
-    let matchTab = true;
-    if (tab === 'Refund Requested') {
-      matchTab = o.disputeStatus.includes('Refund');
-    } else if (tab !== 'All') {
-      matchTab = o.status === tab;
-    }
-
-    const term = search.toLowerCase();
-    const matchSearch =
-      o.id.toLowerCase().includes(term) ||
-      o.customerName.toLowerCase().includes(term) ||
-      o.restaurants.some((r) => r.toLowerCase().includes(term));
-
-    return matchTab && matchSearch;
-  });
 
   return (
     <AdminLayout>
-      {/* ── Page Header ────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: 'var(--accent)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-            }}
-          >
-            Fulfillment Supervision
-          </span>
-          <h1 className="page-title" style={{ fontSize: 'var(--font-size-2xl)', marginTop: 'var(--space-1)' }}>
-            Platform Orders & Dispute Escalations
-          </h1>
-          <p className="page-subtitle">
-            Oversee multi-kitchen order groupings, verify independent sub-order dispatch, and resolve customer claims
-          </p>
-        </div>
-      </div>
-
-      {/* ── Tabs & Search ──────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div style={{ display: 'flex', gap: 'var(--space-2)', overflowX: 'auto' }}>
-          {TABS.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-full)',
-                border: tab === t ? '1px solid var(--accent)' : '1px solid var(--border-primary)',
-                background: tab === t ? 'var(--accent)' : 'var(--surface-primary)',
-                color: tab === t ? '#fff' : 'var(--text-primary)',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-
-        <div style={{
-          background: 'var(--surface-primary)',
-          border: '1px solid var(--border-primary)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '6px 12px',
-          display: 'flex',
-          alignItems: 'center',
-          minWidth: 260,
-        }}>
-          <input
-            type="text"
-            placeholder="Search Order Ref, Customer, Kitchen..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              outline: 'none',
-              width: '100%',
-              fontSize: 'var(--font-size-xs)',
-              color: 'var(--text-primary)',
-            }}
-          />
-        </div>
-      </div>
-
-      {/* ── Orders Table ───────────────────────────────── */}
-      <div style={{
-        background: 'var(--surface-primary)',
-        border: '1px solid var(--border-primary)',
-        borderRadius: 'var(--radius-xl)',
-        padding: 'var(--space-4)',
-        boxShadow: 'var(--shadow-sm)',
-        overflowX: 'auto',
-      }}>
-        {filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 'var(--space-8) 0', color: 'var(--text-muted)' }}>
-            <p>No orders matching current filter.</p>
-          </div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--font-size-sm)' }}>
-            <thead>
-              <tr style={{ borderBottom: '1.5px solid var(--border-secondary)', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                <th style={{ padding: '12px 14px' }}>Order Ref</th>
-                <th style={{ padding: '12px 14px' }}>Customer & Destination</th>
-                <th style={{ padding: '12px 14px' }}>Multi-Kitchens</th>
-                <th style={{ padding: '12px 14px' }}>Assigned Rider</th>
-                <th style={{ padding: '12px 14px' }}>Total Amount</th>
-                <th style={{ padding: '12px 14px' }}>Order Status</th>
-                <th style={{ padding: '12px 14px' }}>Dispute / Claim</th>
-                <th style={{ padding: '12px 14px', textAlign: 'right' }}>Resolution</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((o) => (
-                <tr key={o.id} style={{ borderBottom: '1px solid var(--border-secondary)' }}>
-                  <td style={{ padding: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {o.id}
-                    <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
-                      {o.createdAt}
-                    </span>
-                  </td>
-                  <td style={{ padding: '14px' }}>
-                    <strong style={{ color: 'var(--text-primary)', display: 'block' }}>{o.customerName}</strong>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>📍 {o.deliveryAddress}</span>
-                  </td>
-                  <td style={{ padding: '14px', fontSize: 'var(--font-size-xs)' }}>
-                    <strong style={{ color: 'var(--accent)', display: 'block' }}>
-                      {o.restaurants.join(' + ')}
-                    </strong>
-                    <span style={{ color: 'var(--text-muted)' }}>{o.subOrdersCount} independent kitchens</span>
-                  </td>
-                  <td style={{ padding: '14px', color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)' }}>
-                    {o.riderName}
-                  </td>
-                  <td style={{ padding: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    ₱{o.totalAmount.toLocaleString('en-PH')}
-                    <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
-                      {o.paymentMethod}
-                    </span>
-                  </td>
-                  <td style={{ padding: '14px' }}>
-                    <Badge variant={o.status === 'Completed' ? 'success' : o.status === 'Cancelled' ? 'error' : 'primary'} size="sm" dot>
-                      {o.status}
-                    </Badge>
-                  </td>
-                  <td style={{ padding: '14px' }}>
-                    {o.disputeStatus.includes('Refund') ? (
-                      <Badge variant="warning" size="sm">⚠ {o.disputeStatus}</Badge>
-                    ) : (
-                      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>None</span>
-                    )}
-                  </td>
-                  <td style={{ padding: '14px', textAlign: 'right' }}>
-                    {o.disputeStatus === 'Refund Requested' ? (
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        <Button variant="danger" size="sm" onClick={() => handleDisputeAction(o.id, 'Refund Approved')}>
-                          Approve Refund
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDisputeAction(o.id, 'Dispute Dismissed')}>
-                          Dismiss
-                        </Button>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Settled</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <section className="admin-shell-page">
+        <PageHeader
+          title="Platform Orders"
+          description="Review order payments, recorded fee snapshots, fulfillment history, and escalated cases."
+          actions={<Link className="admin-action-button" to="/admin/orders/disputes">Disputes and escalations</Link>}
+        />
+        <FilterBar search={search} onSearchChange={setSearch} searchLabel="Search order reference">
+          <label className="admin-filter-control">Status<select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)}><option value="">All statuses</option>{statuses.map((status) => <option key={status}>{status}</option>)}</select></label>
+          <label className="admin-filter-control">Payment method<select value={filters.paymentMethod} onChange={(event) => updateFilter('paymentMethod', event.target.value)}><option value="">All methods</option>{paymentMethods.map((method) => <option key={method}>{method}</option>)}</select></label>
+          <label className="admin-filter-control">Restaurant<select value={filters.restaurantId} onChange={(event) => updateFilter('restaurantId', event.target.value)}><option value="">All restaurants</option>{restaurants.map((restaurant) => <option key={restaurant.id} value={restaurant.id}>{restaurant.name}</option>)}</select></label>
+          <label className="admin-filter-control">Rider<select value={filters.riderId} onChange={(event) => updateFilter('riderId', event.target.value)}><option value="">All riders</option>{riders.map((rider) => <option key={rider.id} value={rider.id}>{rider.name}</option>)}</select></label>
+          <label className="admin-filter-control">City<select value={filters.city} onChange={(event) => updateFilter('city', event.target.value)}><option value="">All cities</option>{[...new Set(orders.map((order) => order.city))].map((city) => <option key={city}>{city}</option>)}</select></label>
+          <label className="admin-filter-control">From<input type="date" value={filters.from} onChange={(event) => updateFilter('from', event.target.value)} /></label>
+          <label className="admin-filter-control">To<input type="date" value={filters.to} onChange={(event) => updateFilter('to', event.target.value)} /></label>
+        </FilterBar>
+        <DataTable
+          columns={columns}
+          rows={filteredOrders}
+          emptyTitle="No matching orders"
+          emptyDescription="Try changing the search term or filters."
+        />
+      </section>
     </AdminLayout>
   );
 }
