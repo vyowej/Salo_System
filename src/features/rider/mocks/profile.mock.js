@@ -1,4 +1,4 @@
-// MOCK DATA ONLY — replace with real data later.
+// MOCK DATA ONLY - replace with real data later.
 export const profile = {
   name: 'Sample Rider',
   initials: 'SR',
@@ -14,11 +14,18 @@ export const profile = {
   zone: 'Central sample zone',
   accountStatus: 'Active',
   applicationStatus: 'Under Review',
-  availability: 'Offline',
+  availability: 'offline',
   locationStatus: 'Location permission not enabled',
   rating: '—',
   totalTrips: 0,
   activeDelivery: null,
+  verificationStatus: 'under_review',
+  documents: [
+    { key: 'government_id', label: 'Government ID', reference: 'ID ending 4821', status: 'under_review' },
+    { key: 'driver_license', label: 'Driver license', reference: 'License ending 1930', status: 'approved' },
+    { key: 'vehicle_registration', label: 'Vehicle registration', reference: 'Registration ending 2804', status: 'pending' },
+  ],
+  emergencyContact: { name: 'Ana Santos', relationship: 'Family contact', phone: 'Contact number on file' },
 };
 
 export const application = {

@@ -1,16 +1,19 @@
-// MOCK DATA ONLY — replace with real data later.
+// MOCK DATA ONLY - replace with real data later.
+import { formatPeso } from '../utils/format';
+
 export const dashboard = {
   profileName: 'Sample Rider',
   accountStatus: 'Active',
-  availability: 'Offline',
+  availability: 'offline',
   zone: 'Central sample zone',
   location: { status: 'Location permission not enabled', updatedAt: 'No recent location' },
   shift: { date: 'No shift assigned', start: '—', end: '—', zone: 'No zone assigned', status: 'Unscheduled' },
   activeDelivery: null,
   metrics: [
     { label: "Today's deliveries", value: '0', detail: 'Completed deliveries' },
-    { label: "Today's earnings", value: '₱0', detail: 'No earnings recorded' },
-    { label: 'Pending COD', value: '₱0', detail: 'Not income · collection balance' },
+    { label: "Today's earnings", value: formatPeso(0), detail: 'No earnings recorded' },
+    { label: 'Pending COD', value: formatPeso(0), detail: 'Not income · collection balance' },
+    { label: 'Current shift', value: 'Unscheduled', detail: 'No shift assigned' },
   ],
   quickActions: [
     { label: 'View schedule', href: '/rider/schedule' },
