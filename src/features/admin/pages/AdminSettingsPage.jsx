@@ -4,6 +4,8 @@ import adminService from '../../../services/adminService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import { Input, Select } from '../../../components/forms';
+import { Link } from 'react-router-dom';
+import './AdminPages.css';
 
 export default function AdminSettingsPage() {
   const initial = adminService.getConfig();
@@ -37,7 +39,7 @@ export default function AdminSettingsPage() {
             style={{
               fontSize: 11,
               fontWeight: 700,
-              color: 'var(--salo-brown, #5D4037)',
+              color: 'var(--salo-brown)',
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
             }}
@@ -57,6 +59,9 @@ export default function AdminSettingsPage() {
             ✓ System Policies Saved!
           </Badge>
         )}
+        <Link to="/admin/settings/security" className="admin-settings-security-link">
+          Review administrator sessions and security
+        </Link>
       </div>
 
       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
@@ -91,7 +96,7 @@ export default function AdminSettingsPage() {
 
             <Input
               id="cfg-delivery"
-              label="Platform Base Delivery Fee (₱)"
+              label="Platform Base Delivery Fee (PHP)"
               type="number"
               min="0"
               value={formData.defaultDeliveryFee}
@@ -102,7 +107,7 @@ export default function AdminSettingsPage() {
 
             <Input
               id="cfg-min-order"
-              label="Minimum Cart Order Threshold (₱)"
+              label="Minimum Cart Order Threshold (PHP)"
               type="number"
               min="50"
               value={formData.minimumOrderValue}
@@ -219,7 +224,7 @@ export default function AdminSettingsPage() {
                 width: 20,
                 height: 20,
                 borderRadius: '50%',
-                background: '#fff',
+                background: 'var(--surface-primary)',
                 position: 'absolute',
                 top: 2,
                 left: formData.maintenanceMode ? 22 : 2,
