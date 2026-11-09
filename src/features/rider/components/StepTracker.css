@@ -24,6 +24,16 @@
   border-color: var(--salo-success);
 }
 
+.rider-step-item.is-locked {
+  background: var(--surface-secondary);
+  color: var(--text-muted);
+}
+
+.rider-step-item.is-locked .rider-step-indicator {
+  color: var(--text-muted);
+  border: 1px solid var(--border-primary);
+}
+
 .rider-step-indicator {
   display: inline-flex;
   width: 24px;

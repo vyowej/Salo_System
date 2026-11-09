@@ -1,8 +1,9 @@
-import { Link } from 'react-router-dom';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { Card, CardBody } from '../../../components/common/Card';
 import { DELIVERY_OUTCOMES } from '../constants/riderConstants';
+import { statusBadgeVariants } from '../constants/statusConfig';
+import ScenarioLink from './ScenarioLink';
 import './RiderUI.css';
 
 export function RiderPageHeading({ eyebrow, title, description, actions }) {
@@ -37,14 +38,7 @@ export function RiderCard({ title, description, actions, children, className = '
 
 export function RiderStatusBadge({ status, tone }) {
   const resolvedTone = tone || (DELIVERY_OUTCOMES.includes(status) ? 'danger' : 'neutral');
-  const variant = {
-    success: 'success',
-    warning: 'warning',
-    info: 'info',
-    danger: 'error',
-    neutral: 'default',
-    primary: 'primary',
-  }[resolvedTone] || 'default';
+  const variant = statusBadgeVariants[resolvedTone] || 'default';
   return <Badge variant={variant} size="sm" dot>{status}</Badge>;
 }
 
@@ -111,7 +105,7 @@ export function RiderMetric({ label, value, detail, tone = 'default' }) {
 }
 
 export function RiderLinkButton({ to, children, variant = 'outline' }) {
-  return <Button as={Link} to={to} variant={variant} size="sm">{children}</Button>;
+  return <Button as={ScenarioLink} to={to} variant={variant} size="sm">{children}</Button>;
 }
 
 export function RiderUploadField({ label, accept, onChange, preview, multiple = false, hint }) {

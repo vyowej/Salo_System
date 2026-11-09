@@ -1,0 +1,24 @@
+.rider-payment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-pill);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+}
+
+.rider-payment-badge--paid {
+  background: var(--status-success-bg);
+  border-color: var(--salo-success);
+  color: var(--status-success-text);
+}
+
+.rider-payment-badge--payment_pending {
+  background: var(--status-warning-bg);
+  border-color: var(--salo-warning);
+  color: var(--status-warning-text);
+}
