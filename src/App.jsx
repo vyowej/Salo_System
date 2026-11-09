@@ -163,6 +163,38 @@ function AppShell() {
         title: 'Rider Dashboard | SALO',
         description: 'Track deliveries, accept jobs, and view active order routes.',
       },
+      '/rider/deliveries': {
+        title: 'Delivery offers | SALO Rider',
+        description: 'Review the latest rider delivery offers and active assignments.',
+      },
+      '/rider/deliveries/active': {
+        title: 'Active delivery | SALO Rider',
+        description: 'Track delivery progress, proof, and rider actions.',
+      },
+      '/rider/history': {
+        title: 'Delivery history | SALO Rider',
+        description: 'Review past deliveries, payment, and record details.',
+      },
+      '/rider/support': {
+        title: 'Support & incidents | SALO Rider',
+        description: 'Manage rider support tickets and safety escalations.',
+      },
+      '/rider/safety': {
+        title: 'Safety & welfare | SALO Rider',
+        description: 'Stay safe, follow guidance, and review emergency support contacts.',
+      },
+      '/rider/application': {
+        title: 'Rider application | SALO',
+        description: 'Apply to join the SALO rider network.',
+      },
+      '/rider/activate': {
+        title: 'Activate your rider account | SALO',
+        description: 'Complete rider activation and verification.',
+      },
+      '/rider/account-status': {
+        title: 'Rider account status | SALO',
+        description: 'Check your rider application and account state.',
+      },
       '/admin': {
         title: 'Admin Dashboard | SALO',
         description: 'Monitor platform performance, partners, riders, and operational insights.',
@@ -235,19 +267,25 @@ function AppShell() {
           {/* ── Rider Module (Phase 5) ── */}
           <Route path="/rider" element={<RiderWorkspacePage />} />
           <Route path="/rider/jobs" element={<RiderWorkspacePage />} />
+          <Route path="/rider/deliveries" element={<RiderWorkspacePage />} />
+          <Route path="/rider/deliveries/active" element={<RiderWorkspacePage />} />
           <Route path="/rider/active" element={<RiderWorkspacePage />} />
           <Route path="/rider/map" element={<RiderWorkspacePage />} />
           <Route path="/rider/schedule" element={<RiderWorkspacePage />} />
           <Route path="/rider/earnings" element={<RiderWorkspacePage />} />
           <Route path="/rider/history" element={<RiderWorkspacePage />} />
+          <Route path="/rider/history/:id" element={<RiderWorkspacePage />} />
           <Route path="/rider/notifications" element={<RiderWorkspacePage />} />
           <Route path="/rider/support" element={<RiderWorkspacePage />} />
+          <Route path="/rider/support/:id" element={<RiderWorkspacePage />} />
           <Route path="/rider/profile" element={<RiderWorkspacePage />} />
           <Route path="/rider/settings" element={<RiderWorkspacePage />} />
           <Route path="/rider/safety" element={<RiderWorkspacePage />} />
           <Route path="/rider/application" element={<RiderApplicationPage />} />
           <Route path="/rider/application/status" element={<RiderApplicationStatusPage />} />
           <Route path="/rider/account" element={<RiderApplicationStatusPage />} />
+          <Route path="/rider/activate" element={<RiderApplicationStatusPage />} />
+          <Route path="/rider/account-status" element={<RiderApplicationStatusPage />} />
 
           {/* ── Admin Module (Phase 6) ── */}
           <Route path="/admin" element={<AdminDashboard />} />
