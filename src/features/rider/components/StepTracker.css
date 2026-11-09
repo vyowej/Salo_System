@@ -1,0 +1,55 @@
+.rider-step-tracker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+}
+
+.rider-step-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: start;
+  padding: var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+}
+
+.rider-step-item.is-active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.rider-step-item.is-complete {
+  border-color: var(--salo-success);
+}
+
+.rider-step-indicator {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.rider-step-item.is-active .rider-step-indicator,
+.rider-step-item.is-complete .rider-step-indicator {
+  background: var(--salo-success);
+  color: var(--text-inverse);
+}
+
+.rider-step-item strong,
+.rider-step-item small {
+  display: block;
+}
+
+.rider-step-item small {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
