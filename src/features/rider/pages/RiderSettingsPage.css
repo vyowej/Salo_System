@@ -1,0 +1,131 @@
+.rider-settings-layout {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.35fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.rider-settings-nav {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.rider-settings-nav > button:not(.btn) {
+  min-height: 48px;
+  padding: var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  text-align: left;
+  font: inherit;
+}
+
+.rider-settings-nav > button.is-selected:not(.btn) {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rider-settings-content h2 {
+  margin: 0 0 var(--space-4);
+}
+
+.rider-setting-toggle-list {
+  display: grid;
+}
+
+.rider-setting-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 72px;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-secondary);
+  cursor: pointer;
+}
+
+.rider-setting-toggle span {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.rider-setting-toggle small {
+  color: var(--text-secondary);
+}
+
+.rider-setting-toggle input {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+}
+
+.rider-settings-password-form {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 520px;
+}
+
+.rider-settings-password-form input {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+}
+
+.rider-settings-info {
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+
+.rider-agreement-scroll {
+  max-height: 420px;
+  overflow: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+}
+
+.rider-agreement-scroll section + section {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-primary);
+}
+
+.rider-agreement-scroll h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-md);
+}
+
+.rider-agreement-disclaimer {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.rider-logout-modal > div {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.rider-settings-nav :focus-visible,
+.rider-settings-content :focus-visible,
+.rider-agreement-scroll:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .rider-settings-layout {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import Button from '../../../components/common/Button';
 import RiderLayout from '../../../layouts/RiderLayout';
 import { riderMockData, riderPreviewState } from '../mocks';
@@ -13,6 +13,14 @@ import {
   SUPPORT_CATEGORIES,
   SUPPORT_TICKET_STATUSES,
 } from '../constants/riderConstants';
+import {
+  codTableLabels,
+  legacyDeliveryTabs,
+  legacyEarningsTableLabels,
+  notificationPreferences,
+  proofDeliveryMethods,
+  toggleRecordValue,
+} from '../constants/riderSettings';
 import Badge from '../../../components/common/Badge';
 import {
   RiderCard,
@@ -27,6 +35,7 @@ import {
   RiderUploadField,
 } from '../components/RiderUI';
 import './RiderWorkspacePage.css';
+import ScenarioLink from '../components/ScenarioLink';
 
 const DATA = riderMockData;
 
@@ -96,7 +105,7 @@ function Dashboard({ state, setState }) {
             </RiderCard>
           </div>
           <RiderCard title={'Quick actions'}>
-            <div className="rider-inline">{data.quickActions.map((action) => <Button as={Link} to={action.href} key={action.href} variant="outline" size="sm">{action.label}</Button>)}</div>
+            <div className="rider-inline">{data.quickActions.map((action) => <Button as={ScenarioLink} to={action.href} key={action.href} variant="outline" size="sm">{action.label}</Button>)}</div>
           </RiderCard>
         </div>
       )}
@@ -144,7 +153,7 @@ function ActiveDelivery({ state, setState }) {
       <RiderPreview state={state} setState={setState} data={data} />
       {state !== riderPreviewState.sample && <RiderStatePanel state={state} data={DATA.previewCopy} onStateChange={setState} />}
       {state === riderPreviewState.sample && <>
-        <div className="rider-segmented" role="tablist" aria-label={'Delivery workspace sections'}>{['Delivery', 'Proof of delivery', 'Report a problem'].map((item) => <Button key={item} role="tab" aria-selected={tab === item} variant={tab === item ? 'primary' : 'outline'} size="sm" onClick={() => setTab(item)}>{item}</Button>)}</div>
+        <div className="rider-segmented" role="tablist" aria-label={'Delivery workspace sections'}>{legacyDeliveryTabs.map((item) => <Button key={item} role="tab" aria-selected={tab === item} variant={tab === item ? 'primary' : 'outline'} size="sm" onClick={() => setTab(item)}>{item}</Button>)}</div>
         <div className="rider-stack rider-top-gap">
           {tab === 'Delivery' && <>
             <div className="rider-empty-state"><span className="rider-empty-icon" aria-hidden="true">⌁</span><strong>{DATA.previewCopy.noAssignment}</strong><span>{'When a delivery is assigned, its details and status timeline will appear here.'}</span></div>
@@ -158,7 +167,7 @@ function ActiveDelivery({ state, setState }) {
           </>}
           {tab === 'Proof of delivery' && <RiderCard title={'Proof of delivery'} description={DATA.previewCopy.disabledComplete}>
             <div className="rider-stack">
-              <div className="rider-segmented">{['Hand to customer', 'Contactless'].map((item) => <Button key={item} variant={method === item ? 'primary' : 'outline'} size="sm" onClick={() => setMethod(item)}>{item}</Button>)}</div>
+              <div className="rider-segmented">{proofDeliveryMethods.map((item) => <Button key={item} variant={method === item ? 'primary' : 'outline'} size="sm" onClick={() => setMethod(item)}>{item}</Button>)}</div>
               <RiderUploadField label={'Delivery photo'} accept="image/*" onChange={previewFile} preview={image} hint={DATA.previewCopy.previewUpload} />
               <label className="rider-field"><span>{'Recipient name'}</span><input aria-label={'Recipient name'} placeholder={data.proof.recipient} /></label>
               <label className="rider-field"><span>{'Delivery PIN · optional'}</span><input inputMode="numeric" placeholder={data.proof.pin || 'Optional PIN'} /></label>
@@ -224,7 +233,7 @@ function Earnings({ state, setState }) {
       <RiderCard title={'Earnings trend'} description={'Illustrative CSS chart · no financial data is being calculated'}>
         <div className="rider-chart" role="img" aria-label={'Illustrative seven-period earnings chart'}>{DATA.earnings.chart.map((item) => <div className="rider-chart-column" key={item.label}><span className="rider-chart-bar" style={{ height: `${Math.max(4, item.amount)}%` }} /><span>{item.label}</span></div>)}</div>
       </RiderCard>
-      <RiderCard title={'Earnings records'}><div className="rider-table-wrap"><table className="rider-table"><thead><tr>{['Delivery', 'Date', 'Compensation', 'Incentives', 'Tips', 'Adjustments', 'Payout status'].map((item) => <th key={item}>{item}</th>)}</tr></thead><tbody>{DATA.earnings.records.map((item) => <tr key={item.delivery}><td>{item.delivery}</td><td>{item.date}</td><td>{item.compensation}</td><td>{item.incentive}</td><td>{item.tip}</td><td>{item.adjustment}</td><td>{item.payoutStatus}</td></tr>)}</tbody></table></div></RiderCard>
+      <RiderCard title={'Earnings records'}><div className="rider-table-wrap"><table className="rider-table"><thead><tr>{legacyEarningsTableLabels.map((item) => <th key={item}>{item}</th>)}</tr></thead><tbody>{DATA.earnings.records.map((item) => <tr key={item.delivery}><td>{item.delivery}</td><td>{item.date}</td><td>{item.compensation}</td><td>{item.incentive}</td><td>{item.tip}</td><td>{item.adjustment}</td><td>{item.payoutStatus}</td></tr>)}</tbody></table></div></RiderCard>
       <div className="rider-grid"><RiderCard title={'Payout method'}><p>{DATA.earnings.payoutMethod}</p></RiderCard><RiderCard title={'Payout history'}>{DATA.earnings.payoutHistory.map((item) => <div className="rider-list-row" key={item.reference}><span>{item.reference} · {item.date}</span><span>{item.amount} · {item.status}</span></div>)}</RiderCard></div>
       <CodPanel />
     </div>}
@@ -234,7 +243,7 @@ function Earnings({ state, setState }) {
 function CodPanel() {
   return <RiderCard title={'Cash on Delivery'} description={DATA.cod.incomeNote}>
     <div className="rider-grid"><div className="rider-stack"><span>{'COD balance · not income'}</span><strong className="rider-large-value">{DATA.cod.balance}</strong><span>{'Amount to collect · read only'}</span><strong>{DATA.cod.collectionAmount}</strong><RiderStatusBadge status={DATA.cod.collectionStatus} /></div><div className="rider-stack">{DATA.cod.statuses.map((status) => <RiderStatusBadge key={status} status={status} />)}</div></div>
-    <div className="rider-table-wrap rider-top-gap"><table className="rider-table"><thead><tr>{['Remittance', 'Date', 'Amount', 'Status'].map((item) => <th key={item}>{item}</th>)}</tr></thead><tbody>{DATA.cod.history.map((item) => <tr key={item.reference}><td>{item.reference}</td><td>{item.date}</td><td>{item.amount}</td><td><RiderStatusBadge status={DATA.previewCopy.pendingAdmin} tone="warning" /></td></tr>)}</tbody></table></div>
+    <div className="rider-table-wrap rider-top-gap"><table className="rider-table"><thead><tr>{codTableLabels.map((item) => <th key={item}>{item}</th>)}</tr></thead><tbody>{DATA.cod.history.map((item) => <tr key={item.reference}><td>{item.reference}</td><td>{item.date}</td><td>{item.amount}</td><td><RiderStatusBadge status={DATA.previewCopy.pendingAdmin} tone="warning" /></td></tr>)}</tbody></table></div>
     <p className="rider-note rider-warning">{DATA.cod.riderNotice}</p>
   </RiderCard>;
 }
@@ -315,7 +324,7 @@ function ProfileSettings({ state, setState, settings = false }) {
     <RiderPreview state={state} setState={setState} data={profile} />
     {state !== riderPreviewState.sample ? <RiderStatePanel state={state} data={DATA.previewCopy} onStateChange={setState} /> : settings ? <div className="rider-stack">
       {SETTINGS_SECTIONS.map((section) => <RiderCard key={section} title={section}>
-        {section === SETTINGS_SECTIONS[0] ? ['Delivery offers', 'Shift reminders', 'Application updates', 'COD reminders'].map((item) => <label className="rider-setting-row" key={item}><span>{item}</span><button type="button" role="switch" aria-checked={Boolean(toggles[item])} className="rider-switch" onClick={() => setToggles((all) => ({ ...all, [item]: !all[item] }))}>{toggles[item] ? 'On' : 'Off'}</button></label>) : section === SETTINGS_SECTIONS[1] ? <div className="rider-stack"><label className="rider-field"><span>{'Current password'}</span><input type="password" autoComplete="current-password" /></label><label className="rider-field"><span>{'New password'}</span><input type="password" autoComplete="new-password" /></label><Button variant="outline">{'Update password preview'}</Button></div> : <div className="rider-note">{section === SETTINGS_SECTIONS[2] ? DATA.previewCopy.locationPermission : section === SETTINGS_SECTIONS[5] ? 'Sign out from the rider workspace.' : 'Information is shown as a design preview.'}</div>}
+        {section === SETTINGS_SECTIONS[0] ? notificationPreferences.map((item) => <label className="rider-setting-row" key={item.key}><span>{item.label}</span><button type="button" role="switch" aria-checked={Boolean(toggles[item.key])} className="rider-switch" onClick={() => setToggles((all) => toggleRecordValue(all, item.key))}>{toggles[item.key] ? 'On' : 'Off'}</button></label>) : section === SETTINGS_SECTIONS[1] ? <div className="rider-stack"><label className="rider-field"><span>{'Current password'}</span><input type="password" autoComplete="current-password" /></label><label className="rider-field"><span>{'New password'}</span><input type="password" autoComplete="new-password" /></label><Button variant="outline">{'Update password preview'}</Button></div> : <div className="rider-note">{section === SETTINGS_SECTIONS[2] ? DATA.previewCopy.locationPermission : section === SETTINGS_SECTIONS[5] ? 'Sign out from the rider workspace.' : 'Information is shown as a design preview.'}</div>}
       </RiderCard>)}
     </div> : <div className="rider-grid">
       <RiderCard title={'Rider profile'} description={profile.email}>
@@ -337,7 +346,7 @@ function Safety({ state, setState }) {
       <div className="rider-note rider-danger"><strong>{DATA.safety.drivingNotice}</strong></div>
       <RiderCard title={'Road-safety guidelines'}><div className="rider-grid">{DATA.safety.guidelines.map((item) => <article className="rider-panel" key={item.title}><h3>{item.title}</h3><p>{item.detail}</p></article>)}</div></RiderCard>
       <RiderCard title={'Document & equipment reminders'}><div className="rider-list">{DATA.safety.reminders.map((item) => <div className="rider-list-row" key={item.title}><span><strong>{item.title}</strong><small>{item.detail}</small></span><RiderStatusBadge status={item.status} tone="warning" /></div>)}</div></RiderCard>
-      <RiderCard title={'Emergency contacts'}><div className="rider-list">{DATA.safety.emergencyContacts.map((item) => <div className="rider-list-row" key={item.title}><strong>{item.title}</strong><span>{item.value}</span></div>)}</div><Button as={Link} to="/rider/support" variant="danger-outline">{'Open safety support'}</Button></RiderCard>
+      <RiderCard title={'Emergency contacts'}><div className="rider-list">{DATA.safety.emergencyContacts.map((item) => <div className="rider-list-row" key={item.title}><strong>{item.title}</strong><span>{item.value}</span></div>)}</div><Button as={ScenarioLink} to="/rider/support" variant="danger-outline">{'Open safety support'}</Button></RiderCard>
     </div>}
   </>;
 }

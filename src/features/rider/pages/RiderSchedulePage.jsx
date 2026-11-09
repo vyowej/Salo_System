@@ -5,16 +5,16 @@ import PageHeader from '../components/PageHeader';
 import StateView from '../components/StateView';
 import StatusBadge from '../components/StatusBadge';
 import { statusConfig } from '../constants/statusConfig';
-import { riderMockData } from '../mocks';
+import { getRiderMock } from '../mocks';
+import { formatDate } from '../utils/format';
 import useScenario from '../hooks/useScenario';
 import './RiderSchedulePage.css';
-
-const calendarDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function RiderSchedulePage() {
   const scenario = useScenario();
   const [view, setView] = useState('list');
-  const shifts = useMemo(() => riderMockData.shifts || [], []);
+  const shifts = useMemo(() => getRiderMock('shifts', scenario) || [], [scenario]);
+  const calendar = useMemo(() => getRiderMock('scheduleCalendar', scenario) || [], [scenario]);
 
   return (
     <div className="rider-page-shell">
@@ -36,7 +36,7 @@ export default function RiderSchedulePage() {
                   <div key={`${shift.day}-${shift.date}`} className="rider-shift-row">
                     <div>
                       <strong>{shift.day}</strong>
-                      <p>{shift.date}</p>
+                      <p>{formatDate(shift.date)}</p>
                     </div>
                     <div>
                       <strong>{shift.start} - {shift.end}</strong>
@@ -49,12 +49,10 @@ export default function RiderSchedulePage() {
               </div>
             ) : (
               <div className="rider-calendar-grid">
-                {calendarDays.map((day, index) => (
-                  <div key={day} className="rider-calendar-day">
-                    <span>{day}</span>
-                    <div className="rider-calendar-slot">
-                      {index % 2 === 0 ? '08:00 - 17:00' : '12:00 - 20:00'}
-                    </div>
+                {calendar.map((day) => (
+                  <div key={day.day} className="rider-calendar-day">
+                    <span>{day.day}</span>
+                    <div className="rider-calendar-slot">{day.shift}</div>
                   </div>
                 ))}
               </div>
