@@ -42,8 +42,14 @@ const TeamAndStaffPage = lazy(() => import('./features/restaurant/pages/TeamAndS
 
 // Rider Module (Phase 5)
 const RiderWorkspacePage = lazy(() => import('./features/rider/pages/RiderWorkspacePage'));
+const RiderDashboardPage = lazy(() => import('./features/rider/pages/RiderDashboardPage'));
 const RiderApplicationPage = lazy(() => import('./features/rider/pages/RiderApplicationPage'));
+const RiderApplicationFormPage = lazy(() => import('./features/rider/pages/RiderApplicationFormPage'));
 const RiderApplicationStatusPage = lazy(() => import('./features/rider/pages/RiderApplicationStatusPage'));
+const RiderActivationPage = lazy(() => import('./features/rider/pages/RiderActivationPage'));
+const RiderAccountStatusPage = lazy(() => import('./features/rider/pages/RiderAccountStatusPage'));
+const RiderGoOnlinePage = lazy(() => import('./features/rider/pages/RiderGoOnlinePage'));
+const RiderSchedulePage = lazy(() => import('./features/rider/pages/RiderSchedulePage'));
 
 // Admin Module (Phase 6)
 const AdminDashboard = lazy(() => import('./features/admin/pages/AdminDashboard'));
@@ -265,13 +271,13 @@ function AppShell() {
           </Route>
 
           {/* ── Rider Module (Phase 5) ── */}
-          <Route path="/rider" element={<RiderWorkspacePage />} />
+          <Route path="/rider" element={<RiderDashboardPage />} />
           <Route path="/rider/jobs" element={<RiderWorkspacePage />} />
           <Route path="/rider/deliveries" element={<RiderWorkspacePage />} />
           <Route path="/rider/deliveries/active" element={<RiderWorkspacePage />} />
           <Route path="/rider/active" element={<RiderWorkspacePage />} />
           <Route path="/rider/map" element={<RiderWorkspacePage />} />
-          <Route path="/rider/schedule" element={<RiderWorkspacePage />} />
+          <Route path="/rider/schedule" element={<RiderSchedulePage />} />
           <Route path="/rider/earnings" element={<RiderWorkspacePage />} />
           <Route path="/rider/history" element={<RiderWorkspacePage />} />
           <Route path="/rider/history/:id" element={<RiderWorkspacePage />} />
@@ -282,10 +288,12 @@ function AppShell() {
           <Route path="/rider/settings" element={<RiderWorkspacePage />} />
           <Route path="/rider/safety" element={<RiderWorkspacePage />} />
           <Route path="/rider/application" element={<RiderApplicationPage />} />
+          <Route path="/rider/application-form" element={<RiderApplicationFormPage />} />
           <Route path="/rider/application/status" element={<RiderApplicationStatusPage />} />
-          <Route path="/rider/account" element={<RiderApplicationStatusPage />} />
-          <Route path="/rider/activate" element={<RiderApplicationStatusPage />} />
-          <Route path="/rider/account-status" element={<RiderApplicationStatusPage />} />
+          <Route path="/rider/go-online" element={<RiderGoOnlinePage />} />
+          <Route path="/rider/account" element={<RiderAccountStatusPage />} />
+          <Route path="/rider/activate" element={<RiderActivationPage />} />
+          <Route path="/rider/account-status" element={<RiderAccountStatusPage />} />
 
           {/* ── Admin Module (Phase 6) ── */}
           <Route path="/admin" element={<AdminDashboard />} />
