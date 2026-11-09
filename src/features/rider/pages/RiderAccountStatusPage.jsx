@@ -3,14 +3,19 @@ import { Card, CardBody } from '../../../components/common/Card';
 import PageHeader from '../components/PageHeader';
 import StateView from '../components/StateView';
 import StatusBadge from '../components/StatusBadge';
+import Button from '../../../components/common/Button';
+import ScenarioLink from '../components/ScenarioLink';
 import { accountStates } from '../constants/statusConfig';
-import { riderMockData } from '../mocks';
+import { getRiderMock } from '../mocks';
 import useScenario from '../hooks/useScenario';
 import './RiderAccountStatusPage.css';
 
 export default function RiderAccountStatusPage() {
   const scenario = useScenario();
-  const current = useMemo(() => riderMockData.profile.accountStatus || 'pending_approval', []);
+  const profile = getRiderMock('riderProfile', scenario);
+  const current = useMemo(() => accountStates.find(
+    (status) => status.key === profile.accountStatus || status.label.toLowerCase() === profile.accountStatus.toLowerCase(),
+  )?.key || 'pending_approval', [profile.accountStatus]);
 
   return (
     <div className="rider-page-shell">
@@ -29,6 +34,10 @@ export default function RiderAccountStatusPage() {
               </CardBody>
             </Card>
           ))}
+        </div>
+        <div className="rider-account-status-actions">
+          <Button as={ScenarioLink} to="/rider/activate" variant="primary">Go to account activation</Button>
+          <Button as={ScenarioLink} to="/rider/application" variant="outline">View application status</Button>
         </div>
       </StateView>
     </div>

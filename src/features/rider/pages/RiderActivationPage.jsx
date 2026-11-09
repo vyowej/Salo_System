@@ -4,11 +4,12 @@ import { Card, CardBody } from '../../../components/common/Card';
 import PageHeader from '../components/PageHeader';
 import StateView from '../components/StateView';
 import useScenario from '../hooks/useScenario';
+import { OTP_DIGIT_COUNT, createEmptyOtp } from '../constants/riderConstants';
 import './RiderActivationPage.css';
 
 export default function RiderActivationPage() {
   const scenario = useScenario();
-  const [digits, setDigits] = useState(['', '', '', '', '', '']);
+  const [digits, setDigits] = useState(createEmptyOtp);
   const [submitted, setSubmitted] = useState(false);
 
   function updateDigit(index, value) {
@@ -23,8 +24,8 @@ export default function RiderActivationPage() {
 
   return (
     <div className="rider-page-shell">
-      <PageHeader title="Activate account" subtitle="Enter the six-digit verification code sent to your device." eyebrow="Account activation" />
-      <StateView state={scenario === 'default' ? 'ready' : scenario} emptyTitle="Activation unavailable" emptyMessage="No activation code is available in this preview." onRetry={() => setDigits(['', '', '', '', '', ''])}>
+      <PageHeader title="Activate account" subtitle={`Enter the ${OTP_DIGIT_COUNT}-digit verification code sent to your device.`} eyebrow="Account activation" />
+      <StateView state={scenario === 'default' ? 'ready' : scenario} emptyTitle="Activation unavailable" emptyMessage="No activation code is available in this preview." onRetry={() => setDigits(createEmptyOtp())}>
         {submitted ? (
           <Card>
             <CardBody className="rider-activation-card">
@@ -54,10 +55,10 @@ export default function RiderActivationPage() {
 
               <div className="rider-activation-meta">
                 <Button variant="outline" size="sm">Resend code</Button>
-                <span>{filledCount === 6 ? 'Code ready' : 'Wait 30 seconds to resend'}</span>
+                <span>{filledCount === OTP_DIGIT_COUNT ? 'Code ready' : 'Wait 30 seconds to resend'}</span>
               </div>
 
-              <Button variant="primary" onClick={() => setSubmitted(true)} disabled={filledCount !== 6}>Verify account</Button>
+              <Button variant="primary" onClick={() => setSubmitted(true)} disabled={filledCount !== OTP_DIGIT_COUNT}>Verify account</Button>
             </CardBody>
           </Card>
         )}
