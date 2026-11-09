@@ -613,6 +613,7 @@
   }
   .customer-main {
     margin-left: 0 !important;
+    transition: none;
   }
   .customer-content {
     padding: var(--space-6) var(--space-4);

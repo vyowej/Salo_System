@@ -1,0 +1,20 @@
+.rider-application-stepper { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); margin: var(--space-4) 0 var(--space-6); }
+.rider-application-stepper span { padding: var(--space-3); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-secondary); font-size: var(--font-size-xs); text-align: center; }
+.rider-application-stepper span.is-active { background: var(--accent-subtle); color: var(--text-primary); font-weight: var(--font-weight-bold); }
+.rider-application-stepper span.is-complete { background: var(--status-success-bg, var(--bg-secondary)); color: var(--status-success-text, var(--text-primary)); }
+.rider-application-review dl { display: grid; gap: var(--space-2); }
+.rider-application-review dl div { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr; gap: var(--space-3); padding: var(--space-3); border-bottom: 1px solid var(--border-secondary); }
+.rider-application-review dt { color: var(--text-secondary); }
+.rider-application-review dd { margin: 0; color: var(--text-primary); }
+.rider-application-footnote { margin: var(--space-4) 0 0; color: var(--text-muted); font-size: var(--font-size-xs); text-align: right; }
+.rider-application-success { display: grid; justify-items: center; gap: var(--space-4); padding: var(--space-8); }
+.rider-application-success > span { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: var(--status-success-bg); color: var(--status-success-text); font-size: 30px; }
+.rider-account-state { border-left: 4px solid var(--border-primary); }
+.rider-account-state.tone-warning { border-left-color: var(--salo-warning); }
+.rider-account-state.tone-info { border-left-color: var(--salo-info); }
+.rider-account-state.tone-success { border-left-color: var(--salo-success); }
+.rider-account-state.tone-danger { border-left-color: var(--salo-error); }
+@media (max-width: 600px) {
+  .rider-application-stepper { grid-template-columns: 1fr; }
+  .rider-application-review dl div { grid-template-columns: 1fr; gap: var(--space-1); }
+}

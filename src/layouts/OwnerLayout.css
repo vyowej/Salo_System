@@ -158,6 +158,7 @@
   .owner-main,
   .owner-main.sidebar-collapsed {
     margin-left: 0;
+    transition: none;
   }
 
   .owner-content {
