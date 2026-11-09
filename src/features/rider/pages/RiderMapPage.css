@@ -1,0 +1,84 @@
+.rider-map-card,
+.rider-map-legend-card {
+  margin-bottom: 1rem;
+}
+
+.rider-map-permission-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.rider-map-label {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.rider-map-permission-card h3 {
+  margin: 0.35rem 0 0;
+}
+
+.rider-map-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--salo-warning);
+  border-radius: var(--radius-lg);
+  background: var(--status-warning-bg);
+  color: var(--status-warning-text);
+}
+
+.rider-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.rider-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-primary);
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+}
+
+.legend-dot.pickup {
+  background: var(--salo-success);
+}
+
+.legend-dot.rider {
+  background: var(--salo-accent);
+}
+
+.legend-dot.dropoff {
+  background: var(--salo-warning);
+}
+
+.rider-map-last-updated {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .rider-map-permission-card,
+  .rider-map-last-updated {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
