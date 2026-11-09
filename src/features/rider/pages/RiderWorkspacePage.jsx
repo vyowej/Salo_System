@@ -5,7 +5,6 @@ import RiderLayout from '../../../layouts/RiderLayout';
 import { riderMockData, riderPreviewState } from '../mocks';
 import {
   AVAILABILITY_STATUSES,
-  COD_STATUSES,
   FAILURE_REASONS,
   HISTORY_FILTERS,
   NOTIFICATION_TYPES,
@@ -14,6 +13,7 @@ import {
   SUPPORT_CATEGORIES,
   SUPPORT_TICKET_STATUSES,
 } from '../constants/riderConstants';
+import Badge from '../../../components/common/Badge';
 import {
   RiderCard,
   RiderLinkButton,
@@ -35,7 +35,7 @@ function useScreenPreview() {
   return { state, setState };
 }
 
-function RiderPreview({ state, setState, data }) {
+function RiderPreview({ state, setState }) {
   return (
     <div className="rider-preview-bar">
       <span>{DATA.previewCopy.notConnected}</span>
@@ -153,7 +153,7 @@ function ActiveDelivery({ state, setState }) {
               <div className="rider-grid rider-top-gap"><div><strong>{data.restaurant}</strong><p>{data.pickup}</p></div><div><strong>{data.customer}</strong><p>{data.dropoff}</p></div></div>
               <div className="rider-note">{data.instructions}</div>
               <div className="rider-inline rider-top-gap"><a className="rider-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.dropoff)}`} target="_blank" rel="noreferrer">{'Open in Maps'}</a><Button variant="outline" size="sm">{'Call customer'}</Button><Button variant="ghost" size="sm" onClick={() => setTab('Report a problem')}>{'Cannot reach customer'}</Button></div>
-              <div className="rider-note rider-top-gap">{'Illustrative screen only. No turn-by-turn navigation is provided.'}</div>
+              <div className="rider-note rider-top-gap">{'Illustrative screen only. No live navigation preview is provided.'}</div>
             </RiderCard>
           </>}
           {tab === 'Proof of delivery' && <RiderCard title={'Proof of delivery'} description={DATA.previewCopy.disabledComplete}>
@@ -344,8 +344,8 @@ function Safety({ state, setState }) {
 
 function RouteContent({ state, setState }) {
   const { pathname } = useLocation();
-  if (pathname === '/rider/jobs') return <Offers state={state} setState={setState} />;
-  if (pathname === '/rider/active') return <ActiveDelivery state={state} setState={setState} />;
+  if (pathname === '/rider/jobs' || pathname === '/rider/deliveries') return <Offers state={state} setState={setState} />;
+  if (pathname === '/rider/active' || pathname === '/rider/deliveries/active') return <ActiveDelivery state={state} setState={setState} />;
   if (pathname === '/rider/map') return <MapTracking state={state} setState={setState} />;
   if (pathname === '/rider/schedule') return <Schedule state={state} setState={setState} />;
   if (pathname === '/rider/earnings') return <Earnings state={state} setState={setState} />;
