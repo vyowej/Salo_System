@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import BrandMark from '../common/BrandMark';
 import './SideBar.css';
 
@@ -21,6 +22,7 @@ export default function SideBar({
   onToggleCollapse,
   mobileOpen = false,
   onMobileClose,
+  useRouterLinks = false,
   footer,
 }) {
   // Group items by section
@@ -74,6 +76,7 @@ export default function SideBar({
                   item={item}
                   active={item.id === activeId}
                   collapsed={collapsed}
+                  useRouterLinks={useRouterLinks}
                   onClick={() => {
                     onItemClick?.(item);
                     onMobileClose?.();
@@ -95,14 +98,17 @@ export default function SideBar({
   );
 }
 
-function SideBarItem({ item, active, collapsed, onClick }) {
-  const Tag = item.href ? 'a' : 'button';
+function SideBarItem({ item, active, collapsed, onClick, useRouterLinks }) {
+  const Tag = item.href ? (useRouterLinks ? Link : 'a') : 'button';
+  const destinationProps = item.href
+    ? (useRouterLinks ? { to: item.href } : { href: item.href })
+    : {};
 
   return (
     <Tag
+      {...destinationProps}
       className={`sidebar-item ${active ? 'active' : ''}`}
-      href={item.href}
-      onClick={!item.href ? onClick : undefined}
+      onClick={onClick}
       aria-current={active ? 'page' : undefined}
       title={collapsed ? item.label : undefined}
       type={Tag === 'button' ? 'button' : undefined}

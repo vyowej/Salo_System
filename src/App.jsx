@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import RequireAccess from './routes/RequireAccess';
 import { RestaurantAccessProvider } from './features/restaurant/access/RestaurantAccessContext.jsx';
+import { AdminSessionProvider } from './features/admin/contexts/AdminSessionContext.jsx';
 
 // ── Lazy-Loaded Pages for Code-Splitting ─────────────────────────
 
@@ -25,6 +26,10 @@ const AddressesPage = lazy(() => import('./features/customer/pages/AddressesPage
 const ProfilePage = lazy(() => import('./features/customer/pages/ProfilePage'));
 const PartnerApplicationPage = lazy(() => import('./features/customer/pages/PartnerApplicationPage'));
 const InvitationsInboxPage = lazy(() => import('./features/customer/pages/InvitationsInboxPage'));
+const BusinessApplicationPage = lazy(() => import('./pages/BusinessApplication/BusinessApplicationPage'));
+const BusinessApplicationStatusPage = lazy(() => import('./pages/BusinessApplication/BusinessApplicationStatusPage'));
+const RiderApplicationPage = lazy(() => import('./pages/RiderApplication/RiderApplicationPage'));
+const RiderPartnerStatusPage = lazy(() => import('./pages/RiderApplication/RiderApplicationStatusPage'));
 
 // Owner Module (Phase 4)
 const OwnerDashboard = lazy(() => import('./features/restaurant/pages/OwnerDashboard'));
@@ -47,8 +52,6 @@ const RiderDeliveriesPage = lazy(() => import('./features/rider/pages/RiderDeliv
 const RiderActiveDeliveryPage = lazy(() => import('./features/rider/pages/RiderActiveDeliveryPage'));
 const RiderMapPage = lazy(() => import('./features/rider/pages/RiderMapPage'));
 const RiderEarningsPage = lazy(() => import('./features/rider/pages/RiderEarningsPage'));
-const RiderApplicationFormPage = lazy(() => import('./features/rider/pages/RiderApplicationFormPage'));
-const RiderApplicationStatusPage = lazy(() => import('./features/rider/pages/RiderApplicationStatusPage'));
 const RiderActivationPage = lazy(() => import('./features/rider/pages/RiderActivationPage'));
 const RiderAccountStatusPage = lazy(() => import('./features/rider/pages/RiderAccountStatusPage'));
 const RiderGoOnlinePage = lazy(() => import('./features/rider/pages/RiderGoOnlinePage'));
@@ -65,8 +68,21 @@ const AdminDashboard = lazy(() => import('./features/admin/pages/AdminDashboard'
 const AdminRestaurantsPage = lazy(() => import('./features/admin/pages/AdminRestaurantsPage'));
 const AdminRidersPage = lazy(() => import('./features/admin/pages/AdminRidersPage'));
 const AdminOrdersPage = lazy(() => import('./features/admin/pages/AdminOrdersPage'));
+const AdminOrderDetailPage = lazy(() => import('./features/admin/pages/AdminOrderDetailPage'));
+const AdminReservationsPage = lazy(() => import('./features/admin/pages/AdminReservationsPage'));
+const AdminDisputesPage = lazy(() => import('./features/admin/pages/AdminDisputesPage'));
 const AdminUsersPage = lazy(() => import('./features/admin/pages/AdminUsersPage'));
+const AdminServiceAreasPage = lazy(() => import('./features/admin/pages/AdminServiceAreasPage'));
 const AdminSettingsPage = lazy(() => import('./features/admin/pages/AdminSettingsPage'));
+const AdminSecuritySettingsPage = lazy(() => import('./features/admin/pages/AdminSecuritySettingsPage'));
+const AdminMfaPage = lazy(() => import('./features/admin/pages/AdminMfaPage'));
+const AdminAdministratorsPage = lazy(() => import('./features/admin/pages/AdminAdministratorsPage'));
+const AdminSectionPage = lazy(() => import('./features/admin/pages/AdminSectionPage'));
+const AdminFeesPage = lazy(() => import('./features/admin/pages/AdminFeesPage'));
+const AdminFinancePage = lazy(() => import('./features/admin/pages/AdminFinancePage'));
+const AdminRecordDetailPage = lazy(() => import('./features/admin/pages/AdminRecordDetailPage'));
+const AdminRouteGuard = lazy(() => import('./features/admin/routes/AdminRouteGuard'));
+const AdminPermissionRoute = lazy(() => import('./features/admin/routes/AdminPermissionRoute'));
 
 // ── Lightweight Suspense Loading Screen ──────────────────────────
 function PageLoader() {
@@ -159,6 +175,22 @@ function AppShell() {
         title: 'Become a Partner | SALO',
         description: 'Apply to grow your restaurant or food business with SALO.',
       },
+      '/become-a-partner': {
+        title: 'Restaurant Partner Application | SALO',
+        description: 'Apply to become a verified restaurant partner on SALO.',
+      },
+      '/business-application/status': {
+        title: 'Application Status | SALO Partner',
+        description: 'Track your SALO restaurant partner application progress.',
+      },
+      '/become-a-rider': {
+        title: 'Become a SALO Delivery Rider | SALO',
+        description: 'Join the SALO delivery fleet with flexible shifts, transparent payouts, and verified safety.',
+      },
+      '/rider-application/status': {
+        title: 'Rider Application Status | SALO',
+        description: 'Track your SALO delivery rider application and onboarding progress.',
+      },
       '/owner': {
         title: 'Restaurant Dashboard | SALO Owner',
         description: 'Manage orders, menus, reservations, and store performance from one dashboard.',
@@ -214,6 +246,74 @@ function AppShell() {
         title: 'Admin Dashboard | SALO',
         description: 'Monitor platform performance, partners, riders, and operational insights.',
       },
+      '/admin/mfa': {
+        title: 'Verify Administrator | SALO Admin',
+        description: 'Complete demo administrator multi-factor verification.',
+      },
+      '/admin/accounts': {
+        title: 'Accounts | SALO Admin',
+        description: 'Review account capabilities, statuses, and platform activity.',
+      },
+      '/admin/administrators': {
+        title: 'Administrators | SALO Admin',
+        description: 'Review administrator roles and invitation status.',
+      },
+      '/admin/restaurants': {
+        title: 'Restaurants | SALO Admin',
+        description: 'Manage restaurant partners and application status.',
+      },
+      '/admin/riders': {
+        title: 'Riders | SALO Admin',
+        description: 'Manage rider accounts, verification, and operations.',
+      },
+      '/admin/orders': {
+        title: 'Orders | SALO Admin',
+        description: 'Monitor platform orders and disputes.',
+      },
+      '/admin/reservations': {
+        title: 'Reservations | SALO Admin',
+        description: 'Monitor reservation activity and escalations.',
+      },
+      '/admin/finance': {
+        title: 'Finance | SALO Admin',
+        description: 'Review platform financial operations.',
+      },
+      '/admin/fees': {
+        title: 'Fees and Commissions | SALO Admin',
+        description: 'Configure fees and restaurant commissions.',
+      },
+      '/admin/discounts': {
+        title: 'Discounts and Promotions | SALO Admin',
+        description: 'Manage platform-wide discount campaigns.',
+      },
+      '/admin/service-areas': {
+        title: 'Service Areas | SALO Admin',
+        description: 'Manage supported cities, neighborhoods, and delivery zones.',
+      },
+      '/admin/reports': {
+        title: 'Reports and Analytics | SALO Admin',
+        description: 'Review platform and operational reports.',
+      },
+      '/admin/support': {
+        title: 'Support and Complaints | SALO Admin',
+        description: 'Review platform support requests and complaints.',
+      },
+      '/admin/content': {
+        title: 'Content Management | SALO Admin',
+        description: 'Manage platform content and featured collections.',
+      },
+      '/admin/activity': {
+        title: 'Activity Logs | SALO Admin',
+        description: 'Review platform audit records.',
+      },
+      '/admin/settings': {
+        title: 'Settings | SALO Admin',
+        description: 'Configure platform-wide settings and security.',
+      },
+      '/admin/settings/security': {
+        title: 'Security and Sessions | SALO Admin',
+        description: 'Review and revoke administrator sessions.',
+      },
     };
 
     const pathname = location.pathname;
@@ -260,6 +360,12 @@ function AppShell() {
           <Route path="/customer/invitations" element={<InvitationsInboxPage />} />
           <Route path="/customer/partner" element={<PartnerApplicationPage />} />
           <Route path="/partner" element={<PartnerApplicationPage />} />
+          <Route path="/become-a-partner" element={<BusinessApplicationPage />} />
+          <Route path="/business-application" element={<Navigate to="/become-a-partner" replace />} />
+          <Route path="/business-application/status" element={<BusinessApplicationStatusPage />} />
+          <Route path="/become-a-rider" element={<RiderApplicationPage />} />
+          <Route path="/rider-application" element={<Navigate to="/become-a-rider" replace />} />
+          <Route path="/rider-application/status" element={<RiderPartnerStatusPage />} />
 
           {/* ── Owner Module: every destination checks restaurant membership and permissions ── */}
           <Route path="/owner" element={<RestaurantAccessProvider><Outlet /></RestaurantAccessProvider>}>
@@ -297,9 +403,9 @@ function AppShell() {
             <Route path="profile" element={<RiderProfilePage />} />
             <Route path="settings" element={<RiderSettingsPage />} />
             <Route path="safety" element={<RiderSafetyPage />} />
-            <Route path="application" element={<RiderApplicationStatusPage />} />
-            <Route path="application-form" element={<RiderApplicationFormPage />} />
-            <Route path="application/status" element={<RiderApplicationStatusPage />} />
+            <Route path="application" element={<RiderPartnerStatusPage />} />
+            <Route path="application-form" element={<Navigate to="/become-a-rider" replace />} />
+            <Route path="application/status" element={<RiderPartnerStatusPage />} />
             <Route path="go-online" element={<RiderGoOnlinePage />} />
             <Route path="account" element={<RiderAccountStatusPage />} />
             <Route path="activate" element={<RiderActivationPage />} />
@@ -307,12 +413,35 @@ function AppShell() {
           </Route>
 
           {/* ── Admin Module (Phase 6) ── */}
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/restaurants" element={<AdminRestaurantsPage />} />
-          <Route path="/admin/riders" element={<AdminRidersPage />} />
-          <Route path="/admin/orders" element={<AdminOrdersPage />} />
-          <Route path="/admin/users" element={<AdminUsersPage />} />
-          <Route path="/admin/settings" element={<AdminSettingsPage />} />
+          <Route path="/admin" element={<AdminSessionProvider><AdminRouteGuard /></AdminSessionProvider>}>
+            <Route index element={<AdminPermissionRoute module="dashboard" topic="dashboard"><AdminDashboard /></AdminPermissionRoute>} />
+            <Route path="mfa" element={<AdminMfaPage />} />
+            <Route path="accounts" element={<AdminPermissionRoute module="accounts" topic="accounts"><AdminUsersPage /></AdminPermissionRoute>} />
+            <Route path="users" element={<AdminPermissionRoute module="accounts" topic="accounts"><AdminUsersPage /></AdminPermissionRoute>} />
+            <Route path="administrators" element={<AdminPermissionRoute module="administrators" topic="administrators"><AdminAdministratorsPage /></AdminPermissionRoute>} />
+            <Route path="restaurants" element={<AdminPermissionRoute module="restaurants" topic="restaurants"><AdminRestaurantsPage /></AdminPermissionRoute>} />
+            <Route path="riders" element={<AdminPermissionRoute module="riders" topic="riders"><AdminRidersPage /></AdminPermissionRoute>} />
+            <Route path="orders" element={<AdminPermissionRoute module="orders" topic="orders"><AdminOrdersPage /></AdminPermissionRoute>} />
+            <Route path="orders/disputes" element={<AdminPermissionRoute module="orders" topic="disputes"><AdminDisputesPage /></AdminPermissionRoute>} />
+            <Route path="orders/disputes/:caseId" element={<AdminPermissionRoute module="orders" topic="disputes"><AdminDisputesPage /></AdminPermissionRoute>} />
+            <Route path="orders/:id" element={<AdminPermissionRoute module="orders" topic="orders"><AdminOrderDetailPage /></AdminPermissionRoute>} />
+            <Route path="reservations" element={<AdminPermissionRoute module="reservations" topic="reservations"><AdminReservationsPage /></AdminPermissionRoute>} />
+            <Route path="reservations/:id" element={<AdminPermissionRoute module="reservations" topic="reservations"><AdminReservationsPage /></AdminPermissionRoute>} />
+            <Route path="finance" element={<AdminPermissionRoute module="finance" topic="finance"><AdminFinancePage /></AdminPermissionRoute>} />
+            <Route path="fees" element={<AdminPermissionRoute module="fees" topic="fees"><AdminFeesPage /></AdminPermissionRoute>} />
+            <Route path="discounts" element={<AdminPermissionRoute module="discounts" topic="discounts"><AdminSectionPage title="Discounts and Promotions" topic="discounts" routeName="campaign management" description="Manage platform-funded and partner promotions." /></AdminPermissionRoute>} />
+            <Route path="service-areas" element={<AdminPermissionRoute module="serviceAreas" topic="serviceAreas"><AdminServiceAreasPage /></AdminPermissionRoute>} />
+            <Route path="reports" element={<AdminPermissionRoute module="reports" topic="reports"><AdminSectionPage title="Reports and Analytics" topic="reports" routeName="reporting" description="Review platform, operational, and financial performance." /></AdminPermissionRoute>} />
+            <Route path="support" element={<AdminPermissionRoute module="support" topic="support"><AdminSectionPage title="Support and Complaints" topic="support" routeName="support ticket management" description="Review support cases, assignment, escalation, and resolution history." /></AdminPermissionRoute>} />
+            <Route path="content" element={<AdminPermissionRoute module="content" topic="content"><AdminSectionPage title="Content Management" topic="content" routeName="content publishing" description="Manage homepage content, featured collections, and announcements." /></AdminPermissionRoute>} />
+            <Route path="activity" element={<AdminPermissionRoute module="activity" topic="activity"><AdminSectionPage title="Activity Logs" topic="activity" routeName="audit log review" description="Review read-only administrative and platform audit events." /></AdminPermissionRoute>} />
+            <Route path="settings" element={<AdminPermissionRoute module="settings" topic="settings"><AdminSettingsPage /></AdminPermissionRoute>} />
+            <Route path="settings/security" element={<AdminPermissionRoute module="settings" topic="sessions"><AdminSecuritySettingsPage /></AdminPermissionRoute>} />
+            <Route path="accounts/:id" element={<AdminPermissionRoute module="accounts" topic="accounts"><AdminRecordDetailPage entity="accounts" /></AdminPermissionRoute>} />
+            <Route path="administrators/:id" element={<AdminPermissionRoute module="administrators" topic="administrators"><AdminRecordDetailPage entity="administrators" /></AdminPermissionRoute>} />
+            <Route path="restaurants/:id" element={<AdminPermissionRoute module="restaurants" topic="restaurants"><AdminRecordDetailPage entity="restaurants" /></AdminPermissionRoute>} />
+            <Route path="riders/:id" element={<AdminPermissionRoute module="riders" topic="riders"><AdminRecordDetailPage entity="riders" /></AdminPermissionRoute>} />
+          </Route>
 
           {/* Catch-all redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
