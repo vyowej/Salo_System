@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
@@ -7,6 +7,8 @@ import { useRestaurantAccess } from '../features/restaurant/access/useRestaurant
 import { OWNER_NAV_ITEMS } from '../features/restaurant/access/permissionMap';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
+import ProfileMenu from '../components/navigation/ProfileMenu';
+import '../components/navigation/NavigationShell.css';
 import customerService from '../services/customerService';
 import { CUSTOMER_INVITATION_COUNT } from '../features/restaurant/pages/team/teamSamples';
 import './CustomerLayout.css';
@@ -39,172 +41,6 @@ function getInitials(name) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-function CustomerProfileMenu({
-  open,
-  triggerRef,
-  placement,
-  onClose,
-  profileName,
-  profileEmail,
-  profileInitials,
-  theme,
-  menuItems = [],
-}) {
-  const popoverRef = useRef(null);
-  const [popoverStyle, setPopoverStyle] = useState({});
-
-  useEffect(() => {
-    if (!open) return undefined;
-
-    const updatePosition = () => {
-      const trigger = triggerRef?.current;
-      const popover = popoverRef.current;
-      if (!(trigger && popover)) return;
-
-      const triggerRect = trigger.getBoundingClientRect();
-      const menuWidth = Math.min(280, window.innerWidth - 24);
-      const menuHeight = popover.offsetHeight || 280;
-      const margin = 12;
-
-      let left;
-      if (placement === 'sidebar') {
-        left = Math.min(
-          triggerRect.left + triggerRect.width + 12,
-          window.innerWidth - menuWidth - margin,
-        );
-      } else {
-        left = Math.min(
-          Math.max(margin, triggerRect.right - menuWidth),
-          window.innerWidth - menuWidth - margin,
-        );
-      }
-
-      const shouldOpenUpward = placement === 'sidebar'
-        ? triggerRect.top - menuHeight - 12 > margin
-        : triggerRect.bottom + menuHeight + 12 > window.innerHeight - margin;
-
-      const top = shouldOpenUpward
-        ? triggerRect.top - menuHeight - 12
-        : triggerRect.bottom + 12;
-
-      setPopoverStyle({
-        left: `${Math.max(margin, left)}px`,
-        top: `${Math.min(Math.max(margin, top), window.innerHeight - menuHeight - margin)}px`,
-        width: `${menuWidth}px`,
-      });
-    };
-
-    const frame = requestAnimationFrame(updatePosition);
-    const handleResize = () => updatePosition();
-    const handleScroll = () => updatePosition();
-
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('scroll', handleScroll, true);
-
-    const handlePointerDown = (event) => {
-      const trigger = triggerRef?.current;
-      const popover = popoverRef.current;
-      if (!trigger || !popover) return;
-
-      const clickedInside = popover.contains(event.target) || trigger.contains(event.target);
-      if (!clickedInside) {
-        onClose();
-      }
-    };
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('scroll', handleScroll, true);
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open, placement, triggerRef, onClose]);
-
-  const effectiveMenuItems = menuItems;
-
-  if (!open) return null;
-
-  return (
-    <div
-      ref={popoverRef}
-      className="customer-profile-popover"
-      role="menu"
-      aria-label="Profile menu"
-      style={popoverStyle}
-    >
-      <div className="customer-profile-popover-header">
-        <span className="customer-profile-avatar large" aria-hidden="true">{profileInitials || 'C'}</span>
-        <div className="customer-profile-popover-copy">
-          <span className="customer-profile-name">{profileName}</span>
-          <span className="customer-profile-email">{profileEmail}</span>
-        </div>
-      </div>
-
-      <div className="customer-profile-menu-list">
-        {effectiveMenuItems.map((item) => {
-          const sharedClassName = `customer-profile-menu-item ${item.danger ? 'danger' : ''} ${item.toggle ? 'customer-profile-theme-item' : ''}`.trim();
-
-          if (item.type === 'link') {
-            return (
-              <Link
-                key={item.id}
-                to={item.href}
-                className={sharedClassName}
-                onClick={() => onClose()}
-                role="menuitem"
-              >
-                <span className="customer-profile-menu-left">
-                  {item.icon}
-                  <span>{item.label}</span>
-                </span>
-                {item.badge > 0 && <span className="customer-profile-menu-badge" aria-label={`${item.badge} invitations`}>{item.badge}</span>}
-              </Link>
-            );
-          }
-
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className={sharedClassName}
-              onClick={() => {
-                onClose();
-                item.onClick?.();
-              }}
-              role="menuitem"
-            >
-              {item.toggle ? (
-                <>
-                  <span>{item.label}</span>
-                  <span className={`customer-profile-toggle ${theme === 'dark' ? 'checked' : ''}`} aria-hidden="true">
-                    <span className="customer-profile-toggle-thumb" />
-                  </span>
-                </>
-              ) : (
-                <span className="customer-profile-menu-left">
-                  {item.icon}
-                  <span>{item.label}</span>
-                </span>
-              )}
-              {item.badge > 0 && <span className="customer-profile-menu-badge" aria-label={`${item.badge} invitations`}>{item.badge}</span>}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 export default function CustomerLayout({ children }) {
   const { user, logout } = useAuth();
   const { totalItemCount } = useCart();
@@ -213,15 +49,10 @@ export default function CustomerLayout({ children }) {
   const ownerDestination = OWNER_NAV_ITEMS.find((item) => restaurantAccess.canAccessNavigationItem(item.id))?.href || '/owner';
   const location = useLocation();
   const navigate = useNavigate();
-  const sidebarProfileTriggerRef = useRef(null);
-  const topbarProfileTriggerRef = useRef(null);
-
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [favoriteCount, setFavoriteCount] = useState(0);
-  const [sidebarProfileMenuOpen, setSidebarProfileMenuOpen] = useState(false);
-  const [topbarProfileMenuOpen, setTopbarProfileMenuOpen] = useState(false);
   const [defaultAddress, setDefaultAddress] = useState(() => customerService.getDefaultAddress());
   const [searchQuery, setSearchQuery] = useState(() => new URLSearchParams(location.search).get('q') || '');
   const [recentSearches, setRecentSearches] = useState(() => customerService.getRecentSearches());
@@ -258,23 +89,6 @@ export default function CustomerLayout({ children }) {
       window.removeEventListener('salo:favoritesUpdated', syncFavoriteCount);
     };
   }, [location.pathname]);
-
-  useEffect(() => {
-    if (!sidebarProfileMenuOpen && !topbarProfileMenuOpen) return undefined;
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setSidebarProfileMenuOpen(false);
-        setTopbarProfileMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [sidebarProfileMenuOpen, topbarProfileMenuOpen]);
 
   useEffect(() => {
     if (!addressMenuOpen) return undefined;
@@ -547,9 +361,9 @@ export default function CustomerLayout({ children }) {
   );
 
   return (
-    <div className="customer-shell">
+    <div className="customer-shell navigation-shell">
       {/* ── Sidebar ────────────────────────────────────── */}
-      <div className={`customer-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
+      <div className={`customer-sidebar navigation-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <SideBar
           items={navItems}
           activeId={activeItem}
@@ -581,45 +395,22 @@ export default function CustomerLayout({ children }) {
                 )}
               </button>
 
-              <div className="customer-profile-menu-wrap">
-                <button
-                  ref={sidebarProfileTriggerRef}
-                  type="button"
-                  className={`customer-profile-trigger ${collapsed ? 'collapsed' : ''} ${sidebarProfileMenuOpen ? 'open' : ''}`}
-                  aria-expanded={sidebarProfileMenuOpen}
-                  aria-haspopup="menu"
-                  title={collapsed ? profileName : undefined}
-                  onClick={() => setSidebarProfileMenuOpen((value) => !value)}
-                >
-                  <span className="customer-profile-avatar" aria-hidden="true">{profileInitials || 'C'}</span>
-                  {!collapsed && (
-                    <span className="customer-profile-meta">
-                      <span className="customer-profile-name">{profileName}</span>
-                      <span className="customer-profile-email">{profileEmail}</span>
-                    </span>
-                  )}
-                </button>
-
-                <CustomerProfileMenu
-                  open={sidebarProfileMenuOpen}
-                  triggerRef={sidebarProfileTriggerRef}
-                  placement="sidebar"
-                  onClose={() => setSidebarProfileMenuOpen(false)}
-                  profileName={profileName}
-                  profileEmail={profileEmail}
-                  profileInitials={profileInitials}
-                  theme={theme}
-                  toggleTheme={toggleTheme}
-                  menuItems={sidebarProfileMenuItems}
-                />
-              </div>
+              <ProfileMenu
+                placement="sidebar"
+                collapsed={collapsed}
+                profileName={profileName}
+                profileEmail={profileEmail}
+                profileInitials={profileInitials}
+                theme={theme}
+                menuItems={sidebarProfileMenuItems}
+              />
             </div>
           }
         />
       </div>
 
       {/* ── Main Area ──────────────────────────────────── */}
-      <div className={`customer-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      <div className={`customer-main navigation-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
         <TopBar
           mobileMenuOpen={mobileOpen}
           onMenuToggle={() => setMobileOpen(!mobileOpen)}
@@ -627,21 +418,16 @@ export default function CustomerLayout({ children }) {
           showThemeToggle={false}
           showUserInfo={false}
           search={topbarSearch}
-          profileButton={
-            <button
-              ref={topbarProfileTriggerRef}
-              type="button"
-              className={`topbar-profile-button ${topbarProfileMenuOpen ? 'open' : ''}`}
-              aria-label={`${profileName} profile menu`}
-              aria-expanded={topbarProfileMenuOpen}
-              aria-haspopup="menu"
-              onClick={() => setTopbarProfileMenuOpen((value) => !value)}
-            >
-              <span className="topbar-avatar" aria-hidden="true">
-                {user?.avatar ? <img src={user.avatar} alt="" /> : profileInitials}
-              </span>
-            </button>
-          }
+          profileButton={(
+            <ProfileMenu
+              profileName={profileName}
+              profileEmail={profileEmail}
+              profileInitials={profileInitials}
+              profileAvatar={user?.avatar}
+              theme={theme}
+              menuItems={topbarProfileMenuItems}
+            />
+          )}
           actions={
             <>
               <Link to="/customer/favorites" style={{ textDecoration: 'none' }} title="View favorites">
@@ -679,24 +465,11 @@ export default function CustomerLayout({ children }) {
           }
         />
 
-        <CustomerProfileMenu
-          open={topbarProfileMenuOpen}
-          triggerRef={topbarProfileTriggerRef}
-          placement="topbar"
-          onClose={() => setTopbarProfileMenuOpen(false)}
-          profileName={profileName}
-          profileEmail={profileEmail}
-          profileInitials={profileInitials}
-          theme={theme}
-          toggleTheme={toggleTheme}
-          menuItems={topbarProfileMenuItems}
-        />
-
         <main className="customer-content">
           {children}
         </main>
 
-        <nav className="customer-mobile-bottom-nav" aria-label="Customer mobile navigation">
+        <nav className="customer-mobile-bottom-nav navigation-mobile-bottom-nav" aria-label="Customer mobile navigation">
           {mobileNavItems.map((item) => {
             const isActive = item.href === '/customer'
               ? location.pathname === '/customer'
@@ -706,16 +479,16 @@ export default function CustomerLayout({ children }) {
               <Link
                 key={item.id}
                 to={item.href}
-                className={`customer-mobile-nav-item ${isActive ? 'active' : ''}`}
+                className={`customer-mobile-nav-item navigation-mobile-nav-item ${isActive ? 'active' : ''}`}
                 aria-current={isActive ? 'page' : undefined}
                 title={item.label}
               >
-                <span className="customer-mobile-nav-icon" aria-hidden="true">
+                <span className="customer-mobile-nav-icon navigation-mobile-nav-icon" aria-hidden="true">
                   {item.icon}
                 </span>
                 <span className="customer-mobile-nav-label">{item.label}</span>
                 {item.badge !== undefined && item.badge !== null && item.badge > 0 && (
-                  <span className="customer-mobile-nav-badge">{item.badge > 9 ? '9+' : item.badge}</span>
+                  <span className="customer-mobile-nav-badge navigation-mobile-nav-badge">{item.badge > 9 ? '9+' : item.badge}</span>
                 )}
               </Link>
             );
