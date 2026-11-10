@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 import { useRestaurantAccess } from '../features/restaurant/access/useRestaurantAccess';
 import { OWNER_NAV_ITEMS } from '../features/restaurant/access/permissionMap';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
-import Button from '../components/common/Button';
+import ProfileMenu from '../components/navigation/ProfileMenu';
 import restaurantService from '../services/restaurantService';
+import '../components/navigation/NavigationShell.css';
 import './OwnerLayout.css';
 
 const ICON_PATHS = {
@@ -26,7 +28,7 @@ const ICON_PATHS = {
 
 function icon(name) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d={ICON_PATHS[name]} />
     </svg>
   );
@@ -38,6 +40,7 @@ function getInitials(name) {
 
 export default function OwnerLayout({ children }) {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const access = useRestaurantAccess();
   const location = useLocation();
   const navigate = useNavigate();
@@ -55,6 +58,25 @@ export default function OwnerLayout({ children }) {
   const initials = getInitials(user?.name || user?.username);
   const selectedRestaurant = access.selectedRestaurant;
   const visibleMobileItems = navItems.filter((item) => ['overview', 'orders', 'menu', 'reservations'].includes(item.id));
+  const profileName = user?.name || selectedRestaurant?.name || 'Restaurant Team';
+  const profileEmail = user?.email || user?.username || 'Restaurant workspace';
+  const signOut = async () => {
+    await logout();
+    navigate('/');
+  };
+  const profileMenuItems = [
+    { id: 'profile', type: 'link', label: 'Business Profile', href: '/owner/profile', icon: icon('profile') },
+    { id: 'settings', type: 'link', label: 'Settings', href: '/owner/settings', icon: icon('settings') },
+    { id: 'customer', type: 'link', label: 'Switch to Customer View', href: '/customer', icon: icon('dashboard') },
+    { id: 'theme', label: 'Dark Mode', toggle: true, onClick: toggleTheme },
+    {
+      id: 'logout',
+      label: 'Sign Out',
+      icon: icon('M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7'),
+      onClick: signOut,
+      danger: true,
+    },
+  ];
 
   const restaurantSelector = (
     <label className="owner-restaurant-selector">
@@ -72,8 +94,8 @@ export default function OwnerLayout({ children }) {
   );
 
   return (
-    <div className="owner-shell">
-      <div className={`owner-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
+    <div className="owner-shell navigation-shell">
+      <div className={`owner-sidebar navigation-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <SideBar
           items={navItems}
           activeId={activeItem}
@@ -83,35 +105,42 @@ export default function OwnerLayout({ children }) {
           onMobileClose={() => setMobileOpen(false)}
           footer={(
             <div className="owner-sidebar-footer">
-              <Button as={Link} to="/customer" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link">
-                Switch to Customer View
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                fullWidth
-                className="sidebar-footer-item"
-                onClick={async () => {
-                  await logout();
-                  navigate('/');
-                }}
-              >
-                Sign Out
-              </Button>
+              <ProfileMenu
+                placement="sidebar"
+                collapsed={collapsed}
+                profileName={profileName}
+                profileEmail={profileEmail}
+                profileInitials={initials}
+                profileAvatar={user?.avatar}
+                theme={theme}
+                menuItems={profileMenuItems}
+              />
             </div>
           )}
         />
       </div>
 
-      <div className={`owner-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      <div className={`owner-main navigation-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
         <TopBar
-          userName={user?.name || selectedRestaurant?.name || 'Restaurant Team'}
+          userName={profileName}
           userRole={access.isOwner ? (access.actorType === 'co-owner' ? 'Co-owner' : 'Restaurant Owner') : access.membership?.position || 'Restaurant Staff'}
           userInitials={initials}
           mobileMenuOpen={mobileOpen}
           onMenuToggle={() => setMobileOpen((value) => !value)}
           notificationCount={0}
           showNotifications={false}
+          showThemeToggle={false}
+          showUserInfo={false}
+          profileButton={(
+            <ProfileMenu
+              profileName={profileName}
+              profileEmail={profileEmail}
+              profileInitials={initials}
+              profileAvatar={user?.avatar}
+              theme={theme}
+              menuItems={profileMenuItems}
+            />
+          )}
           actions={restaurantSelector}
         />
         {restaurantService.dataSource === 'demo' && <div className="owner-demo-status" role="status">Demo Data</div>}
@@ -121,14 +150,14 @@ export default function OwnerLayout({ children }) {
           )}
           {children}
         </main>
-        <nav className="owner-mobile-bottom-nav" aria-label="Quick restaurant navigation">
+        <nav className="owner-mobile-bottom-nav navigation-mobile-bottom-nav" aria-label="Quick restaurant navigation">
           {visibleMobileItems.map((item) => (
-            <Link key={item.id} to={item.href} className={item.id === activeItem ? 'active' : ''} aria-current={item.id === activeItem ? 'page' : undefined}>
+            <Link key={item.id} to={item.href} className={`navigation-mobile-nav-item ${item.id === activeItem ? 'active' : ''}`} aria-current={item.id === activeItem ? 'page' : undefined}>
               {icon(item.icon)}
               <span>{item.label}</span>
             </Link>
           ))}
-          <Link to="/customer" aria-label="Switch to customer side">
+          <Link to="/customer" className="navigation-mobile-nav-item" aria-label="Switch to customer side">
             <span aria-hidden="true">↗</span>
             <span>Customer</span>
           </Link>
