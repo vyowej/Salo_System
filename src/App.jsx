@@ -77,9 +77,13 @@ const AdminSettingsPage = lazy(() => import('./features/admin/pages/AdminSetting
 const AdminSecuritySettingsPage = lazy(() => import('./features/admin/pages/AdminSecuritySettingsPage'));
 const AdminMfaPage = lazy(() => import('./features/admin/pages/AdminMfaPage'));
 const AdminAdministratorsPage = lazy(() => import('./features/admin/pages/AdminAdministratorsPage'));
-const AdminSectionPage = lazy(() => import('./features/admin/pages/AdminSectionPage'));
 const AdminFeesPage = lazy(() => import('./features/admin/pages/AdminFeesPage'));
 const AdminFinancePage = lazy(() => import('./features/admin/pages/AdminFinancePage'));
+const AdminActivityPage = lazy(() => import('./features/admin/pages/AdminActivityPage'));
+const AdminContentPage = lazy(() => import('./features/admin/pages/AdminContentPage'));
+const AdminDiscountsPage = lazy(() => import('./features/admin/pages/AdminDiscountsPage'));
+const AdminReportsPage = lazy(() => import('./features/admin/pages/AdminReportsPage'));
+const AdminSupportPage = lazy(() => import('./features/admin/pages/AdminSupportPage'));
 const AdminRecordDetailPage = lazy(() => import('./features/admin/pages/AdminRecordDetailPage'));
 const AdminRouteGuard = lazy(() => import('./features/admin/routes/AdminRouteGuard'));
 const AdminPermissionRoute = lazy(() => import('./features/admin/routes/AdminPermissionRoute'));
@@ -429,12 +433,12 @@ function AppShell() {
             <Route path="reservations/:id" element={<AdminPermissionRoute module="reservations" topic="reservations"><AdminReservationsPage /></AdminPermissionRoute>} />
             <Route path="finance" element={<AdminPermissionRoute module="finance" topic="finance"><AdminFinancePage /></AdminPermissionRoute>} />
             <Route path="fees" element={<AdminPermissionRoute module="fees" topic="fees"><AdminFeesPage /></AdminPermissionRoute>} />
-            <Route path="discounts" element={<AdminPermissionRoute module="discounts" topic="discounts"><AdminSectionPage title="Discounts and Promotions" topic="discounts" routeName="campaign management" description="Manage platform-funded and partner promotions." /></AdminPermissionRoute>} />
+            <Route path="discounts" element={<AdminPermissionRoute module="discounts" topic="discounts"><AdminDiscountsPage /></AdminPermissionRoute>} />
             <Route path="service-areas" element={<AdminPermissionRoute module="serviceAreas" topic="serviceAreas"><AdminServiceAreasPage /></AdminPermissionRoute>} />
-            <Route path="reports" element={<AdminPermissionRoute module="reports" topic="reports"><AdminSectionPage title="Reports and Analytics" topic="reports" routeName="reporting" description="Review platform, operational, and financial performance." /></AdminPermissionRoute>} />
-            <Route path="support" element={<AdminPermissionRoute module="support" topic="support"><AdminSectionPage title="Support and Complaints" topic="support" routeName="support ticket management" description="Review support cases, assignment, escalation, and resolution history." /></AdminPermissionRoute>} />
-            <Route path="content" element={<AdminPermissionRoute module="content" topic="content"><AdminSectionPage title="Content Management" topic="content" routeName="content publishing" description="Manage homepage content, featured collections, and announcements." /></AdminPermissionRoute>} />
-            <Route path="activity" element={<AdminPermissionRoute module="activity" topic="activity"><AdminSectionPage title="Activity Logs" topic="activity" routeName="audit log review" description="Review read-only administrative and platform audit events." /></AdminPermissionRoute>} />
+            <Route path="reports" element={<AdminPermissionRoute module="reports" topic="reports"><AdminReportsPage /></AdminPermissionRoute>} />
+            <Route path="support" element={<AdminPermissionRoute module="support" topic="support"><AdminSupportPage /></AdminPermissionRoute>} />
+            <Route path="content" element={<AdminPermissionRoute module="content" topic="content"><AdminContentPage /></AdminPermissionRoute>} />
+            <Route path="activity" element={<AdminPermissionRoute module="activity" topic="activity"><AdminActivityPage /></AdminPermissionRoute>} />
             <Route path="settings" element={<AdminPermissionRoute module="settings" topic="settings"><AdminSettingsPage /></AdminPermissionRoute>} />
             <Route path="settings/security" element={<AdminPermissionRoute module="settings" topic="sessions"><AdminSecuritySettingsPage /></AdminPermissionRoute>} />
             <Route path="accounts/:id" element={<AdminPermissionRoute module="accounts" topic="accounts"><AdminRecordDetailPage entity="accounts" /></AdminPermissionRoute>} />
