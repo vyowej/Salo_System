@@ -76,21 +76,27 @@ export function getReservationBreakdown(reservationId) {
   return reservation.feeBreakdown;
 }
 
-export function getPlatformTotals() {
-  const orders = getOrdersWithFinancials();
+export function getPlatformTotals({ orderIds, reservationIds } = {}) {
+  const selectedIds = orderIds ? new Set(orderIds) : null;
+  const orders = getOrdersWithFinancials().filter((order) => !selectedIds || selectedIds.has(order.id));
+  const selectedReservations = ADMIN_MOCK_DATA.reservations.filter((reservation) => {
+    if (reservationIds) return reservationIds.has(reservation.id);
+    if (selectedIds) return Boolean(reservation.relatedOrderId && selectedIds.has(reservation.relatedOrderId));
+    return true;
+  });
   const total = (selector) => orders.reduce((sum, order) => sum + selector(order.feeBreakdown), 0);
-  const reservationFees = ADMIN_MOCK_DATA.reservations.reduce(
+  const reservationFees = selectedReservations.reduce(
     (sum, reservation) => sum + getReservationBreakdown(reservation.id).reservationFee,
     0,
   );
-  const reservationRefunds = ADMIN_MOCK_DATA.reservations.reduce(
+  const reservationRefunds = selectedReservations.reduce(
     (sum, reservation) => sum + (reservation.cancellationInfo?.refundStatus === 'Refund confirmed'
       ? getReservationBreakdown(reservation.id).reservationFee
       : 0),
     0,
   );
-  const payouts = getPayoutRecords();
-  const codRemittances = getCodRemittances();
+  const payouts = getPayoutRecords().filter((payout) => !selectedIds || selectedIds.has(payout.orderId));
+  const codRemittances = getCodRemittances().filter((remittance) => !selectedIds || selectedIds.has(remittance.orderId));
   const platformCommission = total((breakdown) => breakdown.platformCommission.amount);
   const serviceFees = total((breakdown) => breakdown.customerServiceFee);
   const platformDiscounts = total((breakdown) => (
@@ -107,6 +113,7 @@ export function getPlatformTotals() {
     discounts: total((breakdown) => breakdown.discount.amount),
     refunds: total((breakdown) => breakdown.refundAdjustment.amount) + reservationRefunds,
     restaurantPayable: total((breakdown) => breakdown.restaurantPayable),
+    riderEarnings: payouts.filter((payout) => payout.kind === 'Rider').reduce((sum, payout) => sum + payout.netPayable, 0),
     reservationFees,
     pendingPayouts: payouts.filter((payout) => payout.status !== 'Paid').reduce((sum, payout) => sum + payout.netPayable, 0),
     outstandingCodRemittances: codRemittances.reduce((sum, remittance) => sum + remittance.outstandingAmount, 0),
