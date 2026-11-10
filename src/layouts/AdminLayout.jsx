@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
+import ProfileMenu from '../components/navigation/ProfileMenu';
 import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
 import { getAdminNavItems } from '../features/admin/constants';
 import useAdminSession from '../features/admin/contexts/useAdminSession';
+import '../components/navigation/NavigationShell.css';
 import './AdminLayout.css';
 
 const ICON_PATHS = {
@@ -34,6 +37,7 @@ function icon(path) {
 
 export default function AdminLayout({ children }) {
   const { logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const { currentAdmin, admins, isDemoMode, selectDemoAdmin, resetMfa } = useAdminSession();
   const location = useLocation();
   const navigate = useNavigate();
@@ -53,10 +57,27 @@ export default function AdminLayout({ children }) {
     ? 'Security and Sessions'
     : navItems.find((item) => item.id === activeItem)?.label || 'Admin';
   const initials = currentAdmin.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase();
+  const signOut = async () => {
+    resetMfa();
+    await logout();
+    navigate('/');
+  };
+  const profileMenuItems = [
+    { id: 'settings', type: 'link', label: 'Settings', href: '/admin/settings', icon: icon(ICON_PATHS.settings) },
+    { id: 'customer', type: 'link', label: 'Switch to Customer View', href: '/customer', icon: icon(ICON_PATHS.dashboard) },
+    { id: 'theme', label: 'Dark Mode', toggle: true, onClick: toggleTheme },
+    {
+      id: 'logout',
+      label: 'Sign Out',
+      icon: icon('M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7'),
+      onClick: signOut,
+      danger: true,
+    },
+  ];
 
   return (
-    <div className="admin-shell">
-      <div className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
+    <div className="admin-shell navigation-shell">
+      <div className={`admin-sidebar navigation-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <SideBar
           items={navItems}
           activeId={activeItem}
@@ -78,27 +99,24 @@ export default function AdminLayout({ children }) {
                   </select>
                 </div>
               )}
-              <Button as={Link} to="/customer" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link">
-                <span className="sidebar-footer-label">Switch to Customer View</span>
-              </Button>
+              <ProfileMenu
+                placement="sidebar"
+                collapsed={collapsed}
+                profileName={currentAdmin.name}
+                profileEmail={currentAdmin.email}
+                profileInitials={initials}
+                theme={theme}
+                menuItems={profileMenuItems}
+              />
               <Button as={Link} to="/owner" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link">
                 <span className="sidebar-footer-label">Switch to Restaurant View</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                fullWidth
-                className="sidebar-footer-item"
-                onClick={() => { resetMfa(); logout(); navigate('/'); }}
-              >
-                <span className="sidebar-footer-label">Sign Out</span>
               </Button>
             </div>
           )}
         />
       </div>
 
-      <div className={`admin-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      <div className={`admin-main navigation-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
         <TopBar
           title={topBarTitle}
           userName={currentAdmin.name}
@@ -107,6 +125,17 @@ export default function AdminLayout({ children }) {
           mobileMenuOpen={mobileOpen}
           onMenuToggle={() => setMobileOpen((value) => !value)}
           showNotifications={false}
+          showThemeToggle={false}
+          showUserInfo={false}
+          profileButton={(
+            <ProfileMenu
+              profileName={currentAdmin.name}
+              profileEmail={currentAdmin.email}
+              profileInitials={initials}
+              theme={theme}
+              menuItems={profileMenuItems}
+            />
+          )}
           actions={isDemoMode ? <Badge size="sm" variant="warning">Demo</Badge> : null}
         />
         <main className="admin-content">{children}</main>
