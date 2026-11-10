@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
+import ProfileMenu from '../components/navigation/ProfileMenu';
 import Button from '../components/common/Button';
-import Badge from '../components/common/Badge';
 import { getRiderMock } from '../features/rider/mocks';
 import { MOBILE_PRIMARY_NAV_KEYS, RIDER_NAV_ITEMS } from '../features/rider/constants/riderConstants';
 import ScenarioLink from '../features/rider/components/ScenarioLink';
 import { withScenario } from '../features/rider/utils/scenarioLinks';
 import useScenario from '../features/rider/hooks/useScenario';
+import '../components/navigation/NavigationShell.css';
 import './RiderLayout.css';
 
 const iconPaths = {
@@ -27,11 +29,12 @@ const iconPaths = {
 };
 
 function icon(path) {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d={path} /></svg>;
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d={path} /></svg>;
 }
 
 export default function RiderLayout({ children }) {
   const { logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
@@ -57,12 +60,30 @@ export default function RiderLayout({ children }) {
   const activePath = location.pathname;
   const current = items.find((item) => item.path === activePath || (item.path !== '/rider' && activePath.startsWith(`${item.path}/`)))?.key || 'dashboard';
   const activeDelivery = deliveries?.active;
+  const signOut = async () => {
+    await logout();
+    navigate('/');
+  };
+  const profileMenuItems = [
+    { id: 'profile', type: 'link', label: 'Rider Profile', href: withScenario('/rider/profile', location.search), icon: icon(iconPaths.profile) },
+    { id: 'settings', type: 'link', label: 'Settings', href: withScenario('/rider/settings', location.search), icon: icon(iconPaths.settings) },
+    { id: 'safety', type: 'link', label: 'Safety & emergency help', href: withScenario('/rider/safety', location.search), icon: icon(iconPaths.support) },
+    { id: 'customer', type: 'link', label: 'Switch to Customer View', href: withScenario('/customer', location.search), icon: icon(iconPaths.dashboard) },
+    { id: 'theme', label: 'Dark Mode', toggle: true, onClick: toggleTheme },
+    {
+      id: 'logout',
+      label: 'Sign Out',
+      icon: icon('M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7'),
+      onClick: signOut,
+      danger: true,
+    },
+  ];
   const primaryNavItems = items.filter((item) => MOBILE_PRIMARY_NAV_KEYS.includes(item.key));
   const moreNavItems = items.filter((item) => !MOBILE_PRIMARY_NAV_KEYS.includes(item.key));
 
   return (
-    <div className="rider-shell">
-      <div className={`rider-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
+    <div className="rider-shell navigation-shell">
+      <div className={`rider-sidebar navigation-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <SideBar
           items={items}
           activeId={current}
@@ -72,28 +93,59 @@ export default function RiderLayout({ children }) {
           onMobileClose={() => setMobileOpen(false)}
           footer={(
             <div className="rider-sidebar-footer">
-              <Button as={ScenarioLink} to="/customer" variant="ghost" size="sm" fullWidth>{'Switch to customer view'}</Button>
-              <Button as={ScenarioLink} to="/rider/safety" variant="ghost" size="sm" fullWidth>{'Safety & emergency help'}</Button>
-              <Button variant="ghost" size="sm" fullWidth onClick={async () => { await logout(); navigate('/'); }}>{'Sign out'}</Button>
+              <ProfileMenu
+                placement="sidebar"
+                collapsed={collapsed}
+                profileName={profile.name}
+                profileEmail={profile.email}
+                profileInitials={profile.initials}
+                profileAvatar={profile.photo}
+                theme={theme}
+                menuItems={profileMenuItems}
+              />
             </div>
           )}
         />
       </div>
 
-      <div className={`rider-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      <div className={`rider-main navigation-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
         <TopBar
           userName={profile.name}
           userRole={profile.accountStatus}
           userInitials={profile.initials}
           showNotifications={false}
+          showThemeToggle={false}
+          showUserInfo={false}
+          mobileMenuOpen={mobileOpen}
+          profileButton={(
+            <ProfileMenu
+              profileName={profile.name}
+              profileEmail={profile.email}
+              profileInitials={profile.initials}
+              profileAvatar={profile.photo}
+              theme={theme}
+              menuItems={profileMenuItems}
+            />
+          )}
           onMenuToggle={() => setMobileOpen((value) => !value)}
           actions={(
-            <div className="rider-top-actions">
-              <Button as={ScenarioLink} to="/rider/notifications" variant="ghost" size="sm" aria-label="Rider notifications">
-                {'Notifications'}
-                {unreadNotifications > 0 && <Badge variant="primary" size="sm">{unreadNotifications}</Badge>}
-              </Button>
-            </div>
+            <ScenarioLink
+              to="/rider/notifications"
+              className="topbar-btn"
+              aria-label={`Notifications${unreadNotifications ? ` (${unreadNotifications})` : ''}`}
+              title="View notifications"
+              style={{ textDecoration: 'none' }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+              {unreadNotifications > 0 && (
+                <span className="topbar-notification-dot" aria-hidden="true">
+                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                </span>
+              )}
+            </ScenarioLink>
           )}
         />
         <main className="rider-content">
@@ -107,12 +159,12 @@ export default function RiderLayout({ children }) {
           )}
           {children}
         </main>
-        <nav className="rider-mobile-nav" aria-label="Rider mobile navigation">
+        <nav className="rider-mobile-nav navigation-mobile-bottom-nav" aria-label="Rider mobile navigation">
           {primaryNavItems.map((item) => (
             <ScenarioLink
               key={item.key}
               to={item.href}
-              className={`rider-mobile-nav-item ${current === item.key ? 'is-active' : ''}`}
+              className={`rider-mobile-nav-item navigation-mobile-nav-item ${current === item.key ? 'is-active active' : ''}`}
               aria-current={current === item.key ? 'page' : undefined}
               onClick={() => setMoreOpen(false)}
             >
@@ -122,7 +174,7 @@ export default function RiderLayout({ children }) {
           ))}
           <button
             type="button"
-            className={`rider-mobile-nav-item ${moreOpen || moreNavItems.some((item) => item.key === current) ? 'is-active' : ''}`}
+            className={`rider-mobile-nav-item navigation-mobile-nav-item ${moreOpen || moreNavItems.some((item) => item.key === current) ? 'is-active active' : ''}`}
             aria-expanded={moreOpen}
             aria-controls="rider-mobile-more-menu"
             onClick={() => setMoreOpen((open) => !open)}
