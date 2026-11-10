@@ -3,44 +3,6 @@
    Shared dashboard layout with administration content
    ============================================================ */
 
-.admin-shell {
-  display: flex;
-  min-height: 100dvh;
-  background: var(--bg-primary);
-}
-
-.admin-sidebar {
-  width: var(--sidebar-width);
-  flex-shrink: 0;
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  z-index: var(--z-sticky);
-  transition: width var(--transition-normal);
-  background: var(--shell-bg);
-  border-right: 1px solid var(--shell-border);
-  overflow: hidden;
-  transition: width var(--transition-normal), transform var(--transition-normal);
-}
-
-.admin-sidebar.collapsed {
-  width: var(--sidebar-collapsed-width);
-}
-
-.admin-main {
-  flex: 1;
-  margin-left: var(--sidebar-width);
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  transition: margin-left var(--transition-normal);
-}
-
-.admin-main.sidebar-collapsed {
-  margin-left: var(--sidebar-collapsed-width);
-}
-
 .admin-content {
   flex: 1;
   padding: var(--space-8);
@@ -50,22 +12,6 @@
 }
 
 @media (max-width: 1024px) {
-  .admin-sidebar {
-    transform: translateX(-100%);
-    width: var(--sidebar-width) !important;
-    z-index: var(--z-overlay);
-  }
-
-  .admin-sidebar.mobile-open {
-    transform: translateX(0);
-    box-shadow: var(--shadow-xl);
-  }
-
-  .admin-main,
-  .admin-main.sidebar-collapsed {
-    margin-left: 0;
-  }
-
   .admin-content {
     padding: var(--space-5) var(--space-4);
   }
