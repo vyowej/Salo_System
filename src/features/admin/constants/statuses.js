@@ -29,4 +29,4 @@ export const ADMIN_FEE_STATUS_TRANSITIONS = {
   Deactivated: [],
 };
 export const ADMIN_HIGH_VALUE_REFUND_THRESHOLD = 5000;
-export const ADMIN_TICKET_STATUSES = ['Submitted', 'Under Review', 'In Progress', 'Escalated', 'Resolved', 'Closed'];
+export const ADMIN_TICKET_STATUSES = ['Submitted', 'Open', 'Under Review', 'Awaiting Response', 'Escalated', 'Resolved', 'Closed'];
