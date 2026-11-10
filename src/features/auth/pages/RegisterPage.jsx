@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from '../../../layouts/AuthLayout';
 import { Input } from '../../../components/forms';
@@ -6,12 +6,21 @@ import Button from '../../../components/common/Button';
 import { useAuth } from '../../../hooks/useAuth';
 import './RegisterPage.css';
 
+/** Slugify a string to a safe username fragment */
+function toUsernameSlug(str) {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 20);
+}
+
 export default function RegisterPage({ embedded = false, onSwitch }) {
   const navigate = useNavigate();
   const { register, loading } = useAuth();
 
   const [formData, setFormData] = useState({
-    fullName: '',
+    firstName: '',
+    lastName: '',
     username: '',
     email: '',
     password: '',
@@ -21,9 +30,24 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
 
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
+  // Track whether the user has manually customised the username field
+  const isUsernameCustomized = useRef(false);
+
+  // Auto-generate username from first + last name unless manually edited
+  useEffect(() => {
+    if (isUsernameCustomized.current) return;
+    const slug = toUsernameSlug(formData.firstName + formData.lastName);
+    setFormData((prev) => ({ ...prev, username: slug }));
+  }, [formData.firstName, formData.lastName]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+
+    if (name === 'username') {
+      // Once the user touches the username field, stop auto-generating
+      isUsernameCustomized.current = true;
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
@@ -35,9 +59,15 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
     e.preventDefault();
     setError(null);
 
+    const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim();
+
     // Validation
-    if (!formData.fullName.trim()) {
-      setError('Please provide your full name.');
+    if (!formData.firstName.trim()) {
+      setError('Please provide your first name.');
+      return;
+    }
+    if (!formData.lastName.trim()) {
+      setError('Please provide your last name.');
       return;
     }
     if (!formData.username.trim() || formData.username.length < 3) {
@@ -63,7 +93,10 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
 
     try {
       await register({
-        fullName: formData.fullName,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        fullName,
+        name: fullName,
         username: formData.username,
         email: formData.email,
         password: formData.password,
@@ -96,30 +129,32 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
       )}
 
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
+        {/* Row 1 — Composite name */}
         <div className="grid-cols-2" style={{ gap: 'var(--space-3)' }}>
           <Input
-            id="register-fullname"
-            name="fullName"
-            label="Full Name"
-            placeholder="e.g. Cassidy Santos"
-            value={formData.fullName}
+            id="register-firstname"
+            name="firstName"
+            label="First Name"
+            placeholder="e.g. Cassidy"
+            value={formData.firstName}
             onChange={handleChange}
             required
-            autoComplete="name"
+            autoComplete="given-name"
           />
 
           <Input
-            id="register-username"
-            name="username"
-            label="Username"
-            placeholder="e.g. cassidys"
-            value={formData.username}
+            id="register-lastname"
+            name="lastName"
+            label="Last Name"
+            placeholder="e.g. Santos"
+            value={formData.lastName}
             onChange={handleChange}
             required
-            autoComplete="username"
+            autoComplete="family-name"
           />
         </div>
 
+        {/* Row 2 — Email */}
         <Input
           id="register-email"
           name="email"
@@ -132,6 +167,24 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
           autoComplete="email"
         />
 
+        {/* Row 3 — Username */}
+        <div className="register-username-field">
+          <Input
+            id="register-username"
+            name="username"
+            label="Username"
+            placeholder="e.g. cassidys"
+            value={formData.username}
+            onChange={handleChange}
+            required
+            autoComplete="username"
+          />
+          <p className="register-field-hint">
+            Your unique handle on SALO — auto-suggested from your name, or customize it.
+          </p>
+        </div>
+
+        {/* Row 4 — Passwords */}
         <div className="grid-cols-2" style={{ gap: 'var(--space-3)' }}>
           <Input
             id="register-password"

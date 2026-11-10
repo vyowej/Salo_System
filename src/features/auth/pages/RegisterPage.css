@@ -9,3 +9,17 @@
   margin-top: calc(-1 * var(--space-2));
   line-height: 1.4;
 }
+
+/* Username field wrapper — collapses hint margin into the form gap */
+.register-username-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.register-field-hint {
+  margin: 0;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
