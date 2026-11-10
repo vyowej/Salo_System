@@ -152,7 +152,13 @@ export const authService = {
       // Local fallback in development
       const newUser = {
         id: Date.now(),
-        name: userData.fullName || userData.name,
+        name:
+          userData.fullName ||
+          userData.name ||
+          [userData.firstName, userData.lastName].filter(Boolean).join(' ') ||
+          userData.email.split('@')[0],
+        firstName: userData.firstName || null,
+        lastName: userData.lastName || null,
         username: userData.username,
         email: userData.email,
         role: userData.role || 'customer',
