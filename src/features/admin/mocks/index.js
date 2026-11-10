@@ -1,4 +1,4 @@
-import { ADMIN_MOCK_DATA } from './data';
+﻿import { ADMIN_MOCK_DATA } from './data';
 import {
   getCodRemittances,
   getFeeConfigurations,
@@ -9,6 +9,7 @@ import {
   getOrdersWithFinancials,
 } from './financials';
 import { getAdminDisputes } from './disputes';
+import { getAdminWorkspaceRecords, getAdminContentData } from './operations';
 
 const accountDirectory = [
   ...ADMIN_MOCK_DATA.customers.map((customer) => ({
@@ -81,12 +82,12 @@ const topics = {
   reservations: ADMIN_MOCK_DATA.reservations,
   finance: { ...ADMIN_MOCK_DATA.finance, totals: getPlatformTotals(), transactions: getFinancialTransactions(), cod: getCodRemittances(), refunds: getRefundRecords(), payouts: getPayoutRecords() },
   fees: getFeeConfigurations(),
-  discounts: [],
+  discounts: getAdminWorkspaceRecords('discounts'),
   reports: { totals: getPlatformTotals(), transactions: getFinancialTransactions() },
   disputes: getAdminDisputes(),
-  support: [],
-  content: [],
-  activity: [],
+  support: getAdminWorkspaceRecords('support'),
+  content: getAdminContentData(),
+  activity: getAdminWorkspaceRecords('activity'),
   settings: ADMIN_MOCK_DATA.settings,
   sessions: ADMIN_MOCK_DATA.sessions,
   administratorActivity: ADMIN_MOCK_DATA.administratorActivity,
@@ -122,3 +123,7 @@ export {
   reconcilePayout,
 } from './financials';
 export { createAdminDispute, getAdminDisputes, saveAdminDisputes } from './disputes';
+export { getAdminWorkspaceRecords, saveAdminWorkspaceRecords, getAdminCategories, getAdminContentData } from './operations';
+export { getDashboardMetrics } from './dashboard';
+export { getAdminReportData, getReportFilterOptions } from './reports';
+
