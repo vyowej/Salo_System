@@ -1,0 +1,206 @@
+/* ============================================================
+   SALO — MobileOrderBar + BottomSheet
+   Only shown below the tablet breakpoint (< 1024px).
+   ============================================================ */
+
+/* ── Floating bottom bar ────────────────────────────────── */
+.mob-bar {
+  position: fixed;
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  /* Sit above the mobile nav (76px) */
+  bottom: calc(76px + var(--space-3) + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - var(--space-8));
+  max-width: 480px;
+  z-index: var(--z-sticky);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+
+  padding: var(--space-3) var(--space-4);
+  background: var(--accent);
+  color: var(--accent-text);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  border: none;
+  font-family: var(--font-body);
+
+  animation: mob-bar-in 220ms ease both;
+}
+
+@keyframes mob-bar-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mob-bar { animation: none; }
+}
+
+.mob-bar:hover {
+  background: var(--accent-hover);
+}
+
+.mob-bar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mob-bar-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.25);
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+}
+
+.mob-bar-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.mob-bar-total {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.mob-bar-cta {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  opacity: 0.9;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Backdrop ───────────────────────────────────────────── */
+.mob-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-bg);
+  z-index: calc(var(--z-modal) - 2);
+  animation: mob-backdrop-in 220ms ease both;
+}
+
+@keyframes mob-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mob-backdrop { animation: none; }
+}
+
+/* ── Bottom sheet ───────────────────────────────────────── */
+.mob-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: calc(var(--z-modal) - 1);
+  /* Max height so it doesn't cover the whole screen */
+  max-height: 85dvh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  animation: mob-sheet-in 280ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes mob-sheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mob-sheet { animation: none; }
+}
+
+/* Drag handle visual hint */
+.mob-sheet-handle {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-2) 0 var(--space-1);
+  cursor: grab;
+}
+
+.mob-sheet-handle-bar {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--border-primary);
+}
+
+/* Close button row */
+.mob-sheet-topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4) var(--space-2);
+}
+
+.mob-sheet-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-secondary);
+}
+
+.mob-sheet-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-full);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  line-height: 1;
+}
+
+.mob-sheet-close:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+/* The OrderPanel inside the sheet fills remaining space */
+.mob-sheet-panel {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* Remove the outer card border/radius when inside the sheet */
+}
+
+.mob-sheet-panel .op-panel {
+  border: none;
+  border-radius: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Only visible below 1024px ──────────────────────────── */
+@media (min-width: 1024px) {
+  .mob-bar,
+  .mob-backdrop,
+  .mob-sheet {
+    display: none !important;
+  }
+}

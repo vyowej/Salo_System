@@ -27,7 +27,7 @@ export default function CodSection() {
 
   return (
     <section className="rider-cod-section">
-      <Card>
+      <Card className="rider-cod-card card--tint-brown">
         <CardBody>
           <div className="rider-cod-header">
             <div>
@@ -38,12 +38,12 @@ export default function CodSection() {
           </div>
 
           <div className="rider-cod-grid">
-            <div className="rider-cod-balance-card">
+            <div className="rider-cod-balance-card rider-cod-balance-card--brown">
               <span>Balance</span>
               <strong>{data?.balance || '—'}</strong>
               <small>Not income</small>
             </div>
-            <div className="rider-cod-balance-card">
+            <div className="rider-cod-balance-card rider-cod-balance-card--brown">
               <span>Collected amount</span>
               <strong>{data?.amountToCollect || '—'}</strong>
               <small>Read-only preview</small>
@@ -54,7 +54,7 @@ export default function CodSection() {
             <Button variant="primary" size="sm">Confirm exact amount collected</Button>
           </div>
 
-          <div className="rider-remittance-panel">
+          <div className="rider-remittance-panel rider-remittance-panel--brown">
             <div className="rider-remittance-row">
               <span>Pending Admin confirmation</span>
               <strong>{data?.remittance?.amount || '—'}</strong>

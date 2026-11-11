@@ -74,11 +74,25 @@
   justify-content: space-between;
   align-items: center;
   gap: var(--space-3);
-  min-height: 64px;
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border-secondary);
+  min-height: var(--space-16);
+  padding: var(--card-padding);
+  border: var(--card-border-width) solid var(--card-brown-border);
+  border-radius: var(--card-radius);
+  background: var(--card-brown-bg);
   color: var(--text-primary);
   text-decoration: none;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.rider-ticket-list-item:hover {
+  border-color: var(--card-brown-border-hover);
+  background: var(--card-brown-bg-hover);
+  box-shadow: var(--shadow-xs);
+}
+
+.rider-ticket-list-item:focus-visible {
+  outline: var(--card-focus-ring-width) solid var(--card-brown-accent);
+  outline-offset: var(--card-focus-ring-offset);
 }
 
 .rider-ticket-list-item div {
@@ -90,6 +104,34 @@
 .rider-ticket-detail-header span {
   color: var(--text-muted);
   font-size: var(--font-size-xs);
+}
+
+.rider-ticket-list-item--submitted .badge,
+.rider-ticket-list-item--under_review .badge,
+.rider-ticket-list-item--awaiting_rider_response .badge,
+.rider-ticket-detail--gold .rider-ticket-detail-header .badge {
+  background: var(--card-gold-chip);
+  color: var(--card-gold-text);
+}
+
+.rider-ticket-list-item--submitted .badge-dot,
+.rider-ticket-list-item--under_review .badge-dot,
+.rider-ticket-list-item--awaiting_rider_response .badge-dot,
+.rider-ticket-detail--gold .rider-ticket-detail-header .badge-dot {
+  background: var(--card-gold-accent);
+}
+
+.rider-ticket-list-item--resolved .badge,
+.rider-ticket-list-item--closed .badge,
+.rider-ticket-detail--green .rider-ticket-detail-header .badge {
+  background: var(--card-green-chip);
+  color: var(--card-green-text);
+}
+
+.rider-ticket-list-item--resolved .badge-dot,
+.rider-ticket-list-item--closed .badge-dot,
+.rider-ticket-detail--green .rider-ticket-detail-header .badge-dot {
+  background: var(--card-green-accent);
 }
 
 .rider-support-success {

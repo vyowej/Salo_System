@@ -22,10 +22,10 @@ export default function AdminSectionPage({ title, description, routeName }) {
         <section className="admin-shell-page">
           <PageHeader title={title} description={description} />
           <div className="admin-stat-grid">
-            <StatCard label="Order GMV" value={formatPeso(totals.gmv)} hint="Customer totals from stored order snapshots" />
-            <StatCard label="Platform revenue" value={formatPeso(totals.platformRevenue)} hint="Commission, fees, discount funding, reservation fees" />
-            <StatCard label="Restaurant sales" value={formatPeso(totals.restaurantSales)} hint="Before commission and adjustments" />
-            <StatCard label="Refunds / adjustments" value={formatPeso(totals.refunds)} hint="Recorded order refund adjustments" />
+            <StatCard label="Order GMV" value={formatPeso(totals.gmv)} hint="Customer totals from stored order snapshots" tone="gold" />
+            <StatCard label="Platform revenue" value={formatPeso(totals.platformRevenue)} hint="Commission, fees, discount funding, reservation fees" tone="gold" />
+            <StatCard label="Restaurant sales" value={formatPeso(totals.restaurantSales)} hint="Before commission and adjustments" tone="gold" />
+            <StatCard label="Refunds / adjustments" value={formatPeso(totals.refunds)} hint="Recorded order refund adjustments" tone="brown" />
           </div>
           <p className="admin-shell-note">This demo report uses the same immutable mock transaction snapshots as order details. GMV is not platform revenue, and later fee changes never recalculate past orders.</p>
           <DataTable columns={columns} rows={transactions} emptyTitle="No financial transactions" emptyDescription="There are no transaction snapshots in this demo data." />

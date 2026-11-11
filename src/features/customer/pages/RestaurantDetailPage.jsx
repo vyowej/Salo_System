@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import customerService from '../../../services/customerService';
@@ -7,19 +7,35 @@ import Badge from '../../../components/common/Badge';
 import ItemModal from '../components/ItemModal';
 import ReservationModal from '../components/ReservationModal';
 import RestaurantImage from '../components/RestaurantImage';
-import { getMenuCustomerPrice, normalizeMenuCategories, normalizeMenuItem } from '../../restaurant/menu/menuData';
+import MenuItemCard from '../components/MenuItemCard';
+import OrderPanel from '../components/OrderPanel';
+import MobileOrderBar from '../components/MobileOrderBar';
+import { useMenuSearch } from '../hooks/useMenuSearch';
+import { useScrollSpy } from '../hooks/useScrollSpy';
+import { normalizeMenuCategories, normalizeMenuItem } from '../../restaurant/menu/menuData';
 import { getLocalDateKey } from '../../../services/demo/operatingHours';
+import './RestaurantDetailPage.css';
+
+/**
+ * Builds a stable section element id for a category name.
+ */
+function categoryToId(cat) {
+  return `rdp-cat-${cat.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
 
 export default function RestaurantDetailPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
 
   const [restaurant, setRestaurant] = useState(null);
-  const [activeCategory, setActiveCategory] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [reservationOpen, setReservationOpen] = useState(searchParams.get('tab') === 'reserve');
   const [isFavorite, setIsFavorite] = useState(false);
+  const [menuSearch, setMenuSearch] = useState('');
+  // Which tab the user clicked most recently (overrides scroll-spy for a beat)
+  const [manualActiveTab, setManualActiveTab] = useState(null);
 
+  // ── Data fetching ──────────────────────────────────────────
   useEffect(() => {
     let active = true;
     async function fetchRest() {
@@ -31,7 +47,6 @@ export default function RestaurantDetailPage() {
           .map(normalizeMenuItem)
           .filter((item) => item.availability !== 'hidden' && visibleCategoryNames.has(item.category));
         setRestaurant({ ...data, categories: categories.map((category) => category.name), menu });
-        setActiveCategory(categories[0]?.name || 'All');
         setIsFavorite(customerService.getFavoriteRestaurants().includes(data.id));
       }
     }
@@ -47,32 +62,19 @@ export default function RestaurantDetailPage() {
     const syncFavoriteState = () => {
       setIsFavorite(Boolean(restaurant && customerService.getFavoriteRestaurants().includes(restaurant.id)));
     };
-
     window.addEventListener('salo:favoritesUpdated', syncFavoriteState);
     return () => window.removeEventListener('salo:favoritesUpdated', syncFavoriteState);
   }, [restaurant]);
 
-  if (!restaurant) {
-    return (
-      <CustomerLayout>
-        <div style={{ padding: 'var(--space-16) 0', textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-muted)' }}>Loading restaurant details...</p>
-        </div>
-      </CustomerLayout>
-    );
-  }
-
-  const filteredMenuItems = activeCategory && activeCategory !== 'All'
-    ? restaurant.menu?.filter((item) => item.category === activeCategory)
-    : restaurant.menu;
-  const offersDelivery = restaurant.fulfillment?.delivery !== false;
-  const offersPickup = restaurant.fulfillment?.pickup !== false;
-  const acceptingOrders = restaurant.operatingSchedule?.acceptingOrders !== false;
-  const acceptingReservations = restaurant.operatingSchedule?.acceptingReservations !== false;
-  const canStartOrder = acceptingOrders && restaurant.isOpen;
-  const upcomingClosures = (restaurant.operatingSchedule?.temporaryClosures || [])
+  // ── Derived restaurant state ───────────────────────────────
+  const offersDelivery = restaurant?.fulfillment?.delivery !== false;
+  const offersPickup = restaurant?.fulfillment?.pickup !== false;
+  const acceptingOrders = restaurant?.operatingSchedule?.acceptingOrders !== false;
+  const acceptingReservations = restaurant?.operatingSchedule?.acceptingReservations !== false;
+  const canStartOrder = acceptingOrders;
+  const upcomingClosures = (restaurant?.operatingSchedule?.temporaryClosures || [])
     .filter((closure) => closure.endDate >= getLocalDateKey());
-  const coverage = restaurant.deliveryCoverage || {};
+  const coverage = restaurant?.deliveryCoverage || {};
   const coverageText = coverage.method === 'cities'
     ? coverage.cities?.join(', ')
     : coverage.method === 'barangays'
@@ -83,19 +85,103 @@ export default function RestaurantDetailPage() {
           ? `${coverage.radiusKm} km`
           : '';
 
+  // ── Category + menu logic ──────────────────────────────────
+  // Memoize so the array reference is stable across renders.
+  const categories = useMemo(() => restaurant?.categories || [], [restaurant]);
+  const allTabs = useMemo(() => ['All', ...categories], [categories]);
+
+  /**
+   * Sorted category groups: available items first, sold-out last.
+   * Shape: [{ name, items: [...] }]
+   */
+  const categoryGroups = useMemo(() => {
+    if (!restaurant?.menu) return [];
+    return categories.map((cat) => {
+      const all = restaurant.menu.filter((item) => item.category === cat);
+      const available = all.filter((item) => item.availability === 'available');
+      const unavailable = all.filter((item) => item.availability !== 'available');
+      return { name: cat, items: [...available, ...unavailable] };
+    });
+  }, [restaurant, categories]);
+
+  // Apply search filter using the shared hook, then re-group by category
+  const allMenuItems = useMemo(
+    () => categoryGroups.flatMap((g) => g.items),
+    [categoryGroups]
+  );
+  const filteredItems = useMenuSearch(allMenuItems, menuSearch);
+
+  const filteredGroups = useMemo(() => {
+    const q = menuSearch.trim();
+    if (!q) return categoryGroups;
+    return categoryGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) =>
+          filteredItems.some((fi) => fi.id === item.id)
+        ),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [categoryGroups, menuSearch, filteredItems]);
+
+  // Section ids for scroll-spy (All tabs excluded — scroll-spy tracks individual categories)
+  const sectionIds = useMemo(() => categories.map(categoryToId), [categories]);
+  const scrollSpyActiveId = useScrollSpy(sectionIds, { rootMargin: '-10% 0px -80% 0px' });
+
+  // Active tab: manual click wins temporarily, scroll-spy otherwise
+  const activeTabId = manualActiveTab
+    ? manualActiveTab
+    : scrollSpyActiveId
+      ? categories.find((c) => categoryToId(c) === scrollSpyActiveId) ?? 'All'
+      : 'All';
+
+  // Clear manual override after 1.2s so scroll-spy takes over again
+  useEffect(() => {
+    if (!manualActiveTab) return;
+    const t = setTimeout(() => setManualActiveTab(null), 1200);
+    return () => clearTimeout(t);
+  }, [manualActiveTab]);
+
+  // Tab click handler
+  const handleTabClick = useCallback((tab) => {
+    setManualActiveTab(tab);
+    if (tab === 'All') {
+      const menuEl = document.getElementById('restaurant-menu-section');
+      menuEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      const el = document.getElementById(categoryToId(tab));
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
+  // ── Loading state ──────────────────────────────────────────
+  if (!restaurant) {
+    return (
+      <CustomerLayout>
+        <div style={{ padding: 'var(--space-16) 0', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-muted)' }}>Loading restaurant details...</p>
+        </div>
+      </CustomerLayout>
+    );
+  }
+
   return (
     <CustomerLayout>
-      {/* ── Item Customization Modal ──────────────────────── */}
+      {/* ── Item Customization Modal ──────────────────────────── */}
       <ItemModal
         open={!!selectedItem}
         onClose={() => setSelectedItem(null)}
         item={selectedItem}
         restaurant={restaurant}
         orderingDisabled={!canStartOrder}
-        orderingDisabledMessage={!acceptingOrders ? 'This restaurant is not accepting orders right now.' : 'Ordering is unavailable while the restaurant is closed.'}
+        orderingDisabledMessage={
+          !acceptingOrders
+            ? 'This restaurant is not accepting orders right now.'
+            : 'Ordering is unavailable while the restaurant is closed.'
+        }
       />
 
-      {/* ── Table Reservation Modal ───────────────────────── */}
+      {/* ── Table Reservation Modal ───────────────────────────── */}
       <ReservationModal
         open={reservationOpen}
         onClose={() => setReservationOpen(false)}
@@ -103,7 +189,7 @@ export default function RestaurantDetailPage() {
         onSuccess={() => {}}
       />
 
-      {/* ── Restaurant Hero Header ────────────────────────── */}
+      {/* ── Restaurant Hero Header ────────────────────────────── */}
       <div style={{
         background: 'var(--surface-primary)',
         border: '1px solid var(--border-primary)',
@@ -222,7 +308,12 @@ export default function RestaurantDetailPage() {
             </div>
             {!canStartOrder && (
               <p role="status" style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)', margin: 'var(--space-2) 0 0' }}>
-                {!acceptingOrders ? 'This restaurant is not accepting orders right now.' : 'Orders are unavailable while the restaurant is closed.'}
+                This restaurant is not accepting orders right now.
+              </p>
+            )}
+            {!restaurant.isOpen && acceptingOrders && (
+              <p role="status" style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)', margin: 'var(--space-2) 0 0' }}>
+                Currently outside regular hours · Orders will be prepared upon opening.
               </p>
             )}
             {!acceptingReservations && (
@@ -282,6 +373,7 @@ export default function RestaurantDetailPage() {
         </div>
       </div>
 
+      {/* ── Hours & availability section ──────────────────────── */}
       <section
         aria-labelledby="restaurant-hours-title"
         style={{
@@ -325,6 +417,7 @@ export default function RestaurantDetailPage() {
         )}
       </section>
 
+      {/* ── Restaurant gallery ───────────────────────────────── */}
       {restaurant.profilePhotos?.length > 0 && (
         <section style={{ marginBottom: 'var(--space-8)' }} aria-labelledby="restaurant-gallery-title">
           <h2 id="restaurant-gallery-title" className="section-title">Restaurant photos</h2>
@@ -341,144 +434,113 @@ export default function RestaurantDetailPage() {
         </section>
       )}
 
-      {/* ── Menu Section ──────────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════
+          REDESIGNED MENU SECTION
+          ══════════════════════════════════════════════════════ */}
       <div id="restaurant-menu-section">
-        {/* Category Tabs */}
-        <div style={{
-          display: 'flex',
-          gap: 'var(--space-2)',
-          overflowX: 'auto',
-          paddingBottom: 'var(--space-3)',
-          marginBottom: 'var(--space-6)',
-          borderBottom: '1px solid var(--border-secondary)',
-        }}>
-          {['All', ...(restaurant.categories || [])].map((cat) => (
+
+        {/* ── Search field ──────────────────────────────── */}
+        <div className="rdp-search-wrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-3.5-3.5" />
+          </svg>
+          <input
+            type="text"
+            className="rdp-search-input"
+            value={menuSearch}
+            onChange={(e) => setMenuSearch(e.target.value)}
+            placeholder="Search menu items…"
+            aria-label="Search menu items"
+          />
+          {menuSearch && (
             <button
-              key={cat}
               type="button"
-              onClick={() => setActiveCategory(cat)}
-              style={{
-                padding: 'var(--space-2) var(--space-4)',
-                borderRadius: 'var(--radius-full)',
-                border: activeCategory === cat ? '1px solid var(--accent)' : '1px solid var(--border-primary)',
-                background: activeCategory === cat ? 'var(--accent)' : 'var(--surface-primary)',
-                color: activeCategory === cat ? '#fff' : 'var(--text-primary)',
-                fontSize: 'var(--font-size-xs)',
-                fontWeight: 600,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
+              className="rdp-search-clear"
+              onClick={() => setMenuSearch('')}
+              aria-label="Clear menu search"
             >
-              {cat}
+              ✕
             </button>
-          ))}
-        </div>
-
-        {/* Items List (Open food presentation, clean and uncrowded) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          {filteredMenuItems?.length ? filteredMenuItems.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => item.availability === 'available' && setSelectedItem(item)}
-              style={{
-                background: 'var(--surface-primary)',
-                border: '1px solid var(--border-primary)',
-                borderRadius: 'var(--radius-lg)',
-                padding: 'var(--space-5)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-5)',
-                cursor: item.availability === 'available' ? 'pointer' : 'not-allowed',
-                opacity: item.availability === 'available' ? 1 : 0.65,
-                transition: 'border-color var(--transition-fast), transform var(--transition-fast)',
-              }}
-              onMouseEnter={(e) => {
-                if (item.availability === 'available') {
-                  e.currentTarget.style.borderColor = 'var(--accent)';
-                  e.currentTarget.style.transform = 'translateY(-1px)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (item.availability === 'available') {
-                  e.currentTarget.style.borderColor = 'var(--border-primary)';
-                  e.currentTarget.style.transform = 'none';
-                }
-              }}
-            >
-              {/* Item Photo / Icon */}
-              <div style={{
-                width: 76,
-                height: 76,
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--bg-tertiary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 36,
-                flexShrink: 0,
-                position: 'relative',
-                overflow: 'hidden',
-              }}>
-                {item.photo ? (
-                  <RestaurantImage image={item.photo} alt={item.photo.alt || item.name} style={{ position: 'absolute', inset: 0, borderRadius: 'var(--radius-md)' }} />
-                ) : (item.image || '🍲')}
-              </div>
-
-              {/* Item Details */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 2 }}>
-                  <h3 style={{ fontSize: 'var(--font-size-base)', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    {item.name}
-                  </h3>
-                  {item.availability !== 'available' && (
-                    <Badge variant="default" size="sm">
-                      {item.availability === 'sold_out' ? 'Sold Out' : 'Temporarily Unavailable'}
-                    </Badge>
-                  )}
-                </div>
-
-                <p style={{
-                  fontSize: 'var(--font-size-xs)',
-                  color: 'var(--text-secondary)',
-                  lineHeight: 1.4,
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                }}>
-                  {item.description}
-                </p>
-
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-                  {item.discountedPrice && <del style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>₱{item.price.toLocaleString()}</del>}
-                  <p style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--accent)', margin: 0 }}>
-                    ₱{getMenuCustomerPrice(item).toLocaleString()}
-                  </p>
-                </div>
-              </div>
-
-              {/* Add Button */}
-              <div>
-                <Button
-                  variant={item.availability === 'available' ? 'outline' : 'secondary'}
-                  size="sm"
-                  disabled={item.availability !== 'available'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (item.availability === 'available') setSelectedItem(item);
-                  }}
-                >
-                  {item.availability === 'available' ? '+ Add' : item.availability === 'sold_out' ? 'Sold Out' : 'Unavailable'}
-                </Button>
-              </div>
-            </div>
-          )) : (
-            <p style={{ padding: 'var(--space-6)', color: 'var(--text-muted)', textAlign: 'center' }}>
-              No menu items are available in this category yet.
-            </p>
           )}
         </div>
-      </div>
+
+        {/* ── Category tabs ─────────────────────────────── */}
+        {!menuSearch && (
+          <div className="rdp-tabs-bar" role="navigation" aria-label="Menu categories">
+            {allTabs.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={`rdp-tab${activeTabId === tab ? ' rdp-tab--active' : ''}`}
+                onClick={() => handleTabClick(tab)}
+                aria-pressed={activeTabId === tab}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── Two-column: menu grid + order panel ───────── */}
+        <div className="rdp-two-col">
+
+          {/* ── LEFT: menu card grid ──────────────────── */}
+          <div className="rdp-menu-col">
+            {filteredGroups.length === 0 ? (
+              <p className="rdp-no-results">
+                No items match "{menuSearch}". Try a different search.
+              </p>
+            ) : (
+              filteredGroups.map((group) => (
+                <section
+                  key={group.name}
+                  id={categoryToId(group.name)}
+                  className="rdp-cat-section"
+                  aria-label={group.name}
+                >
+                  {/* Category heading */}
+                  <div className="rdp-cat-heading">
+                    <span className="rdp-cat-label">{group.name}</span>
+                    <span className="rdp-cat-count">{group.items.length}</span>
+                    <hr className="rdp-cat-divider" aria-hidden="true" />
+                  </div>
+
+                  {/* Card grid */}
+                  <div className="rdp-card-grid">
+                    {group.items.map((item) => (
+                      <MenuItemCard
+                        key={item.id}
+                        item={item}
+                        restaurant={restaurant}
+                        orderingDisabled={!canStartOrder}
+                        onOpenModal={setSelectedItem}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))
+            )}
+          </div>
+
+          {/* ── RIGHT: sticky order panel (desktop only) ─ */}
+          <div className="rdp-panel-col" aria-hidden="false">
+            <OrderPanel
+              restaurantId={restaurant.id}
+              restaurantName={restaurant.name}
+            />
+          </div>
+
+        </div>{/* /rdp-two-col */}
+
+      </div>{/* /restaurant-menu-section */}
+
+      {/* ── Mobile floating bar + bottom sheet ───────────── */}
+      <MobileOrderBar
+        restaurantId={restaurant.id}
+        restaurantName={restaurant.name}
+      />
+
     </CustomerLayout>
   );
 }

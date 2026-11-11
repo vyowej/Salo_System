@@ -1,0 +1,302 @@
+.customer-order-card {
+  gap: var(--space-4);
+}
+
+.customer-order-card__heading,
+.customer-order-card__title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.customer-order-card__heading {
+  flex-wrap: wrap;
+}
+
+.customer-order-card__title-row {
+  align-items: center;
+  margin-bottom: var(--space-1);
+}
+
+.customer-order-card__title-row h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.customer-order-card__meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.customer-order-card__actions {
+  text-align: right;
+}
+
+.customer-order-card__total {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.customer-order-card__action-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.customer-order-card__action-links > span {
+  color: var(--card-orange-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-order-card__suborders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: var(--card-border-width) solid var(--border-secondary);
+}
+
+.customer-order-card__suborder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.customer-order-card__restaurant {
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-order-card__separator {
+  color: var(--text-muted);
+}
+
+.customer-order-card__suborder-status {
+  color: var(--text-secondary);
+}
+
+.customer-reservation-card {
+  gap: var(--space-4);
+}
+
+.customer-reservation-card__heading,
+.customer-reservation-card__title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.customer-reservation-card__title-row {
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.customer-reservation-card__title-row h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.customer-reservation-card__meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.customer-reservation-card__meta strong {
+  color: var(--card-green-text);
+}
+
+.customer-reservation-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.customer-reservation-card__details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--card-detail-min-width), 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--card-border-width) solid var(--border-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.customer-reservation-card__details span {
+  color: var(--text-muted);
+}
+
+.customer-reservation-card__details p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-reservation-card__details p.is-paid {
+  color: var(--status-success-text);
+}
+
+.customer-reservation-card__note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.customer-reservation-card__note span {
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-order-detail-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--card-border-width) solid var(--border-secondary);
+}
+
+.customer-order-detail-card__label {
+  margin: 0 0 var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+}
+
+.customer-order-detail-card__title {
+  margin: var(--space-1) 0 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.customer-order-detail-card__cancellation {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  border: var(--card-border-width) solid var(--status-warning-text);
+  border-radius: var(--radius-md);
+  background: var(--status-warning-bg);
+  color: var(--status-warning-text);
+}
+
+.customer-order-detail-card__cancellation p {
+  margin: var(--space-1) 0;
+  font-size: var(--font-size-xs);
+}
+
+.customer-order-detail-card__stepper {
+  margin: var(--space-5) 0 var(--space-6);
+}
+
+.customer-order-detail-card__steps {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+}
+
+.customer-order-detail-card__step {
+  position: relative;
+  z-index: var(--z-base);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.customer-order-detail-card__step-marker {
+  z-index: var(--z-raised);
+  display: flex;
+  width: var(--space-6);
+  height: var(--space-6);
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.customer-order-detail-card__step-marker.is-done {
+  background: var(--card-orange-accent);
+  color: var(--text-inverse);
+}
+
+.customer-order-detail-card__step > span {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.customer-order-detail-card__step > span.is-done {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-order-detail-card__delivery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--card-delivery-field-min-width), 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.customer-order-detail-card__delivery-field p {
+  margin: 0;
+}
+
+.customer-order-detail-card__value {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-order-detail-card__secondary {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.customer-order-detail-card__items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
+.customer-order-detail-card__item,
+.customer-order-detail-card__subtotal {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.customer-order-detail-card__subtotal {
+  margin-top: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: var(--card-border-width) solid var(--border-secondary);
+  font-weight: var(--font-weight-bold);
+}

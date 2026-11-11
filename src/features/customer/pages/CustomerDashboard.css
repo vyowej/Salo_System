@@ -1,0 +1,163 @@
+.customer-live-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--customer-restaurant-card-min-width), 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+.customer-live-card__heading,
+.customer-restaurant-card__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.customer-live-card__heading {
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.customer-live-card__title {
+  margin: 0 0 var(--space-1);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.customer-live-card__detail {
+  margin: 0 0 var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.customer-live-card__action {
+  display: block;
+  text-decoration: none;
+}
+
+.customer-restaurant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--customer-restaurant-card-min-width), 1fr));
+  gap: var(--space-6);
+}
+
+.customer-restaurant-card {
+  overflow: hidden;
+  border: var(--card-border-width) solid var(--border-primary);
+  border-radius: var(--card-radius);
+  background: var(--surface-primary);
+  color: inherit;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.customer-restaurant-card:hover {
+  border-color: var(--border-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.customer-restaurant-card:focus-visible {
+  outline: var(--card-focus-ring-width) solid var(--border-focus);
+  outline-offset: var(--card-focus-ring-offset);
+}
+
+.customer-restaurant-card__cover {
+  position: relative;
+  display: flex;
+  height: var(--customer-restaurant-cover-height);
+  align-items: center;
+  justify-content: center;
+  border-bottom: var(--card-border-width) solid var(--border-secondary);
+  background: var(--bg-tertiary);
+  font-size: var(--customer-cover-icon-size);
+}
+
+.customer-restaurant-card__image {
+  position: absolute;
+  inset: 0;
+}
+
+.customer-restaurant-card__favorite,
+.customer-restaurant-card__rating {
+  position: absolute;
+  z-index: var(--z-raised);
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.customer-restaurant-card__favorite {
+  top: var(--space-2);
+  right: var(--space-2);
+  display: flex;
+  width: var(--customer-favorite-button-size);
+  height: var(--customer-favorite-button-size);
+  align-items: center;
+  justify-content: center;
+  border: var(--card-border-width) solid var(--border-primary);
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--font-size-md);
+}
+
+.customer-restaurant-card__favorite.is-favorite {
+  color: var(--salo-error);
+}
+
+.customer-restaurant-card__rating {
+  top: var(--space-2);
+  left: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.customer-restaurant-card__details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--card-padding);
+}
+
+.customer-restaurant-card__title-row h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.customer-restaurant-card__cuisine {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.customer-restaurant-card__metadata {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.customer-restaurant-card__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: var(--card-border-width) solid var(--border-secondary);
+}
+
+@media (max-width: 640px) {
+  .customer-live-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-restaurant-grid {
+    grid-template-columns: 1fr;
+  }
+}

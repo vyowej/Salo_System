@@ -1,0 +1,214 @@
+/* ============================================================
+   SALO — RestaurantDetailPage layout styles
+   Two-column menu + order panel, sticky category tabs.
+   All values use design tokens.
+   ============================================================ */
+
+/* ── Two-column layout ──────────────────────────────────── */
+.rdp-two-col {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+/* ── Menu column ────────────────────────────────────────── */
+.rdp-menu-col {
+  min-width: 0;
+}
+
+/* ── Panel column (sticky) ──────────────────────────────── */
+.rdp-panel-col {
+  position: sticky;
+  /* Stick just below the topbar */
+  top: calc(var(--topbar-height) + var(--space-4));
+  /* Max height so it doesn't overflow the viewport; internal scroll is in .op-body */
+  max-height: calc(100dvh - var(--topbar-height) - var(--space-8));
+  display: flex;
+  flex-direction: column;
+}
+
+.rdp-panel-col .op-panel {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Menu search field ──────────────────────────────────── */
+.rdp-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  height: 42px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: var(--space-4);
+}
+
+.rdp-search-wrap svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.rdp-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-body);
+  outline: none;
+}
+
+.rdp-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.rdp-search-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  transition: color var(--transition-fast);
+}
+
+.rdp-search-clear:hover {
+  color: var(--text-primary);
+}
+
+/* ── Sticky category tabs bar ───────────────────────────── */
+.rdp-tabs-bar {
+  position: sticky;
+  top: var(--topbar-height);
+  z-index: var(--z-sticky);
+  background: var(--bg-primary);
+  /* Bleed the sticky bg slightly wider to cover any scroll artefacts */
+  padding: var(--space-2) 0 var(--space-3);
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border-secondary);
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.rdp-tabs-bar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Individual pill tab */
+.rdp-tab {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-primary);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+  white-space: nowrap;
+  font-family: var(--font-body);
+}
+
+.rdp-tab:hover:not(.rdp-tab--active) {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-primary));
+  color: var(--text-primary);
+}
+
+.rdp-tab--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* ── Category section heading ───────────────────────────── */
+.rdp-cat-section {
+  margin-bottom: var(--space-8);
+}
+
+.rdp-cat-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.rdp-cat-label {
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.rdp-cat-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.rdp-cat-divider {
+  flex: 1;
+  height: 1px;
+  background: var(--border-secondary);
+  border: none;
+}
+
+/* ── Card grid ──────────────────────────────────────────── */
+.rdp-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+
+/* ── Empty / no-results states ──────────────────────────── */
+.rdp-no-results {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: var(--space-10) var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+
+/* Tablet: hide panel column, 2-col card grid */
+@media (max-width: 1023px) {
+  .rdp-two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .rdp-panel-col {
+    display: none;
+  }
+
+  .rdp-card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile: single card column */
+@media (max-width: 639px) {
+  .rdp-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rdp-tabs-bar {
+    /* On narrow screens the sticky bar sits just under the topbar */
+    top: var(--topbar-height);
+  }
+}

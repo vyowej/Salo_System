@@ -3,9 +3,10 @@
 .r7-dashboard-additions-heading > span { color: var(--text-muted); font-size: var(--font-size-xs); }
 .r7-dashboard-additions-heading .r7-eyebrow { margin-bottom: 3px; }
 .r7-dashboard-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(195px, 1fr)); gap: var(--space-4); }
-.r7-dashboard-summary-grid > a { display: flex; min-width: 0; border-radius: var(--radius-lg); }
+.r7-dashboard-summary-grid > a { display: flex; min-width: 0; border-radius: var(--card-radius); }
 .r7-dashboard-summary-grid > a:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 3px; }
 .r7-dashboard-summary-grid > a > div { width: 100%; }
+.owner-dashboard-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--card-grid-min-width), 1fr)); gap: var(--space-4); margin-bottom: var(--space-8); }
 .r7-dashboard-warning { margin: 10px 0 0; color: var(--status-warning-text); font-size: var(--font-size-xs); }
 .r7-dashboard-activity { margin-bottom: var(--space-8); padding: var(--space-5); border: 1px solid var(--border-primary); border-radius: var(--radius-lg); background: var(--surface-primary); box-shadow: var(--shadow-sm); }
 .r7-dashboard-activity-list { display: grid; }

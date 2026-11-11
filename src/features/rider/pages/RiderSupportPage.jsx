@@ -14,6 +14,10 @@ import useScenario from '../hooks/useScenario';
 import { formatDateTime } from '../utils/format';
 import './RiderSupportPage.css';
 
+function ticketTone(status) {
+  return ['resolved', 'closed'].includes(status) ? 'green' : 'gold';
+}
+
 export default function RiderSupportPage() {
   const { id } = useParams();
   const scenario = useScenario();
@@ -51,7 +55,7 @@ export default function RiderSupportPage() {
       />
       <StateView state={viewState} emptyTitle="No support activity" emptyMessage="Support tickets and updates will appear here." onRetry={() => window.location.reload()}>
         {ticket ? (
-          <Card>
+          <Card className={`rider-ticket-detail card--tint-brown rider-ticket-detail--${ticketTone(ticket.status)}`}>
             <CardBody>
               <div className="rider-ticket-detail-header">
                 <div><h2>{ticket.subject}</h2><span>{ticket.category} · Updated {formatDateTime(ticket.updated)}</span></div>
@@ -107,7 +111,7 @@ export default function RiderSupportPage() {
                 <h2>Your support tickets</h2>
                 <div className="rider-ticket-list">
                   {support.tickets.map((item) => (
-                    <ScenarioLink className="rider-ticket-list-item" to={`/rider/support/${item.id}`} key={item.id}>
+                    <ScenarioLink className={`rider-ticket-list-item rider-ticket-list-item--${item.status}`} to={`/rider/support/${item.id}`} key={item.id}>
                       <div><strong>{item.subject}</strong><span>{item.id} · {formatDateTime(item.updated)}</span></div>
                       <StatusBadge status={item.status} config={ticketStatuses} />
                     </ScenarioLink>

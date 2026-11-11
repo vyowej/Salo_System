@@ -97,7 +97,11 @@ export default function AdminRestaurantsPage() {
   const appColumns = [
     { key: 'name', label: 'Application', render: (restaurant) => <button className="admin-text-link" type="button" onClick={() => { setSelected(restaurant); setDetailTab('Application'); }}><strong>{restaurant.name}</strong><span>Owner: {restaurant.ownerName}</span></button> },
     { key: 'address', label: 'Physical location' },
-    { key: 'applicationStatus', label: 'Application', render: (restaurant) => <StatusBadge status={restaurant.applicationStatus || restaurant.status} /> },
+    { key: 'applicationStatus', label: 'Application', render: (restaurant) => {
+      const applicationStatus = restaurant.applicationStatus || restaurant.status;
+      const needsAction = ['Pending Review', 'Pending Approval', 'More information requested'].includes(applicationStatus);
+      return <StatusBadge status={applicationStatus} className={needsAction ? 'admin-status-badge--action' : ''} />;
+    } },
     { key: 'verificationStatus', label: 'Verification', render: (restaurant) => <StatusBadge status={restaurant.verificationStatus} /> },
     { key: 'joinedDate', label: 'Submitted', render: (restaurant) => formatDate(restaurant.joinedDate) },
     { key: 'review', label: 'Review', render: (restaurant) => <button className="admin-action-button" type="button" onClick={() => { setSelected(restaurant); setDetailTab('Application'); }}>Review application</button> },

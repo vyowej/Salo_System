@@ -5,6 +5,7 @@ import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
+import './CustomerRecords.css';
 
 export default function ReservationsPage() {
   const [reservations, setReservations] = useState([]);
@@ -115,32 +116,26 @@ export default function ReservationsPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {reservations.map((res) => (
-            <div
+            <article
               key={res.id}
-              style={{
-                background: 'var(--surface-primary)',
-                border: '1px solid var(--border-primary)',
-                borderRadius: 'var(--radius-xl)',
-                padding: 'var(--space-6)',
-                boxShadow: 'var(--shadow-xs)',
-              }}
+              className="customer-reservation-card brand-card brand-card--green"
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+              <div className="customer-reservation-card__heading">
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-1)' }}>
-                    <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <div className="customer-reservation-card__title-row">
+                    <h2>
                       {res.restaurantName}
                     </h2>
-                    <Badge variant={['Approved', 'Confirmed', 'Arrived', 'Seated', 'Completed'].includes(res.status) ? 'success' : res.status === 'Pending' ? 'warning' : 'default'} dot size="sm">
+                    <Badge variant={['Approved', 'Confirmed', 'Arrived', 'Seated', 'Completed'].includes(res.status) ? 'success' : res.status === 'Pending' ? 'warning' : ['Cancelled', 'Rejected', 'No-Show', 'Expired'].includes(res.status) ? 'error' : 'default'} dot size="sm">
                       {res.status}
                     </Badge>
                   </div>
-                  <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-                    Booking Ref: <strong style={{ color: 'var(--accent)', fontFamily: 'monospace' }}>#{res.id}</strong> · Area: {res.seatingArea}
+                  <p className="customer-reservation-card__meta">
+                    Booking Ref: <strong>#{res.id}</strong> · Area: {res.seatingArea}
                   </p>
                 </div>
 
-                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                <div className="customer-reservation-card__actions">
                   {!['Cancelled', 'Rejected', 'Completed', 'No-Show', 'Expired'].includes(res.status) && !['requested', 'approved'].includes(res.cancellationRequest?.status) && (
                     <Button variant="danger-outline" size="sm" onClick={() => handleCancelClick(res.id)}>
                       Request cancellation
@@ -151,55 +146,47 @@ export default function ReservationsPage() {
               </div>
 
               {/* Booking Details Grid */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: 'var(--space-3)',
-                marginTop: 'var(--space-4)',
-                paddingTop: 'var(--space-4)',
-                borderTop: '1px solid var(--border-secondary)',
-                fontSize: 'var(--font-size-xs)',
-              }}>
+              <div className="customer-reservation-card__details">
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }}>Date & Time</span>
-                  <p style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                  <span>Date &amp; Time</span>
+                  <p>
                     📅 {res.date} at {res.time}
                   </p>
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }}>Party Size</span>
-                  <p style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                  <span>Party Size</span>
+                  <p>
                     👥 {res.guests} Guests
                   </p>
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }}>Reservation fee / payment</span>
-                  <p style={{ fontWeight: 600, color: res.paymentStatus === 'Paid' ? 'var(--salo-success)' : 'var(--text-secondary)' }}>
+                  <span>Reservation fee / payment</span>
+                  <p className={res.paymentStatus === 'Paid' ? 'is-paid' : ''}>
                     ₱{res.fee ?? res.depositAmount ?? 0} · {res.paymentStatus || 'Pending'}
                   </p>
                 </div>
 
                 {res.cancellationDeadline && (
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }}>Cancellation Deadline</span>
-                  <p style={{ color: 'var(--text-secondary)' }}>{res.cancellationDeadline}</p>
+                  <span>Cancellation Deadline</span>
+                  <p>{res.cancellationDeadline}</p>
                 </div>
                 )}
               </div>
 
               {res.specialRequests && (
-                <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-                  <span style={{ fontWeight: 600 }}>Note to restaurant:</span> {res.specialRequests}
+                <div className="customer-reservation-card__note">
+                  <span>Note to restaurant:</span> {res.specialRequests}
                 </div>
               )}
               {res.cancellationRequest?.resolutionReason && (
-                <p style={{ marginTop: 'var(--space-3)', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                <p className="customer-reservation-card__note">
                   Cancellation update: {res.cancellationRequest.resolutionReason}
                 </p>
               )}
-            </div>
+            </article>
           ))}
         </div>
       )}

@@ -29,12 +29,12 @@ export default function RiderEarningsPage() {
       >
         <div className="rider-earnings-summary-grid">
           {earnings.summaries.map((item) => (
-            <StatCard key={item.key} label={item.label} value={item.amount} helper={item.detail} />
+            <StatCard key={item.key} label={item.label} value={item.amount} helper={item.detail} tone="gold" />
           ))}
         </div>
 
         <div className="rider-earnings-columns">
-          <Card>
+          <Card className="card--tint-gold">
             <CardBody>
               <h2 className="rider-earnings-section-title">Earnings activity</h2>
               <div className="rider-earnings-chart" role="img" aria-label="Daily earnings chart with visible daily amounts">
@@ -59,7 +59,7 @@ export default function RiderEarningsPage() {
             </CardBody>
           </Card>
 
-          <Card>
+          <Card className="card--tint-gold">
             <CardBody>
               <h2 className="rider-earnings-section-title">Payout method</h2>
               <div className="rider-payout-method">

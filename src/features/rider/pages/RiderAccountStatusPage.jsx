@@ -10,6 +10,18 @@ import { getRiderMock } from '../mocks';
 import useScenario from '../hooks/useScenario';
 import './RiderAccountStatusPage.css';
 
+function accountStatusCardClass(status) {
+  const tone = {
+    pending_approval: 'orange',
+    awaiting_activation: 'gold',
+    active: 'green',
+    suspended: 'danger',
+    deactivated: 'brown',
+  }[status] || '';
+  const tintClass = tone && tone !== 'danger' ? ` card--tint-${tone}` : '';
+  return `rider-account-card${tintClass}${tone ? ' card--status' : ''}${tone === 'danger' ? ' card--danger' : ''}`;
+}
+
 export default function RiderAccountStatusPage() {
   const scenario = useScenario();
   const profile = getRiderMock('riderProfile', scenario);
@@ -23,7 +35,7 @@ export default function RiderAccountStatusPage() {
       <StateView state={scenario === 'default' ? 'ready' : scenario} emptyTitle="Account status unavailable" emptyMessage="This preview has no rider account status information." onRetry={() => window.location.reload()}>
         <div className="rider-account-status-grid">
           {accountStates.map((item) => (
-            <Card key={item.key} className={item.key === current ? 'rider-account-card is-current' : 'rider-account-card'}>
+            <Card key={item.key} className={`${accountStatusCardClass(item.key)}${item.key === current ? ' is-current' : ''}`}>
               <CardBody className="rider-account-card-body">
                 <div className="rider-account-header">
                   <span className="rider-account-icon" aria-hidden="true">{item.key === 'active' ? '✓' : item.key === 'suspended' ? '!' : '•'}</span>

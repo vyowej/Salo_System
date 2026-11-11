@@ -45,6 +45,25 @@
   color: var(--text-primary);
 }
 
+.rider-cod-balance-card--brown {
+  padding: var(--card-padding);
+  border-color: var(--card-brown-border);
+  border-radius: var(--card-radius);
+  background: var(--card-brown-bg);
+}
+
+.rider-cod-balance-card--brown span,
+.rider-cod-balance-card--brown small {
+  color: var(--card-brown-text);
+}
+
+.rider-remittance-panel--brown {
+  padding: var(--card-padding);
+  border-color: var(--card-brown-border);
+  border-radius: var(--card-radius);
+  background: var(--card-brown-bg);
+}
+
 .rider-cod-actions {
   margin-bottom: 1rem;
 }

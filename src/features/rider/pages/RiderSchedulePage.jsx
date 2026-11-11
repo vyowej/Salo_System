@@ -20,7 +20,7 @@ export default function RiderSchedulePage() {
     <div className="rider-page-shell">
       <PageHeader title="Schedule & shifts" subtitle="View assignment windows and schedule changes." eyebrow="Your hours" />
       <StateView state={scenario === 'default' ? 'ready' : scenario} emptyTitle="No shifts available" emptyMessage="There are no assigned shifts in this preview." onRetry={() => window.location.reload()}>
-        <Card>
+        <Card className="card--tint-brown">
           <CardBody>
             <div className="rider-schedule-toolbar">
               <div className="rider-segmented" role="tablist" aria-label="Schedule views">

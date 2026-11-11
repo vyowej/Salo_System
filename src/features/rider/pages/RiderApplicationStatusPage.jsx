@@ -11,6 +11,15 @@ import useScenario from '../hooks/useScenario';
 import { applicationStatuses, accountStates } from '../constants/statusConfig';
 import './RiderApplicationPage.css';
 
+function statusCardClass(status) {
+  if (['approved', 'active'].includes(status)) return 'card--tint-green card--status';
+  if (['rejected', 'suspended'].includes(status)) return 'card--danger card--status';
+  if (['draft', 'submitted', 'under_review', 'requires_info', 'pending_approval', 'awaiting_activation'].includes(status)) {
+    return 'card--tint-gold card--status';
+  }
+  return '';
+}
+
 export default function RiderApplicationStatusPage() {
   const scenario = useScenario();
   const { pathname } = useLocation();
@@ -36,7 +45,7 @@ export default function RiderApplicationStatusPage() {
         {isAccountState ? (
           <div className="rider-account-status-layout">
             {accountStates.map((item) => (
-              <Card key={item.key} className={item.key === currentAccount ? 'rider-account-panel active' : 'rider-account-panel'}>
+              <Card key={item.key} className={`rider-account-panel ${statusCardClass(item.key)}${item.key === currentAccount ? ' active' : ''}`}>
                 <CardBody>
                   <div className="rider-account-panel-top">
                     <h3>{item.label}</h3>
@@ -49,7 +58,7 @@ export default function RiderApplicationStatusPage() {
           </div>
         ) : (
           <div className="rider-status-grid">
-            <Card>
+            <Card className={statusCardClass(currentStatus)}>
               <CardBody>
                 <div className="rider-status-summary">
                   <div>

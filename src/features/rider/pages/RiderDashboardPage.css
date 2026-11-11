@@ -6,7 +6,7 @@
 
 .rider-dashboard-page .card-body {
   min-width: 0;
-  padding: var(--space-4);
+  padding: var(--card-padding);
 }
 
 .rider-dashboard-profile-row,

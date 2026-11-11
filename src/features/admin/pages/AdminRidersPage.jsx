@@ -92,7 +92,7 @@ export default function AdminRidersPage() {
     { key: 'vehicle', label: 'Vehicle', render: (rider) => <>{rider.vehicle}<br /><span className="admin-muted">{rider.licenseNumber}</span></> },
     { key: 'documents', label: 'Document review', render: (rider) => `${rider.idDocument || 'ID'} · ${rider.vehicleDocument || 'Vehicle document'}` },
     { key: 'zone', label: 'Requested zone' },
-    { key: 'verificationStatus', label: 'Verification', render: (rider) => <StatusBadge status={rider.verificationStatus} /> },
+    { key: 'verificationStatus', label: 'Verification', render: (rider) => <StatusBadge status={rider.verificationStatus} className={['Pending', 'Documents requested', 'Under review'].includes(rider.verificationStatus) ? 'admin-status-badge--action' : ''} /> },
     { key: 'review', label: 'Review', render: (rider) => <button className="admin-action-button" type="button" onClick={() => { setSelected(rider); setDetailTab('Application'); }}>Review application</button> },
   ];
   const directoryColumns = [

@@ -54,9 +54,9 @@
 .owner-table-form,
 .owner-table-card,
 .owner-table-filters {
-  border: 1px solid var(--border-primary);
-  border-radius: 16px;
-  padding: 18px;
+  border: var(--card-border-width) solid var(--border-primary);
+  border-radius: var(--card-radius);
+  padding: var(--card-padding);
   background: var(--surface-primary);
 }
 
@@ -156,6 +156,17 @@
   display: grid;
   align-content: start;
   gap: 10px;
+  border-color: var(--card-green-border);
+  background: var(--card-green-bg);
+}
+
+.owner-table-card .badge-success {
+  background: var(--card-green-chip);
+  color: var(--card-green-text);
+}
+
+.owner-table-card .badge-success .badge-dot {
+  background: var(--card-green-accent);
 }
 
 .owner-table-card-heading h2 {

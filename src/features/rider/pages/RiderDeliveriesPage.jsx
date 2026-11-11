@@ -38,7 +38,7 @@ export default function RiderDeliveriesPage() {
         ) : (
           <div className="rider-offer-grid">
             {offers.map((offer) => (
-              <Card key={offer.id} className="rider-offer-card">
+              <Card key={offer.id} className="rider-offer-card card--tint-orange card--status">
                 <CardBody>
                   <div className="rider-offer-topline">
                     <div>
@@ -93,10 +93,13 @@ export default function RiderDeliveriesPage() {
                       {offer.expired ? (
                         <Button variant="ghost" size="sm" disabled>Offer expired</Button>
                       ) : (
-                        <Button as={ScenarioLink} to="/rider/deliveries/active?scenario=active" variant="primary" size="sm">
+                        <Button as={ScenarioLink} to="/rider/deliveries/active?scenario=active" variant="outline" size="sm">
                           Accept
                         </Button>
                       )}
+                      <Button as={ScenarioLink} to={`/rider/map?deliveryId=${encodeURIComponent(offer.id)}`} variant="outline" size="sm">
+                        View map
+                      </Button>
                       <Button variant="outline" size="sm" disabled={offer.expired}>
                         Decline
                       </Button>

@@ -5,6 +5,7 @@ import { useCart } from '../../../hooks/useCart';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
+import './CustomerRecords.css';
 
 export default function OrdersPage() {
   const navigate = useNavigate();
@@ -118,47 +119,32 @@ export default function OrdersPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {filteredOrders.map((order) => (
-            <div
+            <article
               key={order.id}
               onClick={() => navigate(`/customer/orders/${order.id}`)}
-              style={{
-                background: 'var(--surface-primary)',
-                border: '1px solid var(--border-primary)',
-                borderRadius: 'var(--radius-xl)',
-                padding: 'var(--space-5)',
-                cursor: 'pointer',
-                transition: 'border-color var(--transition-fast), transform var(--transition-fast)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--accent)';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--border-primary)';
-                e.currentTarget.style.transform = 'none';
-              }}
+              className="customer-order-card brand-card brand-card--orange brand-card--interactive"
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+              <div className="customer-order-card__heading">
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 2 }}>
-                    <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <div className="customer-order-card__title-row">
+                    <h2>
                       Order #{order.id}
                     </h2>
                     <Badge variant={order.overallStatus === 'Completed' ? 'success' : ['Cancelled', 'Rejected'].includes(order.overallStatus) ? 'error' : order.overallStatus === 'Cancellation Requested' || order.overallStatus === 'Partially Completed' ? 'warning' : 'primary'} dot size="sm">
                       {order.overallStatus}
                     </Badge>
                   </div>
-                  <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                  <p className="customer-order-card__meta">
                     Placed on {order.createdAt} · {order.paymentMethod}
                   </p>
                 </div>
 
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--text-primary)' }}>
+                <div className="customer-order-card__actions">
+                  <p className="customer-order-card__total">
                     ₱{order.totalAmount?.toLocaleString()}
                   </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-                    <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>
+                  <div className="customer-order-card__action-links">
+                    <span>
                       Track Order →
                     </span>
                     <Button
@@ -176,34 +162,19 @@ export default function OrdersPage() {
               </div>
 
               {/* Sub-orders summary badges */}
-              <div style={{
-                marginTop: 'var(--space-4)',
-                paddingTop: 'var(--space-3)',
-                borderTop: '1px solid var(--border-secondary)',
-                display: 'flex',
-                gap: 'var(--space-3)',
-                flexWrap: 'wrap',
-              }}>
+              <div className="customer-order-card__suborders">
                 {order.subOrders?.map((sub, i) => (
                   <div
                     key={sub.id || i}
-                    style={{
-                      background: 'var(--surface-secondary)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: '4px 10px',
-                      fontSize: 11,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                    }}
+                    className="customer-order-card__suborder"
                   >
-                    <span style={{ fontWeight: 600 }}>{sub.restaurantName}</span>
-                    <span style={{ color: 'var(--text-muted)' }}>•</span>
-                    <span style={{ color: 'var(--text-secondary)' }}>{sub.status}</span>
+                    <span className="customer-order-card__restaurant">{sub.restaurantName}</span>
+                    <span className="customer-order-card__separator">•</span>
+                    <span className="customer-order-card__suborder-status">{sub.status}</span>
                   </div>
                 ))}
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}

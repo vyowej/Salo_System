@@ -72,7 +72,7 @@ export default function RiderActiveDeliveryPage() {
           <>
             <StepTracker steps={deliverySteps} currentKey={currentStep} />
             <div className="rider-active-layout">
-              <Card className="rider-active-main">
+              <Card className="rider-active-main card--tint-orange card--status">
                 <CardBody>
                   <div className="rider-detail-row">
                     <span>Order reference</span>
@@ -118,6 +118,9 @@ export default function RiderActiveDeliveryPage() {
                   </div>
                   <Button variant="primary" fullWidth className="rider-action-primary">
                     {primaryActionLabel}
+                  </Button>
+                  <Button as={ScenarioLink} to={`/rider/map?deliveryId=${encodeURIComponent(delivery.id)}`} variant="outline" fullWidth>
+                    View map
                   </Button>
                   <Button variant="outline" fullWidth>
                     Open in Maps

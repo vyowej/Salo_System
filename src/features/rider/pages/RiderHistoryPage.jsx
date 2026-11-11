@@ -17,6 +17,12 @@ import useScenario from '../hooks/useScenario';
 import { formatDateTime } from '../utils/format';
 import './RiderHistoryPage.css';
 
+function deliveryCardClass(status) {
+  if (status === 'delivered') return 'card--tint-green card--status';
+  if (['failed', 'cancelled'].includes(status)) return 'card--danger card--status';
+  return 'card--tint-orange card--status';
+}
+
 export default function RiderHistoryPage() {
   const { id } = useParams();
   const scenario = useScenario();
@@ -55,7 +61,7 @@ export default function RiderHistoryPage() {
       <StateView state={viewState} emptyTitle="No delivery history" emptyMessage="No delivery records match this preview." onRetry={() => window.location.reload()}>
         {selected ? (
           <div className="rider-history-detail-grid">
-            <Card>
+            <Card className={deliveryCardClass(selected.status)}>
               <CardBody>
                 <div className="rider-history-detail-head">
                   <div>

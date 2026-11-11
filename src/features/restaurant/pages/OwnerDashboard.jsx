@@ -57,94 +57,29 @@ function getReservationStatusBadge(status) {
 }
 
 // ── Stat Card ────────────────────────────────────────────────────
-function StatCard({ label, value, sub, accentColor, accentBg, icon, trend, to }) {
+function StatCard({ label, value, sub, tone, icon, iconState, trend, to }) {
   const Wrapper = to ? Link : 'div';
   return (
     <Wrapper
       {...(to ? { to } : {})}
       aria-label={to ? `${label}: ${value}. Open ${to === '/owner/reports' ? 'Reports' : to === '/owner/orders' ? 'Orders' : to === '/owner/reservations' ? 'Reservations' : 'Inventory'}` : undefined}
-      style={{
-        background: 'var(--surface-primary)',
-        border: '1px solid var(--border-primary)',
-        borderRadius: 'var(--radius-lg)',
-        padding: 'var(--space-5)',
-        boxShadow: 'var(--shadow-sm)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--space-2)',
-        position: 'relative',
-        overflow: 'hidden',
-        color: 'inherit',
-        textDecoration: 'none',
-        cursor: to ? 'pointer' : undefined,
-      }}
+      className={`brand-card brand-card--${tone} brand-card--stat${to ? ' brand-card--interactive' : ''}`}
     >
-      {/* Top accent bar */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 3,
-          background: accentColor,
-          borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
-        }}
-      />
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <span
-          style={{
-            fontSize: 'var(--font-size-xs)',
-            fontWeight: 700,
-            color: accentColor,
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-          }}
-        >
-          {label}
-        </span>
+      <div className="brand-card__heading">
+        <span className="brand-card__label">{label}</span>
         {icon && (
-          <span
-            style={{
-              width: 32,
-              height: 32,
-              background: accentBg,
-              borderRadius: 'var(--radius-md)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 16,
-            }}
-          >
+          <span className={`brand-card__icon-chip${iconState ? ` brand-card__icon-chip--${iconState}` : ''}`} aria-hidden="true">
             {icon}
           </span>
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)' }}>
-        <span
-          style={{
-            fontSize: 'var(--font-size-3xl)',
-            fontWeight: 800,
-            color: 'var(--text-primary)',
-            lineHeight: 1,
-          }}
-        >
-          {value}
-        </span>
-        {trend && (
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--status-success-text)' }}>
-            ↑ {trend}
-          </span>
-        )}
+      <div className="brand-card__value-row">
+        <span className="brand-card__value">{value}</span>
+        {trend && <span className="brand-card__trend">↑ {trend}</span>}
       </div>
 
-      {sub && (
-        <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', margin: 0 }}>
-          {sub}
-        </p>
-      )}
+      {sub && <p className="brand-card__helper">{sub}</p>}
     </Wrapper>
   );
 }
@@ -269,21 +204,13 @@ export default function OwnerDashboard() {
       </div>
 
       {/* ── 4 Stat Cards ─────────────────────────────── */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: 'var(--space-4)',
-          marginBottom: 'var(--space-8)',
-        }}
-      >
+      <div className="owner-dashboard-stats-grid">
         <StatCard
           label="Today's Revenue"
           value={formatPeso(stats.todayRevenue)}
           sub="From completed deliveries & pickups"
           trend="+12% vs yesterday"
-          accentColor="var(--fiesta-gold, #F59E0B)"
-          accentBg="var(--fiesta-gold-subtle, #FEF3C7)"
+          tone="gold"
           icon="💰"
           to="/owner/reports"
         />
@@ -291,8 +218,7 @@ export default function OwnerDashboard() {
           label="Orders Today"
           value={stats.ordersToday}
           sub={`${stats.pendingOrders} pending · ${stats.preparingOrders} preparing · ${stats.completedToday} done`}
-          accentColor="var(--accent, #F36B2B)"
-          accentBg="var(--accent-subtle, #FFF0E8)"
+          tone="orange"
           icon="🧾"
           to="/owner/orders"
         />
@@ -300,8 +226,7 @@ export default function OwnerDashboard() {
           label="Pending Reservations"
           value={stats.pendingReservations}
           sub={stats.pendingReservations > 0 ? '⚠ Needs attention' : 'All reservations handled'}
-          accentColor="var(--fiesta-green, #2E7D32)"
-          accentBg="var(--fiesta-green-subtle, #E8F5E9)"
+          tone="green"
           icon="📅"
           to="/owner/reservations"
         />
@@ -309,8 +234,7 @@ export default function OwnerDashboard() {
           label="Avg Order Value"
           value={formatPeso(stats.avgOrderValue)}
           sub="Lifetime average per order"
-          accentColor="var(--fiesta-brown, #5D4037)"
-          accentBg="var(--fiesta-brown-subtle, #EFEBE9)"
+          tone="brown"
           icon="📊"
         />
       </div>
@@ -318,14 +242,14 @@ export default function OwnerDashboard() {
       <section className="r7-dashboard-additions" aria-label="Additional restaurant summaries">
         <div className="r7-dashboard-additions-heading"><div><p className="r7-eyebrow">QUICK HEALTH CHECK</p><h2 className="section-title">More at a glance</h2></div><span>Live demo summaries</span></div>
         <div className="r7-dashboard-summary-grid">
-          <StatCard label="Today's Sales" value={formatPeso(stats.todayRevenue)} sub="Open sales reports" accentColor="var(--fiesta-gold, #F59E0B)" accentBg="var(--fiesta-gold-subtle, #FEF3C7)" icon="₱" to="/owner/reports" />
-          <StatCard label="This Week" value={formatPeso(summary?.weeklyRevenue ?? 0)} sub="Sales total · open reports" accentColor="var(--accent)" accentBg="var(--accent-subtle)" icon="↗" to="/owner/reports" />
-          <StatCard label="This Month" value={formatPeso(summary?.monthlyRevenue ?? 0)} sub="Sales total · open reports" accentColor="var(--fiesta-brown, #5D4037)" accentBg="var(--fiesta-brown-subtle, #EFEBE9)" icon="▦" to="/owner/reports" />
-          <StatCard label="Pending Orders" value={stats.pendingOrders} sub="Review orders needing a decision" accentColor="var(--accent)" accentBg="var(--accent-subtle)" icon="!" to="/owner/orders" />
-          <StatCard label="Today's Reservations" value={summary?.todayReservations ?? 0} sub="Reservations scheduled today" accentColor="var(--fiesta-green, #2E7D32)" accentBg="var(--fiesta-green-subtle, #E8F5E9)" icon="⌂" to="/owner/reservations" />
-          <StatCard label="Available Tables" value={summary?.availableTables ?? '—'} sub="Current table availability" accentColor="var(--fiesta-green, #2E7D32)" accentBg="var(--fiesta-green-subtle, #E8F5E9)" icon="▤" to="/owner/tables" />
-          <StatCard label="Low-Stock Items" value={summary?.lowStockItems ?? '—'} sub={summary?.lowStockItems > 0 ? 'Review items needing attention' : 'Inventory summary' } accentColor="var(--fiesta-gold, #F59E0B)" accentBg="var(--fiesta-gold-subtle, #FEF3C7)" icon="⚠" to="/owner/inventory" />
-          <StatCard label="Sold-Out Items" value={summary?.soldOutItems ?? '—'} sub="Menu items with zero tracked stock" accentColor="var(--salo-error, #DC4545)" accentBg="var(--status-error-bg)" icon="∅" to="/owner/menu" />
+          <StatCard label="Today's Sales" value={formatPeso(stats.todayRevenue)} sub="Open sales reports" tone="gold" icon="₱" to="/owner/reports" />
+          <StatCard label="This Week" value={formatPeso(summary?.weeklyRevenue ?? 0)} sub="Sales total · open reports" tone="gold" icon="↗" to="/owner/reports" />
+          <StatCard label="This Month" value={formatPeso(summary?.monthlyRevenue ?? 0)} sub="Sales total · open reports" tone="gold" icon="▦" to="/owner/reports" />
+          <StatCard label="Pending Orders" value={stats.pendingOrders} sub="Review orders needing a decision" tone="orange" icon="!" to="/owner/orders" />
+          <StatCard label="Today's Reservations" value={summary?.todayReservations ?? 0} sub="Reservations scheduled today" tone="green" icon="⌂" to="/owner/reservations" />
+          <StatCard label="Available Tables" value={summary?.availableTables ?? '—'} sub="Current table availability" tone="green" icon="▤" to="/owner/tables" />
+          <StatCard label="Low-Stock Items" value={summary?.lowStockItems ?? '—'} sub={summary?.lowStockItems > 0 ? 'Review items needing attention' : 'Inventory summary'} tone="brown" icon="⚠" iconState="warning" to="/owner/inventory" />
+          <StatCard label="Sold-Out Items" value={summary?.soldOutItems ?? '—'} sub="Menu items with zero tracked stock" tone="brown" icon="∅" iconState="danger" to="/owner/menu" />
         </div>
         {summaryWarnings.length > 0 && <p className="r7-dashboard-warning" role="status">Some live summary values are unavailable for this account: {summaryWarnings.join(', ')}.</p>}
       </section>

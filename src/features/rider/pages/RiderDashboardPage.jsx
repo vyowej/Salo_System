@@ -15,6 +15,22 @@ import useScenario from '../hooks/useScenario';
 import { formatRelativeTime } from '../utils/format';
 import './RiderDashboardPage.css';
 
+const availabilityTones = {
+  offline: 'brown',
+  online_available: 'green',
+  receiving_offer: 'orange',
+  on_delivery: 'orange',
+  temporarily_unavailable: 'gold',
+  shift_ended: 'brown',
+};
+
+const dashboardMetricTones = {
+  "Today's deliveries": 'green',
+  "Today's earnings": 'gold',
+  'Pending COD': 'brown',
+  'Current shift': 'brown',
+};
+
 export default function RiderDashboardPage() {
   const scenario = useScenario();
   const dashboard = getRiderMock('dashboard', scenario);
@@ -40,7 +56,7 @@ export default function RiderDashboardPage() {
         onRetry={() => window.location.reload()}
       >
         <section className="rider-dashboard-profile-row" aria-label="Rider profile and availability">
-          <Card className="rider-dashboard-profile">
+          <Card className={`rider-dashboard-profile card--tint-${availabilityTones[availability] || 'brown'} card--status`}>
             <CardBody>
               <div className="rider-dashboard-profile-main">
                 <div className="rider-avatar-round" aria-hidden="true">{profile.initials}</div>
@@ -80,20 +96,25 @@ export default function RiderDashboardPage() {
               value={metric.value}
               helper={metric.detail}
               icon={dashboardMetricIcons[index]}
-              tone={index === 1 ? 'success' : 'default'}
+              tone={dashboardMetricTones[metric.label] || 'neutral'}
             />
           ))}
         </section>
 
         <section className="rider-dashboard-columns" aria-label="Current delivery and location">
-          <Card>
+          <Card className="rider-active-preview-card card--tint-orange card--status">
             <CardBody>
               <div className="rider-dashboard-section-head">
                 <h2>Active delivery</h2>
                 {activeDelivery && (
-                  <Button as={ScenarioLink} to="/rider/deliveries/active" variant="outline" size="sm">
-                    Open delivery
-                  </Button>
+                  <div className="rider-dashboard-inline-actions">
+                    <Button as={ScenarioLink} to="/rider/deliveries/active" variant="outline" size="sm">
+                      Open delivery
+                    </Button>
+                    <Button as={ScenarioLink} to={`/rider/map?deliveryId=${encodeURIComponent(activeDelivery.id)}`} variant="outline" size="sm">
+                      View map
+                    </Button>
+                  </div>
                 )}
               </div>
               {activeDelivery ? (
@@ -104,7 +125,7 @@ export default function RiderDashboardPage() {
                   </div>
                   <p><span>Pickup</span>{activeDelivery.restaurant} · {activeDelivery.restaurantAddress || activeDelivery.pickup}</p>
                   <p><span>Drop-off</span>{activeDelivery.dropoff}</p>
-                  <Button as={ScenarioLink} to="/rider/deliveries/active" variant="primary" fullWidth>
+                  <Button as={ScenarioLink} to="/rider/deliveries/active" variant="outline" fullWidth>
                     View active delivery
                   </Button>
                 </div>

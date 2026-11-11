@@ -1,0 +1,482 @@
+/* ============================================================
+   SALO — OrderPanel styles
+   White card, sticky positioning, internal scroll.
+   ============================================================ */
+
+/* ── Panel wrapper ──────────────────────────────────────── */
+.op-panel {
+  background: var(--surface-primary);
+  border: var(--card-border-width) solid var(--border-primary);
+  border-radius: var(--card-radius);
+  display: flex;
+  flex-direction: column;
+  /* Height is controlled by the parent sticky column */
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.op-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--border-secondary);
+  flex-shrink: 0;
+}
+
+.op-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.op-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.op-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+}
+
+.op-clear-btn {
+  background: none;
+  border: none;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--salo-error);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.op-clear-btn:hover {
+  background: var(--status-error-bg);
+}
+
+/* ── Scrollable body ────────────────────────────────────── */
+.op-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  /* Custom thin scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-primary) transparent;
+}
+
+.op-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.op-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.op-body::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: var(--radius-pill);
+}
+
+/* ── Empty state ────────────────────────────────────────── */
+.op-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.op-empty-icon {
+  font-size: 36px;
+  opacity: 0.45;
+  user-select: none;
+}
+
+.op-empty-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.op-empty-hint {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin: 0;
+  line-height: var(--line-height-normal);
+}
+
+/* ── Restaurant group ───────────────────────────────────── */
+.op-restaurant-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.op-restaurant-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-secondary);
+}
+
+.op-restaurant-name {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.op-ordering-now-label {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--salo-green);
+  background: var(--status-success-bg);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--salo-green) 25%, transparent);
+}
+
+/* ── Line item ──────────────────────────────────────────── */
+.op-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  /* Entry animation */
+  animation: op-line-in var(--transition-normal) ease both;
+}
+
+@keyframes op-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .op-line {
+    animation: none;
+  }
+}
+
+.op-line-thumb {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  overflow: hidden;
+  border: 1px solid var(--border-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+.op-line-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.op-line-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.op-line-name {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  line-height: var(--line-height-snug);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.op-line-addons {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: var(--line-height-snug);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.op-line-price {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--accent);
+}
+
+/* Per-line stepper */
+.op-line-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.op-stepper {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.op-stepper-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: var(--font-weight-bold);
+  color: var(--text-secondary);
+  transition: background var(--transition-fast), color var(--transition-fast);
+  line-height: 1;
+}
+
+.op-stepper-btn:hover {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+.op-stepper-qty {
+  min-width: 20px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  pointer-events: none;
+  user-select: none;
+}
+
+.op-remove-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast), background var(--transition-fast);
+  line-height: 1;
+}
+
+.op-remove-btn:hover {
+  color: var(--salo-error);
+  background: var(--status-error-bg);
+}
+
+/* ── Summary (sticky at bottom) ─────────────────────────── */
+.op-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-secondary);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.op-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.op-summary-row--muted {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.op-summary-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.op-summary-value {
+  font-weight: var(--font-weight-semibold);
+  flex-shrink: 0;
+}
+
+.op-summary-value--muted {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Dashed divider before total (like the reference) */
+.op-total-divider {
+  border: none;
+  border-top: 1px dashed var(--border-primary);
+  margin: var(--space-1) 0;
+}
+
+.op-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.op-total-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+}
+
+.op-total-value {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--accent);
+}
+
+/* Checkout button */
+.op-checkout-btn {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: none;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: background var(--transition-fast), opacity var(--transition-fast);
+  margin-top: var(--space-1);
+}
+
+.op-checkout-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.op-checkout-btn:active:not(:disabled) {
+  background: var(--accent-active);
+}
+
+.op-checkout-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.op-viewcart-link {
+  display: block;
+  text-align: center;
+  margin-top: var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.op-viewcart-link:hover {
+  color: var(--accent);
+}
+
+/* ── Confirm clear dialog (inline) ──────────────────────── */
+.op-confirm-clear {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--status-error-bg);
+  border-radius: var(--radius-lg);
+  background: var(--status-error-bg);
+  margin-bottom: var(--space-2);
+}
+
+.op-confirm-clear-text {
+  font-size: var(--font-size-xs);
+  color: var(--status-error-text);
+  margin: 0;
+}
+
+.op-confirm-clear-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.op-confirm-clear-yes {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--salo-error);
+  color: #fff;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.op-confirm-clear-no {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  background: var(--surface-primary);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.op-confirm-clear-yes:hover { opacity: 0.85; }
+.op-confirm-clear-no:hover { background: var(--surface-hover); }
+
+/* ── aria-live announcer (visually hidden) ──────────────── */
+.op-live-region {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

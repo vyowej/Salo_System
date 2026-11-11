@@ -6,6 +6,7 @@ import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
+import './CustomerRecords.css';
 
 const DELIVERY_STEPS = ['Pending', 'Accepted', 'Preparing', 'Ready for Dispatch', 'Out for Delivery', 'Completed'];
 const PICKUP_STEPS = ['Pending', 'Accepted', 'Preparing', 'Ready for Pickup', 'Completed'];
@@ -169,23 +170,17 @@ export default function OrderDetailPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', marginBottom: 'var(--space-10)' }}>
         {order.subOrders?.map((sub, idx) => {
           return (
-            <div
+            <article
               key={sub.id || idx}
-              style={{
-                background: 'var(--surface-primary)',
-                border: '1px solid var(--border-primary)',
-                borderRadius: 'var(--radius-xl)',
-                padding: 'var(--space-6)',
-                boxShadow: 'var(--shadow-sm)',
-              }}
+              className={`customer-order-detail-card brand-card ${['Cancelled', 'Rejected'].includes(sub.status) ? 'brand-card--danger' : 'brand-card--orange brand-card--status'}`}
             >
               {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-4)', paddingBottom: 'var(--space-3)', borderBottom: '1px solid var(--border-secondary)' }}>
+              <div className="customer-order-detail-card__header">
                 <div>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  <span className="customer-order-detail-card__label">
                     RESTAURANT SUB-ORDER #{sub.id}
                   </span>
-                  <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <h2 className="customer-order-detail-card__title">
                     {sub.restaurantName}
                   </h2>
                 </div>
@@ -195,54 +190,27 @@ export default function OrderDetailPage() {
               </div>
 
               {sub.cancellationRequest && (
-                <div role="status" style={{ background: 'var(--surface-secondary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+                <div role="status" className="customer-order-detail-card__cancellation">
                   <strong>Cancellation request: {sub.cancellationRequest.status}</strong>
-                  {sub.cancellationRequest.reason && <p style={{ margin: '4px 0', fontSize: 'var(--font-size-xs)' }}>Customer reason: {sub.cancellationRequest.reason}</p>}
-                  {sub.cancellationRequest.resolutionReason && <p style={{ margin: '4px 0', fontSize: 'var(--font-size-xs)' }}>Restaurant response: {sub.cancellationRequest.resolutionReason}</p>}
+                  {sub.cancellationRequest.reason && <p>Customer reason: {sub.cancellationRequest.reason}</p>}
+                  {sub.cancellationRequest.resolutionReason && <p>Restaurant response: {sub.cancellationRequest.resolutionReason}</p>}
                 </div>
               )}
 
               {/* Status Stepper Progression */}
               {!['Cancelled', 'Rejected'].includes(sub.status) && (
-                <div style={{ margin: 'var(--space-5) 0 var(--space-6)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
+                <div className="customer-order-detail-card__stepper">
+                  <div className="customer-order-detail-card__steps">
                     {(sub.fulfillment === 'pickup' ? PICKUP_STEPS : DELIVERY_STEPS).map((step, sIdx, steps) => {
                       const statusStep = sub.status === 'Pending Confirmation' ? 'Pending' : sub.status;
                       const currentStepIdx = steps.indexOf(statusStep);
                       const isDone = currentStepIdx >= 0 && sIdx <= currentStepIdx;
                       return (
-                        <div
-                          key={step}
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            textAlign: 'center',
-                            flex: 1,
-                            position: 'relative',
-                          }}
-                        >
-                          <div style={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: '50%',
-                            background: isDone ? 'var(--accent)' : 'var(--bg-tertiary)',
-                            color: isDone ? '#fff' : 'var(--text-muted)',
-                            fontSize: 11,
-                            fontWeight: 700,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginBottom: 6,
-                            zIndex: 1,
-                          }}>
+                        <div key={step} className="customer-order-detail-card__step">
+                          <div className={`customer-order-detail-card__step-marker${isDone ? ' is-done' : ''}`}>
                             {isDone ? '✓' : sIdx + 1}
                           </div>
-                          <span style={{
-                            fontSize: 10,
-                            fontWeight: isDone ? 600 : 400,
-                            color: isDone ? 'var(--text-primary)' : 'var(--text-muted)',
-                          }}>
+                          <span className={isDone ? 'is-done' : ''}>
                             {step}
                           </span>
                         </div>
@@ -253,34 +221,25 @@ export default function OrderDetailPage() {
               )}
 
               {/* Delivery Details & Rider Card */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                gap: 'var(--space-4)',
-                background: 'var(--surface-secondary)',
-                borderRadius: 'var(--radius-lg)',
-                padding: 'var(--space-4)',
-                marginBottom: 'var(--space-4)',
-                fontSize: 'var(--font-size-xs)',
-              }}>
-                <div>
-                  <p style={{ fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: 10, marginBottom: 2 }}>
+              <div className="customer-order-detail-card__delivery">
+                <div className="customer-order-detail-card__delivery-field">
+                  <p className="customer-order-detail-card__label">
                     Destination Address
                   </p>
-                  <p style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                  <p className="customer-order-detail-card__value">
                     {sub.deliveryAddress}
                   </p>
                 </div>
 
                 {sub.rider && (
-                  <div>
-                    <p style={{ fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: 10, marginBottom: 2 }}>
+                  <div className="customer-order-detail-card__delivery-field">
+                    <p className="customer-order-detail-card__label">
                       Delivery Rider & Vehicle
                     </p>
-                    <p style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                    <p className="customer-order-detail-card__value">
                       🛵 {sub.rider.name}
                     </p>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
+                    <p className="customer-order-detail-card__secondary">
                       {sub.rider.vehicle} · {sub.rider.eta}
                     </p>
                   </div>
@@ -288,20 +247,20 @@ export default function OrderDetailPage() {
               </div>
 
               {/* Items List */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', fontSize: 'var(--font-size-xs)' }}>
+              <div className="customer-order-detail-card__items">
                 {sub.items?.map((item, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                    <span>                    {item.qty}x {item.name} {item.addOns?.length > 0 && `(${item.addOns.map((addOn) => typeof addOn === 'string' ? addOn : `${addOn.name}${Number(addOn.price) > 0 ? ` (+₱${addOn.price})` : ''}`).join(', ')})`}</span>
-                    <span style={{ fontWeight: 600 }}>₱{(item.price * item.qty).toLocaleString()}</span>
+                  <div key={i} className="customer-order-detail-card__item">
+                    <span>{item.qty}x {item.name} {item.addOns?.length > 0 && `(${item.addOns.map((addOn) => typeof addOn === 'string' ? addOn : `${addOn.name}${Number(addOn.price) > 0 ? ` (+₱${addOn.price})` : ''}`).join(', ')})`}</span>
+                    <span className="customer-order-detail-card__value">₱{(item.price * item.qty).toLocaleString()}</span>
                   </div>
                 ))}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, marginTop: 4, borderTop: '1px solid var(--border-secondary)', fontWeight: 700 }}>
+                <div className="customer-order-detail-card__subtotal">
                   <span>Subtotal + Delivery:</span>
                   <span>₱{(sub.subtotal + sub.deliveryFee).toLocaleString()}</span>
                 </div>
               </div>
-            </div>
+            </article>
           );
         })}
       </div>

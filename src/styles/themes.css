@@ -36,6 +36,47 @@
   --accent-subtle: var(--salo-orange-light);
   --accent-text:   #FFFFFF;
 
+  /* Semantic card tints */
+  --card-orange-bg: color-mix(in srgb, var(--card-brand-orange) 9%, white);
+  --card-orange-bg-hover: color-mix(in srgb, var(--card-brand-orange) 12%, white);
+  --card-orange-border: color-mix(in srgb, var(--card-brand-orange) 28%, white);
+  --card-orange-border-hover: color-mix(in srgb, var(--card-brand-orange) 45%, white);
+  --card-orange-border-strong: var(--card-brand-orange);
+  --card-orange-accent: var(--card-brand-orange);
+  --card-orange-text: #873518;
+  --card-orange-chip: color-mix(in srgb, var(--card-brand-orange) 15%, white);
+  --card-orange-action-hover-text: #000000;
+
+  --card-gold-bg: color-mix(in srgb, var(--card-brand-gold) 9%, white);
+  --card-gold-bg-hover: color-mix(in srgb, var(--card-brand-gold) 12%, white);
+  --card-gold-border: color-mix(in srgb, var(--card-brand-gold) 28%, white);
+  --card-gold-border-hover: color-mix(in srgb, var(--card-brand-gold) 45%, white);
+  --card-gold-border-strong: var(--card-brand-gold);
+  --card-gold-accent: var(--card-brand-gold);
+  --card-gold-text: #684200;
+  --card-gold-chip: color-mix(in srgb, var(--card-brand-gold) 15%, white);
+  --card-gold-action-hover-text: #3F2B09;
+
+  --card-green-bg: color-mix(in srgb, var(--card-brand-green) 9%, white);
+  --card-green-bg-hover: color-mix(in srgb, var(--card-brand-green) 12%, white);
+  --card-green-border: color-mix(in srgb, var(--card-brand-green) 28%, white);
+  --card-green-border-hover: color-mix(in srgb, var(--card-brand-green) 45%, white);
+  --card-green-border-strong: var(--card-brand-green);
+  --card-green-accent: var(--card-brand-green);
+  --card-green-text: #3F4A20;
+  --card-green-chip: color-mix(in srgb, var(--card-brand-green) 15%, white);
+  --card-green-action-hover-text: #FFFFFF;
+
+  --card-brown-bg: color-mix(in srgb, var(--card-brand-brown) 9%, white);
+  --card-brown-bg-hover: color-mix(in srgb, var(--card-brand-brown) 12%, white);
+  --card-brown-border: color-mix(in srgb, var(--card-brand-brown) 28%, white);
+  --card-brown-border-hover: color-mix(in srgb, var(--card-brand-brown) 45%, white);
+  --card-brown-border-strong: var(--card-brand-brown);
+  --card-brown-accent: var(--card-brand-brown);
+  --card-brown-text: #55301C;
+  --card-brown-chip: color-mix(in srgb, var(--card-brand-brown) 15%, white);
+  --card-brown-action-hover-text: #FFFFFF;
+
   /* Gold accent */
   --gold:          var(--salo-gold);
   --gold-subtle:   var(--salo-gold-light);
@@ -157,6 +198,47 @@
   --accent-active: var(--salo-orange-active);
   --accent-subtle: #3A241B;
   --accent-text:   #FFFFFF;
+
+  /* Semantic card tints */
+  --card-orange-bg: color-mix(in srgb, var(--card-brand-orange) 13%, var(--surface-primary));
+  --card-orange-bg-hover: color-mix(in srgb, var(--card-brand-orange) 17%, var(--surface-primary));
+  --card-orange-border: color-mix(in srgb, var(--card-brand-orange) 30%, transparent);
+  --card-orange-border-hover: color-mix(in srgb, var(--card-brand-orange) 45%, transparent);
+  --card-orange-border-strong: #F08B68;
+  --card-orange-accent: #F08B68;
+  --card-orange-text: #FFC0AB;
+  --card-orange-chip: color-mix(in srgb, var(--card-brand-orange) 15%, var(--surface-primary));
+  --card-orange-action-hover-text: var(--text-inverse);
+
+  --card-gold-bg: color-mix(in srgb, var(--card-brand-gold) 13%, var(--surface-primary));
+  --card-gold-bg-hover: color-mix(in srgb, var(--card-brand-gold) 17%, var(--surface-primary));
+  --card-gold-border: color-mix(in srgb, var(--card-brand-gold) 30%, transparent);
+  --card-gold-border-hover: color-mix(in srgb, var(--card-brand-gold) 45%, transparent);
+  --card-gold-border-strong: #F2C46F;
+  --card-gold-accent: #F2C46F;
+  --card-gold-text: #FFE2AE;
+  --card-gold-chip: color-mix(in srgb, var(--card-brand-gold) 15%, var(--surface-primary));
+  --card-gold-action-hover-text: var(--text-inverse);
+
+  --card-green-bg: color-mix(in srgb, var(--card-brand-green) 13%, var(--surface-primary));
+  --card-green-bg-hover: color-mix(in srgb, var(--card-brand-green) 17%, var(--surface-primary));
+  --card-green-border: color-mix(in srgb, var(--card-brand-green) 30%, transparent);
+  --card-green-border-hover: color-mix(in srgb, var(--card-brand-green) 45%, transparent);
+  --card-green-border-strong: #A7B96A;
+  --card-green-accent: #A7B96A;
+  --card-green-text: #D7E4AE;
+  --card-green-chip: color-mix(in srgb, var(--card-brand-green) 15%, var(--surface-primary));
+  --card-green-action-hover-text: var(--text-inverse);
+
+  --card-brown-bg: color-mix(in srgb, var(--card-brand-brown) 13%, var(--surface-primary));
+  --card-brown-bg-hover: color-mix(in srgb, var(--card-brand-brown) 17%, var(--surface-primary));
+  --card-brown-border: color-mix(in srgb, var(--card-brand-brown) 30%, transparent);
+  --card-brown-border-hover: color-mix(in srgb, var(--card-brand-brown) 45%, transparent);
+  --card-brown-border-strong: #AD8977;
+  --card-brown-accent: #AD8977;
+  --card-brown-text: #E8CABB;
+  --card-brown-chip: color-mix(in srgb, var(--card-brand-brown) 15%, var(--surface-primary));
+  --card-brown-action-hover-text: var(--text-inverse);
 
   /* Gold accent */
   --gold:          var(--salo-gold);

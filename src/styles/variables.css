@@ -23,6 +23,29 @@
   --salo-brown-mid:     #55301C;
   --salo-brown-hover:   #38200F;
 
+  /* Brand colors reserved for semantic card tints */
+  --card-brand-orange: #C85428;
+  --card-brand-gold:   #DFA03E;
+  --card-brand-green:  #68733C;
+  --card-brand-brown:  #55301C;
+
+  /* Shared card geometry */
+  --card-radius: 16px;
+  --card-padding: 24px;
+  --card-border-width: 1px;
+  --card-status-border-width: 1.5px;
+  --card-accent-strip-height: 3px;
+  --card-focus-ring-width: 2px;
+  --card-focus-ring-offset: 2px;
+  --card-label-letter-spacing: 0.06em;
+  --customer-restaurant-card-min-width: 320px;
+  --customer-restaurant-cover-height: 140px;
+  --customer-favorite-button-size: 32px;
+  --customer-cover-icon-size: 48px;
+  --card-detail-min-width: 200px;
+  --card-grid-min-width: 220px;
+  --card-delivery-field-min-width: 260px;
+
   /* Legacy aliases retained for existing feature styles */
   --salo-olive:         var(--salo-green);
   --salo-olive-hover:   var(--salo-green-hover);

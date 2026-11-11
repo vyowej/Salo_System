@@ -6,6 +6,7 @@ import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import RestaurantImage from '../components/RestaurantImage';
+import './CustomerDashboard.css';
 
 const CATEGORIES = [
   'All',
@@ -100,17 +101,11 @@ export default function CustomerDashboard() {
 
       {/* ── Active Order & Upcoming Reservation Quick Strips ── */}
       {(activeOrders.length > 0 || upcomingReservations.length > 0) && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
+        <div className="customer-live-card-grid">
           {activeOrders[0] && (
-            <div style={{
-              background: 'var(--surface-primary)',
-              border: '1.5px solid var(--accent)',
-              borderRadius: 'var(--radius-xl)',
-              padding: 'var(--space-5)',
-              boxShadow: 'var(--shadow-sm)',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <article className="brand-card brand-card--orange brand-card--status customer-live-card">
+              <div className="customer-live-card__heading">
+                <span className="brand-card__label">
                   Active Order in Progress
                 </span>
                 <Badge variant="primary" dot size="sm">
@@ -118,31 +113,25 @@ export default function CustomerDashboard() {
                 </Badge>
               </div>
 
-              <p style={{ fontWeight: 700, fontSize: 'var(--font-size-md)', marginBottom: 'var(--space-1)' }}>
+              <p className="customer-live-card__title">
                 Order #{activeOrders[0].id} ({activeOrders[0].subOrders?.length || 1} Restaurants)
               </p>
-              <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-4)' }}>
+              <p className="customer-live-card__detail">
                 {activeOrders[0].subOrders?.map(so => so.restaurantName).join(' + ')}
               </p>
 
-              <Link to={`/customer/orders`} style={{ textDecoration: 'none' }}>
+              <Link to={`/customer/orders`} className="customer-live-card__action">
                 <Button variant="outline" size="sm" fullWidth>
                   Track Live Delivery Status →
                 </Button>
               </Link>
-            </div>
+            </article>
           )}
 
           {upcomingReservations[0] && (
-            <div style={{
-              background: 'var(--surface-primary)',
-              border: '1px solid var(--border-primary)',
-              borderRadius: 'var(--radius-xl)',
-              padding: 'var(--space-5)',
-              boxShadow: 'var(--shadow-sm)',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--status-success-text)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <article className="brand-card brand-card--green brand-card--status customer-live-card">
+              <div className="customer-live-card__heading">
+                <span className="brand-card__label">
                   Confirmed Table Reservation
                 </span>
                 <Badge variant="success" dot size="sm">
@@ -150,19 +139,19 @@ export default function CustomerDashboard() {
                 </Badge>
               </div>
 
-              <p style={{ fontWeight: 700, fontSize: 'var(--font-size-md)', marginBottom: 'var(--space-1)' }}>
+              <p className="customer-live-card__title">
                 {upcomingReservations[0].restaurantName}
               </p>
-              <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-4)' }}>
+              <p className="customer-live-card__detail">
                 📅 {upcomingReservations[0].date} at {upcomingReservations[0].time} · Table for {upcomingReservations[0].guests} guests
               </p>
 
-              <Link to="/customer/reservations" style={{ textDecoration: 'none' }}>
-                <Button variant="secondary" size="sm" fullWidth>
+              <Link to="/customer/reservations" className="customer-live-card__action">
+                <Button variant="outline" size="sm" fullWidth>
                   View Reservation Details →
                 </Button>
               </Link>
-            </div>
+            </article>
           )}
         </div>
       )}
@@ -218,91 +207,38 @@ export default function CustomerDashboard() {
             </Button>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--space-6)' }}>
+          <div className="customer-restaurant-grid">
             {filteredRestaurants.map((rest) => (
-              <div
+              <article
                 key={rest.id}
                 onClick={() => navigate(`/customer/restaurants/${rest.id}`)}
-                style={{
-                  background: 'var(--surface-primary)',
-                  border: '1px solid var(--border-primary)',
-                  borderRadius: 'var(--radius-xl)',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  transition: 'transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-                  e.currentTarget.style.borderColor = 'var(--accent)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'none';
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.borderColor = 'var(--border-primary)';
-                }}
+                className="customer-restaurant-card"
               >
                 {/* Visual Cover */}
-                <div style={{
-                  height: 140,
-                  background: 'var(--bg-tertiary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 48,
-                  position: 'relative',
-                  borderBottom: '1px solid var(--border-secondary)',
-                }}>
+                <div className="customer-restaurant-card__cover">
                   <RestaurantImage
                     image={rest.coverPhoto}
                     alt={`${rest.name} cover photo`}
                     fallback={rest.coverImage || rest.name?.[0] || 'R'}
-                    style={{ position: 'absolute', inset: 0 }}
+                    className="customer-restaurant-card__image"
                   />
                   <button
                     type="button"
                     onClick={(event) => handleToggleFavorite(rest.id, event)}
                     aria-label={favoriteIds.includes(rest.id) ? 'Remove from favorites' : 'Add to favorites'}
-                    style={{
-                      position: 'absolute',
-                      top: 10,
-                      right: 10,
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      border: '1px solid var(--border-primary)',
-                      background: 'var(--surface-primary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      color: favoriteIds.includes(rest.id) ? 'var(--salo-error)' : 'var(--text-muted)',
-                      fontSize: 16,
-                      boxShadow: 'var(--shadow-xs)',
-                      zIndex: 1,
-                    }}
+                    className={`customer-restaurant-card__favorite${favoriteIds.includes(rest.id) ? ' is-favorite' : ''}`}
                   >
                     {favoriteIds.includes(rest.id) ? '♥' : '♡'}
                   </button>
-                  <span style={{
-                    position: 'absolute',
-                    top: 10,
-                    left: 10,
-                    background: 'var(--surface-primary)',
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-full)',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    boxShadow: 'var(--shadow-xs)'
-                  }}>
+                  <span className="customer-restaurant-card__rating">
                     ★ {rest.rating} ({rest.reviewCount})
                   </span>
                 </div>
 
                 {/* Details */}
-                <div style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>
+                <div className="customer-restaurant-card__details">
+                  <div className="customer-restaurant-card__title-row">
+                    <h3>
                       {rest.name}
                     </h3>
                     <Badge variant={rest.isOpen ? 'success' : 'default'} size="sm" dot>
@@ -310,18 +246,11 @@ export default function CustomerDashboard() {
                     </Badge>
                   </div>
 
-                  <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                  <p className="customer-restaurant-card__cuisine">
                     {rest.cuisine}
                   </p>
 
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-3)',
-                    fontSize: '11px',
-                    color: 'var(--text-muted)',
-                    marginTop: 'var(--space-1)',
-                  }}>
+                  <div className="customer-restaurant-card__metadata">
                     <span>🕒 {rest.deliveryTime}</span>
                     <span>•</span>
                     <span>🛵 ₱{rest.deliveryFee} Fee</span>
@@ -330,14 +259,7 @@ export default function CustomerDashboard() {
                   </div>
 
                   {/* Dual Action Strip */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: 'var(--space-2)',
-                    marginTop: 'var(--space-3)',
-                    paddingTop: 'var(--space-3)',
-                    borderTop: '1px solid var(--border-secondary)',
-                  }}>
+                  <div className="customer-restaurant-card__actions">
                     <Button
                       variant="primary"
                       size="sm"
@@ -360,7 +282,7 @@ export default function CustomerDashboard() {
                     </Button>
                   </div>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         )}

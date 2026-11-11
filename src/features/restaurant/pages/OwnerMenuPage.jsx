@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import OwnerLayout from '../../../layouts/OwnerLayout';
 import ownerService from '../../../services/ownerService';
 import Button from '../../../components/common/Button';
@@ -8,6 +9,7 @@ import ImageUploader from '../../../components/common/ImageUploader';
 import RestaurantImage from '../../customer/components/RestaurantImage';
 import { EmptyState, ErrorState, LoadingSpinner } from '../../../components/feedback';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
+import { INVENTORY_MENU_DISPLAY } from './inventoryMenuDisplayConfig';
 import {
   MENU_AVAILABILITY,
   getMenuCustomerPrice,
@@ -66,6 +68,8 @@ function Field({ label, children, error }) {
 export default function OwnerMenuPage() {
   const access = useRestaurantAccess();
   const { selectedRestaurantId } = access;
+  const location = useLocation();
+  const navigate = useNavigate();
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -105,6 +109,29 @@ export default function OwnerMenuPage() {
   useEffect(() => {
     loadMenu();
   }, [loadMenu]);
+
+  const canEditMenuForm = access.canAccess(['menu.items.edit'])
+    || access.canAccess(['menu.pricing.manage'])
+    || access.canAccess(['menu.photos.manage'])
+    || access.canAccess(['menu.availability.manage'])
+    || access.canAccess(['menu.addons.manage']);
+
+  useEffect(() => {
+    const requestedItemId = location.state?.inventoryEditMenuItemId;
+    if (!requestedItemId || loading) return;
+
+    navigate(location.pathname, { replace: true, state: null });
+    const requestedItem = menuItems.find((item) => item.id === requestedItemId);
+    if (!requestedItem) {
+      setError(INVENTORY_MENU_DISPLAY.labels.menuEditNotFound);
+      return;
+    }
+    if (!canEditMenuForm) {
+      setError(INVENTORY_MENU_DISPLAY.labels.menuEditPermission);
+      return;
+    }
+    openEditItem(requestedItem);
+  }, [canEditMenuForm, loading, location.pathname, location.state, menuItems, navigate]);
 
   const filteredItems = useMemo(() => menuItems.filter((item) => {
     const categoryMatches = selectedCategory === 'All' || item.category === selectedCategory;
