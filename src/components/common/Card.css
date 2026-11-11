@@ -5,7 +5,7 @@
 .card {
   background: var(--surface-primary);
   border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
+  border-radius: var(--card-radius);
   overflow: hidden;
   transition:
     border-color var(--transition-fast),
@@ -14,7 +14,7 @@
 
 /* ── Card sections ───────────────────────────────────── */
 .card-header {
-  padding: var(--space-5) var(--space-6);
+  padding: var(--card-padding);
   border-bottom: 1px solid var(--border-secondary);
   display: flex;
   align-items: center;
@@ -36,14 +36,14 @@
 }
 
 .card-body {
-  padding: var(--space-6);
+  padding: var(--card-padding);
 }
 
-.card-body-sm { padding: var(--space-4); }
-.card-body-lg { padding: var(--space-8); }
+.card-body-sm { padding: var(--space-5); }
+.card-body-lg { padding: var(--space-6); }
 
 .card-footer {
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-5) var(--card-padding);
   border-top: 1px solid var(--border-secondary);
   display: flex;
   align-items: center;
@@ -83,10 +83,21 @@
 
 /* ── Stat card ───────────────────────────────────────── */
 .stat-card {
-  padding: var(--space-6);
+  padding: var(--card-padding);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.stat-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.stat-card-icon {
+  color: var(--text-muted);
 }
 
 .stat-card-label {

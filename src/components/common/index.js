@@ -11,3 +11,4 @@ export {
   CardFooter,
   StatCard,
 } from './Card';
+export { default as MapSlot } from './MapSlot';

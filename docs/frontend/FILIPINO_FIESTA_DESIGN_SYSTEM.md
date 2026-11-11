@@ -21,11 +21,37 @@ These colors represent traditional Filipino dining culture — the clay cooking 
 | `--salo-brown` / `--fiesta-brown` | **Earthy Brown** | `#5D4037` | Traditional clay pot (*palayok*) and brand imagery; do not use as a role-specific UI accent. |
 | `--salo-green` / `--fiesta-green` | **Muted Leaf Green** | `#2E7D32` | Semantic success and verification indicators. |
 
+### Semantic Information-Card Tints
+
+The four icon-derived colors below are reserved for summary, status, and
+information cards across all four interfaces. They do not replace the core
+palette above or become role-specific accents.
+
+| Card token family | Color | Meaning |
+|---|---|---|
+| `--card-brand-orange` | `#C85428` | Orders, deliveries, live activity, and items needing action |
+| `--card-brand-gold` | `#DFA03E` | Money, earnings, promotions, and highlights |
+| `--card-brand-green` | `#68733C` | Reservations, tables, availability, approvals, and success |
+| `--card-brand-brown` | `#55301C` | Analytics, inventory, finance controls, and neutral/offline information |
+
+Use the corresponding `--card-*-bg`, `--card-*-bg-hover`, `--card-*-border`,
+`--card-*-border-strong`, `--card-*-accent`, `--card-*-text`, and
+`--card-*-chip` theme tokens rather than component-local color values. Light
+and dark values are defined in `../../src/styles/themes.css`; shared card
+geometry is defined in `../../src/styles/variables.css`.
+
+- Keep forms, input-focused settings/profile cards, data tables, audit records,
+  notifications, and customer restaurant-photo cards neutral.
+- Keep warning and danger states in their existing semantic colors.
+- Use semantic card-label and action-text tokens to preserve readable text and
+  keyboard focus contrast in both themes.
+
 ### Strict Neutral Background Rules (Non-Negotiable)
 
 - **Light Mode (`[data-theme="light"]`):**
   - Background is **PURE WHITE** (`#FFFFFF`).
   - Surfaces use clean cool neutrals (`#F8F9FA` / `#F1F3F5`).
+  - The semantic information-card tints above are the sole approved colored-surface exception.
   - **STRICTLY PROHIBITED:** Beige, cream, ivory, tan, or yellowish warm off-white backgrounds.
 - **Dark Mode (`[data-theme="dark"]`):**
   - Background is **TRUE NEAR-BLACK** (`#171717`).
@@ -40,7 +66,7 @@ SALO must use one visual language across the public site and the Customer, Resta
 
 - Reuse shared components for buttons, inputs, cards, badges, modals, dropdowns, navigation, and other common UI. Extend an existing component or pattern before creating a new one-off style.
 - Use the existing design tokens for colors, spacing, border radii, shadows, and typography. Do not invent values; add or change tokens only through an intentional design-system update.
-- Use Fiesta Orange (`#F36B2B`) for primary actions and selected states, never as a large background. Other palette colors remain shared tokens and should be used only for their established or semantic purpose, not as role-specific accent systems.
+- Use Fiesta Orange (`#F36B2B`) for primary actions and selected states, never as a large background. Other palette colors remain shared tokens and should be used only for their established or semantic purpose, not as role-specific accent systems. The semantic information-card tint mapping above is consistent across roles.
 - Keep top-bar and sidebar structure, height, spacing, logo treatment, and button styling consistent across roles.
 - Prefer open layouts with clear hierarchy over unnecessary nested cards.
 - Keep hover, focus, active, and loading states consistent across the application. Use the existing motion tokens (`150ms` / `220ms`) and do not introduce new motion styles.

@@ -58,10 +58,10 @@ export function CardFooter({ children, className = '', ...props }) {
  */
 export function StatCard({ label, value, change, changeType = 'positive', icon, className = '' }) {
   return (
-    <div className={`card stat-card ${className}`}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+    <div className={`card stat-card card--stat ${className}`}>
+      <div className="stat-card-header">
         <span className="stat-card-label">{label}</span>
-        {icon && <span style={{ color: 'var(--text-muted)' }}>{icon}</span>}
+        {icon && <span className="stat-card-icon">{icon}</span>}
       </div>
       <span className="stat-card-value">{value}</span>
       {change && (
