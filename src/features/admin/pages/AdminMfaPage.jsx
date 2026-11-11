@@ -40,9 +40,6 @@ export default function AdminMfaPage() {
 
   return (
     <main className="admin-mfa-card">
-      <p className="admin-page-header__eyebrow">Administrator security</p>
-      <h1 className="page-title">Verify it’s you</h1>
-      <p>Enter the six-digit demo verification code to continue to the Admin Side.</p>
       <div className="admin-shell-note" role="note">Demo code: <strong>{DEMO_CODE}</strong>. This is a presentation-only MFA screen.</div>
       {error && <p className="admin-security-error" role="alert">{error}</p>}
       {message && <p role="status">{message}</p>}
