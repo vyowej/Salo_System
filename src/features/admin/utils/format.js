@@ -7,7 +7,7 @@ import {
 export { formatDate, formatDateTime };
 
 export function formatPeso(amount) {
-  return formatExistingPeso(amount).replace(/^₱₱/, '₱');
+  return formatExistingPeso(amount);
 }
 
 export function formatDateTimeInput(value) {
