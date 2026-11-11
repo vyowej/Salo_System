@@ -1,9 +1,9 @@
 import './MapSlot.css';
 
 export default function MapSlot({
-  pickup,
-  dropoff,
-  riderLocation,
+  pickup: _pickup,
+  dropoff: _dropoff,
+  riderLocation: _riderLocation,
   label = 'Map will appear here',
   showLabel = true,
   className = '',
