@@ -105,7 +105,7 @@ function Dashboard({ state, setState }) {
             </RiderCard>
           </div>
           <RiderCard title={'Quick actions'}>
-            <div className="rider-inline">{data.quickActions.map((action) => <Button as={ScenarioLink} to={action.href} key={action.href} variant="outline" size="sm">{action.label}</Button>)}</div>
+            <div className="rider-inline">{data.quickActions.map((action) => <Button as={ScenarioLink} to={action.href} key={action.href} variant="secondary" size="sm">{action.label}</Button>)}</div>
           </RiderCard>
         </div>
       )}
@@ -128,7 +128,7 @@ function Offers({ state, setState }) {
               <div className="rider-stack"><p><strong>{'Pickup'}</strong><br />{offer.pickup}</p><p><strong>{'Delivery area'}</strong><br />{offer.deliveryArea}</p><p><strong>{'Instructions'}</strong><br />{offer.instructions}</p></div>
               <div className="rider-stack"><p><strong>{'Distance'}</strong><br />{offer.distance}</p><p><strong>{'Estimated time'}</strong><br />{offer.eta}</p><p><strong>{'Compensation'}</strong><br />{offer.compensation}</p><p><strong>{'Payment type'}</strong><br />{offer.paymentType} {offer.cod && <RiderStatusBadge status={'COD'} tone="warning" />}</p>{offer.cod && <p>{offer.cod}</p>}</div>
             </div>
-            <div className="rider-offer-footer"><div><strong>{offer.countdown}</strong><p className="rider-card-description">{'Offer expiration preview only'}</p></div><div className="rider-inline"><Button variant="primary" size="sm" onClick={() => setMessage('Offer acceptance preview · no assignment was made.')}>{'Accept · preview'}</Button><Button variant="outline" size="sm" onClick={() => setMessage('Offer decline preview · no dispatch update was sent.')}>{'Decline · preview'}</Button></div></div>
+            <div className="rider-offer-footer"><div><strong>{offer.countdown}</strong><p className="rider-card-description">{'Offer expiration preview only'}</p></div><div className="rider-inline"><Button variant="primary" size="sm" onClick={() => setMessage('Offer acceptance preview · no assignment was made.')}>{'Accept · preview'}</Button><Button variant="secondary" size="sm" onClick={() => setMessage('Offer decline preview · no dispatch update was sent.')}>{'Decline · preview'}</Button></div></div>
           </RiderCard>
         ))}
       </div>}
@@ -161,7 +161,7 @@ function ActiveDelivery({ state, setState }) {
               <div className="rider-inline rider-status-wrap">{data.statuses.map((status) => <RiderStatusBadge key={status} status={status} tone={status === data.activeStatus ? 'success' : 'neutral'} />)}</div>
               <div className="rider-grid rider-top-gap"><div><strong>{data.restaurant}</strong><p>{data.pickup}</p></div><div><strong>{data.customer}</strong><p>{data.dropoff}</p></div></div>
               <div className="rider-note">{data.instructions}</div>
-              <div className="rider-inline rider-top-gap"><a className="rider-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.dropoff)}`} target="_blank" rel="noreferrer">{'Open in Maps'}</a><Button variant="outline" size="sm">{'Call customer'}</Button><Button variant="ghost" size="sm" onClick={() => setTab('Report a problem')}>{'Cannot reach customer'}</Button></div>
+              <div className="rider-inline rider-top-gap"><a className="rider-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.dropoff)}`} target="_blank" rel="noreferrer">{'Open in Maps'}</a><Button variant="secondary" size="sm">{'Call customer'}</Button><Button variant="ghost" size="sm" onClick={() => setTab('Report a problem')}>{'Cannot reach customer'}</Button></div>
               <div className="rider-note rider-top-gap">{'Illustrative screen only. No live navigation preview is provided.'}</div>
             </RiderCard>
           </>}
@@ -182,7 +182,7 @@ function ActiveDelivery({ state, setState }) {
               <RiderUploadField label={'Attach supporting photo'} accept="image/*" onChange={previewFile} preview={image} hint={DATA.previewCopy.previewUpload} />
               <Button variant="primary" onClick={() => setSubmitted(true)}>{'Submit report preview'}</Button>
             </div>}
-            <div className="rider-note rider-danger rider-top-gap"><strong>{DATA.support.emergency.title}</strong><p>{DATA.support.emergency.contact}</p><Button variant="outline">{'Open emergency support preview'}</Button></div>
+            <div className="rider-note rider-danger rider-top-gap"><strong>{DATA.support.emergency.title}</strong><p>{DATA.support.emergency.contact}</p><Button variant="secondary">{'Open emergency support preview'}</Button></div>
           </RiderCard>}
         </div>
       </>}
@@ -200,7 +200,7 @@ function Schedule({ state, setState }) {
         <div className="rider-calendar">{DATA.shifts.map((shift) => <button key={shift.day} className={`rider-calendar-day ${selected.day === shift.day ? 'is-selected' : ''}`} onClick={() => setSelected(shift)}><strong>{shift.day}</strong><span>{shift.date}</span></button>)}</div>
       </RiderCard>
       <RiderCard title={'Shift details'} actions={selected.changed && <RiderStatusBadge status={'Schedule changed'} tone="warning" />}>
-        <div className="rider-stack"><strong>{selected.day}</strong><span>{selected.start} – {selected.end}</span><span>{selected.zone}</span><RiderStatusBadge status={selected.status} /><Button variant="outline" size="sm">{'Request schedule change · preview'}</Button></div>
+        <div className="rider-stack"><strong>{selected.day}</strong><span>{selected.start} – {selected.end}</span><span>{selected.zone}</span><RiderStatusBadge status={selected.status} /><Button variant="secondary" size="sm">{'Request schedule change · preview'}</Button></div>
       </RiderCard>
       <RiderCard title={'Assigned shifts'}><div className="rider-list">{DATA.shifts.map((shift) => <button type="button" className="rider-list-row rider-list-button" key={shift.day} onClick={() => setSelected(shift)}><span><strong>{shift.day}</strong><small>{shift.date} · {shift.zone}</small></span><RiderStatusBadge status={shift.status} /></button>)}</div></RiderCard>
     </div>}
@@ -214,7 +214,7 @@ function MapTracking({ state, setState }) {
     <RiderPreview state={state} setState={setState} data={data} />
     {state !== riderPreviewState.sample ? <RiderStatePanel state={state} data={DATA.previewCopy} onStateChange={setState} /> : <div className="rider-stack">
       <div className="rider-note rider-warning" role="status">{data.warning} · {data.lastUpdated}</div>
-      <RiderCard title={'Location permission'} description={DATA.previewCopy.locationPermission}><Button variant="outline">{'Review location permission'}</Button><p className="rider-card-description">{data.permission}</p></RiderCard>
+      <RiderCard title={'Location permission'} description={DATA.previewCopy.locationPermission}><Button variant="secondary">{'Review location permission'}</Button><p className="rider-card-description">{data.permission}</p></RiderCard>
       <RiderCard title={'Active delivery map preview'} description={'Illustrative map panel · not live tracking'}>
         <div className="rider-map-preview" role="img" aria-label={'Non-live map preview with pickup, rider, and drop-off markers'}>
           <span className="rider-map-marker pickup">{data.pickupLabel}</span><span className="rider-map-marker rider">{data.riderLabel}</span><span className="rider-map-marker dropoff">{data.dropoffLabel}</span>
@@ -306,7 +306,7 @@ function Support({ state, setState }) {
       </RiderCard>
       <RiderCard title={'Support tickets'}>
         {DATA.support.tickets.length ? <div className="rider-list">{DATA.support.tickets.map((ticket) => <button className="rider-list-row rider-list-button" key={ticket.id} onClick={() => setSelected(ticket)}><span><strong>{ticket.subject}</strong><small>{ticket.category} · {ticket.updated}</small></span><RiderStatusBadge status={ticket.status} /></button>)}</div> : <div className="rider-empty-state">{DATA.previewCopy.noTicket}</div>}
-        {selected && <div className="rider-detail-panel"><div className="rider-inline"><strong>{selected.id}</strong><RiderStatusBadge status={selected.status} /></div>{selected.thread.map((message) => <p className="rider-note" key={message.message}><strong>{message.author}</strong><br />{message.message}<br />{message.time}</p>)}<label className="rider-field"><span>{'Reply preview'}</span><textarea placeholder={'Write a reply'} /></label><Button variant="outline" size="sm">{'Send reply preview'}</Button></div>}
+        {selected && <div className="rider-detail-panel"><div className="rider-inline"><strong>{selected.id}</strong><RiderStatusBadge status={selected.status} /></div>{selected.thread.map((message) => <p className="rider-note" key={message.message}><strong>{message.author}</strong><br />{message.message}<br />{message.time}</p>)}<label className="rider-field"><span>{'Reply preview'}</span><textarea placeholder={'Write a reply'} /></label><Button variant="secondary" size="sm">{'Send reply preview'}</Button></div>}
       </RiderCard>
       <RiderCard title={DATA.support.emergency.title} className="rider-danger"><p>{DATA.support.emergency.contact}</p><p>{DATA.support.emergency.guidance}</p><div className="rider-inline"><Button variant="danger-outline">{'Emergency support'}</Button><span>{SUPPORT_TICKET_STATUSES.join(' · ')}</span></div></RiderCard>
     </div>}
@@ -324,7 +324,7 @@ function ProfileSettings({ state, setState, settings = false }) {
     <RiderPreview state={state} setState={setState} data={profile} />
     {state !== riderPreviewState.sample ? <RiderStatePanel state={state} data={DATA.previewCopy} onStateChange={setState} /> : settings ? <div className="rider-stack">
       {SETTINGS_SECTIONS.map((section) => <RiderCard key={section} title={section}>
-        {section === SETTINGS_SECTIONS[0] ? notificationPreferences.map((item) => <label className="rider-setting-row" key={item.key}><span>{item.label}</span><button type="button" role="switch" aria-checked={Boolean(toggles[item.key])} className="rider-switch" onClick={() => setToggles((all) => toggleRecordValue(all, item.key))}>{toggles[item.key] ? 'On' : 'Off'}</button></label>) : section === SETTINGS_SECTIONS[1] ? <div className="rider-stack"><label className="rider-field"><span>{'Current password'}</span><input type="password" autoComplete="current-password" /></label><label className="rider-field"><span>{'New password'}</span><input type="password" autoComplete="new-password" /></label><Button variant="outline">{'Update password preview'}</Button></div> : <div className="rider-note">{section === SETTINGS_SECTIONS[2] ? DATA.previewCopy.locationPermission : section === SETTINGS_SECTIONS[5] ? 'Sign out from the rider workspace.' : 'Information is shown as a design preview.'}</div>}
+        {section === SETTINGS_SECTIONS[0] ? notificationPreferences.map((item) => <label className="rider-setting-row" key={item.key}><span>{item.label}</span><button type="button" role="switch" aria-checked={Boolean(toggles[item.key])} className="rider-switch" onClick={() => setToggles((all) => toggleRecordValue(all, item.key))}>{toggles[item.key] ? 'On' : 'Off'}</button></label>) : section === SETTINGS_SECTIONS[1] ? <div className="rider-stack"><label className="rider-field"><span>{'Current password'}</span><input type="password" autoComplete="current-password" /></label><label className="rider-field"><span>{'New password'}</span><input type="password" autoComplete="new-password" /></label><Button variant="secondary">{'Update password preview'}</Button></div> : <div className="rider-note">{section === SETTINGS_SECTIONS[2] ? DATA.previewCopy.locationPermission : section === SETTINGS_SECTIONS[5] ? 'Sign out from the rider workspace.' : 'Information is shown as a design preview.'}</div>}
       </RiderCard>)}
     </div> : <div className="rider-grid">
       <RiderCard title={'Rider profile'} description={profile.email}>
@@ -332,7 +332,7 @@ function ProfileSettings({ state, setState, settings = false }) {
         <div className="rider-stack rider-top-gap"><p>{profile.phone}</p><p>{profile.address}</p><p>{profile.zone}</p><RiderUploadField label={'Profile photo'} accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) setImage(URL.createObjectURL(file)); }} preview={image} hint={DATA.previewCopy.previewUpload} /></div>
       </RiderCard>
       <RiderCard title={'Vehicle & documents'} description={profile.vehicleType}>
-        <div className="rider-stack"><p>{profile.vehicle}</p><p>{profile.plate}</p><p>{profile.license}</p><p>{profile.governmentId}</p><RiderStatusBadge status={vehicleChange ? 'Pending review' : 'No pending vehicle change'} tone={vehicleChange ? 'warning' : 'neutral'} /><Button variant="outline" onClick={() => setVehicleChange(true)}>{'Request vehicle change · preview'}</Button><RiderUploadField label={'Document preview'} accept="image/*,.pdf" onChange={() => {}} hint={DATA.previewCopy.previewUpload} /></div>
+        <div className="rider-stack"><p>{profile.vehicle}</p><p>{profile.plate}</p><p>{profile.license}</p><p>{profile.governmentId}</p><RiderStatusBadge status={vehicleChange ? 'Pending review' : 'No pending vehicle change'} tone={vehicleChange ? 'warning' : 'neutral'} /><Button variant="secondary" onClick={() => setVehicleChange(true)}>{'Request vehicle change · preview'}</Button><RiderUploadField label={'Document preview'} accept="image/*,.pdf" onChange={() => {}} hint={DATA.previewCopy.previewUpload} /></div>
       </RiderCard>
     </div>}
   </>;

@@ -5,6 +5,7 @@
  */
 
 import restaurantService from './restaurantService';
+import addressService, { INITIAL_ADDRESSES as ADDRESS_SERVICE_INITIAL_ADDRESSES } from './addressService';
 
 // ── Realistic Philippine Restaurant Dataset ───────────────────
 export const INITIAL_RESTAURANTS = [
@@ -371,90 +372,35 @@ export const customerService = {
     return restaurantService.getRestaurant(id);
   },
 
-  // Saved Addresses
+  // Saved Addresses (delegated to addressService as single source of truth)
   getSavedAddresses() {
-    try {
-      const stored = localStorage.getItem('salo_addresses');
-      return stored ? JSON.parse(stored) : INITIAL_ADDRESSES;
-    } catch {
-      return INITIAL_ADDRESSES;
-    }
+    return addressService.getAddresses();
   },
 
   saveAddress(newAddress) {
-    const addresses = this.getSavedAddresses();
-    const newId = newAddress.id || `addr-${Date.now()}`;
-    const existingDefaultId = addresses.find((address) => address.isDefault)?.id;
-    const isEditingDefault = newId === existingDefaultId;
-    const shouldSetDefault = Boolean(newAddress.isDefault) || addresses.length === 0 || isEditingDefault;
-
-    const next = [
-      ...addresses.filter((address) => address.id !== newId),
-      { ...newAddress, id: newId, isDefault: false },
-    ];
-
-    const final = ensureSingleDefaultAddress(next, shouldSetDefault ? newId : existingDefaultId || next[0]?.id || null);
-    localStorage.setItem('salo_addresses', JSON.stringify(final));
-    return final;
+    if (newAddress.id && addressService.getAddresses().some((a) => a.id === newAddress.id)) {
+      addressService.updateAddress(newAddress.id, newAddress);
+    } else {
+      addressService.addAddress(newAddress);
+    }
+    return addressService.getAddresses();
   },
 
   updateAddress(addressId, nextAddressData) {
-    const addresses = this.getSavedAddresses();
-    const currentAddress = addresses.find((address) => address.id === addressId);
-    if (!currentAddress) return addresses;
-
-    const existingDefaultId = addresses.find((address) => address.isDefault)?.id;
-    const next = addresses
-      .filter((address) => address.id !== addressId)
-      .map((address) => ({ ...address, isDefault: false }));
-
-    const updated = {
-      ...currentAddress,
-      ...nextAddressData,
-      id: addressId,
-      isDefault: Boolean(nextAddressData.isDefault),
-      phone: String(nextAddressData.phone ?? currentAddress.phone ?? '').trim(),
-      recipientName: String(nextAddressData.recipientName ?? currentAddress.recipientName ?? '').trim(),
-      street: String(nextAddressData.street ?? currentAddress.street ?? '').trim(),
-      city: String(nextAddressData.city ?? currentAddress.city ?? '').trim(),
-      notes: String(nextAddressData.notes ?? currentAddress.notes ?? '').trim(),
-    };
-
-    const fallbackDefaultId = updated.isDefault ? addressId : existingDefaultId || next[0]?.id || null;
-    const final = ensureSingleDefaultAddress([...next, { ...updated, isDefault: false }], fallbackDefaultId);
-    localStorage.setItem('salo_addresses', JSON.stringify(final));
-    return final;
+    addressService.updateAddress(addressId, nextAddressData);
+    return addressService.getAddresses();
   },
 
   deleteAddress(addressId) {
-    const addresses = this.getSavedAddresses();
-    const next = addresses.filter((address) => address.id !== addressId);
-
-    if (next.length === 0) {
-      localStorage.removeItem('salo_addresses');
-      return [];
-    }
-
-    const deletedWasDefault = addresses.find((address) => address.id === addressId)?.isDefault;
-    const fallbackDefaultId = deletedWasDefault ? next[0].id : next.find((address) => address.isDefault)?.id || next[0].id;
-    const final = ensureSingleDefaultAddress(next, fallbackDefaultId);
-    localStorage.setItem('salo_addresses', JSON.stringify(final));
-    return final;
+    return addressService.deleteAddress(addressId);
   },
 
   getDefaultAddress() {
-    const addresses = this.getSavedAddresses();
-    return addresses.find((address) => address.isDefault) || addresses[0] || null;
+    return addressService.getDefaultAddress();
   },
 
   setDefaultAddress(addressId) {
-    const addresses = this.getSavedAddresses();
-    const updated = addresses.map((address) => ({
-      ...address,
-      isDefault: address.id === addressId,
-    }));
-    localStorage.setItem('salo_addresses', JSON.stringify(updated));
-    return updated;
+    return addressService.setDefaultAddress(addressId);
   },
 
   getRecentSearches() {

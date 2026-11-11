@@ -57,10 +57,6 @@ export default function BusinessApplicationStatusPage() {
         <div className="biz-status-header-inner">
           <div className="biz-status-brand">
             <BrandMark size="sm" />
-            <div className="biz-status-title-group">
-              <span className="biz-status-eyebrow">Merchant Tracking</span>
-              <h1 className="biz-status-page-title">Application Status</h1>
-            </div>
           </div>
 
           <div className="biz-status-header-links">

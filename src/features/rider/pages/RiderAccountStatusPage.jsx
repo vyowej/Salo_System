@@ -19,7 +19,7 @@ function accountStatusCardClass(status) {
     deactivated: 'brown',
   }[status] || '';
   const tintClass = tone && tone !== 'danger' ? ` card--tint-${tone}` : '';
-  return `rider-account-card${tintClass}${tone ? ' card--status' : ''}${tone === 'danger' ? ' card--danger' : ''}`;
+  return `rider-account-card${tintClass}${tone === 'danger' ? ' card--danger' : ''}`;
 }
 
 export default function RiderAccountStatusPage() {
@@ -49,7 +49,7 @@ export default function RiderAccountStatusPage() {
         </div>
         <div className="rider-account-status-actions">
           <Button as={ScenarioLink} to="/rider/activate" variant="primary">Go to account activation</Button>
-          <Button as={ScenarioLink} to="/rider/application" variant="outline">View application status</Button>
+          <Button as={ScenarioLink} to="/rider/application" variant="secondary">View application status</Button>
         </div>
       </StateView>
     </div>

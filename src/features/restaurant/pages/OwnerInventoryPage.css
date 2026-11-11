@@ -17,24 +17,12 @@
   gap: var(--space-3);
 }
 
-.owner-inventory-header h1 {
-  margin: 0;
-  font-size: clamp(26px, 3vw, 36px);
-}
+.owner-inventory-header { justify-content: flex-end; }
 
-.owner-inventory-header p,
 .owner-inventory-settings p,
 .owner-inventory-form-heading p {
   margin: var(--space-1) 0 0;
   color: var(--text-secondary);
-}
-
-.owner-inventory-eyebrow {
-  color: var(--accent) !important;
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  letter-spacing: var(--card-label-letter-spacing);
-  text-transform: uppercase;
 }
 
 .owner-inventory-error {
@@ -417,6 +405,8 @@
     flex-direction: column;
     align-items: stretch;
   }
+
+  .owner-inventory-header { align-items: flex-end; }
 
   .owner-inventory-grid {
     grid-template-columns: 1fr;

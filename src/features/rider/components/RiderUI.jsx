@@ -6,17 +6,10 @@ import { statusBadgeVariants } from '../constants/statusConfig';
 import ScenarioLink from './ScenarioLink';
 import './RiderUI.css';
 
-export function RiderPageHeading({ eyebrow, title, description, actions }) {
-  return (
-    <header className="rider-page-heading">
-      <div>
-        <p className="rider-eyebrow">{eyebrow}</p>
-        <h1 className="rider-title">{title}</h1>
-        {description && <p className="rider-description">{description}</p>}
-      </div>
-      {actions && <div className="rider-heading-actions">{actions}</div>}
-    </header>
-  );
+export function RiderPageHeading({ actions }) {
+  if (!actions) return null;
+
+  return <div className="rider-heading-actions-only">{actions}</div>;
 }
 
 export function RiderCard({ title, description, actions, children, className = '' }) {
@@ -66,7 +59,7 @@ export function RiderStatePanel({ state, data, onStateChange }) {
       <div className="rider-state-alert is-error" role="alert">
         <strong>{data.errorTitle}</strong>
         <span>{data.errorMessage}</span>
-        <Button variant="outline" size="sm" onClick={() => onStateChange('Sample data')}>{data.retryLabel}</Button>
+        <Button variant="secondary" size="sm" onClick={() => onStateChange('Sample data')}>{data.retryLabel}</Button>
       </div>
     );
   }

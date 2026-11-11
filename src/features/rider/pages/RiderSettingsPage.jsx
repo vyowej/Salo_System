@@ -109,7 +109,7 @@ export default function RiderSettingsPage() {
         <div className="rider-logout-modal">
           <p>Confirm the sign-out preview for this rider account.</p>
           <div>
-            <Button variant="outline" onClick={() => setLogoutOpen(false)}>Cancel</Button>
+            <Button variant="secondary" onClick={() => setLogoutOpen(false)}>Cancel</Button>
             <Button variant="danger" onClick={() => { setLogoutConfirmed(true); setLogoutOpen(false); }}>Confirm log out</Button>
           </div>
           {logoutConfirmed && <p role="status">Sign-out preview confirmed. No authentication state was changed.</p>}

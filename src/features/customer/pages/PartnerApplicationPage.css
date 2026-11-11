@@ -6,42 +6,7 @@
 .partner-page-container {
   max-width: 1080px;
   margin: 0 auto;
-  padding: var(--space-4) 0 var(--space-12);
-}
-
-.partner-header-section {
-  text-align: center;
-  max-width: 720px;
-  margin: 0 auto var(--space-8);
-}
-
-.partner-eyebrow {
-  display: inline-block;
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-secondary);
-  background: var(--surface-secondary);
-  padding: 4px 14px;
-  border-radius: var(--radius-full);
-  margin-bottom: var(--space-2);
-}
-
-.partner-main-title {
-  font-size: clamp(28px, 3.5vw, 38px);
-  color: var(--text-primary);
-  margin: 0 0 var(--space-3);
-  letter-spacing: -0.025em;
-}
-
-.partner-lead-text {
-  font-family: var(--font-body);
-  font-size: var(--font-size-base);
-  color: var(--text-secondary);
-  line-height: 1.6;
-  margin: 0;
+  padding: 0 0 var(--space-12);
 }
 
 .partner-alert-banner {

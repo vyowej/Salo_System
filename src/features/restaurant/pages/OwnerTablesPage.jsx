@@ -136,14 +136,11 @@ export default function OwnerTablesPage() {
   return (
     <OwnerLayout>
       <div className="owner-tables-page">
-        <header className="owner-tables-header">
-          <div>
-            <p className="owner-tables-eyebrow">Restaurant operations</p>
-            <h1>Tables</h1>
-            <p>Manage dining areas and table schedules. Reserved and Occupied are derived from reservations.</p>
+        {can('tables.add') && (
+          <div className="owner-tables-header">
+            <Button onClick={openNewTable}>Add table</Button>
           </div>
-          {can('tables.add') && <Button onClick={openNewTable}>Add table</Button>}
-        </header>
+        )}
 
         {error && <div className="owner-tables-error" role="alert">{error}</div>}
         {loading ? <LoadingSpinner size="lg" label="Loading tables..." />

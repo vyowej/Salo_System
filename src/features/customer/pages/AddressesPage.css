@@ -1,0 +1,204 @@
+/**
+ * SALO — Saved Addresses Page Styles
+ * Mobile-first (360px, 768px, 1280px), 44px touch targets, token colors only.
+ */
+
+.salo-addresses-container {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.salo-addresses-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.salo-addresses-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.salo-add-address-btn {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* Limit banner */
+.salo-addresses-limit-banner {
+  background: var(--status-info-bg, rgba(59, 130, 246, 0.1));
+  border: 1px solid var(--status-info-border, rgba(59, 130, 246, 0.3));
+  color: var(--status-info-text, #1e40af);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-xs);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Address List Grid */
+.salo-address-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+@media (min-width: 768px) {
+  .salo-address-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Individual Address Card */
+.salo-address-card {
+  background: var(--surface-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.salo-address-card.is-default {
+  border-color: var(--accent);
+  background: var(--surface-primary);
+}
+
+.salo-address-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.salo-address-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.salo-address-badge-label {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.salo-address-recipient {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.salo-address-contact {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.salo-address-full-text {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.salo-address-notes {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  background: var(--surface-secondary);
+  border: 1px dashed var(--border-secondary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  margin: 0;
+}
+
+.salo-address-coordinates {
+  font-size: 11px;
+  color: var(--salo-success, #16a34a);
+  font-weight: 600;
+}
+
+/* Card Actions Row */
+.salo-address-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-secondary);
+  margin-top: auto;
+}
+
+.salo-address-action-btn {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  transition: all 0.15s ease;
+}
+
+.salo-address-action-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.salo-address-action-btn.danger {
+  color: var(--salo-error, #ef4444);
+}
+
+.salo-address-action-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.salo-address-action-btn.default-active {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent);
+  cursor: default;
+}
+
+/* Empty State */
+.salo-address-empty-state {
+  text-align: center;
+  padding: var(--space-12) var(--space-4);
+  background: var(--surface-primary);
+  border: 1px dashed var(--border-primary);
+  border-radius: var(--radius-xl);
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.salo-address-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--surface-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  margin: 0 auto var(--space-4);
+}

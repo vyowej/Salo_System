@@ -27,7 +27,7 @@ export default function RiderSchedulePage() {
                 <button type="button" className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>List</button>
                 <button type="button" className={view === 'calendar' ? 'active' : ''} onClick={() => setView('calendar')}>Calendar</button>
               </div>
-              <Button variant="outline" size="sm">Request change</Button>
+              <Button variant="secondary" size="sm">Request change</Button>
             </div>
 
             {view === 'list' ? (

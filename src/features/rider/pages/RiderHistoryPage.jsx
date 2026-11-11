@@ -18,9 +18,9 @@ import { formatDateTime } from '../utils/format';
 import './RiderHistoryPage.css';
 
 function deliveryCardClass(status) {
-  if (status === 'delivered') return 'card--tint-green card--status';
-  if (['failed', 'cancelled'].includes(status)) return 'card--danger card--status';
-  return 'card--tint-orange card--status';
+  if (status === 'delivered') return 'card--tint-green';
+  if (['failed', 'cancelled'].includes(status)) return 'card--danger';
+  return 'card--tint-orange';
 }
 
 export default function RiderHistoryPage() {
@@ -56,7 +56,7 @@ export default function RiderHistoryPage() {
         title={selected ? `Delivery ${selected.reference}` : 'Delivery history'}
         subtitle={selected ? 'Review the delivery timeline and recorded handoff details.' : 'Search completed and attempted deliveries.'}
         eyebrow="Your delivery records"
-        actions={selected && <Button as={ScenarioLink} to="/rider/history" variant="outline" size="sm">Back to history</Button>}
+        actions={selected && <Button as={ScenarioLink} to="/rider/history" variant="secondary" size="sm">Back to history</Button>}
       />
       <StateView state={viewState} emptyTitle="No delivery history" emptyMessage="No delivery records match this preview." onRetry={() => window.location.reload()}>
         {selected ? (

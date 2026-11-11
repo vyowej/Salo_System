@@ -133,23 +133,17 @@ export default function OrderDetailPage() {
       </Modal>
       {order.cancelError && <p className="form-error" role="alert">{order.cancelError}</p>}
 
-      {/* ── Page Header ─────────────────────────────────── */}
-      <div style={{ marginBottom: 'var(--space-6)' }}>
+      <div style={{ marginBottom: 'var(--space-4)' }}>
         <Link to="/customer/orders" style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
           ← Back to Orders
         </Link>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <h1 className="page-title" style={{ fontSize: 'var(--font-size-2xl)' }}>
-                Order #{order.id}
-              </h1>
-              <Badge variant={['Completed'].includes(order.overallStatus) ? 'success' : ['Cancelled', 'Rejected'].includes(order.overallStatus) ? 'error' : order.overallStatus === 'Cancellation Requested' ? 'warning' : 'primary'} dot>
-                {order.overallStatus}
-              </Badge>
-            </div>
-            <p className="page-subtitle">
-              Placed {order.createdAt} · {order.paymentMethod} · {order.paymentStatus}
+            <Badge variant={['Completed'].includes(order.overallStatus) ? 'success' : ['Cancelled', 'Rejected'].includes(order.overallStatus) ? 'error' : order.overallStatus === 'Cancellation Requested' ? 'warning' : 'primary'} dot>
+              {order.overallStatus}
+            </Badge>
+            <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)' }}>
+              Order #{order.id} · Placed {order.createdAt} · {order.paymentMethod} · {order.paymentStatus}
             </p>
           </div>
 

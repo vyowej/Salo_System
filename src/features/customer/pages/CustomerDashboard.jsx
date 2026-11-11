@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
-import { useAuth } from '../../../hooks/useAuth';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
@@ -19,7 +18,6 @@ const CATEGORIES = [
 ];
 
 export default function CustomerDashboard() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -70,35 +68,8 @@ export default function CustomerDashboard() {
     setFavoriteIds(next);
   };
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    const name = user?.name ? user.name.split(' ')[0] : '';
-    const nameSuffix = name ? `, ${name}` : '';
-    if (hour < 12) return `Good morning${nameSuffix}! Ready to find something delicious?`;
-    if (hour < 18) return `Good afternoon${nameSuffix}! Ready for a hearty meal?`;
-    return `Good evening${nameSuffix}! Ready for dinner?`;
-  };
-
   return (
     <CustomerLayout>
-      {/* ── Welcome Greeting ── */}
-      <div style={{ marginBottom: 'var(--space-8)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
-              <span className="fiesta-pill">Kain tayo!</span>
-            </div>
-            <h1 className="page-title" style={{ fontSize: 'var(--font-size-3xl)', marginTop: 'var(--space-1)' }}>
-              {getGreeting()}
-            </h1>
-            <p className="page-subtitle">
-              Discover restaurants and enjoy good food with the people you love. Order from multiple kitchens or book a table.
-            </p>
-          </div>
-
-        </div>
-      </div>
-
       {/* ── Active Order & Upcoming Reservation Quick Strips ── */}
       {(activeOrders.length > 0 || upcomingReservations.length > 0) && (
         <div className="customer-live-card-grid">

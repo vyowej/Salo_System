@@ -15,10 +15,6 @@ export default function RiderApplicationHeader({
       <div className="rider-wizard-header-container">
         <div className="rider-wizard-header-brand">
           <BrandMark size="sm" />
-          <div className="rider-wizard-header-titles">
-            <span className="rider-wizard-eyebrow">SALO Delivery Fleet</span>
-            <h1 className="rider-wizard-main-title">Rider Partner Application</h1>
-          </div>
         </div>
 
         <div className="rider-wizard-header-actions">

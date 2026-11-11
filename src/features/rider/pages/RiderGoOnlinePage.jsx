@@ -39,7 +39,7 @@ export default function RiderGoOnlinePage() {
 
             <div className="rider-go-online-actions">
               <Button variant="primary" as={ScenarioLink} to="/rider/deliveries">Go online</Button>
-              <Button variant="outline" as={ScenarioLink} to="/rider">Back to dashboard</Button>
+              <Button variant="secondary" as={ScenarioLink} to="/rider">Back to dashboard</Button>
             </div>
           </CardBody>
         </Card>

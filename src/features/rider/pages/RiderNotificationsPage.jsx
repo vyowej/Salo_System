@@ -25,7 +25,7 @@ export default function RiderNotificationsPage() {
         title="Notifications"
         subtitle="Stay up to date on your account, shifts, deliveries, and rider support."
         eyebrow="Updates"
-        actions={<Button variant="outline" size="sm" onClick={() => setAllRead(true)} disabled={unreadCount === 0}>Mark all as read</Button>}
+        actions={<Button variant="secondary" size="sm" onClick={() => setAllRead(true)} disabled={unreadCount === 0}>Mark all as read</Button>}
       />
       <StateView state={viewState} emptyTitle="No notifications" emptyMessage="New rider updates will appear here." onRetry={() => window.location.reload()}>
         <div className="rider-notification-filters" role="group" aria-label="Filter notifications by type">

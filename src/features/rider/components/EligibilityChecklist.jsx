@@ -1,3 +1,5 @@
+import './EligibilityChecklist.css';
+
 export default function EligibilityChecklist({ conditions = [] }) {
   return (
     <div className="rider-eligibility-checklist">

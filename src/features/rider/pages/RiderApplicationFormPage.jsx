@@ -76,7 +76,7 @@ export default function RiderApplicationFormPage() {
               )}
               <div className="rider-form-actions">
                 {step > 0 && (
-                  <Button variant="outline" onClick={() => setStep((current) => current - 1)}>
+                  <Button variant="secondary" onClick={() => setStep((current) => current - 1)}>
                     Back
                   </Button>
                 )}

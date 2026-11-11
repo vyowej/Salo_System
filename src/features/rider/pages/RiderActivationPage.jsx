@@ -54,7 +54,7 @@ export default function RiderActivationPage() {
               </div>
 
               <div className="rider-activation-meta">
-                <Button variant="outline" size="sm">Resend code</Button>
+                <Button variant="secondary" size="sm">Resend code</Button>
                 <span>{filledCount === OTP_DIGIT_COUNT ? 'Code ready' : 'Wait 30 seconds to resend'}</span>
               </div>
 

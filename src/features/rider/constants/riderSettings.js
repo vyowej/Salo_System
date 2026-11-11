@@ -22,7 +22,7 @@ export const riderAgreementSections = [
 export const profileChangeReasons = ['Contact details', 'Address', 'Vehicle information', 'Documents', 'Other'];
 export const historyTableLabels = ['Order', 'Date', 'Restaurant', 'Status', 'Payment', 'Earnings'];
 export const earningsTableLabels = ['Reference', 'Date', 'Amount', 'Status'];
-export const dashboardMetricIcons = ['◔', '◍', '◌', '◷'];
+export const dashboardMetricIcons = ['📦', '₱', '💳', '⏱'];
 export const dashboardQuickActions = [
   { key: 'go_online', label: 'Go Online', path: '/rider/go-online' },
   { key: 'offers', label: 'View Offers', path: '/rider/deliveries' },

@@ -9,23 +9,6 @@ import { ErrorState, LoadingSpinner } from '../../../components/feedback';
 import { DASHBOARD_ACTIVITY_SAMPLES } from './team/dashboardSamples';
 import './team/r7Dashboard.css';
 
-// ── Helpers ──────────────────────────────────────────────────────
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Magandang umaga!';
-  if (hour < 18) return 'Magandang hapon!';
-  return 'Magandang gabi!';
-}
-
-function formatDate() {
-  return new Date().toLocaleDateString('en-PH', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-}
-
 function formatPeso(amount) {
   return `₱${amount.toLocaleString('en-PH')}`;
 }
@@ -175,34 +158,6 @@ export default function OwnerDashboard() {
 
   return (
     <OwnerLayout>
-      {/* ── Greeting Section ─────────────────────────── */}
-      <div style={{ marginBottom: 'var(--space-8)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'var(--fiesta-gold-subtle, #FEF3C7)',
-              color: 'var(--fiesta-gold-text, #92400E)',
-              fontSize: 11,
-              fontWeight: 700,
-              padding: '3px 10px',
-              borderRadius: 'var(--radius-full)',
-              letterSpacing: '0.04em',
-            }}
-          >
-            ✨ {getGreeting()}
-          </span>
-        </div>
-        <h1 className="page-title" style={{ fontSize: 'var(--font-size-3xl)', marginBottom: 'var(--space-1)' }}>
-          Here's your restaurant overview
-        </h1>
-        <p className="page-subtitle">
-          {restaurant?.name || 'Your Restaurant'} &nbsp;·&nbsp; {formatDate()}
-        </p>
-      </div>
-
       {/* ── 4 Stat Cards ─────────────────────────────── */}
       <div className="owner-dashboard-stats-grid">
         <StatCard

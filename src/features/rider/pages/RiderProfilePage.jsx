@@ -33,12 +33,12 @@ export default function RiderProfilePage() {
         title="Rider profile"
         subtitle="Review the account details, vehicle information, and submitted documents on file."
         eyebrow="Your account"
-        actions={<Button variant="outline" size="sm" onClick={() => setModalOpen(true)}>Request change</Button>}
+        actions={<Button variant="secondary" size="sm" onClick={() => setModalOpen(true)}>Request change</Button>}
       />
       <StateView state={viewState} emptyTitle="Profile not available" emptyMessage="Rider profile details are not available in this preview." onRetry={() => window.location.reload()}>
         <div className="rider-profile-account-links">
-          <Button as={ScenarioLink} to="/rider/activate" variant="outline">Account activation</Button>
-          <Button as={ScenarioLink} to="/rider/account-status" variant="outline">Account status</Button>
+          <Button as={ScenarioLink} to="/rider/activate" variant="secondary">Account activation</Button>
+          <Button as={ScenarioLink} to="/rider/account-status" variant="secondary">Account status</Button>
         </div>
         {pendingReview && <div className="rider-profile-pending" role="status"><strong>Pending review</strong><span>Your change request has been added to this local preview.</span></div>}
         <div className="rider-profile-layout">

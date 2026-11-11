@@ -188,12 +188,7 @@ export default function OwnerOrdersPage() {
 
   return (
     <OwnerLayout>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 'var(--space-6)' }}>
-        <div>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Restaurant Operations · Demo data</span>
-          <h1 className="page-title" style={{ fontSize: 'var(--font-size-2xl)', marginTop: 'var(--space-1)' }}>Orders</h1>
-          <p className="page-subtitle">Review restaurant sub-orders, update kitchen progress, and handle cancellation requests.</p>
-        </div>
+      <header style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
         <div role="status" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning-text)', padding: '8px 12px', borderRadius: 'var(--radius-full)', fontWeight: 700, fontSize: 'var(--font-size-xs)' }}>
           {actionRequiredCount} order{actionRequiredCount === 1 ? '' : 's'} need action
         </div>

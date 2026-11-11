@@ -55,30 +55,6 @@
   font: inherit;
 }
 
-.customer-invitations-header {
-  margin: 30px 0 22px;
-}
-
-.customer-invitations-eyebrow {
-  margin: 0 0 5px;
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-
-.customer-invitations-header h1 {
-  margin: 0 0 6px;
-  font-family: var(--font-heading);
-  font-size: var(--text-h2);
-}
-
-.customer-invitations-header > p:last-child {
-  margin: 0;
-  color: var(--text-secondary);
-}
-
 .customer-invitation-list {
   display: grid;
   gap: 15px;
@@ -310,10 +286,6 @@
   .customer-invitations-preview select {
     flex: 1;
     max-width: 185px;
-  }
-
-  .customer-invitations-header {
-    margin-top: 22px;
   }
 
   .customer-invitation-card {

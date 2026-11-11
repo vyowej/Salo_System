@@ -6,7 +6,6 @@
   color: var(--text-primary);
 }
 
-.owner-tables-header,
 .owner-section-heading,
 .owner-table-card-heading,
 .owner-table-form-actions,
@@ -17,24 +16,24 @@
   gap: 12px;
 }
 
-.owner-tables-header h1 {
-  margin: 0;
-  font-size: clamp(26px, 3vw, 36px);
-}
-
-.owner-tables-header p,
 .owner-section-heading p {
   margin: 5px 0 0;
   color: var(--text-secondary);
 }
 
-.owner-tables-eyebrow,
 .owner-table-number {
   color: var(--accent);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .08em;
   text-transform: uppercase;
+}
+
+.owner-tables-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
 }
 
 .owner-section-heading h2 {
@@ -217,13 +216,8 @@
 }
 
 @media (max-width: 700px) {
-  .owner-tables-header,
   .owner-section-heading {
     align-items: flex-start;
-  }
-
-  .owner-tables-header {
-    flex-direction: column;
   }
 
   .owner-table-form-grid {

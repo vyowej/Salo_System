@@ -44,13 +44,7 @@ export default function FavoritesPage() {
 
   return (
     <CustomerLayout>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
-        <div>
-          <p style={{ margin: 0, fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>
-            Saved picks
-          </p>
-          <h1 style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--font-size-3xl)' }}>Your favorite restaurants</h1>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-4)' }}>
         <Link to="/customer" style={{ textDecoration: 'none' }}>
           <Button variant="secondary" size="sm">Explore more</Button>
         </Link>

@@ -81,7 +81,24 @@
 }
 
 .card.card--stat {
-  border-top: var(--card-accent-strip-height) solid var(--card-accent);
+  position: relative;
+  overflow: hidden;
+}
+
+.card.card--stat::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--card-accent, var(--accent));
+  content: "";
+  z-index: 1;
+}
+
+.card.card--live {
+  border-width: 1.5px;
+  border-color: var(--card-accent, var(--accent));
 }
 
 .card.card--danger {

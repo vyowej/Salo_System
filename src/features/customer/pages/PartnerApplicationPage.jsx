@@ -81,15 +81,6 @@ export default function PartnerApplicationPage() {
   return (
     <CustomerLayout>
       <div className="partner-page-container">
-        {/* Page Header */}
-        <div className="partner-header-section">
-          <span className="partner-eyebrow">Opportunities & Growth</span>
-          <h1 className="partner-main-title font-heading">Become a SALO Partner</h1>
-          <p className="partner-lead-text">
-            Join the premier food and gathering network in the Philippines. Whether you run a beloved kitchen or ride with speed and care, SALO empowers your journey with transparent earnings and genuine hospitality.
-          </p>
-        </div>
-
         {notification && (
           <div className="partner-alert-banner" role="status">
             <span style={{ fontSize: 18 }}>✓</span>

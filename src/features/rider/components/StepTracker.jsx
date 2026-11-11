@@ -1,3 +1,5 @@
+import './StepTracker.css';
+
 export default function StepTracker({ steps = [], currentKey = '' }) {
   const activeIndex = steps.findIndex((item) => item.key === currentKey || item.label === currentKey);
 
@@ -12,7 +14,7 @@ export default function StepTracker({ steps = [], currentKey = '' }) {
 
         return (
           <div key={key} className={`rider-step-item ${statusClass}`}>
-            <span className="rider-step-indicator" aria-hidden="true">{index + 1}</span>
+            <span className="rider-step-indicator" aria-hidden="true">{isComplete ? '✓' : index + 1}</span>
             <div>
               <strong>{step.label}</strong>
               <small>{isLocked ? 'Locked until the previous step is complete.' : step.description}</small>

@@ -1,5 +1,6 @@
 import Badge from '../../../components/common/Badge';
 import { statusBadgeVariants } from '../constants/statusConfig';
+import './StatusBadge.css';
 
 export default function StatusBadge({ status, config = [], tone = 'neutral' }) {
   const match = Array.isArray(config)

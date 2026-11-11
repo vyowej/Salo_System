@@ -47,28 +47,6 @@
   gap: var(--space-3, 12px);
 }
 
-.rider-status-title-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.rider-status-eyebrow {
-  font-size: var(--text-xs, 11px);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--salo-orange, #f36b2b);
-}
-
-.rider-status-page-title {
-  font-family: var(--font-heading, 'Fraunces', serif);
-  font-size: var(--font-size-md, 16px);
-  font-weight: 700;
-  color: var(--text-primary, #171717);
-  margin: 0;
-  line-height: 1.2;
-}
-
 .rider-status-header-links {
   display: flex;
   align-items: center;

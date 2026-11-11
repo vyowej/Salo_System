@@ -71,26 +71,12 @@ export default function ReservationsPage() {
         </p>
       </Modal>
 
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-          <div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Table Bookings
-            </span>
-            <h1 className="page-title" style={{ fontSize: 'var(--font-size-2xl)' }}>
-              My Table Reservations
-            </h1>
-            <p className="page-subtitle">
-              Review request status and reservation payment updates from each restaurant.
-            </p>
-          </div>
-
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-4)' }}>
           <Link to="/customer/restaurants" style={{ textDecoration: 'none' }}>
             <Button variant="primary" size="md">
               + Book Another Table
             </Button>
           </Link>
-        </div>
       </div>
 
       {error && <div role="alert" className="form-error" style={{ marginBottom: 'var(--space-4)' }}>{error}</div>}

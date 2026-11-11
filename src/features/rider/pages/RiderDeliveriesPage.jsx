@@ -32,13 +32,13 @@ export default function RiderDeliveriesPage() {
       >
         {offers.length === 0 ? (
           <div className="rider-empty-state-block">
-            <span aria-hidden="true">⌁</span>
+            <span className="rider-empty-icon" aria-hidden="true">🛵</span>
             <strong>No offers right now</strong>
           </div>
         ) : (
           <div className="rider-offer-grid">
             {offers.map((offer) => (
-              <Card key={offer.id} className="rider-offer-card card--tint-orange card--status">
+              <Card key={offer.id} className="rider-offer-card">
                 <CardBody>
                   <div className="rider-offer-topline">
                     <div>
@@ -93,14 +93,14 @@ export default function RiderDeliveriesPage() {
                       {offer.expired ? (
                         <Button variant="ghost" size="sm" disabled>Offer expired</Button>
                       ) : (
-                        <Button as={ScenarioLink} to="/rider/deliveries/active?scenario=active" variant="outline" size="sm">
+                        <Button as={ScenarioLink} to="/rider/deliveries/active?scenario=active" variant="primary" size="sm">
                           Accept
                         </Button>
                       )}
-                      <Button as={ScenarioLink} to={`/rider/map?deliveryId=${encodeURIComponent(offer.id)}`} variant="outline" size="sm">
+                      <Button as={ScenarioLink} to={`/rider/map?deliveryId=${encodeURIComponent(offer.id)}`} variant="secondary" size="sm">
                         View map
                       </Button>
-                      <Button variant="outline" size="sm" disabled={offer.expired}>
+                      <Button variant="secondary" size="sm" disabled={offer.expired}>
                         Decline
                       </Button>
                     </div>

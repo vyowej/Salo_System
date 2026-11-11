@@ -24,28 +24,6 @@
   gap: var(--space-3, 12px);
 }
 
-.app-wizard-header-titles {
-  display: flex;
-  flex-direction: column;
-}
-
-.app-wizard-eyebrow {
-  font-size: var(--text-xs, 11px);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--salo-orange, #f36b2b);
-}
-
-.app-wizard-main-title {
-  font-family: var(--font-heading, 'Fraunces', serif);
-  font-size: var(--font-size-md, 16px);
-  font-weight: 700;
-  color: var(--text-primary, #171717);
-  margin: 0;
-  line-height: 1.2;
-}
-
 .app-wizard-header-actions {
   display: flex;
   align-items: center;
@@ -75,12 +53,6 @@
 }
 
 @media (max-width: 640px) {
-  .app-wizard-eyebrow {
-    display: none;
-  }
-  .app-wizard-main-title {
-    font-size: 14px;
-  }
   .app-wizard-buttons-group .btn span {
     display: none;
   }

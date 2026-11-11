@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
+import useAddresses from '../../../hooks/useAddresses';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
+import AddressFormModal from '../components/AddressFormModal';
 
 const PAYMENT_METHODS = [
   { id: 'cod', name: 'Cash on Delivery (COD)', desc: 'Pay with cash upon arrival of each delivery', icon: '💵' },
@@ -15,12 +17,22 @@ const PAYMENT_METHODS = [
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
-  const { restaurantGroups, itemsSubtotal, totalDeliveryFees, grandTotal, clearCart } = useCart();
+  const { restaurantGroups, itemsSubtotal, totalDeliveryFees, grandTotal, clearCart, setRestaurantAddress } = useCart();
+  const { addresses, addAddress } = useAddresses();
 
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [orderNotes, setOrderNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [targetRestaurantIdForNewAddress, setTargetRestaurantIdForNewAddress] = useState(null);
+
+  const handleModalSaveAddress = (newAddrPayload) => {
+    const saved = addAddress(newAddrPayload);
+    if (targetRestaurantIdForNewAddress && saved) {
+      setRestaurantAddress(targetRestaurantIdForNewAddress, saved);
+    }
+  };
   const hasMissingDeliveryAddresses = restaurantGroups.some(
     (group) => group.fulfillment === 'delivery' && !group.deliveryAddress
   );
@@ -116,16 +128,10 @@ export default function CheckoutPage() {
 
   return (
     <CustomerLayout>
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <Link to="/customer/cart" style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+      <div style={{ marginBottom: 'var(--space-4)' }}>
+        <Link to="/customer/cart" style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           ← Return to Multi-Cart
         </Link>
-        <h1 className="page-title" style={{ fontSize: 'var(--font-size-2xl)' }}>
-          Consolidated Checkout
-        </h1>
-        <p className="page-subtitle">
-          Review your multi-restaurant allocations, delivery addresses, and payment selection.
-        </p>
       </div>
 
       {error && (
@@ -194,14 +200,92 @@ export default function CheckoutPage() {
                     </Badge>
                   </div>
 
-                  <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-                    Destination:{' '}
-                    <strong>
-                      {group.fulfillment === 'delivery'
-                        ? (group.deliveryAddress?.street || 'Customer Default Address')
-                        : 'Self-pickup at kitchen counter'}
-                    </strong>
-                  </p>
+                  {group.fulfillment === 'delivery' ? (
+                    <div style={{
+                      marginTop: 'var(--space-3)',
+                      padding: 'var(--space-3)',
+                      background: 'var(--surface-secondary)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-secondary)',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                          Delivery Destination
+                        </span>
+                        <select
+                          value={group.deliveryAddress?.id || ''}
+                          onChange={(e) => {
+                            if (e.target.value === '__add_new__') {
+                              setTargetRestaurantIdForNewAddress(group.restaurantId);
+                              setFormModalOpen(true);
+                              return;
+                            }
+                            const matched = addresses.find((a) => a.id === e.target.value);
+                            if (matched) setRestaurantAddress(group.restaurantId, matched);
+                          }}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--border-primary)',
+                            background: 'var(--surface-primary)',
+                            color: 'var(--text-primary)',
+                            fontSize: 'var(--font-size-xs)',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            minHeight: 36,
+                          }}
+                          aria-label={`Change delivery address for ${group.restaurantName}`}
+                        >
+                          {addresses.map((addr) => (
+                            <option key={addr.id} value={addr.id}>
+                              {addr.label}: {addr.street}, {addr.city}
+                            </option>
+                          ))}
+                          <option value="__add_new__">+ Add new address...</option>
+                        </select>
+                      </div>
+
+                      {group.deliveryAddress ? (
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 3, flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>
+                              {group.deliveryAddress.label === 'Home' && '🏠 '}
+                              {group.deliveryAddress.label === 'Work' && '💼 '}
+                              {group.deliveryAddress.label === 'School' && '🎓 '}
+                              {!['Home', 'Work', 'School'].includes(group.deliveryAddress.label) && '📍 '}
+                              {group.deliveryAddress.label}
+                            </strong>
+                            {group.deliveryAddress.isDefault && <Badge variant="success" size="sm">Default</Badge>}
+                            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                              · {group.deliveryAddress.recipientName} ({group.deliveryAddress.mobileNumber || group.deliveryAddress.phone})
+                            </span>
+                          </div>
+                          <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                            {[
+                              group.deliveryAddress.street,
+                              group.deliveryAddress.barangay && `Brgy. ${group.deliveryAddress.barangay}`,
+                              group.deliveryAddress.city,
+                              group.deliveryAddress.province,
+                              group.deliveryAddress.postalCode,
+                            ].filter(Boolean).join(', ')}
+                          </p>
+                          {group.deliveryAddress.notes && (
+                            <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                              Rider Note: {group.deliveryAddress.notes}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--salo-error)' }}>
+                          No delivery address selected. Please choose or add an address.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', margin: 'var(--space-2) 0 0' }}>
+                      Fulfillment: <strong>Self-pickup at kitchen counter</strong>
+                    </p>
+                  )}
 
                   <div style={{ marginTop: 'var(--space-2)', fontSize: 11, color: 'var(--text-muted)' }}>
                     {group.items.map((i) => `${i.quantity}x ${i.name}`).join(' · ')}
@@ -343,6 +427,16 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
+
+      <AddressFormModal
+        isOpen={formModalOpen}
+        onClose={() => {
+          setFormModalOpen(false);
+          setTargetRestaurantIdForNewAddress(null);
+        }}
+        onSave={handleModalSaveAddress}
+        existingAddresses={addresses}
+      />
     </CustomerLayout>
   );
 }

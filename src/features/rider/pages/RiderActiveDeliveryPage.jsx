@@ -3,7 +3,9 @@ import Button from '../../../components/common/Button';
 import { Card, CardBody } from '../../../components/common/Card';
 import PageHeader from '../components/PageHeader';
 import StateView from '../components/StateView';
-import StepTracker from '../components/StepTracker';
+import DeliverySteps from '../components/DeliverySteps';
+import DeliveryActions from '../components/DeliveryActions';
+import PickupPhotoDialog from '../components/PickupPhotoDialog';
 import FileUploadField from '../components/FileUploadField';
 import StatusBadge from '../components/StatusBadge';
 import PaymentBadge from '../components/PaymentBadge';
@@ -14,12 +16,19 @@ import { codStatuses, deliveryStatuses } from '../constants/statusConfig';
 import { failureReasons, emergencyContacts } from '../constants';
 import { getRiderMock } from '../mocks';
 import useScenario from '../hooks/useScenario';
+import { advanceDeliveryStep, getDeliveryProgress, uploadPickupPhoto } from '../services/riderDeliveryService';
 import './RiderActiveDeliveryPage.css';
 
 export default function RiderActiveDeliveryPage() {
   const scenario = useScenario();
   const deliveries = useMemo(() => getRiderMock('deliveries', scenario), [scenario]);
-  const delivery = deliveries?.active || null;
+  const [, setDeliveryRevision] = useState(0);
+  const [pickupDialogOpen, setPickupDialogOpen] = useState(false);
+  const baseDelivery = deliveries?.active || null;
+  const deliveryProgress = baseDelivery ? getDeliveryProgress(baseDelivery.id) : null;
+  const delivery = baseDelivery
+    ? { ...baseDelivery, ...deliveryProgress, status: deliveryProgress?.status || baseDelivery.status }
+    : null;
   const viewState = scenario === 'default' || scenario === 'active' ? 'ready' : scenario;
   const [proofOpen, setProofOpen] = useState(false);
   const [problemOpen, setProblemOpen] = useState(false);
@@ -35,6 +44,7 @@ export default function RiderActiveDeliveryPage() {
   const [problemSubmitted, setProblemSubmitted] = useState(false);
 
   const currentStep = delivery?.status || 'accepted';
+  const deliveryId = delivery?.id;
   const primaryActionLabel = deliveryActionLabels[currentStep] || deliveryActionLabels.accepted;
   const canComplete = proofMethod === 'contactless' ? Boolean(photo) : Boolean(recipientName.trim());
 
@@ -54,6 +64,30 @@ export default function RiderActiveDeliveryPage() {
     setProblemSubmitted(true);
   }
 
+  function handlePrimaryAction() {
+    if (!delivery) return;
+    if (currentStep === 'accepted') {
+      advanceDeliveryStep(delivery.id, 'arrived');
+      setDeliveryRevision((revision) => revision + 1);
+      return;
+    }
+    if (currentStep === 'arrived') {
+      setPickupDialogOpen(true);
+      return;
+    }
+    setProofOpen((value) => !value);
+  }
+
+  function closePickupDialog() {
+    setPickupDialogOpen(false);
+  }
+
+  async function confirmPickup(blob, capturedAt) {
+    const pickupPhoto = await uploadPickupPhoto(deliveryId, blob, capturedAt);
+    advanceDeliveryStep(deliveryId, 'picked_up', pickupPhoto);
+    setDeliveryRevision((revision) => revision + 1);
+  }
+
   return (
     <div className="rider-page-shell">
       <PageHeader title="Active delivery" subtitle="Track pickup, handoff, and delivery progress." eyebrow="Current assignment" />
@@ -70,9 +104,9 @@ export default function RiderActiveDeliveryPage() {
           </div>
         ) : (
           <>
-            <StepTracker steps={deliverySteps} currentKey={currentStep} />
+            <DeliverySteps steps={deliverySteps} currentKey={currentStep} />
             <div className="rider-active-layout">
-              <Card className="rider-active-main card--tint-orange card--status">
+              <Card className="rider-active-main card--live card--tint-orange">
                 <CardBody>
                   <div className="rider-detail-row">
                     <span>Order reference</span>
@@ -116,24 +150,18 @@ export default function RiderActiveDeliveryPage() {
                     <span>Delivery progress</span>
                     <StatusBadge status={currentStep} config={deliveryStatuses} />
                   </div>
-                  <Button variant="primary" fullWidth className="rider-action-primary">
-                    {primaryActionLabel}
-                  </Button>
-                  <Button as={ScenarioLink} to={`/rider/map?deliveryId=${encodeURIComponent(delivery.id)}`} variant="outline" fullWidth>
-                    View map
-                  </Button>
-                  <Button variant="outline" fullWidth>
-                    Open in Maps
-                  </Button>
-                  <Button variant="outline" fullWidth>
-                    Call customer
-                  </Button>
-                  <Button variant="ghost" fullWidth onClick={() => setProblemOpen((value) => !value)}>
-                    Can't reach customer
-                  </Button>
-                  <Button variant="ghost" fullWidth onClick={() => setProblemOpen((value) => !value)}>
-                    Report a problem
-                  </Button>
+
+                  <DeliveryActions
+                    actions={[
+                      { key: 'primary', label: primaryActionLabel, variant: 'primary', fullWidth: true, className: 'rider-action-primary', onClick: handlePrimaryAction },
+                      { key: 'map', label: 'View map', variant: 'outline', fullWidth: true, as: ScenarioLink, props: { to: `/rider/map?deliveryId=${encodeURIComponent(delivery.id)}` } },
+                      { key: 'maps', label: 'Open in Maps', variant: 'outline', fullWidth: true, onClick: () => window.alert('This is a preview only; no external map app is connected.') },
+                      { key: 'call', label: 'Call customer', variant: 'outline', fullWidth: true, onClick: () => window.location.href = `tel:${delivery.customerPhone || '+15550199'}` },
+                      { key: 'unreachable', label: "Can't reach customer", variant: 'ghost', fullWidth: true, onClick: () => setProblemOpen((value) => !value) },
+                      { key: 'problem', label: 'Report a problem', variant: 'ghost', fullWidth: true, onClick: () => setProblemOpen((value) => !value) },
+                    ]}
+                  />
+
                   <ScenarioLink to="/rider/safety" className="rider-safety-link">Safety guidance</ScenarioLink>
                   <Button variant="danger-outline" fullWidth onClick={() => setEmergencyOpen((value) => !value)}>
                     Emergency / Safety
@@ -225,7 +253,7 @@ export default function RiderActiveDeliveryPage() {
                     <Button variant="primary" size="sm" onClick={() => setProofOpen((value) => !value)}>
                       Complete delivery
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setProblemOpen((value) => !value)}>
+                    <Button variant="secondary" size="sm" onClick={() => setProblemOpen((value) => !value)}>
                       Report issue
                     </Button>
                   </div>
@@ -235,6 +263,13 @@ export default function RiderActiveDeliveryPage() {
           </>
         )}
       </StateView>
+      {delivery && (
+        <PickupPhotoDialog
+          open={pickupDialogOpen}
+          onClose={closePickupDialog}
+          onConfirm={confirmPickup}
+        />
+      )}
     </div>
   );
 }

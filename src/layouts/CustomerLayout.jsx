@@ -299,11 +299,24 @@ export default function CustomerLayout({ children }) {
 
             <button
               type="button"
+              className="customer-topbar-address-option"
+              style={{ color: 'var(--accent)', fontWeight: 600 }}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                setAddressMenuOpen(false);
+                navigate('/customer/addresses');
+              }}
+            >
+              + Add a new address
+            </button>
+
+            <button
+              type="button"
               className="customer-topbar-address-option manage"
               onMouseDown={(event) => {
                 event.preventDefault();
                 setAddressMenuOpen(false);
-                navigate('/customer/profile#saved-addresses');
+                navigate('/customer/addresses');
               }}
             >
               Manage saved addresses

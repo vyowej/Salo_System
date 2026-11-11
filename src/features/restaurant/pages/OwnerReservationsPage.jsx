@@ -219,19 +219,14 @@ export default function OwnerReservationsPage() {
   return (
     <OwnerLayout>
       <main className="owner-reservations">
-        <header className="reservation-page-header">
-          <div>
-            <span className="reservation-eyebrow">Guest operations</span>
-            <h1 className="page-title">Reservations</h1>
-            <p className="page-subtitle">Review requests, coordinate tables, and track each guest visit.</p>
-          </div>
-          {counts.new > 0 && (
+        {counts.new > 0 && (
+          <header className="reservation-page-header">
             <button type="button" className="reservation-needs-action" onClick={() => setQuickFilter('new')}>
               <span className="reservation-live-dot" />
               {counts.new} new request{counts.new === 1 ? '' : 's'} need action
             </button>
-          )}
-        </header>
+          </header>
+        )}
 
         {error && <div className="reservation-error" role="alert">{error}</div>}
         {loading ? <LoadingSpinner size="lg" label="Loading reservations..." />

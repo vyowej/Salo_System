@@ -7,22 +7,13 @@ import StatusBadge from '../components/StatusBadge';
 import StatCard from '../components/StatCard';
 import EligibilityChecklist from '../components/EligibilityChecklist';
 import ScenarioLink from '../components/ScenarioLink';
-import { accountStates, availabilityStatuses, deliveryStatuses } from '../constants/statusConfig';
+import { accountStates, deliveryStatuses } from '../constants/statusConfig';
 import { eligibilityConditions } from '../constants/eligibilityConditions';
-import { dashboardMetricIcons, dashboardQuickActions } from '../constants/riderSettings';
+import { dashboardMetricIcons } from '../constants/riderSettings';
 import { getRiderMock } from '../mocks';
 import useScenario from '../hooks/useScenario';
 import { formatRelativeTime } from '../utils/format';
 import './RiderDashboardPage.css';
-
-const availabilityTones = {
-  offline: 'brown',
-  online_available: 'green',
-  receiving_offer: 'orange',
-  on_delivery: 'orange',
-  temporarily_unavailable: 'gold',
-  shift_ended: 'brown',
-};
 
 const dashboardMetricTones = {
   "Today's deliveries": 'green',
@@ -38,13 +29,17 @@ export default function RiderDashboardPage() {
   const notifications = getRiderMock('notifications', scenario);
   const activeDelivery = getRiderMock('deliveries', scenario)?.active;
   const [online, setOnline] = useState(profile.availability === 'online_available');
-  const availability = online ? 'online_available' : 'offline';
   const unmetConditions = eligibilityConditions.filter((condition) => !condition.met);
-  const unmetSummary = unmetConditions.map((condition) => condition.label).join(', ');
   const accountStatus = accountStates.find(
     (status) => status.key === profile.accountStatus || status.label.toLowerCase() === profile.accountStatus.toLowerCase(),
   )?.key || 'pending_approval';
   const viewState = scenario === 'default' || scenario === 'active' ? 'ready' : scenario;
+
+  const isLocationWarning = dashboard.location?.status?.toLowerCase().includes('not enabled') || dashboard.location?.status?.toLowerCase().includes('denied');
+  const isSwitchDisabled = unmetConditions.length > 0 && !online;
+  const switchHelperText = unmetConditions.length > 0
+    ? (unmetConditions[0]?.reason || 'Requirements must be met before going online.')
+    : (online ? 'Driver Mode active · receiving dispatch offers.' : 'Toggle switch to go online.');
 
   return (
     <div className="rider-page-shell rider-dashboard-page">
@@ -55,39 +50,50 @@ export default function RiderDashboardPage() {
         emptyMessage="This preview has no rider dashboard content."
         onRetry={() => window.location.reload()}
       >
-        <section className="rider-dashboard-profile-row" aria-label="Rider profile and availability">
-          <Card className={`rider-dashboard-profile card--tint-${availabilityTones[availability] || 'brown'} card--status`}>
-            <CardBody>
-              <div className="rider-dashboard-profile-main">
-                <div className="rider-avatar-round" aria-hidden="true">{profile.initials}</div>
-                <div className="rider-dashboard-profile-copy">
-                  <h2>{profile.name}</h2>
-                  <p>{profile.zone}</p>
+        {/* 1. Status Bar (Replaces old profile card) */}
+        <section className="rider-dashboard-status-bar-section" aria-label="Rider status and driver mode">
+          <Card className={`rider-status-bar ${online ? 'card--tint-green' : ''}`}>
+            <CardBody className="rider-status-bar-body">
+              <div className="rider-status-bar-left">
+                <div className="rider-status-bar-avatar" aria-hidden="true">{profile.initials}</div>
+                <div className="rider-status-bar-info">
+                  <div className="rider-status-bar-name-row">
+                    <span className="rider-status-bar-name">{profile.name}</span>
+                    <StatusBadge status={accountStatus} config={accountStates} />
+                  </div>
+                  <p className="rider-status-bar-zone">{profile.zone}</p>
                 </div>
-                <StatusBadge status={accountStatus} config={accountStates} />
               </div>
-              <div className="rider-dashboard-availability">
-                <StatusBadge status={availability} config={availabilityStatuses} />
+              <div className="rider-status-bar-right">
                 <label className="rider-mode-control" htmlFor="rider-dashboard-mode">
-                  <span id="rider-dashboard-mode-label">Driver Mode</span>
+                  <span className="rider-mode-label">Driver Mode</span>
                   <button
                     id="rider-dashboard-mode"
                     type="button"
                     role="switch"
-                    aria-labelledby="rider-dashboard-mode-label"
+                    aria-label="Driver Mode"
                     aria-checked={online}
-                    className={`rider-mode-toggle ${online ? 'is-on' : ''}`}
-                    onClick={() => setOnline((current) => !current)}
+                    disabled={isSwitchDisabled}
+                    className={`rider-mode-toggle ${online ? 'is-on' : ''} ${isSwitchDisabled ? 'is-disabled' : ''}`}
+                    onClick={() => {
+                      if (!isSwitchDisabled) {
+                        setOnline((current) => !current);
+                      }
+                    }}
                   >
                     <span className="rider-mode-toggle-track" aria-hidden="true" />
                     <span>{online ? 'Online' : 'Offline'}</span>
                   </button>
                 </label>
+                {isSwitchDisabled && (
+                  <small className="rider-mode-helper">{switchHelperText}</small>
+                )}
               </div>
             </CardBody>
           </Card>
         </section>
 
+        {/* 2. KPI Row */}
         <section className="rider-stats-grid" aria-label="Today's rider summary">
           {dashboard.metrics.map((metric, index) => (
             <StatCard
@@ -101,17 +107,18 @@ export default function RiderDashboardPage() {
           ))}
         </section>
 
+        {/* 3. Two columns: Active Delivery (2/3) and Location Status (1/3) */}
         <section className="rider-dashboard-columns" aria-label="Current delivery and location">
-          <Card className="rider-active-preview-card card--tint-orange card--status">
+          <Card className={`rider-active-delivery-card${activeDelivery ? ' card--live card--tint-orange' : ''}`}>
             <CardBody>
               <div className="rider-dashboard-section-head">
-                <h2>Active delivery</h2>
+                <h2 className="rider-card-title">Active delivery</h2>
                 {activeDelivery && (
                   <div className="rider-dashboard-inline-actions">
-                    <Button as={ScenarioLink} to="/rider/deliveries/active" variant="outline" size="sm">
+                    <Button as={ScenarioLink} to="/rider/deliveries/active" variant="secondary" size="sm">
                       Open delivery
                     </Button>
-                    <Button as={ScenarioLink} to={`/rider/map?deliveryId=${encodeURIComponent(activeDelivery.id)}`} variant="outline" size="sm">
+                    <Button as={ScenarioLink} to={`/rider/map?deliveryId=${encodeURIComponent(activeDelivery.id)}`} variant="secondary" size="sm">
                       View map
                     </Button>
                   </div>
@@ -125,54 +132,68 @@ export default function RiderDashboardPage() {
                   </div>
                   <p><span>Pickup</span>{activeDelivery.restaurant} · {activeDelivery.restaurantAddress || activeDelivery.pickup}</p>
                   <p><span>Drop-off</span>{activeDelivery.dropoff}</p>
-                  <Button as={ScenarioLink} to="/rider/deliveries/active" variant="outline" fullWidth>
+                  <Button as={ScenarioLink} to="/rider/deliveries/active" variant="primary" fullWidth>
                     View active delivery
                   </Button>
                 </div>
               ) : (
                 <div className="rider-empty-box">
-                  <span aria-hidden="true">⌁</span>
-                  <strong>No active delivery</strong>
-                  <Button as={ScenarioLink} to="/rider/deliveries" variant="outline">Browse delivery offers</Button>
+                  <span className="rider-empty-icon" aria-hidden="true">🛵</span>
+                  <p className="rider-empty-title">No active delivery</p>
+                  <Button as={ScenarioLink} to="/rider/deliveries" variant="secondary" size="sm">
+                    Browse delivery offers
+                  </Button>
                 </div>
               )}
             </CardBody>
           </Card>
 
-          <Card>
+          <Card className="rider-location-card">
             <CardBody>
               <div className="rider-dashboard-section-head">
-                <h2>Location status</h2>
-                <Button as={ScenarioLink} to="/rider/map" variant="outline" size="sm">Map & tracking</Button>
+                <h2 className="rider-card-title">Location status</h2>
               </div>
               <div className="rider-location-status">
-                <StatusBadge status={dashboard.location.status} />
-                <p>{dashboard.location.message || dashboard.location.status}</p>
-                <small>Last updated: {formatRelativeTime(dashboard.location.updatedAt)}</small>
+                <StatusBadge
+                  status={dashboard.location.status}
+                  tone={isLocationWarning ? 'warning' : 'neutral'}
+                />
+                <p className="rider-location-desc">
+                  {dashboard.location.message && dashboard.location.message.toLowerCase() !== dashboard.location.status?.toLowerCase()
+                    ? dashboard.location.message
+                    : 'Enable GPS permission to allow accurate order tracking and dispatch.'}
+                </p>
+                <small className="rider-location-updated">
+                  Last updated: {formatRelativeTime(dashboard.location.updatedAt)}
+                </small>
+                <Button as={ScenarioLink} to="/rider/map" variant="secondary" size="sm" fullWidth>
+                  Map & tracking
+                </Button>
               </div>
             </CardBody>
           </Card>
         </section>
 
-        <section className="rider-dashboard-lower-columns" aria-label="Notifications and quick actions">
-          <Card>
+        {/* 4. Recent Notifications (3 items only, compact rows) */}
+        <section className="rider-dashboard-notifications-section" aria-label="Recent notifications">
+          <Card className="rider-notifications-card">
             <CardBody>
               <div className="rider-dashboard-section-head">
-                <h2>Recent notifications</h2>
-                <Button as={ScenarioLink} to="/rider/notifications" variant="outline" size="sm">View all</Button>
+                <h2 className="rider-card-title">Recent notifications</h2>
+                <ScenarioLink to="/rider/notifications" className="rider-link-tertiary">
+                  View all
+                </ScenarioLink>
               </div>
-              {notifications.slice(0, 5).length ? (
-                <div className="rider-list-stack">
-                  {notifications.slice(0, 5).map((notice) => (
-                    <article key={notice.id} className="rider-mini-list-row">
-                      <div>
-                        <div className="rider-notification-title">
-                          <strong>{notice.title}</strong>
-                          <span>{notice.unread ? 'Unread' : 'Read'}</span>
-                        </div>
-                        <p>{notice.message}</p>
+              {notifications.slice(0, 3).length ? (
+                <div className="rider-notifications-list">
+                  {notifications.slice(0, 3).map((notice) => (
+                    <article key={notice.id} className="rider-notification-compact-row">
+                      {notice.unread && <span className="rider-unread-dot" aria-label="Unread" />}
+                      <div className="rider-notification-content">
+                        <strong className="rider-notification-title">{notice.title}</strong>
+                        <p className="rider-notification-text">{notice.message}</p>
                       </div>
-                      <small>{formatRelativeTime(notice.time)}</small>
+                      <small className="rider-notification-time">{formatRelativeTime(notice.time)}</small>
                     </article>
                   ))}
                 </div>
@@ -181,49 +202,25 @@ export default function RiderDashboardPage() {
               )}
             </CardBody>
           </Card>
+        </section>
 
-          <Card>
+        {/* 5. Go Online Eligibility Checklist (No duplicate Go Online button) */}
+        <section className="rider-dashboard-eligibility-section" aria-label="Go Online eligibility">
+          <Card className="rider-dashboard-eligibility">
             <CardBody>
               <div className="rider-dashboard-section-head">
-                <h2>Quick actions</h2>
+                <div>
+                  <h2 className="rider-card-title">Go Online eligibility</h2>
+                  <p className="rider-section-subtitle">Review the requirements before enabling Driver Mode.</p>
+                </div>
+                <Button as={ScenarioLink} to="/rider/go-online" variant="secondary" size="sm">
+                  View details
+                </Button>
               </div>
-              <div className="rider-inline-actions">
-                {dashboardQuickActions.map((action) => (
-                  <Button
-                    key={action.key}
-                    as={ScenarioLink}
-                    to={action.path}
-                    variant={action.key === 'go_online' ? 'primary' : 'outline'}
-                    fullWidth
-                  >
-                    {action.label}
-                  </Button>
-                ))}
-              </div>
+              <EligibilityChecklist conditions={eligibilityConditions} />
             </CardBody>
           </Card>
         </section>
-
-        <Card className="rider-dashboard-eligibility">
-          <CardBody>
-            <div className="rider-dashboard-section-head">
-              <div>
-                <h2>Go Online eligibility</h2>
-                <p>Review the requirements before enabling Driver Mode.</p>
-              </div>
-              <Button as={ScenarioLink} to="/rider/go-online" variant="outline">View details</Button>
-            </div>
-            <EligibilityChecklist conditions={eligibilityConditions} />
-            <div className="rider-dashboard-go-online">
-              <Button variant="primary" disabled={unmetConditions.length > 0}>
-                Go Online
-              </Button>
-              {unmetConditions.length > 0 && (
-                <p role="status">Go Online is unavailable until these requirements are met: {unmetSummary}.</p>
-              )}
-            </div>
-          </CardBody>
-        </Card>
       </StateView>
     </div>
   );

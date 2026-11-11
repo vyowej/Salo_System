@@ -137,6 +137,7 @@
   --sidebar-collapsed-width: 68px;
   --content-max-width:       1200px;
   --content-narrow:          760px;
+  --rider-section-gap:       24px;
 
   /* ── Transitions ──────────────────────────────────────── */
   --transition-fast:   150ms ease;

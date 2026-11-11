@@ -68,7 +68,7 @@ export default function RiderApplicationPage() {
             <div className="rider-note">{riderMockData.applicationPreview.uploadHint}</div>
           </div>}
           <div className="rider-wizard-actions">
-            {step > 0 ? <Button variant="outline" onClick={() => setStep((current) => current - 1)}>{riderMockData.applicationPreview.backLabel}</Button> : <Button variant="ghost" onClick={() => setSuccess(true)}>{riderMockData.applicationPreview.saveDraftLabel}</Button>}
+            {step > 0 ? <Button variant="secondary" onClick={() => setStep((current) => current - 1)}>{riderMockData.applicationPreview.backLabel}</Button> : <Button variant="ghost" onClick={() => setSuccess(true)}>{riderMockData.applicationPreview.saveDraftLabel}</Button>}
             {step < riderMockData.applicationPreview.steps.length - 1
               ? <Button variant="primary" onClick={() => setStep((current) => current + 1)}>{riderMockData.applicationPreview.nextLabel}</Button>
               : <Button variant="primary" onClick={() => setSuccess(true)}>{riderMockData.applicationPreview.submitLabel}</Button>}

@@ -76,7 +76,7 @@ export default function CodSection() {
               value={remittanceInput}
               onChange={(event) => setRemittanceInput(event.target.value)}
             />
-            <Button type="submit" variant="outline" size="sm" disabled={!Number.isFinite(Number(remittanceInput)) || Number(remittanceInput) <= 0}>
+            <Button type="submit" variant="primary" size="sm" disabled={!Number.isFinite(Number(remittanceInput)) || Number(remittanceInput) <= 0}>
               Submit remittance preview
             </Button>
           </form>

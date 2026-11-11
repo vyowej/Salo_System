@@ -1,21 +1,4 @@
-.rider-page-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
-}
-.rider-eyebrow {
-  margin: 0 0 var(--space-1);
-  color: var(--accent);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-.rider-title { margin: 0; color: var(--text-primary); font-size: clamp(24px, 4vw, 34px); line-height: 1.2; }
-.rider-description { max-width: 720px; margin: var(--space-2) 0 0; color: var(--text-secondary); font-size: var(--font-size-sm); line-height: var(--line-height-normal); }
-.rider-heading-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.rider-heading-actions-only { display: flex; justify-content: flex-end; margin-bottom: var(--space-4); }
 .rider-card { min-width: 0; overflow: hidden; }
 .rider-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-5) var(--space-5) 0; }
 .rider-card-title { margin: 0; color: var(--text-primary); font-size: var(--font-size-lg); }
@@ -123,7 +106,6 @@
 .rider-status-banner.tone-info { border-left: 4px solid var(--salo-info); }
 @keyframes rider-pulse { from { opacity: .48; } to { opacity: 1; } }
 @media (max-width: 640px) {
-  .rider-page-heading { display: grid; }
   .rider-grid, .rider-form-grid { grid-template-columns: 1fr; }
   .rider-form-grid .span-all { grid-column: auto; }
   .rider-card-heading { padding: var(--space-4) var(--space-4) 0; }

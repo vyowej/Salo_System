@@ -7,9 +7,10 @@ const moneyFormatter = new Intl.NumberFormat('en-PH', {
 });
 
 export function formatPeso(amount) {
-  if (typeof amount === 'string' && amount.startsWith('₱')) return amount;
-  const numericValue = Number(String(amount).replace(/[^0-9.-]/g, '')) || 0;
-  return `₱${moneyFormatter.format(numericValue).replace('PHP', '').trim()}`;
+  const numericValue = typeof amount === 'string'
+    ? Number(amount.replace(/[^0-9.-]/g, '')) || 0
+    : Number(amount) || 0;
+  return moneyFormatter.format(numericValue);
 }
 
 export function formatDate(value, options = {}) {

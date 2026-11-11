@@ -18,23 +18,26 @@
 
 .rider-eligibility-icon {
   display: inline-flex;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
+  line-height: 1;
 }
 
 .rider-eligibility-item.is-met .rider-eligibility-icon {
-  background: var(--salo-green-light);
-  color: var(--salo-success);
+  background: var(--status-success-bg);
+  color: var(--status-success-text);
 }
 
 .rider-eligibility-item.is-unmet .rider-eligibility-icon {
-  background: var(--salo-orange-light);
-  color: var(--salo-primary);
+  background: var(--surface-secondary);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-primary);
 }
 
 .rider-eligibility-item strong,
@@ -42,8 +45,16 @@
   display: block;
 }
 
+.rider-eligibility-item strong {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
 .rider-eligibility-item small {
-  margin-top: var(--space-1);
+  margin-top: 2px;
   color: var(--text-secondary);
+  font-size: var(--font-size-xs);
   line-height: 1.5;
 }

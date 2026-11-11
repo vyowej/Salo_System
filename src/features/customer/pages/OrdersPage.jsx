@@ -61,18 +61,6 @@ export default function OrdersPage() {
 
   return (
     <CustomerLayout>
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Customer Activity
-        </span>
-        <h1 className="page-title" style={{ fontSize: 'var(--font-size-2xl)' }}>
-          My Order History
-        </h1>
-        <p className="page-subtitle">
-          Monitor your active multi-restaurant deliveries and past meal orders.
-        </p>
-      </div>
-
       {/* Filter Tabs */}
       <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-6)' }}>
         {[

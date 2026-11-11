@@ -394,16 +394,11 @@ export default function OwnerMenuPage() {
 
   return (
     <OwnerLayout>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Menu Catalog · Demo data</span>
-          <h1 className="page-title" style={{ fontSize: 'var(--font-size-2xl)', marginTop: 'var(--space-1)' }}>Menu Management</h1>
-          <p className="page-subtitle">Organize categories, manage item details and control customer availability.</p>
-        </div>
-        {access.canAccess(['menu.items.create', 'menu.pricing.manage']) && (
+      {access.canAccess(['menu.items.create', 'menu.pricing.manage']) && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-4)' }}>
           <Button variant="primary" size="md" onClick={openAddItem}>+ Add New Item</Button>
-        )}
-      </header>
+        </div>
+      )}
 
       {error && <div className="form-error" role="alert" style={{ marginBottom: 'var(--space-4)' }}>{error}</div>}
 

@@ -1,0 +1,158 @@
+.pickup-photo-dialog-open {
+  overflow: hidden;
+}
+
+.pickup-photo-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--overlay-bg);
+}
+
+.pickup-photo-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 520px);
+  max-height: 90dvh;
+  overflow: auto;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xl);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-xl);
+}
+
+.pickup-photo-dialog:focus {
+  outline: none;
+}
+
+.pickup-photo-dialog :focus-visible {
+  outline: 3px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.pickup-photo-header,
+.pickup-photo-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.pickup-photo-header {
+  border-bottom: 1px solid var(--border-secondary);
+}
+
+.pickup-photo-header h2,
+.pickup-photo-header p {
+  margin: 0;
+}
+
+.pickup-photo-header h2 {
+  font-size: var(--font-size-lg);
+}
+
+.pickup-photo-header p,
+.pickup-photo-time,
+.pickup-camera-message {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.pickup-photo-close {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xl);
+}
+
+.pickup-photo-close:hover {
+  background: var(--surface-hover);
+}
+
+.pickup-photo-content {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.pickup-camera-preview-wrap {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.pickup-camera-preview,
+.pickup-photo-preview {
+  display: block;
+  width: 100%;
+  max-height: 52dvh;
+  border-radius: var(--radius-lg);
+  background: var(--surface-secondary);
+  object-fit: contain;
+}
+
+.pickup-photo-preview-wrap {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.pickup-photo-time {
+  margin-bottom: 0;
+}
+
+.pickup-photo-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.pickup-photo-footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border-secondary);
+  background: var(--surface-secondary);
+}
+
+.pickup-photo-footer .btn,
+.pickup-photo-content > .btn,
+.pickup-camera-preview-wrap .btn {
+  min-height: 44px;
+}
+
+.pickup-photo-error {
+  margin: 0;
+  color: var(--status-error-text);
+  font-size: var(--font-size-sm);
+}
+
+@media (max-width: 479px) {
+  .pickup-photo-overlay {
+    padding: var(--space-2);
+  }
+
+  .pickup-photo-header,
+  .pickup-photo-content,
+  .pickup-photo-footer {
+    padding: var(--space-3);
+  }
+
+  .pickup-photo-footer {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  }
+
+  .pickup-photo-footer .btn {
+    min-width: 0;
+    white-space: normal;
+  }
+}

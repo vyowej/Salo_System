@@ -1,13 +1,13 @@
 .rider-page-shell {
   width: min(100%, 1200px);
   margin: 0 auto;
-  padding: 1rem 0 2rem;
+  padding: 0;
 }
 
 .rider-offer-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1rem;
+  gap: var(--rider-section-gap, 24px);
 }
 
 .rider-offer-card {

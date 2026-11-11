@@ -15,10 +15,6 @@ export default function ApplicationHeader({
       <div className="app-wizard-header-container">
         <div className="app-wizard-header-brand">
           <BrandMark size="sm" />
-          <div className="app-wizard-header-titles">
-            <span className="app-wizard-eyebrow">SALO Partner Network</span>
-            <h1 className="app-wizard-main-title">Restaurant Application</h1>
-          </div>
         </div>
 
         <div className="app-wizard-header-actions">

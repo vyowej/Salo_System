@@ -60,10 +60,6 @@ export default function RiderApplicationStatusPage() {
         <div className="rider-status-header-inner">
           <div className="rider-status-brand">
             <BrandMark size="sm" />
-            <div className="rider-status-title-group">
-              <span className="rider-status-eyebrow">Fleet Onboarding</span>
-              <h1 className="rider-status-page-title">Rider Application Status</h1>
-            </div>
           </div>
 
           <div className="rider-status-header-links">

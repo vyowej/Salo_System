@@ -12,10 +12,10 @@ import { applicationStatuses, accountStates } from '../constants/statusConfig';
 import './RiderApplicationPage.css';
 
 function statusCardClass(status) {
-  if (['approved', 'active'].includes(status)) return 'card--tint-green card--status';
-  if (['rejected', 'suspended'].includes(status)) return 'card--danger card--status';
+  if (['approved', 'active'].includes(status)) return 'card--tint-green';
+  if (['rejected', 'suspended'].includes(status)) return 'card--danger';
   if (['draft', 'submitted', 'under_review', 'requires_info', 'pending_approval', 'awaiting_activation'].includes(status)) {
-    return 'card--tint-gold card--status';
+    return 'card--tint-gold';
   }
   return '';
 }
@@ -83,9 +83,9 @@ export default function RiderApplicationStatusPage() {
                   ))}
                 </div>
                 <div className="rider-status-actions">
-                  <Button variant="outline" as={ScenarioLink} to="/rider/application-form">Start or continue application</Button>
-                  <Button variant="outline" as={ScenarioLink} to="/rider/activate">Activate account</Button>
-                  <Button variant="outline" as={ScenarioLink} to="/rider/account-status">View account status</Button>
+                  <Button variant="secondary" as={ScenarioLink} to="/rider/application-form">Start or continue application</Button>
+                  <Button variant="secondary" as={ScenarioLink} to="/rider/activate">Activate account</Button>
+                  <Button variant="secondary" as={ScenarioLink} to="/rider/account-status">View account status</Button>
                 </div>
               </CardBody>
             </Card>

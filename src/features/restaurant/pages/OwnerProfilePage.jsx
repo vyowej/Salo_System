@@ -303,11 +303,6 @@ export default function OwnerProfilePage() {
     <OwnerLayout>
       <div className="owner-profile-page">
         <header className="owner-profile-header">
-          <div>
-            <p className="owner-profile-eyebrow">Restaurant workspace</p>
-            <h1 className="page-title">Business Profile</h1>
-            <p className="page-subtitle">Manage the information customers see about this restaurant.</p>
-          </div>
           <div className="owner-profile-header-actions">
             <Link to={`/customer/restaurants/${selectedRestaurantId}`} target="_blank" rel="noreferrer">
               <Button type="button" variant="outline">Open customer page</Button>

@@ -29,7 +29,6 @@ export default function InvitationsInboxPage() {
   return <CustomerLayout>
     <main className="customer-invitations-page">
       <div className="customer-invitations-preview"><span><strong>Design preview - sample data</strong><small>Presentation only · responses are not sent or saved</small></span>{import.meta.env.DEV && <label>Preview state<select value={previewState} onChange={(event) => setPreviewState(event.target.value)} aria-label="Choose invitation inbox preview state">{TEAM_PREVIEW_STATES.map((state) => <option key={state}>{state}</option>)}</select></label>}</div>
-      <header className="customer-invitations-header"><p className="customer-invitations-eyebrow">Your SALO account</p><h1>Invitations</h1><p>Review restaurant team and ownership invitations sent to your account.</p></header>
       {previewState !== 'Sample data' ? <PreviewState state={previewState} onRetry={setPreviewSample} /> : CUSTOMER_INVITATION_SAMPLES.length === 0 ? <PreviewState state="Empty" /> : <div className="customer-invitation-list" aria-live="polite">
         {CUSTOMER_INVITATION_SAMPLES.map((invitation) => {
           const decision = decisions[invitation.id];

@@ -42,18 +42,11 @@ export default function NotificationsPage() {
 
   return (
     <CustomerLayout>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
-        <div>
-          <p style={{ margin: 0, fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>
-            Updates & reminders
-          </p>
-          <h1 style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--font-size-3xl)' }}>Notifications</h1>
-        </div>
-
-        {notifications.length > 0 && (
+      {notifications.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-4)' }}>
           <Button variant="ghost" size="sm" onClick={handleClearAll}>Clear all</Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ padding: 'var(--space-12) 0', textAlign: 'center', color: 'var(--text-muted)' }}>

@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import ProfileMenu from '../components/navigation/ProfileMenu';
-import Button from '../components/common/Button';
 import { getRiderMock } from '../features/rider/mocks';
 import { MOBILE_PRIMARY_NAV_KEYS, RIDER_NAV_ITEMS } from '../features/rider/constants/riderConstants';
 import ScenarioLink from '../features/rider/components/ScenarioLink';
@@ -36,6 +35,7 @@ export default function RiderLayout({ children }) {
   const { logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
+  const isMapPage = location.pathname === '/rider/map';
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -52,14 +52,25 @@ export default function RiderLayout({ children }) {
     id: item.key || item.id,
     href: withScenario(item.href || item.path, location.search),
     icon: icon(iconPaths[item.key || item.id] || iconPaths.dashboard),
-    badge: item.key === 'notifications' && unreadNotifications > 0
-      ? <span className="rider-nav-unread-dot" aria-label="Unread notifications" />
+    badge: item.key === 'notifications'
+      ? unreadNotifications || null
       : item.badge,
   }));
 
   const activePath = location.pathname;
   const current = items.find((item) => item.path === activePath || (item.path !== '/rider' && activePath.startsWith(`${item.path}/`)))?.key || 'dashboard';
   const activeDelivery = deliveries?.active;
+  const activeDeliveryShortId = activeDelivery?.id?.slice(-4);
+
+  useEffect(() => {
+    if (!isMapPage) return undefined;
+    document.body.classList.add('rider-map-route');
+    document.documentElement.classList.add('rider-map-route-active');
+    return () => {
+      document.body.classList.remove('rider-map-route');
+      document.documentElement.classList.remove('rider-map-route-active');
+    };
+  }, [isMapPage]);
   const signOut = async () => {
     await logout();
     navigate('/');
@@ -82,7 +93,7 @@ export default function RiderLayout({ children }) {
   const moreNavItems = items.filter((item) => !MOBILE_PRIMARY_NAV_KEYS.includes(item.key));
 
   return (
-    <div className="rider-shell navigation-shell">
+    <div className={`rider-shell navigation-shell ${isMapPage ? 'rider-map-shell' : ''}`}>
       <div className={`rider-sidebar navigation-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <SideBar
           items={items}
@@ -108,7 +119,7 @@ export default function RiderLayout({ children }) {
         />
       </div>
 
-      <div className={`rider-main navigation-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      <div className={`rider-main navigation-main ${collapsed ? 'sidebar-collapsed' : ''} ${isMapPage ? 'rider-map-main' : ''}`}>
         <TopBar
           userName={profile.name}
           userRole={profile.accountStatus}
@@ -129,34 +140,53 @@ export default function RiderLayout({ children }) {
           )}
           onMenuToggle={() => setMobileOpen((value) => !value)}
           actions={(
-            <ScenarioLink
-              to="/rider/notifications"
-              className="topbar-btn"
-              aria-label={`Notifications${unreadNotifications ? ` (${unreadNotifications})` : ''}`}
-              title="View notifications"
-              style={{ textDecoration: 'none' }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 01-3.46 0" />
-              </svg>
-              {unreadNotifications > 0 && (
-                <span className="topbar-notification-dot" aria-hidden="true">
-                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
-                </span>
+            <>
+              {activeDelivery && (
+                <ScenarioLink
+                  to="/rider/deliveries/active"
+                  className="rider-active-delivery-link"
+                  aria-label={`Active delivery ${activeDelivery.id}`}
+                  title={`Active delivery · ${activeDelivery.id}`}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path d="M3 7h11v10H3zM14 10h4l3 3v4h-7z" />
+                    <circle cx="7.5" cy="18" r="1.5" />
+                    <circle cx="17.5" cy="18" r="1.5" />
+                  </svg>
+                  <span className="rider-active-delivery-label">Active delivery · {activeDelivery.id}</span>
+                  <span className="rider-active-delivery-short-id" aria-hidden="true">{activeDeliveryShortId}</span>
+                </ScenarioLink>
               )}
-            </ScenarioLink>
+              <ScenarioLink
+                to="/rider/safety"
+                className="topbar-btn"
+                aria-label="Safety"
+                title="Safety"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+              </ScenarioLink>
+              <ScenarioLink
+                to="/rider/notifications"
+                className="topbar-btn"
+                aria-label={`Notifications${unreadNotifications ? ` (${unreadNotifications})` : ''}`}
+                title="View notifications"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                  <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 01-3.46 0" />
+                </svg>
+                {unreadNotifications > 0 && (
+                  <span className="topbar-notification-dot" aria-hidden="true">
+                    {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                  </span>
+                )}
+              </ScenarioLink>
+            </>
           )}
         />
-        <main className="rider-content">
-          {activeDelivery && (
-            <div className="rider-active-shortcut">
-              <span>{'Active delivery shortcut'}</span>
-              <Button as={ScenarioLink} to="/rider/deliveries/active" variant={location.pathname === '/rider/deliveries/active' || location.pathname === '/rider/active' ? 'primary' : 'outline'} size="sm">
-                {activeDelivery.id}
-              </Button>
-            </div>
-          )}
+        <main className={`rider-content ${isMapPage ? 'rider-content-map' : ''}`}>
           {children}
         </main>
         <nav className="rider-mobile-nav navigation-mobile-bottom-nav" aria-label="Rider mobile navigation">

@@ -43,29 +43,6 @@ export default function OwnerEarningsPage() {
 
   return (
     <OwnerLayout>
-      {/* ── Page Header ────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: 'var(--salo-green)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-            }}
-          >
-            Financial Performance
-          </span>
-          <h1 className="page-title" style={{ fontSize: 'var(--font-size-2xl)', marginTop: 'var(--space-1)' }}>
-            Earnings Summary
-          </h1>
-          <p className="page-subtitle">
-            Demo earnings data for the selected restaurant. No payouts are processed here.
-          </p>
-        </div>
-      </div>
-
       {/* ── Top Metrics Grid ────────────────────────────── */}
       <div style={{
         display: 'grid',

@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useAuth } from '../../../hooks/useAuth';
-import customerService from '../../../services/customerService';
+import useAddresses from '../../../hooks/useAddresses';
 import { Input } from '../../../components/forms';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
+import AddressFormModal from '../components/AddressFormModal';
 
 const phonePattern = /^(\+63|0)\d{10,11}$/;
 
@@ -24,7 +25,10 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false);
   const [errors, setErrors] = useState({});
   const [deactivateOpen, setDeactivateOpen] = useState(false);
-  const [addresses] = useState(() => customerService.getSavedAddresses());
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const addAddressBtnRef = useRef(null);
+
+  const { addresses, addAddress } = useAddresses();
 
   const validateForm = () => {
     const nextErrors = {};
@@ -82,18 +86,6 @@ export default function ProfilePage() {
           Deactivating your account will disable access to your saved addresses, favorites, and order history. This action is not yet available in the current frontend build.
         </p>
       </Modal>
-
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Account & Preferences
-        </span>
-        <h1 className="page-title" style={{ fontSize: 'var(--font-size-2xl)' }}>
-          Profile Settings
-        </h1>
-        <p className="page-subtitle">
-          Manage your personal details, saved delivery locations, and account controls.
-        </p>
-      </div>
 
       <div style={{ display: 'grid', gap: 'var(--space-5)', maxWidth: 900 }}>
         <div style={{
@@ -206,30 +198,57 @@ export default function ProfilePage() {
               <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>Delivery</p>
               <h2 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--text-primary)', margin: '4px 0 0' }}>Saved Addresses</h2>
             </div>
-            <Button variant="outline" size="sm" onClick={() => navigate('/customer/profile#saved-addresses')}>
-              Manage addresses
-            </Button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <Button
+                ref={addAddressBtnRef}
+                variant="primary"
+                size="sm"
+                onClick={() => setAddressModalOpen(true)}
+                disabled={addresses.length >= 10}
+              >
+                + Add Address
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate('/customer/addresses')}>
+                Manage all ({addresses.length}) →
+              </Button>
+            </div>
           </div>
 
           {addresses.length === 0 ? (
-            <div style={{ padding: 'var(--space-4)', border: '1px dashed var(--border-primary)', borderRadius: 'var(--radius-lg)', color: 'var(--text-muted)' }}>
-              No saved delivery addresses yet.
+            <div style={{ padding: 'var(--space-6)', border: '1px dashed var(--border-primary)', borderRadius: 'var(--radius-lg)', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <p style={{ margin: '0 0 var(--space-3)', color: 'var(--text-secondary)' }}>No saved delivery addresses yet.</p>
+              <Button variant="primary" size="sm" onClick={() => setAddressModalOpen(true)}>
+                Add your first address
+              </Button>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-              {addresses.slice(0, 3).map((address) => (
+              {addresses.map((address) => (
                 <div key={address.id} style={{ border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', background: 'var(--surface-secondary)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)', flexWrap: 'wrap' }}>
                     <strong style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{address.label}</strong>
                     {address.isDefault && <Badge variant="success" size="sm">Default</Badge>}
                   </div>
-                  <p style={{ margin: 0, color: 'var(--text-primary)', lineHeight: 1.6 }}>{address.street}</p>
-                  <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)' }}>{address.city} · {address.recipientName} · {address.phone}</p>
+                  <p style={{ margin: 0, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+                    {[address.street, address.barangay && `Brgy. ${address.barangay}`, address.city, address.province].filter(Boolean).join(', ')}
+                  </p>
+                  <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)' }}>
+                    {address.recipientName} · {address.mobileNumber || address.phone}
+                    {address.notes && ` · Landmark: ${address.notes}`}
+                  </p>
                 </div>
               ))}
             </div>
           )}
         </div>
+
+        <AddressFormModal
+          isOpen={addressModalOpen}
+          onClose={() => setAddressModalOpen(false)}
+          onSave={addAddress}
+          existingAddresses={addresses}
+          triggerRef={addAddressBtnRef}
+        />
 
         <div style={{
           background: 'var(--surface-primary)',

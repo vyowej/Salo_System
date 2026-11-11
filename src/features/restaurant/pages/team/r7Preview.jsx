@@ -15,8 +15,9 @@ export function DesignPreviewBanner({ state, onStateChange }) {
   );
 }
 
-export function PreviewPageHeader({ eyebrow, title, detail, action }) {
-  return <header className="r7-page-header"><div><p className="r7-eyebrow">{eyebrow}</p><h1>{title}</h1>{detail && <p className="r7-page-detail">{detail}</p>}</div>{action}</header>;
+export function PreviewPageHeader({ action }) {
+  if (!action) return null;
+  return <div className="r7-page-header-actions">{action}</div>;
 }
 
 export function PreviewStatePanel({ state, name = 'records', onRetry }) {

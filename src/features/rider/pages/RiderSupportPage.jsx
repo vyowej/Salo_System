@@ -51,7 +51,7 @@ export default function RiderSupportPage() {
         title={ticket ? `Ticket ${ticket.id}` : 'Support & incidents'}
         subtitle={ticket ? 'Review the ticket conversation and send a reply.' : 'Get help with deliveries, account access, safety, and payments.'}
         eyebrow="Rider support"
-        actions={ticket && <Button as={ScenarioLink} to="/rider/support" variant="outline" size="sm">Back to support</Button>}
+        actions={ticket && <Button as={ScenarioLink} to="/rider/support" variant="secondary" size="sm">Back to support</Button>}
       />
       <StateView state={viewState} emptyTitle="No support activity" emptyMessage="Support tickets and updates will appear here." onRetry={() => window.location.reload()}>
         {ticket ? (

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
-import customerService, { INITIAL_RESTAURANTS } from '../../../services/customerService';
+import useAddresses from '../../../hooks/useAddresses';
+import { INITIAL_RESTAURANTS } from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import RestaurantImage from '../components/RestaurantImage';
 import { checkAddressCoverage } from '../utils/deliveryCoverage';
@@ -12,7 +13,6 @@ export default function CartPage() {
   const navigate = useNavigate();
   const {
     restaurantGroups,
-    totalItemCount,
     itemsSubtotal,
     totalDeliveryFees,
     grandTotal,
@@ -26,7 +26,7 @@ export default function CartPage() {
     setAllRestaurantsAddress,
   } = useCart();
 
-  const savedAddresses = customerService.getSavedAddresses();
+  const { addresses: savedAddresses } = useAddresses();
 
   // Highlight state for problem sub-orders
   const [highlightedSuborderId, setHighlightedSuborderId] = useState(null);
@@ -307,20 +307,10 @@ export default function CartPage() {
 
   return (
     <CustomerLayout>
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Consolidated Ordering
-            </span>
-            <h1 className="page-title" style={{ fontSize: 'var(--font-size-2xl)' }}>
-              Multi-Restaurant Cart ({totalItemCount} items)
-            </h1>
-          </div>
-          <Button variant="ghost" size="sm" onClick={clearCart} style={{ color: 'var(--salo-error)' }}>
-            Empty Cart
-          </Button>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-4)' }}>
+        <Button variant="ghost" size="sm" onClick={clearCart} style={{ color: 'var(--salo-error)' }}>
+          Empty Cart
+        </Button>
       </div>
 
       {/* Top link: Use the same address for all restaurants */}

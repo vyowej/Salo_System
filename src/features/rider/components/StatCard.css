@@ -1,14 +1,19 @@
 .rider-stat-card {
-  border-top: 3px solid var(--accent);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: none;
+  min-height: 110px;
 }
 
-.rider-stat-card.tone-success { border-top-color: var(--salo-success); }
-.rider-stat-card.tone-warning { border-top-color: var(--salo-warning); }
-.rider-stat-card.tone-info { border-top-color: var(--salo-info); }
-
 .rider-stat-card-body {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   gap: var(--space-2);
+  height: 100%;
+  padding: var(--space-5);
 }
 
 .rider-stat-card-header {
@@ -22,27 +27,49 @@
 
 .rider-stat-card-icon {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-sm);
-  background: var(--surface-secondary);
-  color: var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--card-chip, var(--surface-secondary));
+  color: var(--card-accent, var(--accent));
+  font-size: 15px;
+  line-height: 1;
 }
 
 .rider-stat-card-label {
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  font-size: 12px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
 }
 
 .rider-stat-card-value {
-  font-size: clamp(24px, 3vw, 30px);
+  display: block;
+  font-family: var(--font-ui);
+  font-size: clamp(26px, 2.5vw, 30px);
+  font-weight: var(--font-weight-bold);
   color: var(--text-primary);
-  line-height: 1.2;
+  line-height: 1.15;
+  margin-top: 2px;
+}
+
+.rider-stat-card-value--text {
+  font-size: 20px;
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .rider-stat-card-helper {
-  font-size: var(--font-size-xs);
+  display: block;
+  font-size: 13px;
   color: var(--text-secondary);
+  line-height: 1.4;
+  margin-top: auto;
 }

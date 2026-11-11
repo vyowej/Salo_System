@@ -223,14 +223,11 @@ export default function OwnerInventoryPage() {
   return (
     <OwnerLayout>
       <div className="owner-inventory-page">
-        <header className="owner-inventory-header">
-          <div>
-            <p className="owner-inventory-eyebrow">{INVENTORY_MENU_DISPLAY.page.eyebrow}</p>
-            <h1>{INVENTORY_MENU_DISPLAY.page.title}</h1>
-            <p>{INVENTORY_MENU_DISPLAY.page.description}</p>
+        {can('inventory.addStock') && (
+          <div className="owner-inventory-header">
+            <Button onClick={openNewItem}>{INVENTORY_MENU_DISPLAY.page.addIngredient}</Button>
           </div>
-          {can('inventory.addStock') && <Button onClick={openNewItem}>{INVENTORY_MENU_DISPLAY.page.addIngredient}</Button>}
-        </header>
+        )}
 
         {error && <div className="owner-inventory-error" role="alert">{error}</div>}
         {loading ? <LoadingSpinner size="lg" label={INVENTORY_MENU_DISPLAY.page.loading} />
