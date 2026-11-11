@@ -95,13 +95,29 @@
 
 /* ── Secondary ───────────────────────────────────────── */
 .btn-secondary {
-  background: var(--surface-secondary);
+  background: var(--surface-primary);
   color: var(--text-primary);
-  border-color: var(--border-primary);
+  border: 1px solid var(--border-primary);
+  box-shadow: none;
 }
 .btn-secondary:hover:not(:disabled) {
-  background: var(--surface-hover);
+  background: var(--surface-secondary);
   border-color: var(--border-primary);
+  color: var(--text-primary);
+}
+
+/* ── Tertiary ────────────────────────────────────────── */
+.btn-tertiary {
+  background: transparent;
+  color: var(--accent);
+  border-color: transparent;
+  font-weight: var(--font-weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.btn-tertiary:hover:not(:disabled) {
+  color: var(--accent-hover);
+  background: transparent;
 }
 
 /* ── Outline ─────────────────────────────────────────── */
