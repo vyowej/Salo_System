@@ -179,11 +179,11 @@ export default function AdminFinancePage() {
       <section className="admin-shell-page">
         <PageHeader title="Finance" description="Review verified payments, separate COD collection from remittance, and reconcile payout snapshots." />
         <div className="admin-stat-grid">
-          <StatCard label="Order value (GMV)" value={formatPeso(totals.gmv)} hint="Customer totals from immutable order snapshots" />
-          <StatCard label="Platform revenue" value={formatPeso(totals.platformRevenue)} hint="Commission, service fees, discount funding, reservation fees" />
-          <StatCard label="Restaurant sales" value={formatPeso(totals.restaurantSales)} hint="Before commission and adjustments" />
-          <StatCard label="Refunds / adjustments" value={formatPeso(totals.refunds)} hint="Recorded order refund adjustments" />
-          <StatCard label="Outstanding COD" value={formatPeso(totals.outstandingCodRemittances)} hint="Demo aggregate; row-level remittances below" />
+          <StatCard label="Order value (GMV)" value={formatPeso(totals.gmv)} hint="Customer totals from immutable order snapshots" tone="gold" />
+          <StatCard label="Platform revenue" value={formatPeso(totals.platformRevenue)} hint="Commission, service fees, discount funding, reservation fees" tone="gold" />
+          <StatCard label="Refunds / adjustments" value={formatPeso(totals.refunds)} hint="Recorded order refund adjustments" tone="brown" />
+          <StatCard label="Restaurant sales" value={formatPeso(totals.restaurantSales)} hint="Before commission and adjustments" tone="gold" />
+          <StatCard label="Outstanding COD" value={formatPeso(totals.outstandingCodRemittances)} hint="Demo aggregate; row-level remittances below" tone="brown" />
         </div>
         <p className="admin-shell-note">GMV is not platform revenue. Finance reads the same fee snapshots as Orders; later fee changes never recalculate previous orders. Online payments cannot be manually marked as paid by an administrator.</p>
         <Tabs items={TABS} value={activeTab} onChange={(tab) => { setActiveTab(tab); setSelectedPayout(null); }} label="Finance workspaces" />

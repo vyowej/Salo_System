@@ -6,14 +6,21 @@ const TONES = {
   accepted: 'success',
   completed: 'success',
   verified: 'success',
-  'pending approval': 'warning',
-  'pending verification': 'warning',
-  'pending invitation': 'warning',
+  'pending approval': 'action',
+  'pending verification': 'action',
+  'pending invitation': 'action',
+  'pending review': 'action',
   pending: 'warning',
-  expired: 'warning',
-  'documents requested': 'warning',
-  'more information requested': 'warning',
-  'under review': 'warning',
+  expired: 'neutral',
+  scheduled: 'gold',
+  draft: 'brown',
+  submitted: 'gold',
+  'documents requested': 'action',
+  'more information requested': 'action',
+  'under review': 'gold',
+  'awaiting rider response': 'gold',
+  resolved: 'success',
+  closed: 'success',
   suspended: 'error',
   rejected: 'error',
   cancelled: 'error',
@@ -24,7 +31,7 @@ const TONES = {
   'on delivery': 'info',
 };
 
-export default function StatusBadge({ status }) {
+export default function StatusBadge({ status, className = '' }) {
   const tone = TONES[String(status).toLowerCase()] || 'neutral';
-  return <span className={`admin-status-badge admin-status-badge--${tone}`}>{status}</span>;
+  return <span className={`admin-status-badge admin-status-badge--${tone} ${className}`.trim()}>{status}</span>;
 }

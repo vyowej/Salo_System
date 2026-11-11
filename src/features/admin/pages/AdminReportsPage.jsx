@@ -119,10 +119,10 @@ export default function AdminReportsPage() {
           <label className="admin-filter-control">Transaction type<select value={filters.transactionType} onChange={(event) => updateFilter('transactionType', event.target.value)}><option value="">All transaction types</option><option>COD</option><option>Online</option><option>Reservation</option></select></label>
         </div>
         {report.totals && <div className="admin-stat-grid">
-          <StatCard label="Order GMV" value={formatPeso(report.totals.gmv)} hint="Customer order value from snapshots" />
-          <StatCard label="Platform revenue" value={formatPeso(report.totals.platformRevenue)} hint="Commissions and fees net of platform-funded discounts" />
-          <StatCard label="Restaurant payable" value={formatPeso(report.totals.restaurantPayable)} hint="Stored order-level payable snapshots" />
-          <StatCard label="Refunds / adjustments" value={formatPeso(report.totals.refunds)} hint="Recorded refunds and reservation adjustments" />
+          <StatCard label="Order GMV" value={formatPeso(report.totals.gmv)} hint="Customer order value from snapshots" tone="gold" />
+          <StatCard label="Platform revenue" value={formatPeso(report.totals.platformRevenue)} hint="Commissions and fees net of platform-funded discounts" tone="gold" />
+          <StatCard label="Restaurant payable" value={formatPeso(report.totals.restaurantPayable)} hint="Stored order-level payable snapshots" tone="brown" />
+          <StatCard label="Refunds / adjustments" value={formatPeso(report.totals.refunds)} hint="Recorded refunds and reservation adjustments" tone="brown" />
         </div>}
         <div className="admin-print-heading"><h2>{reportType} report</h2><p>Generated from SALO demo snapshots</p></div>
         <DataTable columns={columns} rows={rows} emptyTitle="No report rows" emptyDescription="No records match the selected filters. Try a broader date range or remove a filter." />

@@ -252,10 +252,10 @@ export default function AdminDiscountsPage() {
         ) : (
           <>
             <div className="admin-stat-grid">
-              <StatCard label="Active campaigns" value={activeCampaignCount} hint="Scheduled and expired campaigns are excluded" />
-              <StatCard label="Discount uses" value={totalUsage} hint="Recorded mock campaign redemptions" />
-              <StatCard label="Discount expenditure" value={formatPeso(totalDiscount)} hint="All campaign funding sources" />
-              <StatCard label="Platform-funded share" value={formatPeso(fundingTotals.platform)} hint={`Restaurant-funded share ${formatPeso(fundingTotals.restaurant)}`} />
+              <StatCard label="Active campaigns" value={activeCampaignCount} hint="Scheduled and expired campaigns are excluded" tone="gold" />
+              <StatCard label="Discount uses" value={totalUsage} hint="Recorded mock campaign redemptions" tone="brown" />
+              <StatCard label="Discount expenditure" value={formatPeso(totalDiscount)} hint="All campaign funding sources" tone="gold" />
+              <StatCard label="Platform-funded share" value={formatPeso(fundingTotals.platform)} hint={`Restaurant-funded share ${formatPeso(fundingTotals.restaurant)}`} tone="gold" />
             </div>
             <DataTable columns={[
               { key: 'name', label: 'Campaign', render: (item) => <button className="admin-text-link" type="button" onClick={() => setSelected(item)}><strong>{item.name}</strong><span>{item.type}</span></button> },

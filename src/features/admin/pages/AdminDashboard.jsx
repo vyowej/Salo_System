@@ -40,24 +40,24 @@ export default function AdminDashboard() {
 
   const statCards = [
     { label: 'Customers in filtered orders', value: stats.totalCustomers },
-    { label: 'Active customers', value: stats.activeCustomers },
-    { label: 'Restaurant partners', value: stats.totalRestaurants },
-    { label: 'Pending restaurant applications', value: stats.pendingRestaurantApplications },
-    { label: 'Approved restaurants', value: stats.approvedRestaurants },
-    { label: 'Suspended restaurants', value: stats.suspendedRestaurants },
-    { label: 'Registered riders', value: stats.totalRiders },
-    { label: 'Online riders', value: stats.activeRiders },
-    { label: 'Pending rider applications', value: stats.pendingRiderApplications },
-    { label: 'Orders in selected period', value: stats.totalOrders },
-    { label: 'Active orders', value: stats.activeOrders },
-    { label: 'Completed orders', value: stats.completedOrders },
-    { label: 'Cancelled orders', value: stats.cancelledOrders },
-    { label: 'Reservations in selected period', value: stats.totalReservations },
-    { label: 'Pending reservations', value: stats.pendingReservations },
-    { label: 'Pending payouts', value: formatPeso(totals.pendingPayouts) },
-    { label: 'Outstanding COD remittances', value: formatPeso(totals.outstandingCodRemittances) },
-    { label: 'Total customer transaction value · GMV', value: formatPeso(totals.gmv), hint: 'Not platform revenue' },
-    { label: 'Platform revenue', value: formatPeso(totals.platformRevenue), hint: 'Commission and fee snapshots net of platform-funded discounts' },
+    { label: 'Active customers', value: stats.activeCustomers, tone: 'green' },
+    { label: 'Restaurant partners', value: stats.totalRestaurants, tone: 'green' },
+    { label: 'Pending restaurant applications', value: stats.pendingRestaurantApplications, tone: 'orange', status: true },
+    { label: 'Pending rider applications', value: stats.pendingRiderApplications, tone: 'orange', status: true },
+    { label: 'Approved restaurants', value: stats.approvedRestaurants, tone: 'green' },
+    { label: 'Suspended restaurants', value: stats.suspendedRestaurants, danger: true },
+    { label: 'Registered riders', value: stats.totalRiders, tone: 'green' },
+    { label: 'Online riders', value: stats.activeRiders, tone: 'green' },
+    { label: 'Orders in selected period', value: stats.totalOrders, tone: 'orange' },
+    { label: 'Active orders', value: stats.activeOrders, tone: 'orange' },
+    { label: 'Completed orders', value: stats.completedOrders, tone: 'green' },
+    { label: 'Cancelled orders', value: stats.cancelledOrders, danger: true },
+    { label: 'Reservations in selected period', value: stats.totalReservations, tone: 'green' },
+    { label: 'Pending reservations', value: stats.pendingReservations, tone: 'green', status: true },
+    { label: 'Pending payouts', value: formatPeso(totals.pendingPayouts), tone: 'brown' },
+    { label: 'Outstanding COD remittances', value: formatPeso(totals.outstandingCodRemittances), tone: 'brown' },
+    { label: 'Total customer transaction value · GMV', value: formatPeso(totals.gmv), hint: 'Not platform revenue', tone: 'gold' },
+    { label: 'Platform revenue', value: formatPeso(totals.platformRevenue), hint: 'Commission and fee snapshots net of platform-funded discounts', tone: 'gold' },
   ];
 
   const quickActions = [
@@ -105,7 +105,7 @@ export default function AdminDashboard() {
         </section>
 
         <div className="admin-stat-grid">
-          {statCards.map((card) => <StatCard key={card.label} label={card.label} value={card.value} hint={card.hint} />)}
+          {statCards.map((card) => <StatCard key={card.label} {...card} />)}
         </div>
 
         <section className="admin-record-panel">
