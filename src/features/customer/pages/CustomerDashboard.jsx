@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import RestaurantImage from '../components/RestaurantImage';
+import ActiveStatusStrip from '../components/ActiveStatusStrip';
 import './CustomerDashboard.css';
 
 const CATEGORIES = [
@@ -70,62 +71,11 @@ export default function CustomerDashboard() {
 
   return (
     <CustomerLayout>
-      {/* ── Active Order & Upcoming Reservation Quick Strips ── */}
-      {(activeOrders.length > 0 || upcomingReservations.length > 0) && (
-        <div className="customer-live-card-grid">
-          {activeOrders[0] && (
-            <article className="brand-card brand-card--orange brand-card--status customer-live-card">
-              <div className="customer-live-card__heading">
-                <span className="brand-card__label">
-                  Active Order in Progress
-                </span>
-                <Badge variant="primary" dot size="sm">
-                  {activeOrders[0].overallStatus}
-                </Badge>
-              </div>
-
-              <p className="customer-live-card__title">
-                Order #{activeOrders[0].id} ({activeOrders[0].subOrders?.length || 1} Restaurants)
-              </p>
-              <p className="customer-live-card__detail">
-                {activeOrders[0].subOrders?.map(so => so.restaurantName).join(' + ')}
-              </p>
-
-              <Link to={`/customer/orders`} className="customer-live-card__action">
-                <Button variant="outline" size="sm" fullWidth>
-                  Track Live Delivery Status →
-                </Button>
-              </Link>
-            </article>
-          )}
-
-          {upcomingReservations[0] && (
-            <article className="brand-card brand-card--green brand-card--status customer-live-card">
-              <div className="customer-live-card__heading">
-                <span className="brand-card__label">
-                  Confirmed Table Reservation
-                </span>
-                <Badge variant="success" dot size="sm">
-                  {upcomingReservations[0].status}
-                </Badge>
-              </div>
-
-              <p className="customer-live-card__title">
-                {upcomingReservations[0].restaurantName}
-              </p>
-              <p className="customer-live-card__detail">
-                📅 {upcomingReservations[0].date} at {upcomingReservations[0].time} · Table for {upcomingReservations[0].guests} guests
-              </p>
-
-              <Link to="/customer/reservations" className="customer-live-card__action">
-                <Button variant="outline" size="sm" fullWidth>
-                  View Reservation Details →
-                </Button>
-              </Link>
-            </article>
-          )}
-        </div>
-      )}
+      {/* ── Active Order & Upcoming Reservation — compact strip ── */}
+      <ActiveStatusStrip
+        activeOrder={activeOrders[0] ?? null}
+        reservation={upcomingReservations[0] ?? null}
+      />
 
       {/* ── Categories Strip ─────────────────────────────── */}
       <div style={{ marginBottom: 'var(--space-6)' }}>
