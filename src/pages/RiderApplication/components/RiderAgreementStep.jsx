@@ -1,5 +1,13 @@
+import { useEffect, useRef } from 'react';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
+
+const declarationFields = [
+  'infoConfirmed',
+  'documentsGenuine',
+  'safetyPolicyAgreed',
+  'termsAgreed',
+];
 
 export default function RiderAgreementStep({
   applicationData,
@@ -9,6 +17,7 @@ export default function RiderAgreementStep({
   submitting = false,
   allRequiredValid = false,
 }) {
+  const agreeAllRef = useRef(null);
   const {
     personal = {},
     identity = {},
@@ -23,17 +32,23 @@ export default function RiderAgreementStep({
   } = applicationData;
 
   const handleCheckboxChange = (field, checked) => {
-    onDeclarationChange?.({
-      ...declarations,
-      [field]: checked,
-    });
+    onDeclarationChange?.(field, checked);
   };
 
-  const isAllDeclared =
-    declarations.infoConfirmed &&
-    declarations.documentsGenuine &&
-    declarations.safetyPolicyAgreed &&
-    declarations.termsAgreed;
+  const isAllDeclared = declarationFields.every((field) => Boolean(declarations[field]));
+  const isPartiallyDeclared = !isAllDeclared && declarationFields.some((field) => Boolean(declarations[field]));
+
+  const handleAgreeAllChange = (checked) => {
+    onDeclarationChange?.(
+      Object.fromEntries(declarationFields.map((field) => [field, checked])),
+    );
+  };
+
+  useEffect(() => {
+    if (agreeAllRef.current) {
+      agreeAllRef.current.indeterminate = isPartiallyDeclared;
+    }
+  }, [isPartiallyDeclared]);
 
   const canSubmit = allRequiredValid && isAllDeclared && emailVerification.isVerified;
 
@@ -406,8 +421,21 @@ export default function RiderAgreementStep({
         </div>
 
         <div className="agreement-checkboxes-stack">
+          <label className="agreement-check-row agreement-check-all">
+            <input
+              ref={agreeAllRef}
+              type="checkbox"
+              checked={isAllDeclared}
+              onChange={(e) => handleAgreeAllChange(e.target.checked)}
+              className="rider-checkbox-input"
+              aria-controls="declaration-info-confirmed declaration-documents-genuine declaration-safety-policy declaration-terms"
+            />
+            <span className="agreement-check-text">Agree to all declarations</span>
+          </label>
+
           <label className="agreement-check-row">
             <input
+              id="declaration-info-confirmed"
               type="checkbox"
               checked={Boolean(declarations.infoConfirmed)}
               onChange={(e) => handleCheckboxChange('infoConfirmed', e.target.checked)}
@@ -420,6 +448,7 @@ export default function RiderAgreementStep({
 
           <label className="agreement-check-row">
             <input
+              id="declaration-documents-genuine"
               type="checkbox"
               checked={Boolean(declarations.documentsGenuine)}
               onChange={(e) => handleCheckboxChange('documentsGenuine', e.target.checked)}
@@ -432,6 +461,7 @@ export default function RiderAgreementStep({
 
           <label className="agreement-check-row">
             <input
+              id="declaration-safety-policy"
               type="checkbox"
               checked={Boolean(declarations.safetyPolicyAgreed)}
               onChange={(e) => handleCheckboxChange('safetyPolicyAgreed', e.target.checked)}
@@ -444,6 +474,7 @@ export default function RiderAgreementStep({
 
           <label className="agreement-check-row">
             <input
+              id="declaration-terms"
               type="checkbox"
               checked={Boolean(declarations.termsAgreed)}
               onChange={(e) => handleCheckboxChange('termsAgreed', e.target.checked)}
