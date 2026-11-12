@@ -15,6 +15,24 @@ export default function IdentityVerificationStep({
     });
   };
 
+  const handleIdTypeChange = (newType) => {
+    const isPhilId = newType === 'Philippine National ID (PhilID)';
+    onChange?.({
+      ...data,
+      idType: newType,
+      isPermanent: isPhilId ? true : data.isPermanent,
+      expiryDate: isPhilId ? '' : data.expiryDate,
+    });
+  };
+
+  const handlePermanentToggle = (checked) => {
+    onChange?.({
+      ...data,
+      isPermanent: checked,
+      expiryDate: checked ? '' : data.expiryDate,
+    });
+  };
+
   const handleUpload = (docField, fileData) => {
     onChange?.({
       ...data,
@@ -28,6 +46,8 @@ export default function IdentityVerificationStep({
       [docField]: null,
     });
   };
+
+  const isPermanentId = Boolean(data.isPermanent);
 
   return (
     <div className="rider-step-container">
@@ -45,7 +65,7 @@ export default function IdentityVerificationStep({
           <path d="M7 11V7a5 5 0 0110 0v4" />
         </svg>
         <div className="callout-copy">
-          <strong>Privacy & Document Security:</strong> Document images are held in browser temporary memory for this application prototype. No files are transmitted to external cloud servers or stored in persistent browser storage.
+          <strong>Privacy & Document Security:</strong> Document images are held securely in your browser session for this application. No unencrypted files are transmitted to untrusted endpoints.
         </div>
       </div>
 
@@ -55,7 +75,7 @@ export default function IdentityVerificationStep({
             id="id-type"
             label="Government-Issued ID Type"
             value={data.idType || GOVERNMENT_ID_OPTIONS[0]}
-            onChange={(e) => handleChange('idType', e.target.value)}
+            onChange={(e) => handleIdTypeChange(e.target.value)}
             required
             helper="Choose the primary ID you will present."
           >
@@ -84,23 +104,25 @@ export default function IdentityVerificationStep({
               id="id-expiry"
               type="date"
               label="ID Expiration Date"
-              value={data.expiryDate || ''}
+              value={isPermanentId ? '' : data.expiryDate || ''}
               onChange={(e) => handleChange('expiryDate', e.target.value)}
-              disabled={data.isPermanent}
-              error={errors.expiryDate}
-              helper={data.isPermanent ? 'Marked as permanent / no expiry.' : 'Must be valid and unexpired.'}
+              disabled={isPermanentId}
+              error={!isPermanentId ? errors.expiryDate : null}
+              helper={
+                isPermanentId
+                  ? 'Marked as permanent / no expiry (e.g. PhilID / National ID).'
+                  : 'Must be valid and unexpired.'
+              }
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', marginTop: 'var(--space-4)' }}>
-            <label className="rider-checkbox-inline">
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: 'var(--space-2)' }}>
+            <label className="rider-checkbox-inline" htmlFor="id-permanent-checkbox">
               <input
+                id="id-permanent-checkbox"
                 type="checkbox"
-                checked={Boolean(data.isPermanent)}
-                onChange={(e) => {
-                  handleChange('isPermanent', e.target.checked);
-                  if (e.target.checked) handleChange('expiryDate', '');
-                }}
+                checked={isPermanentId}
+                onChange={(e) => handlePermanentToggle(e.target.checked)}
                 className="rider-checkbox-input"
               />
               <span className="rider-checkbox-label-text">
