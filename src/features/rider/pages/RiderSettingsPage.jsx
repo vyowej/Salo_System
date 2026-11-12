@@ -4,7 +4,9 @@ import Modal from '../../../components/common/Modal';
 import { Card, CardBody } from '../../../components/common/Card';
 import PageHeader from '../components/PageHeader';
 import StateView from '../components/StateView';
+import EligibilityChecklist from '../components/EligibilityChecklist';
 import useScenario from '../hooks/useScenario';
+import { eligibilityConditions } from '../constants/eligibilityConditions';
 import { settingsSections, notificationPreferences, riderAgreementSections, updateRecordValue } from '../constants/riderSettings';
 import { getRiderMock } from '../mocks';
 import './RiderSettingsPage.css';
@@ -12,6 +14,7 @@ import './RiderSettingsPage.css';
 export default function RiderSettingsPage() {
   const scenario = useScenario();
   const profile = getRiderMock('riderProfile', scenario);
+  const driverModeSection = settingsSections.find((item) => item.key === 'driver_mode');
   const [section, setSection] = useState(settingsSections[0].key);
   const [preferences, setPreferences] = useState({});
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -43,6 +46,12 @@ export default function RiderSettingsPage() {
           </nav>
           <Card className="rider-settings-content">
             <CardBody>
+              {section === 'driver_mode' && (
+                <>
+                  <h2>{driverModeSection.label}</h2>
+                  <EligibilityChecklist conditions={eligibilityConditions} />
+                </>
+              )}
               {section === 'notifications' && (
                 <>
                   <h2>Notification preferences</h2>
