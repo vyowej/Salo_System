@@ -6,6 +6,7 @@ import {
   RIDER_PAYOUT_ACCOUNT_TYPES,
 } from '../constants/riderApplicationDefaults';
 import { RIDER_DOC_CATALOG, RIDER_DOC_TYPES } from '../constants/riderDocumentMatrix';
+import './PayoutInformationStep.css';
 
 export default function PayoutInformationStep({
   data,
@@ -36,7 +37,7 @@ export default function PayoutInformationStep({
   };
 
   return (
-    <div className="rider-step-container">
+    <div className="rider-step-container rider-payout-step">
       <div className="rider-step-header">
         <h2 className="rider-step-heading">Rider Earnings & Payout Information</h2>
         <p className="rider-step-subheading">
@@ -44,7 +45,7 @@ export default function PayoutInformationStep({
         </p>
       </div>
 
-      <div className="rider-security-callout">
+      <div className="rider-security-callout rider-payout-security-callout">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
           <path d="M7 11V7a5 5 0 0110 0v4" />
@@ -54,8 +55,8 @@ export default function PayoutInformationStep({
         </div>
       </div>
 
-      <div className="rider-form-grid">
-        <div className="grid-cols-2">
+      <div className="rider-form-grid rider-payout-form">
+        <div className="grid-cols-2 rider-payout-fields">
           <Input
             id="payout-holder"
             label="Account Holder Full Name"
@@ -83,9 +84,9 @@ export default function PayoutInformationStep({
           </Select>
         </div>
 
-        <div className="grid-cols-2">
+        <div className="grid-cols-2 rider-payout-fields">
           <FormGroup>
-            <div className="account-number-label-row">
+            <div className="account-number-label-row rider-account-number-label-row">
               <Label htmlFor="payout-account-num" required>
                 Account Number / Mobile Number
               </Label>
@@ -142,7 +143,7 @@ export default function PayoutInformationStep({
         </div>
 
         {/* Optional Proof of Payout Ownership */}
-        <div className="rider-subform-section">
+        <div className="rider-subform-section rider-payout-proof">
           <h4 className="rider-subform-title">Proof of Account Ownership (Optional for Application)</h4>
           <p className="rider-subform-desc">
             Upload an e-wallet profile screenshot (showing your name & mobile number) or bank document header to accelerate disbursement setup.
