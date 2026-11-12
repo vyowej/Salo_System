@@ -1,41 +1,3 @@
-.customer-live-card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(var(--customer-restaurant-card-min-width), 1fr));
-  gap: var(--space-4);
-  margin-bottom: var(--space-8);
-}
-
-.customer-live-card__heading,
-.customer-restaurant-card__title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.customer-live-card__heading {
-  align-items: center;
-  margin-bottom: var(--space-2);
-}
-
-.customer-live-card__title {
-  margin: 0 0 var(--space-1);
-  color: var(--text-primary);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
-}
-
-.customer-live-card__detail {
-  margin: 0 0 var(--space-4);
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.customer-live-card__action {
-  display: block;
-  text-decoration: none;
-}
-
 .customer-restaurant-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--customer-restaurant-card-min-width), 1fr));
@@ -153,9 +115,6 @@
 }
 
 @media (max-width: 640px) {
-  .customer-live-card-grid {
-    grid-template-columns: 1fr;
-  }
 
   .customer-restaurant-grid {
     grid-template-columns: 1fr;
