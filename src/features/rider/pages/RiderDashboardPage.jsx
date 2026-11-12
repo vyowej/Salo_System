@@ -5,11 +5,10 @@ import PageHeader from '../components/PageHeader';
 import StateView from '../components/StateView';
 import StatusBadge from '../components/StatusBadge';
 import StatCard from '../components/StatCard';
-import EligibilityChecklist from '../components/EligibilityChecklist';
 import ScenarioLink from '../components/ScenarioLink';
 import { accountStates, deliveryStatuses } from '../constants/statusConfig';
 import { eligibilityConditions } from '../constants/eligibilityConditions';
-import { dashboardMetricIcons } from '../constants/riderSettings';
+import { dashboardMetricIcons, driverModeEligibilityNotice } from '../constants/riderSettings';
 import { getRiderMock } from '../mocks';
 import useScenario from '../hooks/useScenario';
 import { formatRelativeTime } from '../utils/format';
@@ -37,9 +36,6 @@ export default function RiderDashboardPage() {
 
   const isLocationWarning = dashboard.location?.status?.toLowerCase().includes('not enabled') || dashboard.location?.status?.toLowerCase().includes('denied');
   const isSwitchDisabled = unmetConditions.length > 0 && !online;
-  const switchHelperText = unmetConditions.length > 0
-    ? (unmetConditions[0]?.reason || 'Requirements must be met before going online.')
-    : (online ? 'Driver Mode active · receiving dispatch offers.' : 'Toggle switch to go online.');
 
   return (
     <div className="rider-page-shell rider-dashboard-page">
@@ -85,8 +81,13 @@ export default function RiderDashboardPage() {
                     <span>{online ? 'Online' : 'Offline'}</span>
                   </button>
                 </label>
-                {isSwitchDisabled && (
-                  <small className="rider-mode-helper">{switchHelperText}</small>
+                {unmetConditions.length > 0 && (
+                  <small className="rider-mode-helper">
+                    <span>{driverModeEligibilityNotice.message}</span>
+                    <ScenarioLink to={driverModeEligibilityNotice.path} className="rider-mode-requirements-link">
+                      {driverModeEligibilityNotice.linkLabel}
+                    </ScenarioLink>
+                  </small>
                 )}
               </div>
             </CardBody>
@@ -204,23 +205,6 @@ export default function RiderDashboardPage() {
           </Card>
         </section>
 
-        {/* 5. Go Online Eligibility Checklist (No duplicate Go Online button) */}
-        <section className="rider-dashboard-eligibility-section" aria-label="Go Online eligibility">
-          <Card className="rider-dashboard-eligibility">
-            <CardBody>
-              <div className="rider-dashboard-section-head">
-                <div>
-                  <h2 className="rider-card-title">Go Online eligibility</h2>
-                  <p className="rider-section-subtitle">Review the requirements before enabling Driver Mode.</p>
-                </div>
-                <Button as={ScenarioLink} to="/rider/go-online" variant="secondary" size="sm">
-                  View details
-                </Button>
-              </div>
-              <EligibilityChecklist conditions={eligibilityConditions} />
-            </CardBody>
-          </Card>
-        </section>
       </StateView>
     </div>
   );
