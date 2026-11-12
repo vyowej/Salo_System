@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Modal from '../../../components/common/Modal';
 import Button from '../../../components/common/Button';
-import Badge from '../../../components/common/Badge';
 import { DELIVERY_METHODS } from '../constants/riderApplicationDefaults';
+import { SelectionCheckIcon, VehicleTypeIcon } from './VehicleTypeIcons';
 
 export default function DeliveryMethodStep({
   selectedMethod = 'motorcycle',
@@ -11,6 +11,7 @@ export default function DeliveryMethodStep({
 }) {
   const [pendingMethod, setPendingMethod] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const cardRefs = useRef([]);
 
   const handleCardClick = (methodKey) => {
     if (methodKey === selectedMethod) return;
@@ -32,6 +33,27 @@ export default function DeliveryMethodStep({
     setConfirmModalOpen(false);
   };
 
+  const handleCardKeyDown = (event, index) => {
+    if (event.key === ' ' || event.key === 'Enter') {
+      event.preventDefault();
+      handleCardClick(DELIVERY_METHODS[index].key);
+      return;
+    }
+
+    const direction = ['ArrowRight', 'ArrowDown'].includes(event.key)
+      ? 1
+      : ['ArrowLeft', 'ArrowUp'].includes(event.key)
+        ? -1
+        : 0;
+
+    if (direction) {
+      event.preventDefault();
+      const nextIndex = (index + direction + DELIVERY_METHODS.length) % DELIVERY_METHODS.length;
+      cardRefs.current[nextIndex]?.focus();
+      handleCardClick(DELIVERY_METHODS[nextIndex].key);
+    }
+  };
+
   return (
     <div className="rider-step-container">
       <div className="rider-step-header">
@@ -42,42 +64,33 @@ export default function DeliveryMethodStep({
         </p>
       </div>
 
-      <div className="delivery-methods-grid">
-        {DELIVERY_METHODS.map((method) => {
+      <div className="delivery-methods-grid" role="radiogroup" aria-label="Delivery method">
+        {DELIVERY_METHODS.map((method, index) => {
           const isSelected = method.key === selectedMethod;
 
           return (
             <div
               key={method.key}
               className={`delivery-method-card ${isSelected ? 'selected' : ''}`}
+              ref={(element) => { cardRefs.current[index] = element; }}
               onClick={() => handleCardClick(method.key)}
               role="radio"
               aria-checked={isSelected}
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') handleCardClick(method.key);
-              }}
+              aria-label={method.label}
+              tabIndex={isSelected ? 0 : -1}
+              onKeyDown={(event) => handleCardKeyDown(event, index)}
             >
-              <div className="method-card-top">
-                <span className="method-icon" aria-hidden="true">{method.icon}</span>
-                <div className="method-badge-wrap">
-                  {isSelected ? (
-                    <Badge variant="warning" size="sm">Selected</Badge>
-                  ) : (
-                    <span className="method-radius-badge">{method.maxRadius}</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="method-card-body">
-                <span className="method-tagline">{method.tagline}</span>
-                <h3 className="method-title">{method.label}</h3>
-                <p className="method-desc">{method.description}</p>
-                <div className="method-requirements-box">
-                  <strong>Requirements:</strong>
-                  <span>{method.requirementsSummary}</span>
-                </div>
-              </div>
+              {isSelected && (
+                <span className="method-selected-check" aria-hidden="true">
+                  <SelectionCheckIcon />
+                </span>
+              )}
+              <span className="method-icon-wrap" aria-hidden="true">
+                <VehicleTypeIcon name={method.icon} />
+              </span>
+              <span className="method-title">{method.displayLabel}</span>
+              <span className="method-distance">{method.maxRadius}</span>
+              <span className="method-requirements">{method.requirementsSummary}</span>
             </div>
           );
         })}
