@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import Modal from '../../components/common/Modal';
 import Button from '../../components/common/Button';
 import RiderApplicationHeader from './components/RiderApplicationHeader';
 import RiderApplicationProgress from './components/RiderApplicationProgress';
@@ -16,15 +15,20 @@ import EmergencyContactStep from './components/EmergencyContactStep';
 import PayoutInformationStep from './components/PayoutInformationStep';
 import RiderAgreementStep from './components/RiderAgreementStep';
 import ApplicationSuccess from './components/ApplicationSuccess';
+import ExitConfirmModal from './components/ExitConfirmModal';
 import {
   INITIAL_RIDER_APPLICATION_STATE,
   RIDER_APPLICATION_STEPS,
 } from './constants/riderApplicationDefaults';
 import { getVehicleDocuments, RIDER_DOC_TYPES } from './constants/riderDocumentMatrix';
+import {
+  saveRiderDraft,
+  loadRiderDraft,
+  clearRiderDraft,
+} from './services/riderDraftStorage';
 import adminService from '../../services/adminService';
 import './RiderApplicationPage.css';
 
-const SESSION_DRAFT_KEY = 'salo_rider_app_draft';
 const STORAGE_RIDER_APPS_KEY = 'salo_rider_applications';
 
 export default function RiderApplicationPage() {
@@ -32,40 +36,69 @@ export default function RiderApplicationPage() {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
 
-  // Wizard Step State
-  const initialStepParam = parseInt(searchParams.get('step') || '1', 10);
-  const [currentStep, setCurrentStep] = useState(
-    initialStepParam >= 1 && initialStepParam <= 10 ? initialStepParam : 1
-  );
-  const [completedSteps, setCompletedSteps] = useState([1]);
-
-  // Form State initialized from sessionStorage draft if available
-  const [formData, setFormData] = useState(() => {
+  // Load existing draft from persistent storage on mount
+  const [initialDraft] = useState(() => {
     try {
-      const savedDraft = sessionStorage.getItem(SESSION_DRAFT_KEY);
-      if (savedDraft) {
-        const parsed = JSON.parse(savedDraft);
-        return {
-          ...INITIAL_RIDER_APPLICATION_STATE,
-          ...parsed,
-          vehicleDocuments: {},
-          clearanceDocuments: {},
-          identity: {
-            ...INITIAL_RIDER_APPLICATION_STATE.identity,
-            ...(parsed.identity || {}),
-            frontPhoto: null,
-            backPhoto: null,
-            selfiePhoto: null,
-          },
-          vehicleInfo: {
-            ...INITIAL_RIDER_APPLICATION_STATE.vehicleInfo,
-            ...(parsed.vehicleInfo || {}),
-            vehiclePhoto: null,
-          },
-        };
-      }
+      return loadRiderDraft();
     } catch {
-      // fallback
+      return null;
+    }
+  });
+
+  // Wizard Step State: query param takes precedence, then saved draft step, default to 1
+  const [currentStep, setCurrentStep] = useState(() => {
+    const stepQuery = parseInt(searchParams.get('step') || '', 10);
+    if (stepQuery >= 1 && stepQuery <= 10) return stepQuery;
+    if (initialDraft && initialDraft.currentStep >= 1 && initialDraft.currentStep <= 10) {
+      return initialDraft.currentStep;
+    }
+    return 1;
+  });
+
+  const [completedSteps, setCompletedSteps] = useState(() => {
+    if (initialDraft && Array.isArray(initialDraft.completedSteps) && initialDraft.completedSteps.length > 0) {
+      return initialDraft.completedSteps;
+    }
+    return [1];
+  });
+
+  // Form State initialized from persistent draft if available (including photos and files)
+  const [formData, setFormData] = useState(() => {
+    if (initialDraft && initialDraft.formData) {
+      return {
+        ...INITIAL_RIDER_APPLICATION_STATE,
+        ...initialDraft.formData,
+        identity: {
+          ...INITIAL_RIDER_APPLICATION_STATE.identity,
+          ...(initialDraft.formData.identity || {}),
+        },
+        vehicleInfo: {
+          ...INITIAL_RIDER_APPLICATION_STATE.vehicleInfo,
+          ...(initialDraft.formData.vehicleInfo || {}),
+        },
+        personal: {
+          ...INITIAL_RIDER_APPLICATION_STATE.personal,
+          ...(initialDraft.formData.personal || {}),
+          address: {
+            ...INITIAL_RIDER_APPLICATION_STATE.personal.address,
+            ...(initialDraft.formData.personal?.address || {}),
+          },
+        },
+        emergency: {
+          ...INITIAL_RIDER_APPLICATION_STATE.emergency,
+          ...(initialDraft.formData.emergency || {}),
+        },
+        payout: {
+          ...INITIAL_RIDER_APPLICATION_STATE.payout,
+          ...(initialDraft.formData.payout || {}),
+        },
+        declarations: {
+          ...INITIAL_RIDER_APPLICATION_STATE.declarations,
+          ...(initialDraft.formData.declarations || {}),
+        },
+        vehicleDocuments: initialDraft.formData.vehicleDocuments || {},
+        clearanceDocuments: initialDraft.formData.clearanceDocuments || {},
+      };
     }
     return INITIAL_RIDER_APPLICATION_STATE;
   });
@@ -73,11 +106,15 @@ export default function RiderApplicationPage() {
   const [validationErrors, setValidationErrors] = useState({});
   const [isDraftSaved, setIsDraftSaved] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState(() => initialDraft?.savedAt || null);
+  const [saveError, setSaveError] = useState(null);
+  const [isDirty, setIsDirty] = useState(false);
+
   const [exitModalOpen, setExitModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submittedData, setSubmittedData] = useState(null);
 
-  // Sync step from query param if changed
+  // Sync step from query param if changed externally
   useEffect(() => {
     const stepQuery = parseInt(searchParams.get('step') || '', 10);
     if (stepQuery >= 1 && stepQuery <= 10 && stepQuery !== currentStep) {
@@ -85,41 +122,51 @@ export default function RiderApplicationPage() {
     }
   }, [searchParams, currentStep]);
 
-  // Save Draft locally to sessionStorage (serializable only)
-  const saveDraftLocally = useCallback(() => {
+  // Guard against accidental page reload or tab closure when unsaved changes exist
+  useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      if (isDirty) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isDirty]);
+
+  // Save Draft locally to persistent storage (preserving all fields, documents, and photos)
+  const saveDraftLocally = useCallback(async () => {
+    if (savingDraft) return false;
     setSavingDraft(true);
+    setSaveError(null);
+
     try {
-      const serializableData = {
-        ...formData,
-        vehicleDocuments: {},
-        clearanceDocuments: {},
-        identity: {
-          ...formData.identity,
-          frontPhoto: null,
-          backPhoto: null,
-          selfiePhoto: null,
-        },
-        vehicleInfo: {
-          ...formData.vehicleInfo,
-          vehiclePhoto: null,
-        },
-        payout: {
-          ...formData.payout,
-          accountNumber: formData.payout.accountNumber
-            ? `••••${formData.payout.accountNumber.slice(-4)}`
-            : '',
-          proofDocument: null,
-        },
-      };
-      sessionStorage.setItem(SESSION_DRAFT_KEY, JSON.stringify(serializableData));
+      const result = await saveRiderDraft({
+        formData,
+        currentStep,
+        completedSteps,
+      });
+
       setIsDraftSaved(true);
-      setTimeout(() => setIsDraftSaved(false), 3000);
+      setLastSavedTime(result.savedAt);
+      setIsDirty(false);
+
+      setTimeout(() => {
+        setIsDraftSaved(false);
+      }, 3500);
+
+      return true;
     } catch (e) {
-      console.warn('Unable to save draft to sessionStorage', e);
+      console.warn('Unable to save draft to storage', e);
+      setSaveError(e.message || 'Failed to save draft. Storage quota may be exceeded.');
+      return false;
     } finally {
       setSavingDraft(false);
     }
-  }, [formData]);
+  }, [formData, currentStep, completedSteps, savingDraft]);
 
   // Step Validation Functions
   const validateStep = (stepNumber) => {
@@ -224,7 +271,6 @@ export default function RiderApplicationPage() {
           errors.escooterBrand = 'E-scooter brand is required.';
         }
       }
-      // Walker mode is exempt from vehicle information
     }
 
     // Step 6: Vehicle Documents
@@ -235,7 +281,12 @@ export default function RiderApplicationPage() {
       ).filter((d) => d.required);
 
       for (const reqDoc of requiredDocs) {
-        if (!formData.vehicleDocuments[reqDoc.id]?.name) {
+        const hasDoc = Boolean(
+          formData.vehicleDocuments[reqDoc.id]?.name ||
+          formData.vehicleDocuments[reqDoc.id]?.dataUrl ||
+          formData.vehicleDocuments[reqDoc.id]?.previewUrl
+        );
+        if (!hasDoc) {
           errors[reqDoc.id] = `${reqDoc.title} is required for ${formData.deliveryMethod.replace('_', ' ')} delivery.`;
         }
       }
@@ -243,8 +294,14 @@ export default function RiderApplicationPage() {
 
     // Step 7: Clearances
     if (stepNumber === 7) {
-      const hasNbi = Boolean(formData.clearanceDocuments[RIDER_DOC_TYPES.NBI_CLEARANCE]?.name);
-      const hasPolice = Boolean(formData.clearanceDocuments[RIDER_DOC_TYPES.POLICE_CLEARANCE]?.name);
+      const hasNbi = Boolean(
+        formData.clearanceDocuments[RIDER_DOC_TYPES.NBI_CLEARANCE]?.name ||
+        formData.clearanceDocuments[RIDER_DOC_TYPES.NBI_CLEARANCE]?.dataUrl
+      );
+      const hasPolice = Boolean(
+        formData.clearanceDocuments[RIDER_DOC_TYPES.POLICE_CLEARANCE]?.name ||
+        formData.clearanceDocuments[RIDER_DOC_TYPES.POLICE_CLEARANCE]?.dataUrl
+      );
       if (!hasNbi && !hasPolice) {
         errors.primaryClearance = 'Either an NBI Clearance or a Police Clearance is required.';
       }
@@ -333,8 +390,9 @@ export default function RiderApplicationPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Updaters for state
+  // Updaters for state — each marks form dirty
   const handleEmailVerificationChange = (nextVerification) => {
+    setIsDirty(true);
     setFormData((prev) => ({
       ...prev,
       emailVerification: nextVerification,
@@ -354,6 +412,7 @@ export default function RiderApplicationPage() {
   };
 
   const handlePersonalChange = (nextPersonal) => {
+    setIsDirty(true);
     setFormData((prev) => ({ ...prev, personal: nextPersonal }));
     setValidationErrors((prev) => ({
       ...prev,
@@ -367,6 +426,7 @@ export default function RiderApplicationPage() {
   };
 
   const handleIdentityChange = (nextIdentity) => {
+    setIsDirty(true);
     setFormData((prev) => ({ ...prev, identity: nextIdentity }));
     setValidationErrors((prev) => ({
       ...prev,
@@ -378,11 +438,13 @@ export default function RiderApplicationPage() {
   };
 
   const handleSelectDeliveryMethod = (methodKey) => {
+    setIsDirty(true);
     setFormData((prev) => ({ ...prev, deliveryMethod: methodKey }));
     setValidationErrors((prev) => ({ ...prev, deliveryMethod: null }));
   };
 
   const handleVehicleInfoChange = (nextVehicleInfo) => {
+    setIsDirty(true);
     setFormData((prev) => ({ ...prev, vehicleInfo: nextVehicleInfo }));
     setValidationErrors((prev) => ({
       ...prev,
@@ -397,6 +459,7 @@ export default function RiderApplicationPage() {
   };
 
   const handleVehicleDocumentUpload = (docId, fileData) => {
+    setIsDirty(true);
     setFormData((prev) => ({
       ...prev,
       vehicleDocuments: {
@@ -408,6 +471,7 @@ export default function RiderApplicationPage() {
   };
 
   const handleVehicleDocumentRemove = (docId) => {
+    setIsDirty(true);
     setFormData((prev) => {
       const nextDocs = { ...prev.vehicleDocuments };
       delete nextDocs[docId];
@@ -416,6 +480,7 @@ export default function RiderApplicationPage() {
   };
 
   const handleClearanceUpload = (docId, fileData) => {
+    setIsDirty(true);
     setFormData((prev) => ({
       ...prev,
       clearanceDocuments: {
@@ -431,6 +496,7 @@ export default function RiderApplicationPage() {
   };
 
   const handleClearanceRemove = (docId) => {
+    setIsDirty(true);
     setFormData((prev) => {
       const nextDocs = { ...prev.clearanceDocuments };
       delete nextDocs[docId];
@@ -439,6 +505,7 @@ export default function RiderApplicationPage() {
   };
 
   const handleEmergencyChange = (nextEmergency) => {
+    setIsDirty(true);
     setFormData((prev) => ({ ...prev, emergency: nextEmergency }));
     setValidationErrors((prev) => ({
       ...prev,
@@ -449,6 +516,7 @@ export default function RiderApplicationPage() {
   };
 
   const handlePayoutChange = (nextPayout) => {
+    setIsDirty(true);
     setFormData((prev) => ({ ...prev, payout: nextPayout }));
     setValidationErrors((prev) => ({
       ...prev,
@@ -457,15 +525,27 @@ export default function RiderApplicationPage() {
     }));
   };
 
-  const handleDeclarationChange = (declField, checked) => {
-    setFormData((prev) => ({
-      ...prev,
-      declarations: {
-        ...prev.declarations,
-        [declField]: checked,
-      },
-    }));
-    setValidationErrors((prev) => ({ ...prev, [declField]: null }));
+  // Robust declaration handler supporting both (field, checked) and object signature
+  const handleDeclarationChange = (arg1, arg2) => {
+    setIsDirty(true);
+    if (typeof arg1 === 'object' && arg1 !== null) {
+      setFormData((prev) => ({
+        ...prev,
+        declarations: {
+          ...prev.declarations,
+          ...arg1,
+        },
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        declarations: {
+          ...prev.declarations,
+          [arg1]: arg2,
+        },
+      }));
+      setValidationErrors((prev) => ({ ...prev, [arg1]: null }));
+    }
   };
 
   // Final Application Submission (Mock)
@@ -521,7 +601,7 @@ export default function RiderApplicationPage() {
         },
       };
 
-      // 1. Sync to Admin riders list (so AdminRidersPage sees the new applicant!)
+      // 1. Sync to Admin riders list (so AdminRidersPage sees the new applicant)
       try {
         const currentRiders = adminService.getRiders();
         localStorage.setItem(
@@ -542,8 +622,9 @@ export default function RiderApplicationPage() {
         console.warn('Could not save rider application to customer storage', e);
       }
 
-      // Clear session draft upon successful submission
-      sessionStorage.removeItem(SESSION_DRAFT_KEY);
+      // Clear draft upon successful submission
+      clearRiderDraft();
+      setIsDirty(false);
 
       setSubmittedData({
         referenceNumber: generatedRef,
@@ -558,9 +639,31 @@ export default function RiderApplicationPage() {
     }, 1200);
   };
 
-  const handleExitConfirm = () => {
+  // Exit button logic: exit immediately if clean, prompt 3-option modal if dirty
+  const handleHeaderExit = () => {
+    if (!isDirty) {
+      navigate('/rider');
+    } else {
+      setExitModalOpen(true);
+    }
+  };
+
+  // 3-Option Modal actions
+  const handleSaveAndExit = async () => {
+    const success = await saveDraftLocally();
+    if (success) {
+      setExitModalOpen(false);
+      navigate('/rider');
+    }
+  };
+
+  const handleExitWithoutSaving = () => {
     setExitModalOpen(false);
-    navigate('/customer/partner');
+    navigate('/rider');
+  };
+
+  const handleCancelExit = () => {
+    setExitModalOpen(false);
   };
 
   // Check if all essential previous steps are valid for review step
@@ -590,9 +693,11 @@ export default function RiderApplicationPage() {
         currentStep={currentStep}
         totalSteps={RIDER_APPLICATION_STEPS.length}
         onSaveDraft={saveDraftLocally}
-        onExit={() => setExitModalOpen(true)}
+        onExit={handleHeaderExit}
         isDraftSaved={isDraftSaved}
         savingDraft={savingDraft}
+        lastSavedTime={lastSavedTime}
+        saveError={saveError}
       />
 
       {/* Success Receipt View after Submission */}
@@ -738,38 +843,14 @@ export default function RiderApplicationPage() {
         </>
       )}
 
-      {/* Confirmation Modal Before Leaving Unsaved Application */}
-      <Modal
+      {/* 3-Option Confirmation Modal Before Leaving Unsaved Application */}
+      <ExitConfirmModal
         isOpen={exitModalOpen}
-        onClose={() => setExitModalOpen(false)}
-        title="Leave Rider Application?"
-        size="sm"
-      >
-        <div className="rider-modal-exit-body">
-          <p>
-            Are you sure you want to leave? Make sure to save your draft so you can continue where you left off later.
-          </p>
-          <div className="rider-modal-exit-actions">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                saveDraftLocally();
-                setExitModalOpen(false);
-              }}
-            >
-              Save Draft & Stay
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              onClick={handleExitConfirm}
-            >
-              Discard & Exit
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onClose={handleCancelExit}
+        onSaveAndExit={handleSaveAndExit}
+        onExitWithoutSaving={handleExitWithoutSaving}
+        isSaving={savingDraft}
+      />
     </div>
   );
 }
