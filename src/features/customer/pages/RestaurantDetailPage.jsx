@@ -13,7 +13,6 @@ import MobileOrderBar from '../components/MobileOrderBar';
 import { useMenuSearch } from '../hooks/useMenuSearch';
 import { useScrollSpy } from '../hooks/useScrollSpy';
 import { normalizeMenuCategories, normalizeMenuItem } from '../../restaurant/menu/menuData';
-import { getLocalDateKey } from '../../../services/demo/operatingHours';
 import './RestaurantDetailPage.css';
 
 /**
@@ -72,8 +71,6 @@ export default function RestaurantDetailPage() {
   const acceptingOrders = restaurant?.operatingSchedule?.acceptingOrders !== false;
   const acceptingReservations = restaurant?.operatingSchedule?.acceptingReservations !== false;
   const canStartOrder = acceptingOrders;
-  const upcomingClosures = (restaurant?.operatingSchedule?.temporaryClosures || [])
-    .filter((closure) => closure.endDate >= getLocalDateKey());
   const coverage = restaurant?.deliveryCoverage || {};
   const coverageText = coverage.method === 'cities'
     ? coverage.cities?.join(', ')
@@ -337,25 +334,6 @@ export default function RestaurantDetailPage() {
               <span style={{ color: 'var(--text-muted)' }}>Rating: </span>
               <strong>★ {restaurant.rating} ({restaurant.reviewCount} reviews)</strong>
             </div>
-            <div>
-              <span style={{ color: 'var(--text-muted)' }}>Delivery Time: </span>
-              <strong>{restaurant.deliveryTime}</strong>
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-muted)' }}>Delivery Fee: </span>
-              <strong>₱{restaurant.deliveryFee}</strong>
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-muted)' }}>Min. Order: </span>
-              <strong>₱{restaurant.minOrder}</strong>
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-muted)' }}>Services: </span>
-              <strong>{[
-                offersDelivery && 'Delivery',
-                offersPickup && 'Pickup',
-              ].filter(Boolean).join(' · ') || 'Unavailable'}</strong>
-            </div>
             {coverageText && (
               <div>
                 <span style={{ color: 'var(--text-muted)' }}>Delivery area: </span>
@@ -372,50 +350,6 @@ export default function RestaurantDetailPage() {
           )}
         </div>
       </div>
-
-      {/* ── Hours & availability section ──────────────────────── */}
-      <section
-        aria-labelledby="restaurant-hours-title"
-        style={{
-          margin: '0 0 var(--space-8)',
-          padding: 'var(--space-5)',
-          border: '1px solid var(--border-primary)',
-          borderRadius: 'var(--radius-xl)',
-          background: 'var(--surface-primary)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-          <h2 id="restaurant-hours-title" className="section-title" style={{ margin: 0 }}>Hours and availability</h2>
-          <Badge variant={restaurant.isOpen ? 'success' : 'default'} dot>{restaurant.isOpen ? 'Open now' : 'Closed now'}</Badge>
-        </div>
-        <ul style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 'var(--space-2) var(--space-4)', padding: 0, margin: 'var(--space-4) 0 0', listStyle: 'none' }}>
-          {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
-            const schedule = restaurant.operatingSchedule?.weeklySchedule?.[day];
-            const label = `${day[0].toUpperCase()}${day.slice(1)}`;
-            const periods = schedule?.periods || [];
-            return (
-              <li key={day} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-2)', color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)' }}>
-                <strong style={{ color: 'var(--text-primary)' }}>{label}</strong>
-                <span>{schedule?.closed ? 'Closed' : periods.map((period) => `${period.open}–${period.close}`).join(', ') || 'Hours not set'}</span>
-              </li>
-            );
-          })}
-        </ul>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)', marginTop: 'var(--space-4)', color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)' }}>
-          <span>Orders: <strong>{acceptingOrders ? 'Accepting' : 'Paused'}</strong></span>
-          <span>Reservations: <strong>{acceptingReservations ? 'Accepting' : 'Paused'}</strong></span>
-        </div>
-        {upcomingClosures.length > 0 && (
-          <div role="status" style={{ marginTop: 'var(--space-4)', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', background: 'var(--status-warning-bg)', color: 'var(--status-warning-text)' }}>
-            <strong>Temporary closure notice</strong>
-            {upcomingClosures.map((closure) => (
-              <p key={closure.id} style={{ margin: 'var(--space-1) 0 0', fontSize: 'var(--font-size-sm)' }}>
-                {closure.type}: {closure.startDate}{closure.endDate !== closure.startDate ? ` – ${closure.endDate}` : ''} · {closure.reason}
-              </p>
-            ))}
-          </div>
-        )}
-      </section>
 
       {/* ── Restaurant gallery ───────────────────────────────── */}
       {restaurant.profilePhotos?.length > 0 && (
