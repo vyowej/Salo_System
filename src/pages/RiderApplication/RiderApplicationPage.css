@@ -481,21 +481,36 @@
 
 .delivery-methods-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--space-4, 16px);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: 150px;
+  gap: var(--space-3, 12px);
 }
 
 .delivery-method-card {
+  grid-column: span 2;
   display: flex;
   flex-direction: column;
-  padding: var(--space-4, 16px);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1, 4px);
+  min-width: 0;
+  padding: var(--space-3, 12px);
   background: var(--surface-primary, #ffffff);
-  border: 2px solid var(--border-primary, #e5e7eb);
+  border: 1px solid var(--border-primary, #e5e7eb);
   border-radius: var(--radius-lg, 14px);
-  cursor: pointer;
-  transition: all var(--transition-fast, 150ms ease);
-  text-align: left;
   position: relative;
+  color: var(--text-primary, #171717);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color var(--transition-fast, 150ms ease), background-color var(--transition-fast, 150ms ease), box-shadow var(--transition-fast, 150ms ease);
+}
+
+.delivery-method-card:nth-child(4) {
+  grid-column: 2 / span 2;
+}
+
+.delivery-method-card:nth-child(5) {
+  grid-column: 4 / span 2;
 }
 
 [data-theme="dark"] .delivery-method-card {
@@ -505,73 +520,117 @@
 
 .delivery-method-card:hover {
   border-color: var(--salo-orange, #f36b2b);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md, 0 4px 12px rgba(243, 107, 43, 0.12));
+  box-shadow: 0 2px 8px rgba(243, 107, 43, 0.12);
+}
+
+.delivery-method-card:focus-visible {
+  outline: 3px solid var(--salo-orange, #f36b2b);
+  outline-offset: 2px;
 }
 
 .delivery-method-card.selected {
   border-color: var(--salo-orange, #f36b2b);
   background: var(--salo-orange-light, #fff5f0);
+  box-shadow: inset 0 0 0 1px var(--salo-orange, #f36b2b);
 }
 
 [data-theme="dark"] .delivery-method-card.selected {
   background: rgba(243, 107, 43, 0.15);
 }
 
-.method-card-header {
-  display: flex;
-  justify-content: space-between;
+.method-icon-wrap {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   align-items: center;
-  margin-bottom: var(--space-2, 8px);
-}
-
-.method-icon {
-  font-size: 32px;
-}
-
-.method-tagline {
-  font-size: var(--text-xs, 11px);
-  font-weight: 700;
-  text-transform: uppercase;
+  justify-content: center;
+  margin-bottom: 2px;
+  border-radius: var(--radius-md, 10px);
+  background: var(--salo-orange-light, #fff5f0);
   color: var(--salo-orange, #f36b2b);
 }
 
-.method-card-title {
-  font-size: var(--font-size-base, 15px);
-  font-weight: 700;
+.method-icon-wrap svg {
+  display: block;
+}
+
+.method-selected-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--salo-orange, #f36b2b);
+  color: var(--surface-primary, #ffffff);
+}
+
+.method-title {
+  max-width: 100%;
+  overflow: hidden;
   color: var(--text-primary, #171717);
-  margin: 0 0 6px;
-}
-
-.method-card-desc {
-  font-size: var(--text-xs, 11px);
-  color: var(--text-secondary, #525252);
-  line-height: var(--line-height-normal, 1.55);
-  margin: 0 0 var(--space-3, 12px);
-  flex: 1;
-}
-
-.method-card-meta {
-  border-top: 1px dashed var(--border-secondary, #f1f3f5);
-  padding-top: var(--space-2, 8px);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-[data-theme="dark"] .method-card-meta {
-  border-top-color: var(--border-secondary, #353539);
-}
-
-.method-meta-req {
-  font-size: var(--text-xs, 11px);
-  color: var(--text-muted, #737373);
-}
-
-.method-meta-radius {
-  font-size: var(--text-xs, 11px);
+  font-size: var(--font-size-sm, 14px);
   font-weight: 600;
-  color: var(--salo-orange, #f36b2b);
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.method-distance {
+  color: var(--text-muted, #737373);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.3;
+}
+
+.method-requirements {
+  display: flex;
+  min-height: 3.9em;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary, #525252);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .delivery-methods-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 150px;
+  }
+
+  .delivery-method-card {
+    grid-column: span 1;
+  }
+
+  .delivery-method-card:nth-child(4),
+  .delivery-method-card:nth-child(5) {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 360px) {
+  .delivery-methods-grid {
+    gap: var(--space-2, 8px);
+  }
+
+  .delivery-method-card {
+    padding: var(--space-2, 8px);
+  }
+
+  .method-title {
+    font-size: var(--text-xs, 11px);
+  }
+
+  .method-requirements {
+    font-size: 10px;
+  }
 }
 
 /* Shifts & Days */
@@ -810,6 +869,36 @@
   align-items: flex-start;
   gap: var(--space-3, 12px);
   cursor: pointer;
+}
+
+.agreement-check-all {
+  padding-bottom: var(--space-3, 12px);
+  border-bottom: 1px solid var(--border-secondary, #f1f3f5);
+}
+
+.agreement-check-all .agreement-check-text {
+  font-weight: 600;
+}
+
+.rider-checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  cursor: pointer;
+  user-select: none;
+  min-height: 44px;
+}
+
+.rider-checkbox-label-text {
+  font-size: var(--text-sm, 13px);
+  color: var(--text-primary, #111827);
+  font-weight: 500;
+  cursor: pointer;
+  line-height: var(--line-height-snug, 1.35);
+}
+
+[data-theme="dark"] .rider-checkbox-label-text {
+  color: var(--text-primary, #f3f4f6);
 }
 
 .rider-checkbox-input {
