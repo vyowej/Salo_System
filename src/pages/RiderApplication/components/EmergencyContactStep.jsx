@@ -4,6 +4,7 @@ import {
   RIDER_SHIFTS,
   RIDER_DAYS_OF_WEEK,
 } from '../constants/riderApplicationDefaults';
+import './EmergencyContactStep.css';
 
 export default function EmergencyContactStep({
   data,
@@ -34,7 +35,7 @@ export default function EmergencyContactStep({
   };
 
   return (
-    <div className="rider-step-container">
+    <div className="rider-step-container rider-emergency-step">
       <div className="rider-step-header">
         <h2 className="rider-step-heading">Emergency Contact & Delivery Preferences</h2>
         <p className="rider-step-subheading">
@@ -44,13 +45,13 @@ export default function EmergencyContactStep({
 
       <div className="rider-form-grid">
         {/* Section 1: Emergency Contact */}
-        <div className="rider-subform-section">
+        <section className="rider-subform-section rider-emergency-section">
           <h3 className="rider-subform-title">Emergency Contact Details</h3>
           <p className="rider-subform-desc">
             Someone SALO Safety Support can immediately reach in case of an on-road accident, vehicle breakdown, or medical emergency.
           </p>
 
-          <div className="rider-form-grid" style={{ marginTop: 'var(--space-3)' }}>
+          <div className="rider-form-grid rider-emergency-fields">
             <div className="grid-cols-2">
               <Input
                 id="em-name"
@@ -99,16 +100,16 @@ export default function EmergencyContactStep({
               />
             </div>
           </div>
-        </div>
+        </section>
 
         {/* Section 2: Delivery Preferences & Shifts */}
-        <div className="rider-subform-section">
+        <section className="rider-subform-section rider-emergency-section">
           <h3 className="rider-subform-title">Delivery Coverage & Working Schedule</h3>
           <p className="rider-subform-desc">
             Indicate the cities and neighborhoods where you prefer to receive delivery assignments.
           </p>
 
-          <div className="rider-form-grid" style={{ marginTop: 'var(--space-3)' }}>
+          <div className="rider-form-grid rider-emergency-fields">
             <div className="grid-cols-2">
               <Input
                 id="pref-city"
@@ -132,16 +133,13 @@ export default function EmergencyContactStep({
             </div>
 
             {/* Shift selections */}
-            <div className="rider-preference-group">
-              <span className="rider-pref-label">Preferred Operating Shifts (Select all that apply):</span>
+            <fieldset className="rider-preference-group">
+              <legend className="rider-pref-label">Preferred operating shifts <span>(select all that apply)</span></legend>
               <div className="rider-shifts-grid">
                 {RIDER_SHIFTS.map((shift) => {
                   const isChecked = (data.preferredShifts || []).includes(shift.key);
                   return (
-                    <label
-                      key={shift.key}
-                      className={`rider-shift-chip ${isChecked ? 'active' : ''}`}
-                    >
+                    <label key={shift.key} className={`rider-shift-chip ${isChecked ? 'active' : ''}`}>
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -153,11 +151,11 @@ export default function EmergencyContactStep({
                   );
                 })}
               </div>
-            </div>
+            </fieldset>
 
             {/* Days of week availability */}
-            <div className="rider-preference-group">
-              <span className="rider-pref-label">Weekly Day Availability:</span>
+            <fieldset className="rider-preference-group">
+              <legend className="rider-pref-label">Weekly day availability</legend>
               <div className="rider-days-row">
                 {RIDER_DAYS_OF_WEEK.map((day) => {
                   const isDayChecked = (data.availableDays || []).includes(day.key);
@@ -166,6 +164,7 @@ export default function EmergencyContactStep({
                       key={day.key}
                       type="button"
                       className={`rider-day-btn ${isDayChecked ? 'active' : ''}`}
+                      aria-pressed={isDayChecked}
                       onClick={() => handleDayToggle(day.key)}
                     >
                       {day.label}
@@ -173,13 +172,13 @@ export default function EmergencyContactStep({
                   );
                 })}
               </div>
-            </div>
+            </fieldset>
 
             <p className="rider-field-disclaimer">
               * Note: Delivery assignment zones and shift availability are subject to actual SALO customer order volume and platform coverage.
             </p>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );
