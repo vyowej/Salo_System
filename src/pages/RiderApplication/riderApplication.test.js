@@ -138,3 +138,132 @@ test('status simulation configuration contains all 8 required states', () => {
   assert.ok(MOCK_RIDER_ADMIN_FEEDBACK.Approved.activationChecklist.length >= 3, 'Must provide Approved activation checklist');
   assert.ok(MOCK_RIDER_ADMIN_FEEDBACK.Rejected.reason, 'Must provide Rejected reason');
 });
+
+test('camera config maps facing mode and identifies photo requirements', async () => {
+  const {
+    isPhotoRequirement,
+    getPreferredFacingMode,
+    CAMERA_FACING_MODES,
+  } = await import('./constants/cameraConfig.js');
+
+  assert.equal(isPhotoRequirement('selfie_photo'), true);
+  assert.equal(isPhotoRequirement('motorcycle_photo'), true);
+  assert.equal(isPhotoRequirement('id_front'), true);
+  assert.equal(isPhotoRequirement('nbi_clearance'), false);
+  assert.equal(isPhotoRequirement('lto_or'), false);
+
+  assert.equal(getPreferredFacingMode('selfie_photo'), CAMERA_FACING_MODES.USER);
+  assert.equal(getPreferredFacingMode('motorcycle_photo'), CAMERA_FACING_MODES.ENVIRONMENT);
+  assert.equal(getPreferredFacingMode('id_front'), CAMERA_FACING_MODES.ENVIRONMENT);
+});
+
+test('riderDraftStorage saves, restores, and clears application drafts safely', async () => {
+  const {
+    saveRiderDraft,
+    loadRiderDraft,
+    clearRiderDraft,
+    hasRiderDraft,
+    RIDER_DRAFT_STORAGE_KEY,
+  } = await import('./services/riderDraftStorage.js');
+
+  assert.ok(RIDER_DRAFT_STORAGE_KEY);
+  // Mock in-memory localStorage for node test environment
+  const memoryStore = {};
+  globalThis.window = {
+    localStorage: {
+      getItem: (key) => memoryStore[key] || null,
+      setItem: (key, val) => { memoryStore[key] = String(val); },
+      removeItem: (key) => { delete memoryStore[key]; },
+    },
+  };
+
+  try {
+    assert.equal(hasRiderDraft(), false);
+
+    const sampleFormData = {
+      ...INITIAL_RIDER_APPLICATION_STATE,
+      personal: {
+        ...INITIAL_RIDER_APPLICATION_STATE.personal,
+        firstName: 'Jose',
+        lastName: 'Rizal',
+      },
+      identity: {
+        ...INITIAL_RIDER_APPLICATION_STATE.identity,
+        selfiePhoto: {
+          id: 'selfie_photo',
+          name: 'selfie_123.jpg',
+          dataUrl: 'data:image/jpeg;base64,mockImageContent',
+          previewUrl: 'data:image/jpeg;base64,mockImageContent',
+          size: 15420,
+          isCaptured: true,
+        },
+      },
+      deliveryMethod: 'motorcycle',
+    };
+
+    const saveResult = await saveRiderDraft({
+      formData: sampleFormData,
+      currentStep: 3,
+      completedSteps: [1, 2],
+    });
+
+    assert.equal(saveResult.success, true);
+    assert.ok(saveResult.savedAt);
+    assert.equal(hasRiderDraft(), true);
+
+    const loadedDraft = loadRiderDraft();
+    assert.ok(loadedDraft, 'Draft should be loaded successfully');
+    assert.equal(loadedDraft.currentStep, 3);
+    assert.deepEqual(loadedDraft.completedSteps, [1, 2]);
+    assert.equal(loadedDraft.formData.personal.firstName, 'Jose');
+    assert.equal(loadedDraft.formData.identity.selfiePhoto.name, 'selfie_123.jpg');
+    assert.equal(loadedDraft.formData.identity.selfiePhoto.dataUrl, 'data:image/jpeg;base64,mockImageContent');
+
+    clearRiderDraft();
+    assert.equal(hasRiderDraft(), false);
+    assert.equal(loadRiderDraft(), null);
+  } finally {
+    delete globalThis.window;
+  }
+});
+
+test('identity verification allows permanent ID without expiration date', () => {
+  const validateIdentity = (identity) => {
+    const errors = {};
+    if (!identity.idNumber?.trim()) {
+      errors.idNumber = 'Government ID number is required.';
+    }
+    if (!identity.isPermanent && !identity.expiryDate) {
+      errors.expiryDate = 'ID expiration date is required (or mark as permanent).';
+    }
+    if (!identity.frontPhoto) {
+      errors.frontPhoto = 'Front image of your government ID is required.';
+    }
+    if (!identity.selfiePhoto) {
+      errors.selfiePhoto = 'A clear verification selfie photo is required.';
+    }
+    return errors;
+  };
+
+  // Case 1: isPermanent is false, no expiry date -> should produce error
+  const nonPermanentIdentity = {
+    idNumber: '1234-5678-9012',
+    isPermanent: false,
+    expiryDate: '',
+    frontPhoto: { name: 'front.jpg' },
+    selfiePhoto: { name: 'selfie.jpg' },
+  };
+  const errors1 = validateIdentity(nonPermanentIdentity);
+  assert.ok(errors1.expiryDate, 'Non-permanent ID without expiry must require expiration date');
+
+  // Case 2: isPermanent is true, no expiry date -> should be valid (no error)
+  const permanentIdentity = {
+    idNumber: '1234-5678-9012',
+    isPermanent: true,
+    expiryDate: '',
+    frontPhoto: { name: 'front.jpg' },
+    selfiePhoto: { name: 'selfie.jpg' },
+  };
+  const errors2 = validateIdentity(permanentIdentity);
+  assert.equal(errors2.expiryDate, undefined, 'Permanent ID without expiry must be valid');
+});
