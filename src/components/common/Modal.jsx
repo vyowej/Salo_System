@@ -13,6 +13,7 @@ import './Modal.css';
  */
 export default function Modal({
   open,
+  isOpen,
   onClose,
   title,
   size = 'md',
@@ -20,35 +21,36 @@ export default function Modal({
   footer,
   hideClose = false,
 }) {
+  const isVisible = Boolean(open ?? isOpen);
   const panelRef = useRef(null);
 
   // Close on Escape
   useEffect(() => {
-    if (!open) return;
+    if (!isVisible) return;
     const handler = (e) => {
       if (e.key === 'Escape') onClose?.();
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [open, onClose]);
+  }, [isVisible, onClose]);
 
   // Lock body scroll
   useEffect(() => {
-    if (open) {
+    if (isVisible) {
       const prev = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => { document.body.style.overflow = prev; };
     }
-  }, [open]);
+  }, [isVisible]);
 
   // Focus trap: move focus to modal on open
   useEffect(() => {
-    if (open && panelRef.current) {
+    if (isVisible && panelRef.current) {
       panelRef.current.focus();
     }
-  }, [open]);
+  }, [isVisible]);
 
-  if (!open) return null;
+  if (!isVisible) return null;
 
   return createPortal(
     <div
