@@ -15,8 +15,9 @@
   align-items: center;
   gap: var(--space-3);
   flex: 1;
-  max-width: 760px;
+  max-width: 100%;
   min-width: 0;
+  overflow: hidden;
 }
 
 .customer-topbar-address-selector {
