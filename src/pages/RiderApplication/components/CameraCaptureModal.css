@@ -1,0 +1,212 @@
+.camera-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 16px);
+}
+
+.camera-viewfinder-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: 440px;
+  background: var(--text-primary, #111827);
+  border-radius: var(--radius-lg, 12px);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-video-wrapper,
+.camera-preview-frozen {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-video-stream {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.camera-video-stream.is-mirrored {
+  transform: scaleX(-1);
+}
+
+.camera-captured-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #0a0a0a;
+}
+
+.camera-overlay-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: var(--text-xs, 11px);
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+}
+
+/* Viewfinder guides */
+.camera-viewfinder-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4, 16px);
+}
+
+.camera-viewfinder-overlay.selfie-guide .camera-guide-frame {
+  width: 200px;
+  height: 260px;
+  border: 2px dashed rgba(255, 255, 255, 0.7);
+  border-radius: 50% 50% 45% 45%;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+}
+
+.camera-viewfinder-overlay.card-guide .camera-guide-frame {
+  width: 85%;
+  max-width: 380px;
+  aspect-ratio: 1.58 / 1;
+  border: 2px dashed rgba(255, 255, 255, 0.75);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+}
+
+.camera-guide-label {
+  margin-top: 12px;
+  color: #ffffff;
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 4px 12px;
+  border-radius: var(--radius-full, 9999px);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  letter-spacing: 0.02em;
+}
+
+/* Spinner and loading */
+.camera-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: var(--text-sm, 13px);
+  font-weight: 500;
+}
+
+.camera-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: var(--salo-orange, #f36b2b);
+  border-radius: 50%;
+  animation: camera-spin 0.8s linear infinite;
+}
+
+@keyframes camera-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error banner */
+.camera-error-banner {
+  position: absolute;
+  inset: 0;
+  background: var(--surface-primary, #ffffff);
+  padding: var(--space-6, 24px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-3, 12px);
+}
+
+.camera-error-icon {
+  color: var(--salo-error, #b84040);
+}
+
+.camera-error-text {
+  font-size: var(--text-sm, 13px);
+  color: var(--text-secondary, #4b5563);
+  max-width: 380px;
+  line-height: var(--line-height-snug, 1.35);
+  margin: 0;
+}
+
+.camera-error-actions {
+  display: flex;
+  gap: var(--space-2, 8px);
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: var(--space-2, 8px);
+}
+
+/* Controls */
+.camera-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3, 12px);
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.camera-shutter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  min-width: 160px;
+}
+
+.shutter-circle-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+}
+
+@media (max-width: 600px) {
+  .camera-viewfinder-container {
+    aspect-ratio: 3 / 4;
+    max-height: 380px;
+  }
+
+  .camera-controls-row {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .camera-controls-row > button {
+    width: 100%;
+    justify-content: center;
+  }
+}
