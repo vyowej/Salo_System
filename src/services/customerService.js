@@ -5,7 +5,7 @@
  */
 
 import restaurantService from './restaurantService';
-import addressService, { INITIAL_ADDRESSES as ADDRESS_SERVICE_INITIAL_ADDRESSES } from './addressService';
+import addressService from './addressService';
 
 // ── Realistic Philippine Restaurant Dataset ───────────────────
 export const INITIAL_RESTAURANTS = [
@@ -348,7 +348,7 @@ export const INITIAL_NOTIFICATIONS = [
   },
 ];
 
-const ensureSingleDefaultAddress = (addresses, preferredId = null) => {
+const _ensureSingleDefaultAddress = (addresses, preferredId = null) => {
   const next = addresses.map((address) => ({ ...address, isDefault: false }));
   const fallbackId = preferredId || next.find((address) => address.isDefault)?.id || next[0]?.id || null;
 
