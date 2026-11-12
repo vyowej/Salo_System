@@ -1,10 +1,17 @@
 export const settingsSections = [
   { key: 'notifications', label: 'Notification preferences' },
+  { key: 'driver_mode', label: 'Driver Mode' },
   { key: 'security', label: 'Password & security' },
   { key: 'location', label: 'Location guidance' },
   { key: 'privacy', label: 'Privacy' },
   { key: 'terms', label: 'Terms & rider agreement' },
 ];
+
+export const driverModeEligibilityNotice = {
+  message: "You can't go online yet.",
+  linkLabel: 'View requirements',
+  path: '/rider/settings',
+};
 
 export const notificationPreferences = [
   { key: 'delivery_offers', label: 'Delivery offers', detail: 'New offers and assignment updates.' },
