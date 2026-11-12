@@ -24,7 +24,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -46,8 +46,10 @@
 }
 
 .topbar-search {
-  flex: 1;
-  max-width: 400px;
+  flex: 1 1 0%;
+  max-width: 560px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .topbar-search .input-wrapper { flex: 1; }
@@ -55,8 +57,9 @@
 .topbar-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-2);
-  flex-shrink: 0;
+  flex: 0 0 auto;
 }
 
 .topbar-btn {
