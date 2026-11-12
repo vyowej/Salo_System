@@ -1,0 +1,49 @@
+.rider-exit-modal-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4, 16px);
+  padding: var(--space-2, 8px) 0;
+}
+
+.rider-exit-icon-wrap {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--salo-orange-light, #f9ede7);
+  color: var(--salo-orange, #f36b2b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rider-exit-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rider-exit-heading {
+  font-size: var(--text-lg, 18px);
+  font-weight: 700;
+  color: var(--text-primary, #111827);
+  margin: 0;
+}
+
+.rider-exit-subtext {
+  font-size: var(--text-sm, 13px);
+  color: var(--text-secondary, #4b5563);
+  margin: 0;
+  line-height: var(--line-height-snug, 1.4);
+  max-width: 340px;
+}
+
+.rider-exit-options-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  width: 100%;
+  margin-top: var(--space-2, 8px);
+}
