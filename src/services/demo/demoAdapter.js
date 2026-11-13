@@ -513,10 +513,15 @@ function validateTableFields(table, restaurant) {
   if (!Number.isInteger(capacity) || capacity < 1 || capacity > 100) {
     throw new Error('Table capacity must be a whole number between 1 and 100.');
   }
+  const rawType = String(table.type || 'Indoor').trim();
+  const validTypes = ['Indoor', 'Outdoor', 'Private', 'Booth', 'Bar / High Top', 'Patio'];
+  const matchedType = validTypes.find((t) => t.toLowerCase() === rawType.toLowerCase()) || rawType || 'Indoor';
+
   return {
     name,
     number: String(table.number ?? '').trim(),
     capacity,
+    type: matchedType,
     description: String(table.description || '').trim(),
     area: validateDiningArea(table.area, restaurant),
   };
@@ -1346,14 +1351,15 @@ export const demoAdapter = {
     return result.area;
   },
 
-  getTables(restaurantId, date = new Date().toISOString().slice(0, 10)) {
+  getTables(restaurantId, date = new Date().toISOString().slice(0, 10), time = null) {
     const store = readStore();
     const restaurant = findRestaurant(restaurantId, store);
     if (!restaurant) throw new Error('The selected restaurant could not be found.');
     assertServicePermission(store, restaurant.id, 'tables.view');
     return clone(restaurant.tables.map((table) => ({
       ...table,
-      status: deriveTableStatus(table, restaurant.reservations || [], date),
+      status: deriveTableStatus(table, restaurant.reservations || [], date, time),
+      rawStatus: table.status,
     })));
   },
 
@@ -1374,11 +1380,9 @@ export const demoAdapter = {
       if (!restaurant) throw new Error('The selected restaurant could not be found.');
       assertServicePermission(store, restaurant.id, 'tables.add');
       const fields = validateTableFields(data, restaurant);
-      const status = data.status || 'Available';
-      if (!['Available', 'Unavailable', 'Maintenance'].includes(status)) {
-        throw new Error('Reserved and Occupied statuses are derived from reservations.');
-      }
-      if (status !== 'Available') assertServicePermission(store, restaurant.id, 'tables.manageAvailability');
+      const isInactive = data.isActive === false || data.status === 'Inactive' || data.status === 'Archived';
+      const status = isInactive ? 'Inactive' : (['Available', 'Unavailable', 'Maintenance'].includes(data.status) ? data.status : 'Available');
+      if (status !== 'Available' && !isInactive) assertServicePermission(store, restaurant.id, 'tables.manageAvailability');
       const number = fields.number || String(restaurant.tables.length + 1);
       if (restaurant.tables.some((table) => table.name.toLowerCase() === fields.name.toLowerCase()
         || (table.number && table.number.toLowerCase() === number.toLowerCase()))) {
@@ -1388,8 +1392,11 @@ export const demoAdapter = {
         id: `TBL-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         ...fields,
         number,
+        type: fields.type,
+        isActive: !isInactive,
+        isArchived: isInactive && (data.isArchived === true || data.status === 'Archived'),
         status,
-        availability: status === 'Unavailable' ? 'unavailable' : 'available',
+        availability: isInactive || status === 'Unavailable' ? 'unavailable' : 'available',
       };
       restaurant.tables.push(table);
       return { table, restaurantId: restaurant.id };
@@ -1405,18 +1412,32 @@ export const demoAdapter = {
       assertServicePermission(store, restaurant.id, 'tables.edit');
       const table = restaurant.tables.find((entry) => entry.id === tableId);
       if (!table) throw new Error('The table could not be found.');
-      if (Object.hasOwn(data, 'status') || Object.hasOwn(data, 'availability')) {
+      if (Object.hasOwn(data, 'status') || Object.hasOwn(data, 'availability') || Object.hasOwn(data, 'isActive') || Object.hasOwn(data, 'isArchived')) {
         assertServicePermission(store, restaurant.id, 'tables.manageAvailability');
       }
       const fields = validateTableFields({ ...table, ...data }, restaurant);
-      const status = data.status || table.status;
-      if (!['Available', 'Unavailable', 'Maintenance'].includes(status)) {
-        throw new Error('Reserved and Occupied statuses are derived from reservations.');
+      const number = fields.number || table.number || '';
+
+      const duplicate = restaurant.tables.find((entry) => entry.id !== tableId && (
+        entry.name.toLowerCase() === fields.name.toLowerCase()
+        || (entry.number && number && entry.number.toLowerCase() === number.toLowerCase())
+      ));
+      if (duplicate) {
+        throw new Error('A table with that name or number already exists.');
       }
+
+      const isInactive = data.isActive === false || data.status === 'Inactive' || data.status === 'Archived';
+      const status = isInactive
+        ? (data.status === 'Archived' || table.isArchived ? 'Archived' : 'Inactive')
+        : (['Available', 'Unavailable', 'Maintenance'].includes(data.status) ? data.status : 'Available');
+
       const conflicts = getTableEditConflicts(table, {
         ...fields,
+        number,
         status,
-        availability: data.availability ?? table.availability,
+        isActive: !isInactive,
+        isArchived: isInactive && (data.isArchived === true || data.status === 'Archived' || table.isArchived),
+        availability: isInactive || status === 'Unavailable' ? 'unavailable' : 'available',
       }, restaurant.reservations || [], Number(store.reservationDurationMinutes || RESERVATION_DURATION_MINUTES));
       if (conflicts.length) {
         const refs = conflicts.map((reservation) => `#${reservation.reference || reservation.id}`).join(', ');
@@ -1424,13 +1445,29 @@ export const demoAdapter = {
       }
       const before = clone(table);
       Object.assign(table, fields, {
+        number,
+        type: fields.type,
+        isActive: !isInactive,
+        isArchived: isInactive && (data.isArchived === true || data.status === 'Archived' || table.isArchived),
         status,
-        availability: status === 'Unavailable' || data.availability === 'unavailable' ? 'unavailable' : 'available',
+        availability: isInactive || status === 'Unavailable' ? 'unavailable' : 'available',
       });
       return { table, before, restaurantId: restaurant.id };
     });
     this.logActivity({ module: 'tables', action: 'table-updated', targetId: tableId, before: result.before, after: result.table, restaurantId: result.restaurantId });
     return result.table;
+  },
+
+  archiveTable(tableId, restaurantId) {
+    return this.updateTable(tableId, { isActive: false, isArchived: true, status: 'Archived' }, restaurantId);
+  },
+
+  deactivateTable(tableId, restaurantId) {
+    return this.updateTable(tableId, { isActive: false, status: 'Inactive' }, restaurantId);
+  },
+
+  reactivateTable(tableId, restaurantId) {
+    return this.updateTable(tableId, { isActive: true, isArchived: false, status: 'Available' }, restaurantId);
   },
 
   setTableAvailability(tableId, status, restaurantId) {
@@ -1712,11 +1749,60 @@ export const demoAdapter = {
     if (!reservation) throw new Error('The reservation could not be found.');
     const guests = Number(reservation.partySize ?? reservation.guests ?? 0);
     return clone(getRestaurantTables(restaurant.id, store).filter((table) => (
-      Number(table.capacity || 0) >= guests
+      table.isActive !== false
+      && !table.isArchived
+      && table.status !== 'Inactive'
+      && table.status !== 'Archived'
+      && Number(table.capacity || 0) >= guests
       && !['Unavailable', 'Maintenance'].includes(table.status)
       && table.availability !== 'unavailable'
       && isTableAvailableForReservation(restaurant.id, { ...reservation, assignedTable: table }, store)
     )));
+  },
+
+  getReservationTableOptions(restaurantId, reservationId) {
+    const store = readStore();
+    const restaurant = findRestaurant(restaurantId, store);
+    if (!restaurant) throw new Error('The selected restaurant could not be found.');
+    assertReservationPermission(store, restaurant.id, 'view');
+    const reservation = (restaurant.reservations || []).find((entry) => entry.id === reservationId);
+    if (!reservation) throw new Error('The reservation could not be found.');
+    const guests = Number(reservation.partySize ?? reservation.guests ?? 0);
+    const tables = getRestaurantTables(restaurant.id, store);
+
+    return clone(tables.map((table) => {
+      const isAssignedToThis = (reservation.assignedTable?.id && table.id && reservation.assignedTable.id === table.id)
+        || (reservation.assignedTable?.name && table.name && reservation.assignedTable.name === table.name)
+        || reservation.assignedTable === table.id;
+      const isInactive = table.isActive === false || table.isArchived || table.status === 'Inactive' || table.status === 'Archived';
+      const isMaintenance = table.status === 'Maintenance' || table.status === 'Unavailable' || table.availability === 'unavailable';
+      const isTooSmall = Number(table.capacity || 0) < guests;
+      const candidate = { ...reservation, assignedTable: table };
+      const canAccommodate = isTableAvailableForReservation(restaurant.id, candidate, store);
+
+      let isAvailable = false;
+      let statusLabel;
+
+      if (isInactive) {
+        statusLabel = 'Inactive / Archived';
+      } else if (isMaintenance) {
+        statusLabel = table.status === 'Maintenance' ? 'Under Maintenance' : 'Unavailable';
+      } else if (isTooSmall) {
+        statusLabel = `Too small (${table.capacity} seats, party is ${guests})`;
+      } else if (!canAccommodate && !isAssignedToThis) {
+        statusLabel = `Reserved at ${reservation.time}`;
+      } else {
+        isAvailable = true;
+        statusLabel = isAssignedToThis ? 'Currently Assigned' : 'Available';
+      }
+
+      return {
+        ...table,
+        isAvailable: isAvailable || isAssignedToThis,
+        isAssignedToThis,
+        statusLabel,
+      };
+    }));
   },
 
   assignReservationTable(id, tableId, restaurantId) {
@@ -1726,8 +1812,21 @@ export const demoAdapter = {
       assertReservationPermission(store, restaurant.id, 'assignTables');
       const reservation = (restaurant.reservations || []).find((entry) => entry.id === id);
       if (!reservation) throw new Error('The reservation could not be found.');
+
+      if (!tableId || tableId === 'none' || tableId === 'unassigned') {
+        const before = { assignedTable: clone(reservation.assignedTable || null) };
+        reservation.assignedTable = null;
+        reservation.updatedAt = new Date().toISOString();
+        const shared = (store.customerReservations || []).find((entry) => entry.id === id);
+        if (shared) Object.assign(shared, { assignedTable: null, updatedAt: reservation.updatedAt });
+        return { reservation, before, restaurantId: restaurant.id, table: null };
+      }
+
       const table = getRestaurantTables(restaurant.id, store).find((entry) => entry.id === tableId);
       if (!table) throw new Error('Choose a valid table for this restaurant.');
+      if (table.isActive === false || table.isArchived || table.status === 'Inactive' || table.status === 'Archived') {
+        throw new Error('This table is inactive or archived and cannot be assigned to reservations.');
+      }
       const before = { assignedTable: clone(reservation.assignedTable || null) };
       const candidate = { ...reservation, assignedTable: table };
       if (!isTableAvailableForReservation(restaurant.id, candidate, store)) {

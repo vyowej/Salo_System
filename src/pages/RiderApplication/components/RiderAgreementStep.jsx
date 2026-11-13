@@ -495,7 +495,7 @@ export default function RiderAgreementStep({
             </svg>
             <span>
               {!emailVerification.isVerified
-                ? 'Please complete Step 1 (Company & Email OTP Verification) before submitting.'
+                ? 'Please complete Step 1 (Email Verification) before submitting.'
                 : !isAllDeclared
                 ? 'Please check all four declaration boxes above to enable application submission.'
                 : 'Please complete all required fields and documents.'}

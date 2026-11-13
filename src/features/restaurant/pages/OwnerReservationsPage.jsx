@@ -94,6 +94,7 @@ export default function OwnerReservationsPage() {
 
   // Table assignments
   const [tableChoices, setTableChoices] = useState({});
+  const [tableOptionsMap, setTableOptionsMap] = useState({});
   const [selectedTableMap, setSelectedTableMap] = useState({});
 
   const can = (permission) => access.canAccess([permission]);
@@ -149,7 +150,9 @@ export default function OwnerReservationsPage() {
     if (!reservation) return;
     try {
       const choices = ownerService.getReservationTables(selectedRestaurantId, reservation.id);
+      const options = ownerService.getReservationTableOptions ? ownerService.getReservationTableOptions(selectedRestaurantId, reservation.id) : choices;
       setTableChoices((prev) => ({ ...prev, [reservation.id]: choices }));
+      setTableOptionsMap((prev) => ({ ...prev, [reservation.id]: options }));
       setSelectedTableMap((prev) => ({
         ...prev,
         [reservation.id]: reservation.assignedTable?.id || '',
@@ -368,10 +371,9 @@ export default function OwnerReservationsPage() {
   };
 
   const handleAssignTable = (reservation, tableId) => {
-    if (!tableId) return;
     runAction(() => {
-      ownerService.assignReservationTable(reservation.id, tableId, selectedRestaurantId);
-    }, `Table assigned to #${reservation.id}.`);
+      ownerService.assignReservationTable(reservation.id, tableId || null, selectedRestaurantId);
+    }, tableId ? `Table assigned to #${reservation.id}.` : `Table assignment removed from #${reservation.id}.`);
   };
 
   const handleMarkArrived = (reservation) => {
@@ -526,6 +528,13 @@ export default function OwnerReservationsPage() {
           </div>
 
           <div className="owner-reservations__header-right">
+            {can('tables.view') && (
+              <Link to="/owner/tables" style={{ textDecoration: 'none' }}>
+                <Button variant="outline" size="sm">
+                  🍽️ Table Management
+                </Button>
+              </Link>
+            )}
             {can('business.hours.manage') && (
               <Button
                 variant="outline"
@@ -1427,9 +1436,9 @@ export default function OwnerReservationsPage() {
                               style={{ height: 30, fontSize: 11, minWidth: 120 }}
                             >
                               <option value="">-- No table --</option>
-                              {(tableChoices[row.id] || tables || []).map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.name || t.id} ({t.capacity}p)
+                              {(tableOptionsMap[row.id] || tableChoices[row.id] || tables || []).map((t) => (
+                                <option key={t.id} value={t.id} disabled={!t.isAvailable && !t.isAssignedToThis}>
+                                  {t.name || t.id} ({t.capacity}p{t.type ? ` · ${t.type}` : ''}) {t.isAssignedToThis ? '✓' : (!t.isAvailable ? `(${t.statusLabel || 'Busy'})` : '')}
                                 </option>
                               ))}
                             </select>
@@ -1603,10 +1612,10 @@ export default function OwnerReservationsPage() {
                     }}
                     style={{ width: '100%', height: 38 }}
                   >
-                    <option value="">-- No table assigned --</option>
-                    {(tableChoices[detailsRes.id] || tables || []).map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name || t.id} ({t.area}) · Capacity: {t.capacity} seats
+                    <option value="">-- No table assigned (Unassigned) --</option>
+                    {(tableOptionsMap[detailsRes.id] || tableChoices[detailsRes.id] || tables || []).map((t) => (
+                      <option key={t.id} value={t.id} disabled={!t.isAvailable && !t.isAssignedToThis}>
+                        {t.name || t.id} ({t.type || t.area || 'Indoor'}) · {t.capacity} seats — {t.isAssignedToThis ? 'Currently Assigned' : (t.statusLabel || (t.status === 'Available' ? 'Available' : t.status))}
                       </option>
                     ))}
                   </select>

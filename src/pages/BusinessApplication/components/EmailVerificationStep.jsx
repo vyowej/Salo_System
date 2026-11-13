@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Button from '../../../components/common/Button';
+import Badge from '../../../components/common/Badge';
 import { Input } from '../../../components/forms';
 
 const COUNTDOWN_INITIAL_SECONDS = 60;
@@ -274,10 +275,17 @@ export default function EmailVerificationStep({
     <div className="wizard-step-container">
       {/* Header */}
       <div className="wizard-step-header">
-        <h2 className="wizard-step-heading">Account & Email Verification</h2>
-        <p className="wizard-step-subheading">
-          Verify your official email address with a 6-digit one-time code to secure your restaurant application and activate partner onboarding.
-        </p>
+        <div className="wizard-step-header-with-badge">
+          <div>
+            <h2 className="wizard-step-heading">Account & Email Verification</h2>
+            <p className="wizard-step-subheading">
+              Verify your official email address with a 6-digit one-time code to secure your restaurant application and activate partner onboarding.
+            </p>
+          </div>
+          <Badge variant={data.isVerified ? 'success' : 'warning'} size="md">
+            {data.isVerified ? 'Verified ✓' : 'Verification Required'}
+          </Badge>
+        </div>
       </div>
 
       <div className="wizard-email-verify-card">

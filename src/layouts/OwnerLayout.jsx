@@ -143,7 +143,6 @@ export default function OwnerLayout({ children }) {
           )}
           actions={restaurantSelector}
         />
-        {restaurantService.dataSource === 'demo' && <div className="owner-demo-status" role="status">Demo Data</div>}
         <main className="owner-content">
           {!restaurantService.dataSource && (
             <div className="owner-data-state" role="status">Loading restaurant workspace…</div>

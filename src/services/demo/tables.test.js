@@ -127,3 +127,159 @@ test('table mutations enforce their service permissions and reservation staff ca
     restore();
   }
 });
+
+test('complete Table Management flow: add, edit, assign, conflict prevention, cancel release, archive, and isolation', () => {
+  const restore = installDemoSession();
+  try {
+    const restaurantId = 'dalisay-heritage';
+
+    // 1. Add a table with name, unique number, capacity, type, and area
+    const newTable = demoAdapter.addTable({
+      name: 'Garden Terrace 1',
+      number: 'GT-01',
+      capacity: 6,
+      type: 'Outdoor',
+      area: 'Outdoor',
+      status: 'Active',
+      description: 'Scenic garden view table',
+    }, restaurantId);
+
+    assert.equal(newTable.name, 'Garden Terrace 1');
+    assert.equal(newTable.number, 'GT-01');
+    assert.equal(newTable.capacity, 6);
+    assert.equal(newTable.type, 'Outdoor');
+    assert.equal(newTable.isActive, true);
+    assert.equal(newTable.status, 'Available');
+
+    // 2. Prevent duplicate table numbers within the same restaurant
+    assert.throws(
+      () => demoAdapter.addTable({
+        name: 'Another Table',
+        number: 'GT-01', // duplicate number!
+        capacity: 4,
+        type: 'Indoor',
+        area: 'Indoor',
+      }, restaurantId),
+      /already exists/,
+    );
+
+    // Also prevent duplicate names
+    assert.throws(
+      () => demoAdapter.addTable({
+        name: 'Garden Terrace 1', // duplicate name!
+        number: 'GT-99',
+        capacity: 4,
+        type: 'Indoor',
+        area: 'Indoor',
+      }, restaurantId),
+      /already exists/,
+    );
+
+    // 3. Edit existing table details
+    const updatedTable = demoAdapter.updateTable(newTable.id, {
+      capacity: 8,
+      type: 'Private',
+      area: 'Outdoor',
+      description: 'Expanded garden table',
+    }, restaurantId);
+
+    assert.equal(updatedTable.capacity, 8);
+    assert.equal(updatedTable.type, 'Private');
+    assert.equal(updatedTable.description, 'Expanded garden table');
+
+    // 4. Create two reservations at the same date and time
+    const resA = demoAdapter.createCustomerReservation({
+      restaurantId,
+      guestName: 'Ana Santos',
+      date: '2026-12-25',
+      time: '6:00 PM',
+      guests: 6,
+    });
+
+    const resB = demoAdapter.createCustomerReservation({
+      restaurantId,
+      guestName: 'Carlos Cruz',
+      date: '2026-12-25',
+      time: '6:00 PM',
+      guests: 6,
+    });
+
+    // Verify table options show GT-01 as available for resA
+    const optionsA = demoAdapter.getReservationTableOptions(restaurantId, resA.id);
+    const tableOptionA = optionsA.find((opt) => opt.id === newTable.id);
+    assert.ok(tableOptionA);
+    assert.equal(tableOptionA.isAvailable, true);
+
+    // Assign GT-01 to reservation A
+    const assignedResA = demoAdapter.assignReservationTable(resA.id, newTable.id, restaurantId);
+    assert.equal(assignedResA.assignedTable?.id, newTable.id);
+
+    // Dynamic table status for that date/time reflects Reserved
+    const tablesOnDate = demoAdapter.getTables(restaurantId, '2026-12-25', '6:00 PM');
+    const tableStateOnDate = tablesOnDate.find((t) => t.id === newTable.id);
+    assert.equal(tableStateOnDate.status, 'Reserved');
+
+    // 5. Verify overlapping reservations cannot use the same table
+    const optionsB = demoAdapter.getReservationTableOptions(restaurantId, resB.id);
+    const tableOptionB = optionsB.find((opt) => opt.id === newTable.id);
+    assert.ok(tableOptionB);
+    assert.equal(tableOptionB.isAvailable, false);
+    assert.match(tableOptionB.statusLabel, /Reserved at 6:00 PM/);
+
+    assert.throws(
+      () => demoAdapter.assignReservationTable(resB.id, newTable.id, restaurantId),
+      /overlaps another active reservation/,
+    );
+
+    // Verify unassigning table from reservation A
+    demoAdapter.assignReservationTable(resA.id, null, restaurantId);
+    assert.equal(demoAdapter.getReservationTables(restaurantId, resA.id).some((t) => t.id === newTable.id), true);
+
+    // Re-assign to resA for cancellation test
+    demoAdapter.assignReservationTable(resA.id, newTable.id, restaurantId);
+
+    // 6. Cancel reservation A and verify that table becomes available again
+    demoAdapter.cancelCustomerReservation(resA.id, 'Customer emergency');
+    demoAdapter.resolveReservationCancellation(resA.id, 'approve', restaurantId);
+
+    // Table is now released and can be assigned to reservation B!
+    const optionsBAfterCancel = demoAdapter.getReservationTableOptions(restaurantId, resB.id);
+    const tableOptionBAfter = optionsBAfterCancel.find((opt) => opt.id === newTable.id);
+    assert.equal(tableOptionBAfter.isAvailable, true);
+
+    const assignedResB = demoAdapter.assignReservationTable(resB.id, newTable.id, restaurantId);
+    assert.equal(assignedResB.assignedTable?.id, newTable.id);
+
+    // Unassign resB so table has no future commitments
+    demoAdapter.assignReservationTable(resB.id, null, restaurantId);
+
+    // 7. Archive table and verify that it can no longer be assigned to new reservations
+    const archivedTable = demoAdapter.archiveTable(newTable.id, restaurantId);
+    assert.equal(archivedTable.isActive, false);
+    assert.equal(archivedTable.isArchived, true);
+    assert.equal(archivedTable.status, 'Archived');
+    assert.equal(archivedTable.availability, 'unavailable');
+
+    // Excluded from reservation options
+    const optionsAfterArchive = demoAdapter.getReservationTables(restaurantId, resB.id);
+    assert.equal(optionsAfterArchive.some((t) => t.id === newTable.id), false);
+
+    assert.throws(
+      () => demoAdapter.assignReservationTable(resB.id, newTable.id, restaurantId),
+      /inactive or archived/,
+    );
+
+    // 8. Reactivate table and verify it returns to available inventory
+    const reactivatedTable = demoAdapter.reactivateTable(newTable.id, restaurantId);
+    assert.equal(reactivatedTable.isActive, true);
+    assert.equal(reactivatedTable.isArchived, false);
+    assert.equal(reactivatedTable.status, 'Available');
+    assert.equal(reactivatedTable.availability, 'available');
+
+    // 9. Restaurant data isolation
+    const otherRestaurantTables = demoAdapter.getTables('manila-artisan-pizza');
+    assert.equal(otherRestaurantTables.some((t) => t.id === newTable.id), false);
+  } finally {
+    restore();
+  }
+});

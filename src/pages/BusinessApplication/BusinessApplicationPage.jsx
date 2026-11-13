@@ -515,7 +515,9 @@ export default function BusinessApplicationPage() {
                     size="md"
                     onClick={handleNextStep}
                   >
-                    Continue →
+                    {currentStep === 1 && !formData.emailVerification?.isVerified
+                      ? 'Verify OTP to Continue →'
+                      : 'Continue →'}
                   </Button>
                 ) : null}
               </div>

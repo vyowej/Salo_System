@@ -120,7 +120,7 @@ export default function PartnerApplicationPage() {
               <div className="partner-perks-list">
                 <div className="partner-perk-item">
                   <span className="perk-bullet">✓</span>
-                  <span>Direct dine-in table reservation system with guest deposits</span>
+                  <span>Direct table reservation system with guest deposits</span>
                 </div>
                 <div className="partner-perk-item">
                   <span className="perk-bullet">✓</span>
@@ -139,7 +139,7 @@ export default function PartnerApplicationPage() {
                       Open Merchant Portal →
                     </Button>
                     <Button as={Link} to="/business-application/status" variant="outline" size="sm" fullWidth>
-                      View Onboarding Status
+                      View Application Status
                     </Button>
                   </div>
                 ) : applications.restaurant?.status ? (
@@ -149,8 +149,7 @@ export default function PartnerApplicationPage() {
                         Application: {applications.restaurant.status}
                       </p>
                       <p style={{ fontSize: 12, margin: 0, color: 'var(--text-secondary)' }}>
-                        {applications.restaurant.submittedAt ? `Submitted on ${applications.restaurant.submittedAt}. ` : ''}
-                        Review in progress by SALO Onboarding Operations.
+                        Ref: {applications.restaurant.referenceNumber || applications.restaurant.id || 'SALO-REST-20261109-001'} · {applications.restaurant.submittedAt ? `Submitted on ${applications.restaurant.submittedAt}` : 'Review in progress by SALO Onboarding Operations'}
                       </p>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
@@ -158,7 +157,7 @@ export default function PartnerApplicationPage() {
                         Check Status
                       </Button>
                       <Button as={Link} to="/become-a-partner" variant="outline" size="md" fullWidth>
-                        Edit Form
+                        Edit Application
                       </Button>
                     </div>
                   </div>
@@ -235,7 +234,7 @@ export default function PartnerApplicationPage() {
                 ) : (
                   <div className="rider-partner-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
                     <Button as={Link} to="/become-a-rider" variant="primary" size="lg" fullWidth>
-                      Apply as a Delivery Rider
+                      Apply as a Rider Partner
                     </Button>
                     <Button as={Link} to="/rider-application/status" variant="outline" size="md" fullWidth>
                       View Application Status

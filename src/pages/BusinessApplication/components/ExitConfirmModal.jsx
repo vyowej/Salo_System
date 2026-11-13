@@ -17,7 +17,7 @@ export default function ExitConfirmModal({
       open={showModal}
       isOpen={showModal}
       onClose={onClose}
-      title="Exit Partner Application?"
+      title="Exit Restaurant Application?"
       size="sm"
     >
       <div className="wizard-exit-modal-body">
@@ -30,9 +30,9 @@ export default function ExitConfirmModal({
         </div>
 
         <div className="wizard-exit-text">
-          <h4 className="wizard-exit-heading">You have an application in progress</h4>
+          <h4 className="wizard-exit-heading">You have unsaved changes</h4>
           <p className="wizard-exit-subtext">
-            Would you like to save your draft before leaving? You can resume your restaurant application anytime from where you left off.
+            Would you like to save your draft before leaving? You can resume your application from where you left off at any time.
           </p>
         </div>
 

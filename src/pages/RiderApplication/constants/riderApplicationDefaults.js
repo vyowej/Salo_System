@@ -126,7 +126,7 @@ export const RIDER_DAYS_OF_WEEK = [
 ];
 
 export const RIDER_APPLICATION_STEPS = [
-  { step: 1, id: 'email_otp', label: 'Company & Email OTP', shortLabel: 'Email OTP' },
+  { step: 1, id: 'email_otp', label: 'Email Verification', shortLabel: 'Email OTP' },
   { step: 2, id: 'personal', label: 'Personal Information', shortLabel: 'Personal' },
   { step: 3, id: 'identity', label: 'Identity Verification', shortLabel: 'Identity' },
   { step: 4, id: 'delivery_method', label: 'Delivery Method', shortLabel: 'Method' },

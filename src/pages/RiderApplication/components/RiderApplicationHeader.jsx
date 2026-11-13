@@ -32,7 +32,7 @@ export default function RiderApplicationHeader({
           <BrandMark size="sm" />
           <span className="rider-wizard-brand-divider" aria-hidden="true" />
           <div className="rider-wizard-context">
-            <span className="rider-wizard-app-badge">Courier Onboarding</span>
+            <span className="rider-wizard-app-badge">Partner Onboarding</span>
             <span className="rider-wizard-app-title">Rider Application</span>
           </div>
         </div>

@@ -245,10 +245,9 @@ export default function EmailVerificationStep({
       <div className="wizard-step-header">
         <div className="wizard-step-header-with-badge">
           <div>
-            <h2 className="wizard-step-heading">Company & Email Verification</h2>
+            <h2 className="wizard-step-heading">Account & Email Verification</h2>
             <p className="wizard-step-subheading">
-              Verify your company or courier contact email to start your application.
-              Receiving and confirming your OTP code is mandatory to proceed to the next step.
+              Verify your official email address with a 6-digit one-time code to secure your rider application and activate courier onboarding.
             </p>
           </div>
           <Badge variant={data.isVerified ? 'success' : 'warning'} size="md">

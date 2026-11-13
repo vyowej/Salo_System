@@ -65,6 +65,10 @@ export const ownerService = {
     return restaurantService.getReservationTables(restaurantId, reservationId);
   },
 
+  getReservationTableOptions(restaurantId, reservationId) {
+    return restaurantService.getReservationTableOptions(restaurantId, reservationId);
+  },
+
   getDiningAreas(restaurantId) {
     return restaurantService.getDiningAreas(restaurantId);
   },
@@ -77,8 +81,8 @@ export const ownerService = {
     return restaurantService.updateDiningArea(id, name, restaurantId);
   },
 
-  getTables(restaurantId, date) {
-    return restaurantService.getTables(restaurantId, date);
+  getTables(restaurantId, date, time) {
+    return restaurantService.getTables(restaurantId, date, time);
   },
 
   getTableSchedule(tableId, date, restaurantId) {
@@ -95,6 +99,18 @@ export const ownerService = {
 
   setTableAvailability(id, status, restaurantId) {
     return restaurantService.setTableAvailability(id, status, restaurantId);
+  },
+
+  archiveTable(id, restaurantId) {
+    return restaurantService.archiveTable(id, restaurantId);
+  },
+
+  deactivateTable(id, restaurantId) {
+    return restaurantService.deactivateTable(id, restaurantId);
+  },
+
+  reactivateTable(id, restaurantId) {
+    return restaurantService.reactivateTable(id, restaurantId);
   },
 
   getInventorySettings(restaurantId) {

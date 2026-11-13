@@ -64,9 +64,7 @@ export default function OwnerEarningsPage() {
           <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--accent)', margin: 'var(--space-2) 0' }}>
             ₱{earnings.today.toLocaleString('en-PH')}
           </p>
-          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--salo-green)', fontWeight: 600 }}>
-            Demo data
-          </span>
+          
         </div>
 
         {/* This Week */}
@@ -83,9 +81,7 @@ export default function OwnerEarningsPage() {
           <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--fiesta-gold, #F59E0B)', margin: 'var(--space-2) 0' }}>
             ₱{earnings.thisWeek.toLocaleString('en-PH')}
           </p>
-          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-            Demo data
-          </span>
+          
         </div>
 
         {/* This Month */}
@@ -140,10 +136,9 @@ export default function OwnerEarningsPage() {
           <div>
             <h2 className="section-title" style={{ margin: 0 }}>Recent Daily Performance</h2>
             <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-              Daily gross sales from demo data
+              Daily gross sales
             </p>
           </div>
-          <Badge variant="warning">Demo Data</Badge>
         </div>
 
         {/* Bar chart representation */}

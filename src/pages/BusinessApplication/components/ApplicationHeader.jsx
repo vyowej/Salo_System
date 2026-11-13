@@ -63,7 +63,7 @@ export default function ApplicationHeader({
               loading={savingDraft}
               disabled={savingDraft}
               className={`app-wizard-save-btn ${isDraftSaved ? 'btn-draft-saved' : ''}`}
-              title="Save current progress locally"
+              title="Save current application progress to draft"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />

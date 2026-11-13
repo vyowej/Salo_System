@@ -34,13 +34,27 @@ export function getTableReservations(table, reservations, date) {
   ));
 }
 
-export function deriveTableStatus(table, reservations, date) {
+export function deriveTableStatus(table, reservations, date, time = null) {
+  if (table.isActive === false || table.isArchived || table.status === 'Inactive' || table.status === 'Archived') {
+    return 'Inactive';
+  }
   if (table.status === 'Unavailable' || table.availability === 'unavailable') return 'Unavailable';
   if (table.status === 'Maintenance') return 'Maintenance';
+  
   const scheduled = getTableReservations(table, reservations, date);
+  if (!scheduled.length) return 'Available';
+
+  if (time) {
+    const timeMatch = scheduled.filter((r) => r.time === time);
+    if (timeMatch.some((reservation) => ['Arrived', 'Seated'].includes(reservation.status))) {
+      return 'Occupied';
+    }
+    return timeMatch.length > 0 ? 'Reserved' : 'Available';
+  }
+
   return scheduled.some((reservation) => ['Arrived', 'Seated'].includes(reservation.status))
     ? 'Occupied'
-    : scheduled.length ? 'Reserved' : 'Available';
+    : 'Reserved';
 }
 
 export function getTableEditConflicts(table, changes, reservations, durationMinutes, now = new Date()) {
@@ -51,8 +65,10 @@ export function getTableEditConflicts(table, changes, reservations, durationMinu
   ));
   const newCapacity = Number(changes.capacity ?? table.capacity);
   const changedArea = changes.area != null && changes.area !== table.area;
-  const unavailable = ['Unavailable', 'Maintenance'].includes(changes.status)
-    || changes.availability === 'unavailable';
+  const unavailable = ['Unavailable', 'Maintenance', 'Inactive', 'Archived'].includes(changes.status)
+    || changes.availability === 'unavailable'
+    || changes.isActive === false
+    || changes.isArchived === true;
 
   return active.filter((reservation) => (
     Number(reservation.partySize ?? reservation.guests ?? 0) > newCapacity
