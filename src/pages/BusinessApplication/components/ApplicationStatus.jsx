@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
@@ -7,11 +7,12 @@ import {
   APPLICATION_STATUS_CONFIG,
   MOCK_ADMIN_FEEDBACK_SAMPLES,
 } from '../constants/applicationDefaults';
+import adminService from '../../../services/adminService';
 import './ApplicationStatus.css';
 
 const TIMELINE_STEPS = [
   { key: 'submitted', label: 'Application Submitted', desc: 'Received by onboarding queue' },
-  { key: 'under_review', label: 'Document & Permit Review', desc: 'Checking DTI/SEC, BIR 2303, and Mayor’s Permit' },
+  { key: 'under_review', label: 'Document & Permit Review', desc: 'Checking DTI/SEC, Mayor’s Permit, and ID' },
   { key: 'kitchen_check', label: 'Premises & Banking Verification', desc: 'Validating dispatch coordinates & account' },
   { key: 'final_decision', label: 'Decision & Activation', desc: 'Merchant agreement & storefront publishing' },
 ];
@@ -22,10 +23,13 @@ export default function ApplicationStatus({
   onStatusChange,
 }) {
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
   const [currentStatus, setCurrentStatus] = useState(initialStatus);
   const [checklist, setChecklist] = useState(
     MOCK_ADMIN_FEEDBACK_SAMPLES.Approved.activationChecklist
   );
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
     setCurrentStatus(initialStatus);
@@ -42,6 +46,52 @@ export default function ApplicationStatus({
     );
   };
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError('');
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('File size exceeds 10 MB limit.');
+      return;
+    }
+    const validMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+    if (!validMimes.includes(file.type)) {
+      setUploadError('Please upload a PDF, JPG, or PNG document.');
+      return;
+    }
+
+    setUploadedFile(file);
+  };
+
+  // Find active admin request if any
+  const pendingRequests = applicationData?.requestedDocuments || [];
+  const activeRequest = pendingRequests[pendingRequests.length - 1] || MOCK_ADMIN_FEEDBACK_SAMPLES['Additional Documents Required'];
+
+  const handleSubmitRequestedDoc = () => {
+    if (!uploadedFile) return;
+
+    const fileMeta = {
+      id: `req-doc-${Date.now()}`,
+      name: uploadedFile.name,
+      size: uploadedFile.size,
+      type: uploadedFile.type,
+      uploadedAt: new Date().toISOString(),
+    };
+
+    const restId = applicationData?.referenceNumber || applicationData?.id;
+    if (restId) {
+      try {
+        adminService.submitRequestedDocument(restId, activeRequest?.id, fileMeta);
+      } catch (e) {
+        console.warn('Could not sync requested doc to adminService', e);
+      }
+    }
+
+    setUploadedFile(null);
+    handleStatusSelect('Under Review');
+  };
+
   const statusMeta = APPLICATION_STATUS_CONFIG[currentStatus] || APPLICATION_STATUS_CONFIG['Pending Review'];
   const refNum = applicationData?.referenceNumber || 'SALO-APP-20261109-8421';
   const restName = applicationData?.businessInfo?.restaurantName || applicationData?.name || 'Barrio Fiesta Bistro';
@@ -55,13 +105,13 @@ export default function ApplicationStatus({
     if (currentStatus === 'Rejected') {
       return stepIndex <= 1 ? 'completed' : 'rejected';
     }
-    if (currentStatus === 'Needs Correction') {
+    if (currentStatus === 'Needs Correction' || currentStatus === 'Additional Documents Required') {
       return stepIndex === 1 ? 'flagged' : stepIndex < 1 ? 'completed' : 'pending';
     }
     if (currentStatus === 'Resubmitted' || currentStatus === 'Under Review') {
       return stepIndex <= 1 ? 'completed' : stepIndex === 2 ? 'active' : 'pending';
     }
-    if (currentStatus === 'Pending Review') {
+    if (currentStatus === 'Pending Review' || currentStatus === 'Submitted') {
       return stepIndex === 0 ? 'completed' : stepIndex === 1 ? 'active' : 'pending';
     }
     if (currentStatus === 'Pending Submission' || currentStatus === 'Draft') {
@@ -76,7 +126,7 @@ export default function ApplicationStatus({
       <div className="status-simulation-panel">
         <div className="simulation-header">
           <span className="simulation-tag">Prototype Status Simulator</span>
-          <span className="simulation-subtext">Click any of the 8 mock application states below to test:</span>
+          <span className="simulation-subtext">Click any of the mock application states below to test:</span>
         </div>
         <div className="simulation-pills-row">
           {Object.keys(APPLICATION_STATUS_CONFIG).map((statusKey) => (
@@ -117,7 +167,131 @@ export default function ApplicationStatus({
 
       {/* Conditional Status State Detail Modules */}
 
-      {/* 1. Needs Correction State */}
+      {/* 1. Additional Documents Required State */}
+      {currentStatus === 'Additional Documents Required' && (
+        <div className="status-correction-card" role="alert" style={{ borderColor: 'var(--salo-warning, #f59e0b)' }}>
+          <div className="correction-icon-wrap" aria-hidden="true" style={{ background: '#fef3c7', color: '#b45309' }}>
+            📋
+          </div>
+          <div className="correction-body">
+            <h3 className="correction-title">Action Required: Additional Supporting Documents Requested</h3>
+            <div className="correction-meta-row">
+              <span>Reviewed by: <strong>{activeRequest?.reviewedBy || 'SALO Compliance Reviewer'}</strong></span>
+              <span>•</span>
+              <span>Document: <strong>{activeRequest?.requestedDocument || activeRequest?.documentName || 'Sanitary Permit / Health Certificate'}</strong></span>
+              {activeRequest?.dueDate && (
+                <>
+                  <span>•</span>
+                  <span>Due Date: <strong>{activeRequest.dueDate}</strong></span>
+                </>
+              )}
+            </div>
+
+            <div className="correction-feedback-box" style={{ background: 'var(--surface-secondary, #f8f9fa)', borderLeft: '4px solid var(--salo-warning, #f59e0b)' }}>
+              <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 600 }}>
+                Reason for Request:
+              </p>
+              <p className="correction-feedback-text" style={{ fontStyle: 'normal', margin: '0 0 8px' }}>
+                {activeRequest?.reason || 'Additional business documentation required to complete partner onboarding.'}
+              </p>
+              {activeRequest?.instructions && (
+                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-secondary, #e5e7eb)' }}>
+                  <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    Instructions from Reviewer:
+                  </p>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    {activeRequest.instructions}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Document Upload Interface */}
+            <div style={{ margin: '16px 0', padding: '16px', background: 'var(--surface-primary, #ffffff)', border: '1px solid var(--border-primary, #e5e7eb)', borderRadius: '10px' }}>
+              <h4 style={{ margin: '0 0 8px', fontSize: '14px', fontWeight: 700 }}>
+                Upload Requested Document
+              </h4>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
+                Please provide clear digital scans or photos of the requested document.
+              </p>
+
+              {uploadedFile ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--surface-secondary, #f8f9fa)', borderRadius: '8px', border: '1px solid var(--border-secondary, #e5e7eb)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '20px' }} aria-hidden="true">📄</span>
+                    <div>
+                      <strong style={{ fontSize: '13px', display: 'block' }}>{uploadedFile.name}</strong>
+                      <small style={{ color: 'var(--text-muted)' }}>{(uploadedFile.size / 1024).toFixed(1)} KB • Ready to submit</small>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="danger-outline"
+                    size="sm"
+                    onClick={() => setUploadedFile(null)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    border: '2px dashed var(--border-primary, #e5e7eb)',
+                    borderRadius: '8px',
+                    padding: '24px 16px',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    background: 'var(--surface-secondary, #f8f9fa)',
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                    style={{ display: 'none' }}
+                    onChange={handleFileSelect}
+                  />
+                  <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 600, color: 'var(--salo-orange, #f36b2b)' }}>
+                    Click to select file or drag & drop
+                  </p>
+                  <small style={{ color: 'var(--text-muted)' }}>PDF, JPG, or PNG (Max 10 MB)</small>
+                </div>
+              )}
+
+              {uploadError && (
+                <p style={{ color: 'var(--salo-error)', fontSize: '12px', margin: '8px 0 0' }} role="alert">
+                  {uploadError}
+                </p>
+              )}
+            </div>
+
+            <div className="correction-actions">
+              <Button
+                variant="primary"
+                size="md"
+                disabled={!uploadedFile}
+                onClick={handleSubmitRequestedDoc}
+              >
+                Submit Requested Documents
+              </Button>
+              <Button
+                as={Link}
+                to="/customer"
+                variant="outline"
+                size="md"
+              >
+                Back to Dashboard
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Needs Correction State */}
       {currentStatus === 'Needs Correction' && (
         <div className="status-correction-card" role="alert">
           <div className="correction-icon-wrap" aria-hidden="true">⚠️</div>
@@ -154,7 +328,7 @@ export default function ApplicationStatus({
         </div>
       )}
 
-      {/* 2. Approved State */}
+      {/* 3. Approved State */}
       {currentStatus === 'Approved' && (
         <div className="status-approved-card">
           <div className="approved-banner">
@@ -202,7 +376,7 @@ export default function ApplicationStatus({
         </div>
       )}
 
-      {/* 3. Rejected State */}
+      {/* 4. Rejected State */}
       {currentStatus === 'Rejected' && (
         <div className="status-rejected-card">
           <div className="rejected-icon" aria-hidden="true">✕</div>
