@@ -1,5 +1,7 @@
-import Button from '../../../components/common/Button';
+import { useMemo } from 'react';
 import Badge from '../../../components/common/Badge';
+import Button from '../../../components/common/Button';
+import { getDocumentClassification } from '../constants/documentRequirements';
 
 export default function ApplicationReviewStep({
   applicationData,
@@ -10,15 +12,22 @@ export default function ApplicationReviewStep({
   allRequiredValid = false,
 }) {
   const {
+    emailVerification = {},
     businessInfo = {},
     representative = {},
     documents = {},
     address = {},
     payout = {},
     configuration = {},
-    emailVerification = {},
     review = {},
   } = applicationData;
+
+  const docCategories = useMemo(() => {
+    return getDocumentClassification(
+      businessInfo.ownershipStructure || 'Sole Proprietorship',
+      representative.position || 'Business Owner'
+    );
+  }, [businessInfo.ownershipStructure, representative.position]);
 
   const handleCheckboxChange = (field, checked) => {
     onDeclarationChange?.({
@@ -27,16 +36,19 @@ export default function ApplicationReviewStep({
     });
   };
 
-  const isAllDeclared = review.infoConfirmed && review.authorizationConfirmed && review.termsAgreed;
-  const canSubmit = allRequiredValid && isAllDeclared && emailVerification.isVerified;
+  const isAllDeclarationsConfirmed =
+    Boolean(review.infoConfirmed) &&
+    Boolean(review.authorizationConfirmed) &&
+    Boolean(review.termsAgreed);
 
-  const uploadedDocCount = Object.keys(documents).filter((k) => documents[k]?.name).length;
+  const isReadyToSubmit = isAllDeclarationsConfirmed && allRequiredValid && !submitting;
+
   const menuItemsCount = (configuration.menuItems || []).length;
 
   return (
     <div className="wizard-step-container">
       <div className="wizard-step-header">
-        <h2 className="wizard-step-heading">Application Review & Final Submission</h2>
+        <h2 className="wizard-step-heading">Review & Submit Application</h2>
         <p className="wizard-step-subheading">
           Review all entered restaurant details, uploaded documents, and merchant configuration before final submission.
           You may edit any section prior to submitting.
@@ -44,18 +56,58 @@ export default function ApplicationReviewStep({
       </div>
 
       <div className="review-sections-stack">
-        {/* Section 1: Business Information */}
+        {/* Section 1: Email Verification Status */}
         <div className="review-section-card">
           <div className="review-card-header">
             <div className="review-card-title-group">
               <span className="review-section-num">1</span>
-              <h3 className="review-section-title">Business & Restaurant Information</h3>
+              <h3 className="review-section-title">Email Verification Status</h3>
             </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => onNavigateToStep(1)}
+            >
+              Edit
+            </Button>
+          </div>
+          <div className="review-data-grid">
+            <div className="review-item">
+              <span className="review-label">Verified Contact Email</span>
+              <span className="review-value font-strong">{emailVerification.verifiedEmail || emailVerification.email || '—'}</span>
+            </div>
+            <div className="review-item">
+              <span className="review-label">Verification Status</span>
+              <span className="review-value">
+                {emailVerification.isVerified ? (
+                  <Badge variant="success" size="sm">✓ Verified Authenticated</Badge>
+                ) : (
+                  <Badge variant="danger" size="sm">Verification Required</Badge>
+                )}
+              </span>
+            </div>
+            {emailVerification.isSameAsAccount && (
+              <div className="review-item full-width">
+                <span className="review-label">Account Mapping</span>
+                <span className="review-value">Linked directly to primary SALO account</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Section 2: Business Information */}
+        <div className="review-section-card">
+          <div className="review-card-header">
+            <div className="review-card-title-group">
+              <span className="review-section-num">2</span>
+              <h3 className="review-section-title">Business & Restaurant Information</h3>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigateToStep(2)}
             >
               Edit
             </Button>
@@ -98,18 +150,18 @@ export default function ApplicationReviewStep({
           </div>
         </div>
 
-        {/* Section 2: Owner & Representative */}
+        {/* Section 3: Owner & Representative */}
         <div className="review-section-card">
           <div className="review-card-header">
             <div className="review-card-title-group">
-              <span className="review-section-num">2</span>
+              <span className="review-section-num">3</span>
               <h3 className="review-section-title">Owner / Authorized Representative</h3>
             </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => onNavigateToStep(2)}
+              onClick={() => onNavigateToStep(3)}
             >
               Edit
             </Button>
@@ -150,54 +202,114 @@ export default function ApplicationReviewStep({
           </div>
         </div>
 
-        {/* Section 3: Business Documents */}
+        {/* Section 4: Business Documents */}
         <div className="review-section-card">
           <div className="review-card-header">
             <div className="review-card-title-group">
-              <span className="review-section-num">3</span>
+              <span className="review-section-num">4</span>
               <h3 className="review-section-title">Business Documents & Permits</h3>
             </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => onNavigateToStep(3)}
+              onClick={() => onNavigateToStep(4)}
             >
               Edit
             </Button>
           </div>
           <div className="review-docs-list">
-            {uploadedDocCount > 0 ? (
-              Object.entries(documents).map(([docId, doc]) => {
-                if (!doc?.name) return null;
-                return (
-                  <div key={docId} className="review-doc-row">
-                    <div className="review-doc-left">
-                      <span className="review-doc-icon" aria-hidden="true">📄</span>
-                      <span className="review-doc-name">{doc.name}</span>
+            <div style={{ fontSize: 'var(--text-xs, 12px)', fontWeight: 700, color: 'var(--text-secondary, #525252)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+              Required Documents
+            </div>
+            {docCategories.mandatory.map((doc) => {
+              const uploaded = documents[doc.id];
+              return (
+                <div key={doc.id} className="review-doc-row">
+                  <div className="review-doc-left">
+                    <span className="review-doc-icon" aria-hidden="true">📄</span>
+                    <div>
+                      <span className="review-doc-name">{doc.title}</span>
+                      {uploaded?.name && <small style={{ display: 'block', color: 'var(--text-secondary, #525252)' }}>{uploaded.name}</small>}
                     </div>
-                    <Badge variant="success" size="sm">Ready</Badge>
                   </div>
-                );
-              })
-            ) : (
-              <p className="review-empty-note">No documents uploaded yet.</p>
+                  {uploaded?.name ? (
+                    <Badge variant="success" size="sm">Ready</Badge>
+                  ) : (
+                    <Badge variant="danger" size="sm">Required</Badge>
+                  )}
+                </div>
+              );
+            })}
+
+            {docCategories.conditional.length > 0 && (
+              <>
+                <div style={{ fontSize: 'var(--text-xs, 12px)', fontWeight: 700, color: 'var(--text-secondary, #525252)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 6px' }}>
+                  Conditional Documents
+                </div>
+                {docCategories.conditional.map((doc) => {
+                  const uploaded = documents[doc.id];
+                  return (
+                    <div key={doc.id} className="review-doc-row">
+                      <div className="review-doc-left">
+                        <span className="review-doc-icon" aria-hidden="true">📄</span>
+                        <div>
+                          <span className="review-doc-name">{doc.title}</span>
+                          {uploaded?.name && <small style={{ display: 'block', color: 'var(--text-secondary, #525252)' }}>{uploaded.name}</small>}
+                        </div>
+                      </div>
+                      {uploaded?.name ? (
+                        <Badge variant="success" size="sm">Ready</Badge>
+                      ) : (
+                        <Badge variant="danger" size="sm">Required</Badge>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {docCategories.supporting.length > 0 && (
+              <>
+                <div style={{ fontSize: 'var(--text-xs, 12px)', fontWeight: 700, color: 'var(--text-secondary, #525252)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 6px' }}>
+                  Supporting Documents (Optional)
+                </div>
+                {docCategories.supporting.map((doc) => {
+                  const uploaded = documents[doc.id];
+                  return (
+                    <div key={doc.id} className="review-doc-row">
+                      <div className="review-doc-left">
+                        <span className="review-doc-icon" aria-hidden="true">📄</span>
+                        <div>
+                          <span className="review-doc-name">{doc.title}</span>
+                          {uploaded?.name && <small style={{ display: 'block', color: 'var(--text-secondary, #525252)' }}>{uploaded.name}</small>}
+                        </div>
+                      </div>
+                      {uploaded?.name ? (
+                        <Badge variant="success" size="sm">Attached</Badge>
+                      ) : (
+                        <Badge variant="neutral" size="sm">Optional</Badge>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
             )}
           </div>
         </div>
 
-        {/* Section 4: Business Address */}
+        {/* Section 5: Address & Location */}
         <div className="review-section-card">
           <div className="review-card-header">
             <div className="review-card-title-group">
-              <span className="review-section-num">4</span>
+              <span className="review-section-num">5</span>
               <h3 className="review-section-title">Business Address & Location Pin</h3>
             </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => onNavigateToStep(4)}
+              onClick={() => onNavigateToStep(5)}
             >
               Edit
             </Button>
@@ -230,18 +342,18 @@ export default function ApplicationReviewStep({
           </div>
         </div>
 
-        {/* Section 5: Payout Information */}
+        {/* Section 6: Payout Information */}
         <div className="review-section-card">
           <div className="review-card-header">
             <div className="review-card-title-group">
-              <span className="review-section-num">5</span>
+              <span className="review-section-num">6</span>
               <h3 className="review-section-title">Bank & Payout Details</h3>
             </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => onNavigateToStep(5)}
+              onClick={() => onNavigateToStep(6)}
             >
               Edit
             </Button>
@@ -270,18 +382,18 @@ export default function ApplicationReviewStep({
           </div>
         </div>
 
-        {/* Section 6: Configuration & Initial Menu */}
+        {/* Section 7: Configuration & Initial Menu */}
         <div className="review-section-card">
           <div className="review-card-header">
             <div className="review-card-title-group">
-              <span className="review-section-num">6</span>
-              <h3 className="review-section-title">Services & Initial Menu Setup</h3>
+              <span className="review-section-num">7</span>
+              <h3 className="review-section-title">Services & Restaurant Setup</h3>
             </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => onNavigateToStep(6)}
+              onClick={() => onNavigateToStep(7)}
             >
               Edit
             </Button>
@@ -292,7 +404,6 @@ export default function ApplicationReviewStep({
               <div className="review-pill-tags">
                 {configuration.services?.delivery && <Badge variant="info" size="sm">🛵 Delivery</Badge>}
                 {configuration.services?.pickup && <Badge variant="info" size="sm">🛍️ Pickup</Badge>}
-                {configuration.services?.dineIn && <Badge variant="info" size="sm">🍽️ Dine-in</Badge>}
                 {configuration.services?.tableReservations && <Badge variant="info" size="sm">📅 Reservations</Badge>}
               </div>
             </div>
@@ -306,40 +417,6 @@ export default function ApplicationReviewStep({
               <span className="review-label">Branding Images</span>
               <span className="review-value">
                 {configuration.logo ? '✓ Logo uploaded' : 'No logo'} • {configuration.coverPhoto ? '✓ Cover banner uploaded' : 'No banner'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Section 7: Verification Status */}
-        <div className="review-section-card">
-          <div className="review-card-header">
-            <div className="review-card-title-group">
-              <span className="review-section-num">7</span>
-              <h3 className="review-section-title">Email Verification Status</h3>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onNavigateToStep(7)}
-            >
-              Check
-            </Button>
-          </div>
-          <div className="review-data-grid">
-            <div className="review-item">
-              <span className="review-label">Verified Contact Email</span>
-              <span className="review-value font-strong">{emailVerification.verifiedEmail || representative.email || '—'}</span>
-            </div>
-            <div className="review-item">
-              <span className="review-label">Status</span>
-              <span className="review-value">
-                {emailVerification.isVerified ? (
-                  <Badge variant="success" size="sm">✓ Verified Authenticated</Badge>
-                ) : (
-                  <Badge variant="danger" size="sm">Verification Required</Badge>
-                )}
               </span>
             </div>
           </div>
@@ -359,10 +436,10 @@ export default function ApplicationReviewStep({
               type="checkbox"
               checked={Boolean(review.infoConfirmed)}
               onChange={(e) => handleCheckboxChange('infoConfirmed', e.target.checked)}
-              className="wizard-checkbox-input"
             />
-            <span className="submission-check-text">
-              I confirm that all information and documents provided in this application are genuine, true, and legally current.
+            <span>
+              <strong>Accuracy of Information:</strong> I declare under penalty of perjury that all submitted restaurant
+              information, uploaded business permits, and banking details are genuine, accurate, and up-to-date.
             </span>
           </label>
 
@@ -371,10 +448,10 @@ export default function ApplicationReviewStep({
               type="checkbox"
               checked={Boolean(review.authorizationConfirmed)}
               onChange={(e) => handleCheckboxChange('authorizationConfirmed', e.target.checked)}
-              className="wizard-checkbox-input"
             />
-            <span className="submission-check-text">
-              I confirm that I am authorized to bind the registered food establishment to SALO partner agreements and terms.
+            <span>
+              <strong>Authority to Bind Establishment:</strong> I certify that I have the official mandate to bind this
+              operating restaurant to the SALO Merchant Terms and receive operational disbursement payouts.
             </span>
           </label>
 
@@ -383,43 +460,31 @@ export default function ApplicationReviewStep({
               type="checkbox"
               checked={Boolean(review.termsAgreed)}
               onChange={(e) => handleCheckboxChange('termsAgreed', e.target.checked)}
-              className="wizard-checkbox-input"
             />
-            <span className="submission-check-text">
-              I agree to the applicable SALO Merchant Partner Application Terms, 10% Platform Fee schedule, and Privacy Notice.
+            <span>
+              <strong>Terms of Service & Food Safety Agreement:</strong> I agree to comply with SALO’s Merchant Terms of
+              Service, Philippine Food Safety Act (RA 10611), and Data Privacy Act (RA 10173).
             </span>
           </label>
         </div>
-
-        {!canSubmit && (
-          <div className="submission-validation-warning">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            <span>
-              {!emailVerification.isVerified
-                ? 'Please complete Step 7 (Email Verification) before submitting.'
-                : !isAllDeclared
-                ? 'Please check all three declaration boxes above to enable submission.'
-                : 'Please complete all required fields and documents.'}
-            </span>
-          </div>
-        )}
 
         <div className="submission-action-bar">
           <Button
             type="button"
             variant="primary"
             size="lg"
-            fullWidth
             onClick={onSubmitApplication}
-            disabled={!canSubmit || submitting}
             loading={submitting}
+            disabled={!isReadyToSubmit}
           >
-            Submit Application
+            {submitting ? 'Submitting Application...' : 'Submit Application →'}
           </Button>
+
+          {!isAllDeclarationsConfirmed && (
+            <span className="submission-hint-warning">
+              Please check all declarations above to enable submission.
+            </span>
+          )}
         </div>
       </div>
     </div>
