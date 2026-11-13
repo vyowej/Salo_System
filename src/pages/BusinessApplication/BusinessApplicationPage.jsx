@@ -1,19 +1,19 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import Modal from '../../components/common/Modal';
 import Button from '../../components/common/Button';
 import ApplicationHeader from './components/ApplicationHeader';
 import ApplicationProgress from './components/ApplicationProgress';
+import EmailVerificationStep from './components/EmailVerificationStep';
 import BusinessInformationStep from './components/BusinessInformationStep';
 import RepresentativeInformationStep from './components/RepresentativeInformationStep';
 import BusinessDocumentsStep from './components/BusinessDocumentsStep';
 import BusinessAddressStep from './components/BusinessAddressStep';
 import PayoutInformationStep from './components/PayoutInformationStep';
 import RestaurantConfigurationStep from './components/RestaurantConfigurationStep';
-import EmailVerificationStep from './components/EmailVerificationStep';
 import ApplicationReviewStep from './components/ApplicationReviewStep';
 import ApplicationSuccess from './components/ApplicationSuccess';
+import ExitConfirmModal from './components/ExitConfirmModal';
 import {
   INITIAL_APPLICATION_STATE,
   WIZARD_STEPS,
@@ -58,9 +58,37 @@ export default function BusinessApplicationPage() {
   const [validationErrors, setValidationErrors] = useState({});
   const [isDraftSaved, setIsDraftSaved] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState(null);
   const [exitModalOpen, setExitModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submittedData, setSubmittedData] = useState(null);
+
+  // Sync email & company name to businessInfo if verified
+  useEffect(() => {
+    if (formData.emailVerification?.isVerified && formData.emailVerification?.verifiedEmail) {
+      const verified = formData.emailVerification.verifiedEmail;
+      const compName = formData.emailVerification.companyName?.trim() || '';
+      setFormData((prev) => ({
+        ...prev,
+        businessInfo: {
+          ...prev.businessInfo,
+          businessEmail: (!prev.businessInfo.businessEmail || prev.emailVerification?.isSameAsAccount)
+            ? verified
+            : prev.businessInfo.businessEmail,
+          restaurantName: (!prev.businessInfo.restaurantName && compName)
+            ? compName
+            : prev.businessInfo.restaurantName,
+        },
+      }));
+    }
+  }, [
+    formData.emailVerification?.isVerified,
+    formData.emailVerification?.verifiedEmail,
+    formData.emailVerification?.isSameAsAccount,
+    formData.emailVerification?.companyName,
+    formData.businessInfo.businessEmail,
+    formData.businessInfo.restaurantName,
+  ]);
 
   // Sync draft state to sessionStorage (without File objects)
   const saveDraftLocally = useCallback(() => {
@@ -82,6 +110,7 @@ export default function BusinessApplicationPage() {
       };
       sessionStorage.setItem(SESSION_DRAFT_KEY, JSON.stringify(serializableData));
       setIsDraftSaved(true);
+      setLastSavedTime(new Date().toISOString());
       setTimeout(() => setIsDraftSaved(false), 3000);
     } catch (e) {
       console.warn('Unable to save draft to sessionStorage', e);
@@ -95,6 +124,12 @@ export default function BusinessApplicationPage() {
     const errors = {};
 
     if (stepNumber === 1) {
+      if (!formData.emailVerification?.isVerified) {
+        errors.verification = 'Please verify your email address with the 6-digit code to continue.';
+      }
+    }
+
+    if (stepNumber === 2) {
       if (!formData.businessInfo.restaurantName?.trim()) {
         errors.restaurantName = 'Please enter your restaurant or business name.';
       }
@@ -108,7 +143,7 @@ export default function BusinessApplicationPage() {
       }
     }
 
-    if (stepNumber === 2) {
+    if (stepNumber === 3) {
       if (!formData.representative.firstName?.trim()) {
         errors.firstName = 'First name is required.';
       }
@@ -135,20 +170,20 @@ export default function BusinessApplicationPage() {
       }
     }
 
-    if (stepNumber === 3) {
+    if (stepNumber === 4) {
       const requiredDocs = getRequiredDocuments(
         formData.businessInfo.ownershipStructure,
         formData.representative.position
       ).filter((d) => d.required);
 
       for (const reqDoc of requiredDocs) {
-        if (!formData.documents[reqDoc.id]?.name) {
+        if (!formData.documents[reqDoc.id]?.name && !formData.documents[reqDoc.id]?.dataUrl) {
           errors[reqDoc.id] = `${reqDoc.title} is required.`;
         }
       }
     }
 
-    if (stepNumber === 4) {
+    if (stepNumber === 5) {
       if (!formData.address.street?.trim()) {
         errors.street = 'Street or building address is required.';
       }
@@ -160,7 +195,7 @@ export default function BusinessApplicationPage() {
       }
     }
 
-    if (stepNumber === 5) {
+    if (stepNumber === 6) {
       if (!formData.payout.accountHolder?.trim()) {
         errors.accountHolder = 'Account holder name is required.';
       }
@@ -171,16 +206,10 @@ export default function BusinessApplicationPage() {
       }
     }
 
-    if (stepNumber === 6) {
+    if (stepNumber === 7) {
       const hasAnyService = Object.values(formData.configuration.services || {}).some(Boolean);
       if (!hasAnyService) {
-        errors.services = 'Please select at least one restaurant service (Delivery, Pickup, Dine-in, or Reservations).';
-      }
-    }
-
-    if (stepNumber === 7) {
-      if (!formData.emailVerification.isVerified) {
-        errors.verification = 'Please verify your email address to proceed.';
+        errors.services = 'Please select at least one restaurant service (Delivery, Pickup, or Table Reservations).';
       }
     }
 
@@ -236,31 +265,6 @@ export default function BusinessApplicationPage() {
     });
   };
 
-  // Email Verification Handlers
-  const handleVerifySuccess = (verificationMeta) => {
-    setFormData((prev) => ({
-      ...prev,
-      emailVerification: verificationMeta,
-    }));
-    setCompletedSteps((prev) => [...prev, 7]);
-    setValidationErrors((prev) => ({ ...prev, verification: null }));
-  };
-
-  const handleEmailChange = (newEmail) => {
-    setFormData((prev) => ({
-      ...prev,
-      representative: {
-        ...prev.representative,
-        email: newEmail,
-      },
-      emailVerification: {
-        isVerified: false,
-        verifiedEmail: '',
-        verifiedAt: null,
-      },
-    }));
-  };
-
   // Final Application Submission (Mock)
   const handleSubmitApplication = () => {
     setSubmitting(true);
@@ -273,23 +277,48 @@ export default function BusinessApplicationPage() {
       const submissionIso = today.toISOString();
 
       const newApplication = {
+        id: generatedRef,
         referenceNumber: generatedRef,
+        name: formData.businessInfo.restaurantName,
         restaurantName: formData.businessInfo.restaurantName,
+        businessType: formData.businessInfo.businessType,
+        ownershipStructure: formData.businessInfo.ownershipStructure,
         cuisine: formData.businessInfo.cuisineType,
         ownerName: `${formData.representative.firstName} ${formData.representative.lastName}`,
-        ownerEmail: formData.representative.email,
+        ownerEmail: formData.representative.email || formData.emailVerification.verifiedEmail,
         phone: formData.businessInfo.businessPhone,
         address: `${formData.address.street}, Brgy. ${formData.address.barangay}, ${formData.address.city}`,
-        status: 'Pending Review',
+        zone: formData.address.city,
+        status: 'Submitted',
+        applicationStatus: 'Submitted',
+        verificationStatus: 'Pending',
+        operatingStatus: 'Pending Activation',
         submittedAt: submissionIso,
         joinedDate: submissionIso.split('T')[0],
-        dtiNumber: formData.documents?.dti_certificate?.name ? 'Verified File' : 'Submitted Online',
+        documents: Object.keys(formData.documents).map((docId) => ({
+          id: docId,
+          name: formData.documents[docId]?.name || docId,
+          type: formData.documents[docId]?.type,
+          size: formData.documents[docId]?.size,
+          uploadedAt: formData.documents[docId]?.uploadedAt || submissionIso,
+          verificationStatus: 'Pending Review',
+        })),
+        requestedDocuments: [],
+        applicationHistory: [
+          {
+            id: `hist-${Date.now()}`,
+            title: 'Application Submitted',
+            description: `Application received for ${formData.businessInfo.restaurantName} (${formData.businessInfo.ownershipStructure}). Initial mandatory documents queued for compliance review.`,
+            time: submissionIso,
+          },
+        ],
       };
 
       // Push to adminService so Admin sees it in AdminRestaurantsPage!
       try {
         const currentRests = adminService.getRestaurants();
-        adminService.saveRestaurants([newApplication, ...currentRests]);
+        adminService.saveRestaurants?.([newApplication, ...currentRests]) ||
+          adminService.updateRestaurantStatus(newApplication.id, 'Submitted', newApplication);
       } catch (e) {
         console.warn('Could not sync to adminService', e);
       }
@@ -301,9 +330,14 @@ export default function BusinessApplicationPage() {
         existing.restaurant = {
           id: generatedRef,
           name: newApplication.restaurantName,
-          status: 'Pending Review',
+          status: 'Submitted',
+          applicationStatus: 'Submitted',
           submittedAt: newApplication.joinedDate,
           referenceNumber: generatedRef,
+          businessInfo: formData.businessInfo,
+          representative: formData.representative,
+          documents: formData.documents,
+          requestedDocuments: [],
         };
         localStorage.setItem(STORAGE_PARTNER_APPS_KEY, JSON.stringify(existing));
       } catch (e) {
@@ -330,6 +364,7 @@ export default function BusinessApplicationPage() {
   // Check if all prior steps are valid for review submit
   const areAllRequiredStepsValid = () => {
     return (
+      Boolean(formData.emailVerification?.isVerified) &&
       Boolean(formData.businessInfo.restaurantName) &&
       Boolean(formData.representative.firstName) &&
       Boolean(formData.address.street) &&
@@ -347,6 +382,7 @@ export default function BusinessApplicationPage() {
         onExit={() => setExitModalOpen(true)}
         isDraftSaved={isDraftSaved}
         savingDraft={savingDraft}
+        lastSavedTime={lastSavedTime}
       />
 
       {/* If already submitted in current flow, display Success Receipt */}
@@ -374,34 +410,58 @@ export default function BusinessApplicationPage() {
           <main className="wizard-main-content">
             <div className="wizard-step-body">
               {currentStep === 1 && (
-                <BusinessInformationStep
-                  data={formData.businessInfo}
-                  onChange={(next) => setFormData((prev) => ({ ...prev, businessInfo: next }))}
+                <EmailVerificationStep
+                  data={formData.emailVerification}
+                  onChange={(next) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      emailVerification: next,
+                      businessInfo: {
+                        ...prev.businessInfo,
+                        businessEmail: next.verifiedEmail || next.email || prev.businessInfo.businessEmail,
+                      },
+                    }));
+                    if (next.isVerified) {
+                      setValidationErrors((prev) => ({ ...prev, verification: null, email: null }));
+                    }
+                  }}
+                  currentUser={user}
                   errors={validationErrors}
                 />
               )}
 
               {currentStep === 2 && (
+                <BusinessInformationStep
+                  data={formData.businessInfo}
+                  onChange={(next) => setFormData((prev) => ({ ...prev, businessInfo: next }))}
+                  verifiedEmail={formData.emailVerification?.verifiedEmail || formData.emailVerification?.email || ''}
+                  errors={validationErrors}
+                />
+              )}
+
+              {currentStep === 3 && (
                 <RepresentativeInformationStep
                   data={formData.representative}
                   onChange={(next) => setFormData((prev) => ({ ...prev, representative: next }))}
+                  verifiedEmail={formData.emailVerification?.verifiedEmail || formData.emailVerification?.email || ''}
                   errors={validationErrors}
                   currentUser={user}
                 />
               )}
 
-              {currentStep === 3 && (
+              {currentStep === 4 && (
                 <BusinessDocumentsStep
                   ownershipStructure={formData.businessInfo.ownershipStructure}
                   position={formData.representative.position}
                   documents={formData.documents}
                   onDocumentUpload={handleDocumentUpload}
                   onDocumentRemove={handleDocumentRemove}
+                  onSkipSupporting={handleNextStep}
                   errors={validationErrors}
                 />
               )}
 
-              {currentStep === 4 && (
+              {currentStep === 5 && (
                 <BusinessAddressStep
                   data={formData.address}
                   onChange={(next) => setFormData((prev) => ({ ...prev, address: next }))}
@@ -409,7 +469,7 @@ export default function BusinessApplicationPage() {
                 />
               )}
 
-              {currentStep === 5 && (
+              {currentStep === 6 && (
                 <PayoutInformationStep
                   data={formData.payout}
                   onChange={(next) => setFormData((prev) => ({ ...prev, payout: next }))}
@@ -417,20 +477,11 @@ export default function BusinessApplicationPage() {
                 />
               )}
 
-              {currentStep === 6 && (
+              {currentStep === 7 && (
                 <RestaurantConfigurationStep
                   data={formData.configuration}
                   onChange={(next) => setFormData((prev) => ({ ...prev, configuration: next }))}
                   errors={validationErrors}
-                />
-              )}
-
-              {currentStep === 7 && (
-                <EmailVerificationStep
-                  targetEmail={formData.representative.email || formData.businessInfo.businessEmail}
-                  verificationState={formData.emailVerification}
-                  onVerifySuccess={handleVerifySuccess}
-                  onEmailChange={handleEmailChange}
                 />
               )}
 
@@ -473,43 +524,18 @@ export default function BusinessApplicationPage() {
         </>
       )}
 
-      {/* Exit Confirmation Modal */}
-      <Modal
+      {/* Styled Exit Confirmation Modal matching Rider Application */}
+      <ExitConfirmModal
+        isOpen={exitModalOpen}
         open={exitModalOpen}
         onClose={() => setExitModalOpen(false)}
-        title="Leave Partner Application?"
-        size="sm"
-      >
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', margin: '0 0 var(--space-4)' }}>
-          You have an application in progress. You can save your draft to continue later, or discard your current session.
-        </p>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              saveDraftLocally();
-              handleExitConfirm();
-            }}
-          >
-            Save Draft & Exit
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={handleExitConfirm}
-          >
-            Discard
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => setExitModalOpen(false)}
-          >
-            Stay on Page
-          </Button>
-        </div>
-      </Modal>
+        onSaveAndExit={() => {
+          saveDraftLocally();
+          handleExitConfirm();
+        }}
+        onExitWithoutSaving={handleExitConfirm}
+        isSaving={savingDraft}
+      />
     </div>
   );
 }
