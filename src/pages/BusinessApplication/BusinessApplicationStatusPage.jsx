@@ -15,10 +15,12 @@ export default function BusinessApplicationStatusPage() {
         const parsed = JSON.parse(stored);
         if (parsed.restaurant) {
           return {
+            id: parsed.restaurant.id || parsed.restaurant.referenceNumber,
             referenceNumber: parsed.restaurant.referenceNumber || parsed.restaurant.id || 'SALO-APP-20261109-8421',
             name: parsed.restaurant.name || 'Barrio Fiesta Bistro',
             status: parsed.restaurant.status || 'Pending Review',
             submittedAt: parsed.restaurant.submittedAt || new Date().toISOString(),
+            requestedDocuments: parsed.restaurant.requestedDocuments || [],
           };
         }
       }
@@ -26,10 +28,12 @@ export default function BusinessApplicationStatusPage() {
       // fallback
     }
     return {
+      id: 'SALO-APP-20261109-8421',
       referenceNumber: 'SALO-APP-20261109-8421',
       name: 'Barrio Fiesta Bistro',
       status: 'Pending Review',
       submittedAt: new Date().toISOString(),
+      requestedDocuments: [],
     };
   });
 
