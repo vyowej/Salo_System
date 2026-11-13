@@ -1,13 +1,18 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Input, Select, ErrorMessage } from '../../../components/forms';
 import { REPRESENTATIVE_POSITIONS } from '../constants/applicationDefaults';
 
 export default function RepresentativeInformationStep({
   data,
   onChange,
+  verifiedEmail = '',
   errors = {},
   currentUser = null,
 }) {
+  const [sameAsVerified, setSameAsVerified] = useState(
+    Boolean(verifiedEmail && data.email === verifiedEmail)
+  );
+
   const handleChange = (field, value) => {
     onChange?.({
       ...data,
@@ -17,7 +22,7 @@ export default function RepresentativeInformationStep({
 
   // Pre-fill from authenticated customer profile if representative info is empty
   useEffect(() => {
-    if (currentUser && !data.firstName && !data.email) {
+    if (currentUser && !data.firstName) {
       const nameParts = (currentUser.name || '').trim().split(' ');
       const firstName = nameParts[0] || '';
       const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
@@ -25,10 +30,22 @@ export default function RepresentativeInformationStep({
         ...data,
         firstName: data.firstName || firstName,
         lastName: data.lastName || lastName,
-        email: data.email || currentUser.email || '',
+        email: data.email || verifiedEmail || currentUser.email || '',
+      });
+    } else if (verifiedEmail && !data.email) {
+      onChange?.({
+        ...data,
+        email: verifiedEmail,
       });
     }
-  }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentUser, verifiedEmail]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleToggleSameEmail = (checked) => {
+    setSameAsVerified(checked);
+    if (checked && verifiedEmail) {
+      handleChange('email', verifiedEmail);
+    }
+  };
 
   return (
     <div className="wizard-step-container">
@@ -110,17 +127,36 @@ export default function RepresentativeInformationStep({
         </div>
 
         <div className="grid-cols-2">
-          <Input
-            id="rep-email"
-            type="email"
-            label="Personal / Direct Email Address"
-            placeholder="e.g. mariaclara@example.com"
-            value={data.email || ''}
-            onChange={(e) => handleChange('email', e.target.value)}
-            error={errors.email}
-            required
-            helper="We will send a 6-digit verification code to this address."
-          />
+          <div>
+            <Input
+              id="rep-email"
+              type="email"
+              label="Personal / Representative Email"
+              placeholder="e.g. mariaclara@example.com"
+              value={data.email || ''}
+              onChange={(e) => {
+                setSameAsVerified(false);
+                handleChange('email', e.target.value);
+              }}
+              error={errors.email}
+              required
+              helper={
+                sameAsVerified
+                  ? 'Same as verified business email.'
+                  : 'Official merchant correspondence will be sent to this representative.'
+              }
+            />
+            {verifiedEmail && (
+              <label className="checkbox-inline-option">
+                <input
+                  type="checkbox"
+                  checked={sameAsVerified}
+                  onChange={(e) => handleToggleSameEmail(e.target.checked)}
+                />
+                <span>Same as verified business email ({verifiedEmail})</span>
+              </label>
+            )}
+          </div>
 
           <Input
             id="rep-phone"

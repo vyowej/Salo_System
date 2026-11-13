@@ -27,15 +27,25 @@ export default function RiderApplicationHeader({
   return (
     <header className="rider-wizard-header" role="banner">
       <div className="rider-wizard-header-container">
+        {/* Left: Brand + Application Identifier */}
         <div className="rider-wizard-header-brand">
           <BrandMark size="sm" />
+          <span className="rider-wizard-brand-divider" aria-hidden="true" />
+          <div className="rider-wizard-context">
+            <span className="rider-wizard-app-badge">Courier Onboarding</span>
+            <span className="rider-wizard-app-title">Rider Application</span>
+          </div>
         </div>
 
+        {/* Right: Step Counter + Actions */}
         <div className="rider-wizard-header-actions">
-          <div className="rider-wizard-step-counter" aria-live="polite">
-            <span className="counter-label">Step</span>
-            <span className="counter-numbers">
-              <strong>{currentStep}</strong> / {totalSteps}
+          {/* Polished Step Pill */}
+          <div className="rider-wizard-step-pill" aria-live="polite">
+            <span className="step-pill-label">Step</span>
+            <span className="step-pill-numbers">
+              <strong>{currentStep}</strong>
+              <span className="step-pill-separator">/</span>
+              <span>{totalSteps}</span>
             </span>
           </div>
 
@@ -54,9 +64,9 @@ export default function RiderApplicationHeader({
               loading={savingDraft}
               disabled={savingDraft}
               title="Save current application progress to draft"
-              className={saveError ? 'btn-save-error' : ''}
+              className={`rider-wizard-save-btn ${isDraftSaved ? 'btn-draft-saved' : ''} ${saveError ? 'btn-save-error' : ''}`}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
                 <polyline points="17 21 17 13 7 13 7 21" />
                 <polyline points="7 3 7 8 15 8" />
@@ -78,7 +88,7 @@ export default function RiderApplicationHeader({
               className="rider-wizard-exit-btn"
               title="Exit application"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>

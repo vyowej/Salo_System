@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import Badge from '../../../components/common/Badge';
+import Button from '../../../components/common/Button';
 import DocumentUploadCard from './DocumentUploadCard';
-import { getRequiredDocuments } from '../constants/documentRequirements';
+import { getDocumentClassification } from '../constants/documentRequirements';
 
 export default function BusinessDocumentsStep({
   ownershipStructure,
@@ -9,35 +10,29 @@ export default function BusinessDocumentsStep({
   documents = {},
   onDocumentUpload,
   onDocumentRemove,
+  onSkipSupporting,
   errors = {},
 }) {
-  const documentList = useMemo(() => {
-    return getRequiredDocuments(ownershipStructure, position);
+  const { mandatory, conditional, supporting } = useMemo(() => {
+    return getDocumentClassification(ownershipStructure, position);
   }, [ownershipStructure, position]);
 
-  // Group by category
-  const categories = useMemo(() => {
-    const map = {};
-    documentList.forEach((doc) => {
-      const cat = doc.category || 'General Documents';
-      if (!map[cat]) map[cat] = [];
-      map[cat].push(doc);
-    });
-    return Object.entries(map);
-  }, [documentList]);
+  const requiredCount = mandatory.length + conditional.length;
+  const uploadedMandatoryCount = mandatory.filter((d) => documents[d.id]?.name).length;
+  const uploadedConditionalCount = conditional.filter((d) => documents[d.id]?.name).length;
+  const uploadedRequiredCount = uploadedMandatoryCount + uploadedConditionalCount;
 
-  const requiredCount = documentList.filter((d) => d.required).length;
-  const uploadedRequiredCount = documentList.filter((d) => d.required && documents[d.id]?.name).length;
+  const uploadedSupportingCount = supporting.filter((d) => documents[d.id]?.name).length;
 
   return (
     <div className="wizard-step-container">
       <div className="wizard-step-header">
         <div className="wizard-step-header-with-badge">
           <div>
-            <h2 className="wizard-step-heading">Business Registration & Permits</h2>
+            <h2 className="wizard-step-heading">Business Documents & Permits</h2>
             <p className="wizard-step-subheading">
-              Upload digital copies or clear photos of your establishment’s official registration, tax, and local permits.
-              Requirements below are tailored to your entity type: <strong>{ownershipStructure}</strong>.
+              Upload digital copies or clear photos of your establishment’s official registration and permits.
+              Requirements below are tailored to your entity type (<strong>{ownershipStructure}</strong>) and representative role (<strong>{position}</strong>).
             </p>
           </div>
           <div className="wizard-docs-summary-badge">
@@ -56,22 +51,60 @@ export default function BusinessDocumentsStep({
           <line x1="12" y1="8" x2="12.01" y2="8" />
         </svg>
         <div className="callout-content">
-          <strong>Document Security & Privacy Notice:</strong> Files uploaded here are held in temporary memory for application preview only. No files are uploaded to external cloud servers or stored in persistent browser cookies.
+          <strong>Document Security:</strong> Uploaded documents and camera photos are encrypted and used exclusively for partner verification and compliance.
         </div>
       </div>
 
       <div className="wizard-doc-categories-stack">
-        {categories.map(([categoryName, docs]) => (
-          <section key={categoryName} className="wizard-doc-category-group">
+        {/* Section 1: Required Documents (Mandatory Documents) */}
+        <section className="wizard-doc-category-group" aria-labelledby="section-mandatory-title">
+          <div className="wizard-doc-category-title-bar">
+            <div>
+              <h3 id="section-mandatory-title" className="wizard-doc-category-title">
+                Required Documents
+              </h3>
+              <p className="wizard-doc-section-desc">
+                Primary business verification documents required for all initial restaurant partner applications.
+              </p>
+            </div>
+            <span className="wizard-doc-category-count">
+              {uploadedMandatoryCount} of {mandatory.length} uploaded
+            </span>
+          </div>
+
+          <div className="wizard-doc-cards-grid">
+            {mandatory.map((doc) => (
+              <DocumentUploadCard
+                key={doc.id}
+                docConfig={doc}
+                currentDoc={documents[doc.id] || null}
+                onUpload={onDocumentUpload}
+                onRemove={onDocumentRemove}
+                error={errors[doc.id]}
+              />
+            ))}
+          </div>
+        </section>
+
+        {/* Section 2: Conditional Documents (Rendered ONLY when applicable) */}
+        {conditional.length > 0 && (
+          <section className="wizard-doc-category-group" aria-labelledby="section-conditional-title">
             <div className="wizard-doc-category-title-bar">
-              <h3 className="wizard-doc-category-title">{categoryName}</h3>
+              <div>
+                <h3 id="section-conditional-title" className="wizard-doc-category-title">
+                  Conditional Documents
+                </h3>
+                <p className="wizard-doc-section-desc">
+                  Applicable because you are applying as an authorized representative or manager.
+                </p>
+              </div>
               <span className="wizard-doc-category-count">
-                {docs.filter((d) => documents[d.id]?.name).length} of {docs.length} uploaded
+                {uploadedConditionalCount} of {conditional.length} uploaded
               </span>
             </div>
 
             <div className="wizard-doc-cards-grid">
-              {docs.map((doc) => (
+              {conditional.map((doc) => (
                 <DocumentUploadCard
                   key={doc.id}
                   docConfig={doc}
@@ -83,7 +116,53 @@ export default function BusinessDocumentsStep({
               ))}
             </div>
           </section>
-        ))}
+        )}
+
+        {/* Section 3: Additional Supporting Documents (Optional Documents) */}
+        <section className="wizard-doc-category-group" aria-labelledby="section-supporting-title">
+          <div className="wizard-doc-category-title-bar wizard-doc-category-title-bar--supporting">
+            <div className="wizard-doc-supporting-header-content">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 id="section-supporting-title" className="wizard-doc-category-title">
+                  Additional Supporting Documents
+                </h3>
+                <Badge variant="neutral" size="sm">Optional</Badge>
+              </div>
+              <p className="wizard-doc-section-desc">
+                These supporting documents can help with the verification of your restaurant. You may upload the documents you currently have available. SALO administrators may request additional documents if necessary during the review process.
+              </p>
+            </div>
+            <div className="wizard-doc-supporting-actions">
+              <span className="wizard-doc-category-count">
+                {uploadedSupportingCount} of {supporting.length} uploaded (optional)
+              </span>
+              {onSkipSupporting && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onSkipSupporting}
+                  title="Proceed to next step without uploading optional documents"
+                >
+                  Skip Supporting Documents →
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="wizard-doc-cards-grid">
+            {supporting.map((doc) => (
+              <DocumentUploadCard
+                key={doc.id}
+                docConfig={doc}
+                currentDoc={documents[doc.id] || null}
+                onUpload={onDocumentUpload}
+                onRemove={onDocumentRemove}
+                error={errors[doc.id]}
+              />
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

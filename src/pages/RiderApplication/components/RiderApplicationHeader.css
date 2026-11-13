@@ -1,11 +1,24 @@
+/* ============================================================
+   SALO — Modern Application Top Bar (Rider Wizard)
+   ============================================================ */
+
 .rider-wizard-header {
   position: sticky;
   top: 0;
   z-index: var(--z-sticky, 200);
-  background: var(--surface-primary, #ffffff);
-  border-bottom: 1px solid var(--border-primary, #e5e7eb);
-  box-shadow: var(--shadow-xs, 0 1px 2px rgba(23, 23, 23, 0.04));
-  padding: var(--space-3, 12px) 0;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border-primary, rgba(0, 0, 0, 0.08));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  padding: 10px 0;
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+[data-theme="dark"] .rider-wizard-header {
+  background: rgba(23, 23, 23, 0.88);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .rider-wizard-header-container {
@@ -16,46 +29,181 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4, 16px);
+  min-height: 44px;
 }
 
+/* Brand & Context Group */
 .rider-wizard-header-brand {
   display: flex;
   align-items: center;
   gap: var(--space-3, 12px);
 }
 
-.rider-wizard-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4, 16px);
+.rider-wizard-brand-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border-primary, #e5e7eb);
 }
 
-.rider-wizard-step-counter {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  background: var(--surface-secondary, #f8f9fa);
-  border: 1px solid var(--border-secondary, #f1f3f5);
-  border-radius: var(--radius-full, 9999px);
-  padding: 4px 12px;
-  font-size: var(--text-sm, 13px);
-  color: var(--text-secondary, #525252);
+[data-theme="dark"] .rider-wizard-brand-divider {
+  background: var(--border-primary, #353539);
 }
 
-.rider-wizard-step-counter strong {
+.rider-wizard-context {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.rider-wizard-app-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--salo-orange, #f36b2b);
 }
 
+.rider-wizard-app-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #171717);
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .rider-wizard-app-title {
+  color: #ededed;
+}
+
+/* Actions Group */
+.rider-wizard-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+}
+
+/* Polished Step Pill */
+.rider-wizard-step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-secondary, #f4f5f7);
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: var(--radius-full, 9999px);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #525252);
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+[data-theme="dark"] .rider-wizard-step-pill {
+  background: #252529;
+  border-color: #353539;
+  color: #a3a3a3;
+}
+
+.step-pill-label {
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #737373);
+}
+
+.step-pill-numbers {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.step-pill-numbers strong {
+  color: var(--salo-orange, #f36b2b);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.step-pill-separator {
+  color: var(--text-muted, #9ca3af);
+  font-size: 11px;
+}
+
+/* Saved Indicator */
+.rider-last-saved-indicator {
+  font-size: 11px;
+  color: var(--text-muted, #737373);
+  white-space: nowrap;
+}
+
+/* Buttons Group */
 .rider-wizard-buttons-group {
   display: flex;
   align-items: center;
   gap: var(--space-2, 8px);
 }
 
-.rider-last-saved-indicator {
-  font-size: var(--text-xs, 12px);
-  color: var(--text-muted, #6b7280);
-  white-space: nowrap;
+.rider-wizard-save-btn {
+  border-color: var(--border-primary, #d1d5db) !important;
+  color: var(--text-primary, #171717) !important;
+  background: transparent !important;
+  border-radius: var(--radius-full, 9999px) !important;
+  padding: 6px 14px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  transition: all var(--transition-fast, 150ms ease) !important;
+}
+
+.rider-wizard-save-btn:hover {
+  background: var(--surface-secondary, #f4f5f7) !important;
+  border-color: var(--text-secondary, #9ca3af) !important;
+}
+
+[data-theme="dark"] .rider-wizard-save-btn {
+  border-color: #3f3f46 !important;
+  color: #ededed !important;
+}
+
+[data-theme="dark"] .rider-wizard-save-btn:hover {
+  background: #27272a !important;
+}
+
+.rider-wizard-save-btn.btn-draft-saved {
+  border-color: #10b981 !important;
+  color: #059669 !important;
+  background: #ecfdf5 !important;
+}
+
+[data-theme="dark"] .rider-wizard-save-btn.btn-draft-saved {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border-color: #059669 !important;
+}
+
+.rider-wizard-save-btn.btn-save-error {
+  border-color: #ef4444 !important;
+  color: #b91c1c !important;
+}
+
+.rider-wizard-exit-btn {
+  color: var(--text-secondary, #525252) !important;
+  border-radius: var(--radius-full, 9999px) !important;
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  transition: all var(--transition-fast, 150ms ease) !important;
+}
+
+.rider-wizard-exit-btn:hover {
+  background: rgba(239, 68, 68, 0.08) !important;
+  color: #dc2626 !important;
+}
+
+[data-theme="dark"] .rider-wizard-exit-btn {
+  color: #a3a3a3 !important;
+}
+
+[data-theme="dark"] .rider-wizard-exit-btn:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
 }
 
 .rider-header-error-banner {
@@ -68,7 +216,20 @@
   text-align: center;
 }
 
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .rider-wizard-app-badge {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
+  .rider-wizard-context {
+    display: none;
+  }
+  .rider-wizard-brand-divider {
+    display: none;
+  }
   .rider-last-saved-indicator {
     display: none;
   }
@@ -76,6 +237,8 @@
     display: none;
   }
   .rider-wizard-buttons-group .btn {
-    padding: 6px 10px;
+    padding: 6px 8px !important;
+    min-width: 34px;
+    justify-content: center;
   }
 }

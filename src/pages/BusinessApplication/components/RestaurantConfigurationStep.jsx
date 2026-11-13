@@ -405,19 +405,6 @@ export default function RestaurantConfigurationStep({
               </div>
             </label>
 
-            <label className={`service-option-card ${data.services.dineIn ? 'selected' : ''}`}>
-              <input
-                type="checkbox"
-                checked={data.services.dineIn}
-                onChange={() => handleServiceToggle('dineIn')}
-              />
-              <div className="service-card-body">
-                <span className="service-icon" aria-hidden="true">🍽️</span>
-                <span className="service-title">Dine-in Ordering</span>
-                <span className="service-desc">QR code menu ordering for seated customers.</span>
-              </div>
-            </label>
-
             <label className={`service-option-card ${data.services.tableReservations ? 'selected' : ''}`}>
               <input
                 type="checkbox"

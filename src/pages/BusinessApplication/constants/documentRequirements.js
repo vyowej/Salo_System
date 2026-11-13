@@ -1,6 +1,6 @@
 /**
  * SALO — Restaurant Partner Document Requirements Matrix
- * Conditional requirements dynamically determined by selected business ownership structure.
+ * Categorized document classification: Mandatory, Conditional, and Supporting.
  */
 
 export const DOCUMENT_TYPES = {
@@ -24,7 +24,9 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.DTI_CERTIFICATE,
     title: 'DTI Business Name Certificate',
     description: 'Current Certificate of Business Name Registration issued by the Department of Trade and Industry (DTI).',
+    whyNeeded: 'Verifies the official registration and sole proprietorship legal business name with the Department of Trade and Industry (DTI).',
     category: 'Business Registration',
+    classification: 'mandatory',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
@@ -32,7 +34,9 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.SEC_CERTIFICATE,
     title: 'SEC Certificate of Registration',
     description: 'Securities and Exchange Commission (SEC) Registration including Articles of Incorporation/Partnership.',
+    whyNeeded: 'Verifies the corporate or partnership legal personality, registration number, and registered officers with the SEC.',
     category: 'Business Registration',
+    classification: 'mandatory',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
@@ -40,7 +44,9 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.CDA_CERTIFICATE,
     title: 'CDA Registration Certificate',
     description: 'Cooperative Development Authority (CDA) Certificate of Registration and Cooperative By-laws.',
+    whyNeeded: 'Verifies the legal existence, operating registration, and cooperative by-laws registered with the Cooperative Development Authority (CDA).',
     category: 'Business Registration',
+    classification: 'mandatory',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
@@ -48,7 +54,9 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.OTHER_REGISTRATION,
     title: 'Proof of Business Registration',
     description: 'Official registration documentation validating legal recognition of the operating food establishment.',
+    whyNeeded: 'Validates government recognition and legitimacy of the operating food business under applicable Philippine regulations.',
     category: 'Business Registration',
+    classification: 'mandatory',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
@@ -56,7 +64,9 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.BIR_2303,
     title: 'BIR Form 2303 (Certificate of Registration)',
     description: 'Bureau of Internal Revenue (BIR) Certificate of Registration indicating registered Tax Identification Number (TIN) and tax types.',
+    whyNeeded: 'Confirms registered Tax Identification Number (TIN), legal entity name, and tax classification for billing and withholding compliance.',
     category: 'Tax Registration',
+    classification: 'supporting',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
@@ -64,7 +74,9 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.MAYORS_PERMIT,
     title: "Mayor's / Business Permit",
     description: 'Valid Mayor’s or Local Government Business Permit for the current operating year for your food establishment location.',
+    whyNeeded: 'Confirms authorization from the Local Government Unit (LGU) to legally conduct commercial food operations for the current operating year.',
     category: 'Local Government Permits',
+    classification: 'mandatory',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
@@ -72,7 +84,9 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.BARANGAY_CLEARANCE,
     title: 'Barangay Business Clearance',
     description: 'Local Barangay Business Clearance endorsing restaurant operation within the jurisdiction.',
+    whyNeeded: 'Evidences local community-level endorsement and commercial compliance within the host barangay jurisdiction.',
     category: 'Local Government Permits',
+    classification: 'supporting',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
@@ -80,7 +94,9 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.SANITARY_PERMIT,
     title: 'Sanitary Permit / Health Certificate',
     description: 'City/Municipal Health Office inspection certificate for food preparation and hygiene standards.',
+    whyNeeded: 'Validates kitchen sanitation, health standards, and safe food-handling compliance inspected by the local health office.',
     category: 'Local Government Permits',
+    classification: 'supporting',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
@@ -88,7 +104,9 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.FIRE_SAFETY_PERMIT,
     title: 'Fire Safety Inspection Certificate (FSIC)',
     description: 'Bureau of Fire Protection (BFP) clearance certifying compliance with fire safety regulations.',
+    whyNeeded: 'Certifies kitchen and dining premises compliance with the Fire Code of the Philippines issued by the Bureau of Fire Protection (BFP).',
     category: 'Local Government Permits',
+    classification: 'supporting',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
@@ -96,7 +114,9 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.GOVERNMENT_ID,
     title: 'Valid Government-Issued ID',
     description: 'Passport, UMID, Driver’s License, PhilID (National ID), or PRC ID of the owner or authorized representative.',
+    whyNeeded: 'Authenticates the legal identity of the owner or representative binding the establishment to SALO terms.',
     category: 'Identity Verification',
+    classification: 'mandatory',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
@@ -104,7 +124,9 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.PROOF_OF_ADDRESS,
     title: 'Proof of Business Address',
     description: 'Commercial lease contract, recent utility bill (power/water within last 3 months), or property title for the kitchen location.',
+    whyNeeded: 'Confirms the physical restaurant or kitchen location for delivery rider dispatch, customer pickups, and service coverage.',
     category: 'Location Verification',
+    classification: 'mandatory',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
@@ -112,7 +134,9 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.AUTHORIZATION_LETTER,
     title: "Secretary's Certificate / Board Resolution / Authorization Letter",
     description: 'Official corporate resolution or notarized letter authorizing the representative to enter into contracts with SALO.',
+    whyNeeded: 'Establishes legal authority for a non-owner manager or representative to represent the business and bind it to partner agreements.',
     category: 'Representative Authorization',
+    classification: 'conditional',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
@@ -120,52 +144,69 @@ export const DOCUMENT_CATALOG = {
     id: DOCUMENT_TYPES.BANK_PROOF,
     title: 'Proof of Bank Account Ownership',
     description: 'Bank certificate, deposit slip, or first page of bank statement showing account name and account number (balances can be blurred).',
+    whyNeeded: 'Validates bank account details for merchant payout disbursements.',
     category: 'Payout Verification',
+    classification: 'supporting',
     acceptedFormats: 'PDF, JPG, PNG',
     maxSizeMb: 10,
   },
 };
 
 /**
- * Returns the conditional document configuration array based on the selected ownership structure
- * and whether the representative is an authorized representative/manager rather than owner.
+ * Returns categorized documents: mandatory, conditional, and supporting.
  */
-export function getRequiredDocuments(ownershipStructure, position) {
+export function getDocumentClassification(ownershipStructure, position) {
   const isRepresentative = position === 'Authorized Representative' || position === 'Manager';
-  const docs = [];
 
-  // 1. Entity registration
+  // 1. Mandatory Business Registration based on ownership structure
+  let registrationDoc;
   if (ownershipStructure === 'Sole Proprietorship') {
-    docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.DTI_CERTIFICATE], required: true });
+    registrationDoc = { ...DOCUMENT_CATALOG[DOCUMENT_TYPES.DTI_CERTIFICATE], required: true };
   } else if (ownershipStructure === 'Corporation' || ownershipStructure === 'Partnership') {
-    docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.SEC_CERTIFICATE], required: true });
-    if (isRepresentative) {
-      docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.AUTHORIZATION_LETTER], required: true });
-    }
+    registrationDoc = { ...DOCUMENT_CATALOG[DOCUMENT_TYPES.SEC_CERTIFICATE], required: true };
   } else if (ownershipStructure === 'Cooperative') {
-    docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.CDA_CERTIFICATE], required: true });
-    if (isRepresentative) {
-      docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.AUTHORIZATION_LETTER], required: true });
-    }
+    registrationDoc = { ...DOCUMENT_CATALOG[DOCUMENT_TYPES.CDA_CERTIFICATE], required: true };
   } else {
-    docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.OTHER_REGISTRATION], required: true });
-    if (isRepresentative) {
-      docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.AUTHORIZATION_LETTER], required: true });
-    }
+    registrationDoc = { ...DOCUMENT_CATALOG[DOCUMENT_TYPES.OTHER_REGISTRATION], required: true };
   }
 
-  // 2. Tax registration (BIR 2303)
-  docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.BIR_2303], required: true });
+  const mandatory = [
+    registrationDoc,
+    { ...DOCUMENT_CATALOG[DOCUMENT_TYPES.GOVERNMENT_ID], required: true },
+    { ...DOCUMENT_CATALOG[DOCUMENT_TYPES.MAYORS_PERMIT], required: true },
+    { ...DOCUMENT_CATALOG[DOCUMENT_TYPES.PROOF_OF_ADDRESS], required: true },
+  ];
 
-  // 3. Local Government Permits
-  docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.MAYORS_PERMIT], required: true });
-  docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.BARANGAY_CLEARANCE], required: false });
-  docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.SANITARY_PERMIT], required: false });
-  docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.FIRE_SAFETY_PERMIT], required: false });
+  // 2. Conditional Documents
+  const conditional = [];
+  if (isRepresentative) {
+    conditional.push({
+      ...DOCUMENT_CATALOG[DOCUMENT_TYPES.AUTHORIZATION_LETTER],
+      required: true,
+      conditionMessage: `Required because you identified your role as ${position}. Non-owner representatives must provide proof of authority.`,
+    });
+  }
 
-  // 4. Identity & Location
-  docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.GOVERNMENT_ID], required: true });
-  docs.push({ ...DOCUMENT_CATALOG[DOCUMENT_TYPES.PROOF_OF_ADDRESS], required: true });
+  // 3. Additional Supporting Documents (Optional - never blocks submission)
+  const supporting = [
+    { ...DOCUMENT_CATALOG[DOCUMENT_TYPES.BIR_2303], required: false },
+    { ...DOCUMENT_CATALOG[DOCUMENT_TYPES.BARANGAY_CLEARANCE], required: false },
+    { ...DOCUMENT_CATALOG[DOCUMENT_TYPES.SANITARY_PERMIT], required: false },
+    { ...DOCUMENT_CATALOG[DOCUMENT_TYPES.FIRE_SAFETY_PERMIT], required: false },
+  ];
 
-  return docs;
+  return {
+    mandatory,
+    conditional,
+    supporting,
+  };
+}
+
+/**
+ * Returns a flat array of all applicable documents for the wizard step,
+ * keeping backwards compatibility with existing consumers.
+ */
+export function getRequiredDocuments(ownershipStructure, position) {
+  const { mandatory, conditional, supporting } = getDocumentClassification(ownershipStructure, position);
+  return [...mandatory, ...conditional, ...supporting];
 }

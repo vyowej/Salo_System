@@ -118,18 +118,27 @@ export const DAYS_OF_WEEK = [
 ];
 
 export const WIZARD_STEPS = [
-  { step: 1, id: 'business', label: 'Business Info', shortLabel: 'Business' },
-  { step: 2, id: 'representative', label: 'Representative', shortLabel: 'Owner' },
-  { step: 3, id: 'documents', label: 'Documents & Permits', shortLabel: 'Docs' },
-  { step: 4, id: 'address', label: 'Address & Location', shortLabel: 'Address' },
-  { step: 5, id: 'payout', label: 'Payout Details', shortLabel: 'Payout' },
-  { step: 6, id: 'config', label: 'Configuration', shortLabel: 'Setup' },
-  { step: 7, id: 'verification', label: 'Email Verification', shortLabel: 'Verify' },
+  { step: 1, id: 'verification', label: 'Email Verification', shortLabel: 'Email OTP' },
+  { step: 2, id: 'business', label: 'Business Information', shortLabel: 'Business' },
+  { step: 3, id: 'representative', label: 'Authorized Representative', shortLabel: 'Owner' },
+  { step: 4, id: 'documents', label: 'Documents & Permits', shortLabel: 'Docs' },
+  { step: 5, id: 'address', label: 'Business Address', shortLabel: 'Address' },
+  { step: 6, id: 'payout', label: 'Payout Details', shortLabel: 'Payout' },
+  { step: 7, id: 'config', label: 'Restaurant Setup', shortLabel: 'Setup' },
   { step: 8, id: 'review', label: 'Review & Submit', shortLabel: 'Review' },
 ];
 
 export const INITIAL_APPLICATION_STATE = {
-  // Step 1: Business Info
+  // Step 1: Email Verification
+  emailVerification: {
+    email: '',
+    isSameAsAccount: true,
+    isVerified: false,
+    verifiedEmail: '',
+    verifiedAt: null,
+  },
+
+  // Step 2: Business Info
   businessInfo: {
     restaurantName: '',
     registeredName: '',
@@ -141,7 +150,7 @@ export const INITIAL_APPLICATION_STATE = {
     description: '',
   },
 
-  // Step 2: Representative Info
+  // Step 3: Representative Info
   representative: {
     firstName: '',
     middleName: '',
@@ -154,10 +163,10 @@ export const INITIAL_APPLICATION_STATE = {
     isAuthorized: false,
   },
 
-  // Step 3: Documents (Map of docId => { file, name, size, type, previewUrl, uploadedAt })
+  // Step 4: Documents (Map of docId => { file, name, size, type, previewUrl, uploadedAt })
   documents: {},
 
-  // Step 4: Address
+  // Step 5: Address
   address: {
     region: 'National Capital Region (NCR)',
     province: 'Metro Manila',
@@ -170,7 +179,7 @@ export const INITIAL_APPLICATION_STATE = {
     mapPinned: true,
   },
 
-  // Step 5: Payout
+  // Step 6: Payout
   payout: {
     accountHolder: '',
     bankName: 'Bank of the Philippine Islands (BPI)',
@@ -179,7 +188,7 @@ export const INITIAL_APPLICATION_STATE = {
     proofDocument: null, // Bank statement / cert file preview
   },
 
-  // Step 6: Configuration
+  // Step 7: Configuration
   configuration: {
     logo: null, // { name, src }
     coverPhoto: null, // { name, src }
@@ -195,7 +204,6 @@ export const INITIAL_APPLICATION_STATE = {
     services: {
       delivery: true,
       pickup: true,
-      dineIn: true,
       tableReservations: false,
     },
     reservationSettings: {
@@ -207,13 +215,6 @@ export const INITIAL_APPLICATION_STATE = {
       reservationNotes: 'Reservations held for 15 minutes past scheduled booking time.',
     },
     menuItems: [],
-  },
-
-  // Step 7: Email verification state
-  emailVerification: {
-    isVerified: false,
-    verifiedEmail: '',
-    verifiedAt: null,
   },
 
   // Step 8: Review declarations
@@ -230,6 +231,12 @@ export const APPLICATION_STATUS_CONFIG = {
     variant: 'neutral',
     description: 'Application started but not yet submitted.',
     progress: 10,
+  },
+  Submitted: {
+    label: 'Submitted',
+    variant: 'info',
+    description: 'Application successfully received and queued for compliance review.',
+    progress: 30,
   },
   'Pending Submission': {
     label: 'Pending Submission',
@@ -248,6 +255,12 @@ export const APPLICATION_STATUS_CONFIG = {
     variant: 'info',
     description: 'SALO Onboarding Operations are verifying legal permits and kitchen premises.',
     progress: 65,
+  },
+  'Additional Documents Required': {
+    label: 'Additional Documents Required',
+    variant: 'danger',
+    description: 'Action required: Administrator has requested additional supporting documents for your application.',
+    progress: 50,
   },
   'Needs Correction': {
     label: 'Needs Correction',
@@ -276,6 +289,15 @@ export const APPLICATION_STATUS_CONFIG = {
 };
 
 export const MOCK_ADMIN_FEEDBACK_SAMPLES = {
+  'Additional Documents Required': {
+    reviewedBy: 'SALO Onboarding Compliance Team',
+    reviewedAt: '2026-11-10T09:30:00Z',
+    requestedDocument: 'Sanitary Permit / Health Certificate',
+    reason: 'Food safety verification for prepared meals and kitchen sanitation inspection.',
+    instructions: 'Please upload an active Sanitary Permit issued by the City Health Department for the current calendar year. Ensure all text and permit numbers are clearly readable.',
+    dueDate: '2026-11-24',
+    actionPrompt: 'Upload Requested Document',
+  },
   'Needs Correction': {
     reviewedBy: 'SALO Onboarding Operations (Officer M. Santos)',
     reviewedAt: '2026-11-09T14:20:00Z',
