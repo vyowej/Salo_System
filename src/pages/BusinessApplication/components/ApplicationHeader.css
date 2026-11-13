@@ -1,11 +1,24 @@
+/* ============================================================
+   SALO — Modern Application Top Bar (Business & Partner Wizard)
+   ============================================================ */
+
 .app-wizard-header {
   position: sticky;
   top: 0;
   z-index: var(--z-sticky, 200);
-  background: var(--surface-primary, #ffffff);
-  border-bottom: 1px solid var(--border-primary, #e5e7eb);
-  box-shadow: var(--shadow-xs, 0 1px 2px rgba(23, 23, 23, 0.04));
-  padding: var(--space-3, 12px) 0;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border-primary, rgba(0, 0, 0, 0.08));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  padding: 10px 0;
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+[data-theme="dark"] .app-wizard-header {
+  background: rgba(23, 23, 23, 0.88);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .app-wizard-header-container {
@@ -16,47 +29,201 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4, 16px);
+  min-height: 44px;
 }
 
+/* Brand & Context Group */
 .app-wizard-header-brand {
   display: flex;
   align-items: center;
   gap: var(--space-3, 12px);
 }
 
-.app-wizard-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4, 16px);
+.app-wizard-brand-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border-primary, #e5e7eb);
 }
 
-.app-wizard-step-counter {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  background: var(--surface-secondary, #f8f9fa);
-  border: 1px solid var(--border-secondary, #f1f3f5);
-  border-radius: var(--radius-full, 9999px);
-  padding: 4px 12px;
-  font-size: var(--text-sm, 13px);
-  color: var(--text-secondary, #525252);
+[data-theme="dark"] .app-wizard-brand-divider {
+  background: var(--border-primary, #353539);
 }
 
-.app-wizard-step-counter strong {
+.app-wizard-context {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.app-wizard-app-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--salo-orange, #f36b2b);
 }
 
+.app-wizard-app-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #171717);
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .app-wizard-app-title {
+  color: #ededed;
+}
+
+/* Actions Group */
+.app-wizard-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+}
+
+/* Polished Step Pill */
+.app-wizard-step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-secondary, #f4f5f7);
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: var(--radius-full, 9999px);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #525252);
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+[data-theme="dark"] .app-wizard-step-pill {
+  background: #252529;
+  border-color: #353539;
+  color: #a3a3a3;
+}
+
+.step-pill-label {
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #737373);
+}
+
+.step-pill-numbers {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.step-pill-numbers strong {
+  color: var(--salo-orange, #f36b2b);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.step-pill-separator {
+  color: var(--text-muted, #9ca3af);
+  font-size: 11px;
+}
+
+/* Saved Time */
+.app-wizard-saved-time {
+  font-size: 11px;
+  color: var(--text-muted, #737373);
+  white-space: nowrap;
+}
+
+/* Buttons Group */
 .app-wizard-buttons-group {
   display: flex;
   align-items: center;
   gap: var(--space-2, 8px);
 }
 
+.app-wizard-save-btn {
+  border-color: var(--border-primary, #d1d5db) !important;
+  color: var(--text-primary, #171717) !important;
+  background: transparent !important;
+  border-radius: var(--radius-full, 9999px) !important;
+  padding: 6px 14px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  transition: all var(--transition-fast, 150ms ease) !important;
+}
+
+.app-wizard-save-btn:hover {
+  background: var(--surface-secondary, #f4f5f7) !important;
+  border-color: var(--text-secondary, #9ca3af) !important;
+}
+
+[data-theme="dark"] .app-wizard-save-btn {
+  border-color: #3f3f46 !important;
+  color: #ededed !important;
+}
+
+[data-theme="dark"] .app-wizard-save-btn:hover {
+  background: #27272a !important;
+}
+
+.app-wizard-save-btn.btn-draft-saved {
+  border-color: #10b981 !important;
+  color: #059669 !important;
+  background: #ecfdf5 !important;
+}
+
+[data-theme="dark"] .app-wizard-save-btn.btn-draft-saved {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border-color: #059669 !important;
+}
+
+.app-wizard-exit-btn {
+  color: var(--text-secondary, #525252) !important;
+  border-radius: var(--radius-full, 9999px) !important;
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  transition: all var(--transition-fast, 150ms ease) !important;
+}
+
+.app-wizard-exit-btn:hover {
+  background: rgba(239, 68, 68, 0.08) !important;
+  color: #dc2626 !important;
+}
+
+[data-theme="dark"] .app-wizard-exit-btn {
+  color: #a3a3a3 !important;
+}
+
+[data-theme="dark"] .app-wizard-exit-btn:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .app-wizard-app-badge {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
+  .app-wizard-context {
+    display: none;
+  }
+  .app-wizard-brand-divider {
+    display: none;
+  }
+  .app-wizard-saved-time {
+    display: none;
+  }
   .app-wizard-buttons-group .btn span {
     display: none;
   }
   .app-wizard-buttons-group .btn {
-    padding: 6px 10px;
+    padding: 6px 8px !important;
+    min-width: 34px;
+    justify-content: center;
   }
 }
