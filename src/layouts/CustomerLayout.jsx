@@ -384,9 +384,22 @@ export default function CustomerLayout({ children }) {
           onToggleCollapse={() => setCollapsed(!collapsed)}
           mobileOpen={mobileOpen}
           onMobileClose={() => setMobileOpen(false)}
+          title="SALO"
+          subtitle="Order. Reserve. Gather."
+          profile={(
+            <ProfileMenu
+              placement="sidebar"
+              collapsed
+              profileName={profileName}
+              profileEmail={profileEmail}
+              profileInitials={profileInitials}
+              profileAvatar={user?.avatar}
+              theme={theme}
+              menuItems={sidebarProfileMenuItems}
+            />
+          )}
           footer={
             <div className="customer-profile-footer">
-              <div className="customer-sidebar-divider" />
 
               <button
                 type="button"
@@ -407,16 +420,6 @@ export default function CustomerLayout({ children }) {
                   </span>
                 )}
               </button>
-
-              <ProfileMenu
-                placement="sidebar"
-                collapsed={collapsed}
-                profileName={profileName}
-                profileEmail={profileEmail}
-                profileInitials={profileInitials}
-                theme={theme}
-                menuItems={sidebarProfileMenuItems}
-              />
             </div>
           }
         />

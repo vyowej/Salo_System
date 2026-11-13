@@ -220,3 +220,20 @@
 .profile-menu-item.danger:hover {
   background: var(--surface-hover);
 }
+
+/* Divider before the preferences / sign-out group */
+.profile-menu-theme-item {
+  position: relative;
+  margin-top: var(--space-2);
+}
+
+.profile-menu-theme-item::before {
+  content: '';
+  position: absolute;
+  top: calc(-1 * var(--space-1) - 3px);
+  left: calc(-1 * var(--space-3));
+  right: calc(-1 * var(--space-3));
+  height: 1px;
+  background: var(--border-primary);
+}
+

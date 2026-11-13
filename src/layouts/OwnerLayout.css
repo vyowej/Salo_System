@@ -46,13 +46,13 @@
   min-height: 40px;
   padding: 0 var(--space-3);
   border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--surface-primary);
   color: var(--text-primary);
   font: inherit;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
-  box-shadow: var(--shadow-xs);
+  cursor: pointer;
 }
 
 .owner-restaurant-selector select:focus-visible {

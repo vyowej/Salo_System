@@ -103,19 +103,19 @@ export default function OwnerLayout({ children }) {
           onToggleCollapse={() => setCollapsed((value) => !value)}
           mobileOpen={mobileOpen}
           onMobileClose={() => setMobileOpen(false)}
-          footer={(
-            <div className="owner-sidebar-footer">
-              <ProfileMenu
-                placement="sidebar"
-                collapsed={collapsed}
-                profileName={profileName}
-                profileEmail={profileEmail}
-                profileInitials={initials}
-                profileAvatar={user?.avatar}
-                theme={theme}
-                menuItems={profileMenuItems}
-              />
-            </div>
+          title={selectedRestaurant?.name || 'Restaurant'}
+          subtitle={access.isOwner ? 'Restaurant workspace' : 'Staff workspace'}
+          profile={(
+            <ProfileMenu
+              placement="sidebar"
+              collapsed
+              profileName={profileName}
+              profileEmail={profileEmail}
+              profileInitials={initials}
+              profileAvatar={user?.avatar}
+              theme={theme}
+              menuItems={profileMenuItems}
+            />
           )}
         />
       </div>

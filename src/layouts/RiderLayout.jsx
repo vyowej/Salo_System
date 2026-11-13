@@ -102,19 +102,19 @@ export default function RiderLayout({ children }) {
           onToggleCollapse={() => setCollapsed((value) => !value)}
           mobileOpen={mobileOpen}
           onMobileClose={() => setMobileOpen(false)}
-          footer={(
-            <div className="rider-sidebar-footer">
-              <ProfileMenu
-                placement="sidebar"
-                collapsed={collapsed}
-                profileName={profile.name}
-                profileEmail={profile.email}
-                profileInitials={profile.initials}
-                profileAvatar={profile.photo}
-                theme={theme}
-                menuItems={profileMenuItems}
-              />
-            </div>
+          title="Rider Hub"
+          subtitle={profile.name || 'Rider workspace'}
+          profile={(
+            <ProfileMenu
+              placement="sidebar"
+              collapsed
+              profileName={profile.name}
+              profileEmail={profile.email}
+              profileInitials={profile.initials}
+              profileAvatar={profile.photo}
+              theme={theme}
+              menuItems={profileMenuItems}
+            />
           )}
         />
       </div>

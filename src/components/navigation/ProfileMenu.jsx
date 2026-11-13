@@ -33,12 +33,13 @@ export default function ProfileMenu({
       const left = placement === 'sidebar'
         ? Math.min(triggerRect.left + triggerRect.width + 12, window.innerWidth - menuWidth - margin)
         : Math.min(Math.max(margin, triggerRect.right - menuWidth), window.innerWidth - menuWidth - margin);
-      const shouldOpenUpward = placement === 'sidebar'
-        ? triggerRect.top - menuHeight - 12 > margin
-        : triggerRect.bottom + menuHeight + 12 > window.innerHeight - margin;
-      const top = shouldOpenUpward
-        ? triggerRect.top - menuHeight - 12
-        : triggerRect.bottom + 12;
+      const shouldOpenUpward = triggerRect.bottom + menuHeight + 12 > window.innerHeight - margin;
+      // Sidebar menus open beside the trigger, bottom-aligned with it.
+      const top = placement === 'sidebar'
+        ? triggerRect.bottom - menuHeight
+        : shouldOpenUpward
+          ? triggerRect.top - menuHeight - 12
+          : triggerRect.bottom + 12;
 
       setPopoverStyle({
         left: `${Math.max(margin, left)}px`,

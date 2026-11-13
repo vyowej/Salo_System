@@ -87,6 +87,19 @@ export default function AdminLayout({ children }) {
           onItemClick={() => setMobileOpen(false)}
           onMobileClose={() => setMobileOpen(false)}
           useRouterLinks
+          title="Admin Console"
+          subtitle={currentAdmin.role}
+          profile={(
+            <ProfileMenu
+              placement="sidebar"
+              collapsed
+              profileName={currentAdmin.name}
+              profileEmail={currentAdmin.email}
+              profileInitials={initials}
+              theme={theme}
+              menuItems={profileMenuItems}
+            />
+          )}
           footer={(
             <div className="admin-sidebar-footer">
               {isDemoMode && (
@@ -99,15 +112,6 @@ export default function AdminLayout({ children }) {
                   </select>
                 </div>
               )}
-              <ProfileMenu
-                placement="sidebar"
-                collapsed={collapsed}
-                profileName={currentAdmin.name}
-                profileEmail={currentAdmin.email}
-                profileInitials={initials}
-                theme={theme}
-                menuItems={profileMenuItems}
-              />
               <Button as={Link} to="/owner" variant="ghost" size="sm" fullWidth className="sidebar-footer-item sidebar-footer-link">
                 <span className="sidebar-footer-label">Switch to Restaurant View</span>
               </Button>

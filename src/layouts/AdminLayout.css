@@ -19,10 +19,7 @@
 
 .admin-sidebar-footer { display: grid; gap: var(--space-2); }
 .admin-sidebar.collapsed .admin-demo-switcher { display: none; }
-.admin-shell .sidebar-collapse-btn,
 .admin-shell .topbar-hamburger { min-width: 44px; min-height: 44px; }
-.admin-shell .sidebar-collapse-btn { width: 44px; height: 44px; }
-.admin-shell .sidebar.collapsed .sidebar-collapse-btn { right: 0; width: 44px; height: 44px; }
 .admin-content button { min-height: 44px; }
 .admin-content input:not([type="checkbox"]),
 .admin-content select { min-height: 44px; }

@@ -31,17 +31,15 @@
   min-height: 40px;
   padding: 0 var(--space-3);
   border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--surface-primary);
   color: var(--text-primary);
-  box-shadow: var(--shadow-xs);
   cursor: pointer;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
 }
 
 .customer-topbar-address-button:hover {
-  border-color: var(--accent);
-  box-shadow: var(--shadow-sm);
+  background: var(--surface-hover);
 }
 
 .customer-topbar-address-selector {
@@ -146,12 +144,18 @@
   gap: var(--space-2);
   flex: 1;
   min-width: 0;
-  height: 42px;
+  height: 40px;
   padding: 0 var(--space-3);
   border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.customer-topbar-search:focus-within {
   background: var(--surface-primary);
-  box-shadow: var(--shadow-xs);
+  border-color: var(--text-muted);
+  box-shadow: 0 0 0 3px var(--surface-hover);
 }
 
 .customer-topbar-search svg {
