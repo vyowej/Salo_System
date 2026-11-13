@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import AdminLayout from '../../../layouts/AdminLayout';
 import adminService from '../../../services/adminService';
+import Modal from '../../../components/common/Modal';
+import Button from '../../../components/common/Button';
 import {
   ConfirmDialog,
   DataTable,
@@ -19,7 +21,7 @@ import './AdminPages.css';
 const SAVED_RESTAURANTS = adminService.getRestaurants();
 const INITIAL_RESTAURANTS = getAdminMock('restaurants').data.map((restaurant) => ({
   ...restaurant,
-  ...(SAVED_RESTAURANTS.find((saved) => saved.id === restaurant.id) || {}),
+  ...(SAVED_RESTAURANTS.find((saved) => saved.id === restaurant.id || saved.referenceNumber === restaurant.id) || {}),
 }));
 
 export default function AdminRestaurantsPage() {
@@ -35,22 +37,89 @@ export default function AdminRestaurantsPage() {
   const [pendingCommission, setPendingCommission] = useState(null);
   const [commissionDraft, setCommissionDraft] = useState('');
   const [notice, setNotice] = useState('');
+
+  // Request Additional Documents Modal State
+  const [requestDocModalOpen, setRequestDocModalOpen] = useState(false);
+  const [requestDocType, setRequestDocType] = useState('Sanitary Permit / Health Certificate');
+  const [customDocName, setCustomDocName] = useState('');
+  const [requestDocReason, setRequestDocReason] = useState('');
+  const [requestDocInstructions, setRequestDocInstructions] = useState('');
+  const [requestDocDueDate, setRequestDocDueDate] = useState('');
+  const [requestDocError, setRequestDocError] = useState('');
+
   const canApprove = permissions.restaurants?.includes('approve');
   const canReject = permissions.restaurants?.includes('reject');
   const canEdit = permissions.restaurants?.includes('edit');
   const canActivate = permissions.restaurants?.includes('activate');
   const canDeactivate = permissions.restaurants?.includes('deactivate');
+
   const matching = useMemo(() => restaurants.filter((restaurant) => {
     const term = search.trim().toLowerCase();
     return !term || [restaurant.name, restaurant.ownerName, restaurant.ownerEmail, restaurant.address, restaurant.zone]
       .some((value) => String(value || '').toLowerCase().includes(term));
   }), [restaurants, search]);
-  const applications = matching.filter((restaurant) => ['Pending Review', 'More information requested'].includes(restaurant.applicationStatus) || restaurant.status === 'Pending Approval');
-  const filteredApplications = applications.filter((restaurant) => applicationFilter === 'All applications' || restaurant.applicationStatus === applicationFilter);
+
+  const applications = matching.filter((restaurant) => {
+    const status = restaurant.applicationStatus || restaurant.status;
+    return [
+      'Submitted',
+      'Pending Review',
+      'Under Review',
+      'Additional Documents Required',
+      'More information requested',
+      'Needs Correction',
+      'Pending Approval',
+    ].includes(status);
+  });
+
+  const filteredApplications = applications.filter((restaurant) => {
+    if (applicationFilter === 'All applications') return true;
+    return (restaurant.applicationStatus || restaurant.status) === applicationFilter;
+  });
 
   function askAction(restaurant, action) {
     setSelected(restaurant);
     setPendingAction({ restaurant, action });
+  }
+
+  function handleUpdateDocStatus(restaurantId, docId, status, reason) {
+    const updatedList = adminService.updateRestaurantDocumentStatus(restaurantId, docId, { status, reason });
+    setRestaurants(updatedList);
+    const currentRest = updatedList.find((r) => r.id === restaurantId || r.referenceNumber === restaurantId);
+    if (currentRest) setSelected(currentRest);
+    setNotice(`${selected?.name || 'Restaurant'}: Document marked as ${status}.`);
+  }
+
+  function handleSendDocRequest(e) {
+    e?.preventDefault();
+    const docName = requestDocType === 'Other (Custom Document Name)' ? customDocName.trim() : requestDocType;
+    if (!docName) {
+      setRequestDocError('Please specify the document name.');
+      return;
+    }
+    if (!requestDocReason.trim()) {
+      setRequestDocError('Please provide a reason for the request.');
+      return;
+    }
+
+    const { updated } = adminService.requestAdditionalDocuments(selected.id, {
+      documentName: docName,
+      reason: requestDocReason.trim(),
+      instructions: requestDocInstructions.trim(),
+      dueDate: requestDocDueDate,
+    });
+
+    setRestaurants(updated);
+    const currentRest = updated.find((r) => r.id === selected.id || r.referenceNumber === selected.id);
+    if (currentRest) setSelected(currentRest);
+
+    setNotice(`${selected.name}: Additional document "${docName}" requested. Status updated to Additional Documents Required.`);
+    setRequestDocModalOpen(false);
+    setRequestDocReason('');
+    setRequestDocInstructions('');
+    setCustomDocName('');
+    setRequestDocDueDate('');
+    setRequestDocError('');
   }
 
   function applyAction({ reason }) {
@@ -99,13 +168,14 @@ export default function AdminRestaurantsPage() {
     { key: 'address', label: 'Physical location' },
     { key: 'applicationStatus', label: 'Application', render: (restaurant) => {
       const applicationStatus = restaurant.applicationStatus || restaurant.status;
-      const needsAction = ['Pending Review', 'Pending Approval', 'More information requested'].includes(applicationStatus);
+      const needsAction = ['Submitted', 'Pending Review', 'Under Review', 'Additional Documents Required', 'Pending Approval', 'More information requested'].includes(applicationStatus);
       return <StatusBadge status={applicationStatus} className={needsAction ? 'admin-status-badge--action' : ''} />;
     } },
-    { key: 'verificationStatus', label: 'Verification', render: (restaurant) => <StatusBadge status={restaurant.verificationStatus} /> },
+    { key: 'verificationStatus', label: 'Verification', render: (restaurant) => <StatusBadge status={restaurant.verificationStatus || 'Pending'} /> },
     { key: 'joinedDate', label: 'Submitted', render: (restaurant) => formatDate(restaurant.joinedDate) },
     { key: 'review', label: 'Review', render: (restaurant) => <button className="admin-action-button" type="button" onClick={() => { setSelected(restaurant); setDetailTab('Application'); }}>Review application</button> },
   ];
+
   const directoryColumns = [
     { key: 'name', label: 'Restaurant', render: (restaurant) => <button className="admin-text-link" type="button" onClick={() => { setSelected(restaurant); setDetailTab('Profile'); }}><strong>{restaurant.name}</strong><span>{restaurant.ownerName} · {restaurant.ownerEmail}</span></button> },
     { key: 'address', label: 'Physical address / coverage', render: (restaurant) => <>{restaurant.address}<br /><span className="admin-muted">Delivery: {(restaurant.serviceCoverage || [restaurant.zone]).join(', ')}</span></> },
@@ -120,6 +190,7 @@ export default function AdminRestaurantsPage() {
       {canDeactivate && restaurant.status !== 'Deactivated' && <button className="admin-action-button" type="button" onClick={() => askAction(restaurant, 'Deactivate operations')}>Deactivate</button>}
     </div> },
   ];
+
   const history = selected
     ? [...(selected.applicationHistory || [
       { id: 'submitted', title: 'Application submitted', description: 'Business information and supporting documents received.', time: `${selected.joinedDate}T09:00:00+08:00` },
@@ -135,7 +206,19 @@ export default function AdminRestaurantsPage() {
         <Tabs items={['Applications', 'Directory', 'Monitoring']} value={view} onChange={setView} label="Restaurant management views" />
         <div className="admin-filter-bar">
           <label className="admin-filter-control">Search<input aria-label="Search restaurants" placeholder="Restaurant, owner, location, or email" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-          {view === 'Applications' && <label className="admin-filter-control">Application status<select aria-label="Filter restaurant applications" value={applicationFilter} onChange={(event) => setApplicationFilter(event.target.value)}><option>All applications</option><option>Pending Review</option><option>More information requested</option></select></label>}
+          {view === 'Applications' && (
+            <label className="admin-filter-control">
+              Application status
+              <select aria-label="Filter restaurant applications" value={applicationFilter} onChange={(event) => setApplicationFilter(event.target.value)}>
+                <option>All applications</option>
+                <option>Submitted</option>
+                <option>Pending Review</option>
+                <option>Under Review</option>
+                <option>Additional Documents Required</option>
+                <option>More information requested</option>
+              </select>
+            </label>
+          )}
         </div>
         {view === 'Applications' && <DataTable columns={appColumns} rows={filteredApplications} emptyTitle="No restaurant applications" emptyDescription="There are no applications matching the selected filter." />}
         {view === 'Directory' && <DataTable columns={directoryColumns} rows={matching} emptyTitle="No restaurants found" emptyDescription="Adjust your search to see restaurant partners." />}
@@ -161,7 +244,13 @@ export default function AdminRestaurantsPage() {
               <li><strong>Delivery coverage</strong>{(selected.serviceCoverage || [selected.zone]).join(', ')}</li>
               <li><strong>Application / verification</strong>{selected.applicationStatus || selected.status} · {selected.verificationStatus || 'Pending'}</li>
             </ul>
-            <DocumentViewer documents={selected.documents || ['Business permit', 'Owner identification']} subject={selected.ownerName} status={selected.verificationStatus || 'Pending'} />
+            <DocumentViewer
+              documents={selected.documents || ['Business permit', 'Owner identification']}
+              subject={selected.ownerName}
+              status={selected.verificationStatus || 'Pending'}
+              onUpdateDocumentStatus={(docId, status, reason) => handleUpdateDocStatus(selected.id, docId, status, reason)}
+              onRequestAdditional={() => setRequestDocModalOpen(true)}
+            />
             {canApprove && selected.applicationStatus !== 'Approved' && <button className="admin-action-button" type="button" onClick={() => askAction(selected, 'Approve application')}>Approve</button>}
             {canReject && selected.applicationStatus !== 'Rejected' && <button className="admin-action-button admin-action-button--danger" type="button" onClick={() => askAction(selected, 'Reject application')}>Reject</button>}
             {canEdit && <div className="admin-record-panel"><label className="admin-filter-control">Request additional information<textarea rows="3" value={requestMessage} onChange={(event) => setRequestMessage(event.target.value)} placeholder="Specify which information is needed" /></label><button className="admin-action-button" type="button" disabled={!requestMessage.trim()} onClick={() => askAction(selected, 'Request more information')}>Send request</button></div>}
@@ -172,6 +261,98 @@ export default function AdminRestaurantsPage() {
           {detailTab === 'History' && <Timeline items={history} />}
         </>}
       </DetailDrawer>
+
+      {/* Request Additional Documents Modal */}
+      <Modal
+        open={requestDocModalOpen}
+        title="Request Additional Documents"
+        onClose={() => setRequestDocModalOpen(false)}
+        size="md"
+        footer={(
+          <div className="admin-page-header__actions">
+            <Button variant="ghost" onClick={() => setRequestDocModalOpen(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleSendDocRequest}>Send Document Request</Button>
+          </div>
+        )}
+      >
+        <form onSubmit={handleSendDocRequest} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Request supporting documents from <strong>{selected?.name}</strong>. The application status will be updated to <em>Additional Documents Required</em>.
+          </p>
+
+          <label className="admin-filter-control">
+            Document requested <span style={{ color: 'var(--salo-error)' }}>*</span>
+            <select
+              value={requestDocType}
+              onChange={(e) => setRequestDocType(e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-primary)' }}
+            >
+              <option value="Sanitary Permit / Health Certificate">Sanitary Permit / Health Certificate</option>
+              <option value="Fire Safety Inspection Certificate (FSIC)">Fire Safety Inspection Certificate (FSIC)</option>
+              <option value="Barangay Business Clearance">Barangay Business Clearance</option>
+              <option value="BIR Form 2303 (Certificate of Registration)">BIR Form 2303 (Certificate of Registration)</option>
+              <option value="Updated Mayor's / Business Permit">Updated Mayor's / Business Permit</option>
+              <option value="Secretary's Certificate / Board Resolution">Secretary's Certificate / Board Resolution</option>
+              <option value="Proof of Bank Account Ownership">Proof of Bank Account Ownership</option>
+              <option value="Other (Custom Document Name)">Other (Custom Document Name)</option>
+            </select>
+          </label>
+
+          {requestDocType === 'Other (Custom Document Name)' && (
+            <label className="admin-filter-control">
+              Custom Document Name <span style={{ color: 'var(--salo-error)' }}>*</span>
+              <input
+                type="text"
+                placeholder="e.g. Commissary Lease Agreement"
+                value={customDocName}
+                onChange={(e) => setCustomDocName(e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-primary)' }}
+              />
+            </label>
+          )}
+
+          <label className="admin-filter-control">
+            Reason for request <span style={{ color: 'var(--salo-error)' }}>*</span>
+            <textarea
+              rows="3"
+              placeholder="Explain why this document is required for partner onboarding..."
+              value={requestDocReason}
+              onChange={(e) => {
+                setRequestDocReason(e.target.value);
+                setRequestDocError('');
+              }}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-primary)' }}
+            />
+          </label>
+
+          <label className="admin-filter-control">
+            Instructions for applicant (optional)
+            <textarea
+              rows="2"
+              placeholder="e.g. Ensure the document is dated 2026 and official municipal stamp is legible..."
+              value={requestDocInstructions}
+              onChange={(e) => setRequestDocInstructions(e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-primary)' }}
+            />
+          </label>
+
+          <label className="admin-filter-control">
+            Optional submission due date
+            <input
+              type="date"
+              value={requestDocDueDate}
+              onChange={(e) => setRequestDocDueDate(e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-primary)' }}
+            />
+          </label>
+
+          {requestDocError && (
+            <p style={{ color: 'var(--salo-error)', fontSize: '12px', margin: 0 }} role="alert">
+              {requestDocError}
+            </p>
+          )}
+        </form>
+      </Modal>
 
       <ConfirmDialog
         open={Boolean(pendingAction)}
