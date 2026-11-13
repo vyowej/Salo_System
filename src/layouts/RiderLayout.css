@@ -224,3 +224,25 @@ html.rider-map-route-active::-webkit-scrollbar {
     display: none;
   }
 }
+
+.rider-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: filter var(--transition-fast), border-color var(--transition-fast);
+}
+.rider-status-pill:hover { filter: brightness(0.97); }
+.rider-status-pill-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.rider-status-pill--gray { background: var(--surface-secondary); color: var(--text-muted); border-color: var(--border-primary); }
+.rider-status-pill--green { background: var(--status-success-bg, rgba(22, 163, 74, 0.12)); color: var(--status-success-text, #15803d); border-color: rgba(22, 163, 74, 0.28); }
+.rider-status-pill--orange { background: var(--accent-subtle); color: var(--accent); border-color: rgba(243, 107, 43, 0.28); }
+

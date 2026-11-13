@@ -168,6 +168,7 @@ export default function ProfileMenu({
                   role="menuitem"
                   onClick={() => {
                     setOpen(false);
+                    triggerRef.current?.focus();
                     item.onClick?.();
                   }}
                 >

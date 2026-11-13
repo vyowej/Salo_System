@@ -133,8 +133,8 @@
   /* ── Layout ───────────────────────────────────────────── */
   --topbar-height:           64px;
   --navbar-height:           var(--topbar-height);
-  --sidebar-width:           300px; /* icon rail (68px) + nav panel */
-  --sidebar-collapsed-width: 68px;
+  --sidebar-width:           240px;
+  --sidebar-collapsed-width: 72px;
   --content-max-width:       1200px;
   --content-narrow:          760px;
   --rider-section-gap:       24px;

@@ -70,9 +70,8 @@
 
 .topbar-search {
   flex: 1 1 0%;
-  max-width: 560px;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .topbar-search .input-wrapper { flex: 1; }
@@ -207,9 +206,9 @@
   box-shadow: 0 0 0 2px var(--shell-bg), 0 0 0 4px var(--border-primary);
 }
 
-/* The sidebar rail already shows the avatar on desktop */
 .topbar-profile-slot {
-  display: none;
+  display: flex;
+  align-items: center;
 }
 
 .topbar-avatar {
@@ -274,16 +273,24 @@
 }
 
 @media (max-width: 1024px) {
+  .topbar {
+    height: auto;
+    flex-wrap: wrap;
+    padding-block: var(--space-2);
+    row-gap: var(--space-2);
+  }
+
   .topbar-heading {
     flex: 1 1 auto;
   }
 
   .topbar-hamburger { display: flex; }
   .topbar-mobile-brand { display: block; }
-  .topbar-profile-slot { display: flex; }
-  .topbar-breadcrumb-root,
-  .topbar-breadcrumb-sep { display: none; }
-  .topbar-search { display: none; }
+  .topbar-search {
+    order: 3;
+    flex: 1 0 100%;
+    max-width: 100%;
+  }
 }
 
 @media (max-width: 767px) {

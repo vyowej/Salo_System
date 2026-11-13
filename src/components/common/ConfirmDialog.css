@@ -1,0 +1,84 @@
+/* ============================================================
+   SALO — ConfirmDialog Component
+   ============================================================ */
+
+.confirm-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--overlay-bg);
+  backdrop-filter: blur(4px);
+  animation: confirmFadeIn var(--transition-fast) both;
+}
+
+.confirm-dialog-panel {
+  width: min(100%, 400px);
+  padding: var(--space-6);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xl);
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  animation: confirmScaleIn var(--transition-normal) both;
+}
+
+.confirm-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.confirm-dialog-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-heading, var(--font-body));
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.confirm-dialog-message {
+  margin: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+@keyframes confirmFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes confirmScaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (max-width: 479px) {
+  .confirm-dialog-panel {
+    padding: var(--space-5);
+  }
+
+  .confirm-dialog-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .confirm-dialog-actions > button {
+    width: 100%;
+  }
+}

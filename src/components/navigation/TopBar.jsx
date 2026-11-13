@@ -12,6 +12,7 @@ const PAGE_TITLES = {
   '/customer/favorites': 'Favorites',
   '/customer/notifications': 'Notifications',
   '/customer/reservations': 'Table Bookings',
+  '/customer/invitations': 'Invitations',
   '/customer/addresses': 'Saved Addresses',
   '/customer/partner': 'Become a Partner',
   '/customer/profile': 'Profile Settings',
@@ -29,11 +30,19 @@ const PAGE_TITLES = {
   '/owner/activity': 'Activity Logs',
   '/owner/settings': 'Settings',
   '/rider': 'Dashboard',
+  '/rider/deliveries': 'Deliveries',
+  '/rider/deliveries/active': 'Active Delivery',
   '/rider/active': 'Active Delivery',
-  '/rider/jobs': 'Available Jobs',
+  '/rider/jobs': 'Deliveries',
+  '/rider/map': 'Map / Tracking',
+  '/rider/schedule': 'Schedule',
+  '/rider/earnings': 'Earnings',
   '/rider/history': 'Delivery History',
-  '/rider/earnings': 'Earnings & Cash',
+  '/rider/notifications': 'Notifications',
+  '/rider/support': 'Support',
   '/rider/profile': 'Rider Profile',
+  '/rider/settings': 'Settings',
+  '/rider/safety': 'Safety',
   '/admin': 'Platform Overview',
   '/admin/restaurants': 'Restaurants & Partners',
   '/admin/riders': 'Courier Fleet',
@@ -41,18 +50,6 @@ const PAGE_TITLES = {
   '/admin/users': 'User Directory',
   '/admin/settings': 'System Configuration',
 };
-
-const WORKSPACE_LABELS = {
-  customer: 'Customer',
-  owner: 'Restaurant',
-  rider: 'Rider',
-  admin: 'Admin',
-};
-
-function getWorkspaceLabel(pathname) {
-  const root = pathname.split('/').filter(Boolean)[0];
-  return WORKSPACE_LABELS[root] || '';
-}
 
 function getPageTitle(pathname) {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
@@ -63,17 +60,6 @@ function getPageTitle(pathname) {
 
 /**
  * SALO TopBar
- *
- * @param {node}     search       - optional existing search input
- * @param {node}     actions      - extra action nodes (before notifications)
- * @param {string}   userName
- * @param {string}   userRole
- * @param {string}   userInitials
- * @param {string}   userAvatar
- * @param {boolean}  showNotifications
- * @param {number}   notificationCount
- * @param {function} onMenuToggle - mobile hamburger callback
- * @param {function} onAvatarClick
  */
 export default function TopBar({
   search,
@@ -84,6 +70,8 @@ export default function TopBar({
   userAvatar,
   showNotifications = true,
   notificationCount = 0,
+  notificationsHref = '/customer/notifications',
+  headingExtras,
   onMenuToggle,
   mobileMenuOpen = false,
   onAvatarClick,
@@ -95,7 +83,6 @@ export default function TopBar({
 }) {
   const { pathname } = useLocation();
   const pageTitle = title || getPageTitle(pathname);
-  const workspaceLabel = pageTitle ? getWorkspaceLabel(pathname) : '';
 
   return (
     <header className="topbar">
@@ -108,9 +95,9 @@ export default function TopBar({
             type="button"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <line x1="3" y1="6" x2="21" y2="6"/>
-              <line x1="3" y1="12" x2="21" y2="12"/>
-              <line x1="3" y1="18" x2="21" y2="18"/>
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
         )}
@@ -121,17 +108,8 @@ export default function TopBar({
           </span>
         )}
 
-        <div className="topbar-breadcrumb">
-          {workspaceLabel && (
-            <>
-              <span className="topbar-breadcrumb-root">{workspaceLabel}</span>
-              <svg className="topbar-breadcrumb-sep" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            </>
-          )}
-          <h1 className="topbar-title">{pageTitle}</h1>
-        </div>
+        <h1 className="topbar-title">{pageTitle}</h1>
+        {headingExtras}
       </div>
 
       {search && <div className="topbar-search">{search}</div>}
@@ -141,10 +119,16 @@ export default function TopBar({
         {actions}
 
         {showNotifications && (
-          <Link to="/customer/notifications" className="topbar-btn" aria-label={`Notifications${notificationCount ? ` (${notificationCount})` : ''}`} title="View notifications" style={{ textDecoration: 'none' }}>
+          <Link
+            to={notificationsHref}
+            className="topbar-btn"
+            aria-label={`Notifications${notificationCount ? ` (${notificationCount})` : ''}`}
+            title="View notifications"
+            style={{ textDecoration: 'none' }}
+          >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.73 21a2 2 0 01-3.46 0"/>
+              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 01-3.46 0" />
             </svg>
             {notificationCount > 0 && (
               <span className="topbar-notification-dot" aria-hidden="true">
@@ -177,7 +161,7 @@ export default function TopBar({
               </span>
             )}
             <svg className="topbar-user-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <polyline points="6 9 12 15 18 9"/>
+              <polyline points="6 9 12 15 18 9" />
             </svg>
           </button>
         )}

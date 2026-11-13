@@ -7,6 +7,7 @@ const FULFILLMENT_STORAGE_KEY = 'salo_cart_fulfillment';
 const ADDRESSES_STORAGE_KEY = 'salo_cart_addresses';
 const MODES_STORAGE_KEY = 'salo_cart_address_modes';
 const ITEM_ADDRESSES_STORAGE_KEY = 'salo_cart_item_addresses';
+const CUSTOMER_MODE_STORAGE_KEY = 'salo_customer_fulfillment_mode';
 
 export function CartProvider({ children }) {
   const [items, setItems] = useState(() => {
@@ -22,6 +23,26 @@ export function CartProvider({ children }) {
       return [];
     }
   });
+
+  // Global customer mode: 'delivery' | 'pickup' | 'dine-in'
+  const [fulfillmentMode, setFulfillmentModeState] = useState(() => {
+    try {
+      const stored = localStorage.getItem(CUSTOMER_MODE_STORAGE_KEY);
+      return ['delivery', 'pickup', 'dine-in'].includes(stored) ? stored : 'delivery';
+    } catch {
+      return 'delivery';
+    }
+  });
+
+  const setFulfillmentMode = useCallback((mode) => {
+    const next = ['delivery', 'pickup', 'dine-in'].includes(mode) ? mode : 'delivery';
+    setFulfillmentModeState(next);
+    try {
+      localStorage.setItem(CUSTOMER_MODE_STORAGE_KEY, next);
+    } catch {
+      // Ignore storage failures
+    }
+  }, []);
 
   // Per-restaurant fulfillment configuration { [restaurantId]: 'delivery' | 'pickup' }
   const [restaurantFulfillment, setRestaurantFulfillmentState] = useState(() => {
@@ -421,6 +442,8 @@ export function CartProvider({ children }) {
     itemsSubtotal,
     totalDeliveryFees,
     grandTotal,
+    fulfillmentMode,
+    setFulfillmentMode,
     restaurantFulfillment,
     restaurantAddresses,
     restaurantAddressModes,

@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { Link, useLocation } from 'react-router-dom';
+import { useLogout } from '../hooks/useLogout';
 import { useTheme } from '../hooks/useTheme';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import ProfileMenu from '../components/navigation/ProfileMenu';
 import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 import { getAdminNavItems } from '../features/admin/constants';
 import useAdminSession from '../features/admin/contexts/useAdminSession';
 import '../components/navigation/NavigationShell.css';
@@ -36,16 +37,30 @@ function icon(path) {
 }
 
 export default function AdminLayout({ children }) {
-  const { logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { currentAdmin, admins, isDemoMode, selectDemoAdmin, resetMfa } = useAdminSession();
+  const { requestLogout, logoutDialogProps } = useLogout({ onBeforeLogout: resetMfa });
   const location = useLocation();
-  const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      const stored = localStorage.getItem('salo_admin_sidebar_collapsed');
+      return stored === null ? true : stored === 'true';
+    } catch {
+      return true;
+    }
+  });
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('salo_admin_sidebar_collapsed', String(next)); } catch { /* Ignore storage errors */ }
+      return next;
+    });
+  };
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const navItems = getAdminNavItems(currentAdmin.role).map((item) => ({
     ...item,
+    end: item.href === '/admin',
     icon: icon(ICON_PATHS[item.id]),
   }));
   const activeItem = navItems.find((item) => (
@@ -57,11 +72,7 @@ export default function AdminLayout({ children }) {
     ? 'Security and Sessions'
     : navItems.find((item) => item.id === activeItem)?.label || 'Admin';
   const initials = currentAdmin.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase();
-  const signOut = async () => {
-    resetMfa();
-    await logout();
-    navigate('/');
-  };
+
   const profileMenuItems = [
     { id: 'settings', type: 'link', label: 'Settings', href: '/admin/settings', icon: icon(ICON_PATHS.settings) },
     { id: 'customer', type: 'link', label: 'Switch to Customer View', href: '/customer', icon: icon(ICON_PATHS.dashboard) },
@@ -70,7 +81,7 @@ export default function AdminLayout({ children }) {
       id: 'logout',
       label: 'Sign Out',
       icon: icon('M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7'),
-      onClick: signOut,
+      onClick: requestLogout,
       danger: true,
     },
   ];
@@ -82,24 +93,12 @@ export default function AdminLayout({ children }) {
           items={navItems}
           activeId={activeItem}
           collapsed={collapsed}
-          onToggleCollapse={() => setCollapsed((value) => !value)}
+          onToggleCollapse={toggleCollapsed}
           mobileOpen={mobileOpen}
           onItemClick={() => setMobileOpen(false)}
           onMobileClose={() => setMobileOpen(false)}
-          useRouterLinks
-          title="Admin Console"
-          subtitle={currentAdmin.role}
-          profile={(
-            <ProfileMenu
-              placement="sidebar"
-              collapsed
-              profileName={currentAdmin.name}
-              profileEmail={currentAdmin.email}
-              profileInitials={initials}
-              theme={theme}
-              menuItems={profileMenuItems}
-            />
-          )}
+          logoHref="/admin"
+          onLogout={requestLogout}
           footer={(
             <div className="admin-sidebar-footer">
               {isDemoMode && (
@@ -144,6 +143,7 @@ export default function AdminLayout({ children }) {
         />
         <main className="admin-content">{children}</main>
       </div>
+      <ConfirmDialog {...logoutDialogProps} />
     </div>
   );
 }

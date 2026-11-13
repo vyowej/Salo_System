@@ -1,33 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
-import { useTheme } from '../hooks/useTheme';
-import { useRestaurantAccess } from '../features/restaurant/access/useRestaurantAccess';
-import { OWNER_NAV_ITEMS } from '../features/restaurant/access/permissionMap';
+import { useLogout } from '../hooks/useLogout';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import ProfileMenu from '../components/navigation/ProfileMenu';
-import '../components/navigation/NavigationShell.css';
+import Modal from '../components/common/Modal';
+import ConfirmDialog from '../components/common/ConfirmDialog';
+import {
+  CUSTOMER_NAV_CONFIG,
+  CUSTOMER_SIDEBAR_COLLAPSED_KEY,
+} from '../components/navigation/customerNavConfig';
 import customerService from '../services/customerService';
 import { CUSTOMER_INVITATION_COUNT } from '../features/restaurant/pages/team/teamSamples';
+import '../components/navigation/NavigationShell.css';
 import './CustomerLayout.css';
 
+const FULFILLMENT_MODES = [
+  { id: 'delivery', label: 'Delivery' },
+  { id: 'pickup', label: 'Pickup' },
+  { id: 'dine-in', label: 'Dine-in' },
+];
+
 const mkIcon = (path) => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d={path} />
   </svg>
 );
-
-const ICONS = {
-  home: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z',
-  restaurants: 'M3 11l19-9-9 19-2-8-8-2z',
-  cart: 'M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z M3 6h18 M16 10a4 4 0 01-8 0',
-  orders: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
-  reservation: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-  addresses: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z',
-  profile: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 3a4 4 0 100 8 4 4 0 000-8z',
-};
 
 function getInitials(name) {
   const trimmed = (name || '').trim();
@@ -41,18 +41,31 @@ function getInitials(name) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
+function readSidebarCollapsed() {
+  try {
+    const stored = localStorage.getItem(CUSTOMER_SIDEBAR_COLLAPSED_KEY);
+    return stored === null ? true : stored === 'true';
+  } catch {
+    return true;
+  }
+}
+
 export default function CustomerLayout({ children }) {
-  const { user, logout } = useAuth();
-  const { totalItemCount } = useCart();
-  const { theme, toggleTheme } = useTheme();
-  const restaurantAccess = useRestaurantAccess();
-  const ownerDestination = OWNER_NAV_ITEMS.find((item) => restaurantAccess.canAccessNavigationItem(item.id))?.href || '/owner';
+  const { user } = useAuth();
+  const { totalItemCount, fulfillmentMode, setFulfillmentMode } = useCart();
+  const { requestLogout, logoutDialogProps } = useLogout();
   const location = useLocation();
   const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(false);
+
+  const [collapsed, setCollapsed] = useState(readSidebarCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+
   const [notificationCount, setNotificationCount] = useState(0);
-  const [favoriteCount, setFavoriteCount] = useState(0);
+  const [hasActiveOrder, setHasActiveOrder] = useState(false);
+  const [hasReservationUpdate, setHasReservationUpdate] = useState(false);
+
   const [defaultAddress, setDefaultAddress] = useState(() => customerService.getDefaultAddress());
   const [searchQuery, setSearchQuery] = useState(() => new URLSearchParams(location.search).get('q') || '');
   const [recentSearches, setRecentSearches] = useState(() => customerService.getRecentSearches());
@@ -70,23 +83,33 @@ export default function CustomerLayout({ children }) {
   }, [location.pathname]);
 
   useEffect(() => {
-    const syncNotificationCount = () => {
-      const unreadCount = customerService.getNotifications().filter((item) => !item.read).length;
-      setNotificationCount(unreadCount);
+    const syncAttentionState = () => {
+      const notifications = customerService.getNotifications();
+      const unread = notifications.filter((item) => !item.read);
+      setNotificationCount(unread.length);
+
+      const orders = customerService.getOrders();
+      setHasActiveOrder(
+        orders.some(
+          (o) => !['Completed', 'Cancelled', 'Rejected', 'Partially Completed'].includes(o.overallStatus)
+        )
+      );
+
+      const reservations = customerService.getReservations();
+      const unreadReservationNote = unread.some((n) => n.type === 'reservation');
+      const activeReservation = reservations.some((r) =>
+        ['Pending', 'Approved', 'Confirmed', 'Arrived', 'Seated'].includes(r.status)
+      );
+      setHasReservationUpdate(unreadReservationNote || activeReservation);
     };
 
-    const syncFavoriteCount = () => {
-      setFavoriteCount(customerService.getFavoriteRestaurants().length);
-    };
-
-    syncNotificationCount();
-    syncFavoriteCount();
-    window.addEventListener('salo:notificationsUpdated', syncNotificationCount);
-    window.addEventListener('salo:favoritesUpdated', syncFavoriteCount);
+    syncAttentionState();
+    window.addEventListener('salo:notificationsUpdated', syncAttentionState);
+    window.addEventListener('salo:demoStoreUpdated', syncAttentionState);
 
     return () => {
-      window.removeEventListener('salo:notificationsUpdated', syncNotificationCount);
-      window.removeEventListener('salo:favoritesUpdated', syncFavoriteCount);
+      window.removeEventListener('salo:notificationsUpdated', syncAttentionState);
+      window.removeEventListener('salo:demoStoreUpdated', syncAttentionState);
     };
   }, [location.pathname]);
 
@@ -94,8 +117,7 @@ export default function CustomerLayout({ children }) {
     if (!addressMenuOpen) return undefined;
 
     const handlePointerDown = (event) => {
-      const selector = event.target.closest('.customer-topbar-address-selector');
-      if (!selector) {
+      if (!event.target.closest('.customer-topbar-address-selector')) {
         setAddressMenuOpen(false);
       }
     };
@@ -115,132 +137,83 @@ export default function CustomerLayout({ children }) {
     };
   }, [addressMenuOpen]);
 
-  const navItems = [
-    { id: 'home', label: 'Explore & Feed', icon: mkIcon(ICONS.home), href: '/customer', section: 'Dining' },
-    { id: 'restaurants', label: 'All Restaurants', icon: mkIcon(ICONS.restaurants), href: '/customer/restaurants' },
-    {
-      id: 'cart',
-      label: 'Multi-Cart',
-      icon: mkIcon(ICONS.cart),
-      href: '/customer/cart',
-      badge: totalItemCount > 0 ? totalItemCount : null,
-    },
-    { id: 'orders', label: 'My Orders', icon: mkIcon(ICONS.orders), href: '/customer/orders', section: 'Activity' },
-    { id: 'favorites', label: 'Favorites', icon: mkIcon('M12 21s-8.5-4.9-10-9.5C1.2 8.5 3 5 6.8 5c2.1 0 3.3 1.1 4.2 2.5.9-1.4 2.1-2.5 4.2-2.5 3.8 0 5.6 3.5 5.6 6.5C20.5 16.1 12 21 12 21z'), href: '/customer/favorites', badge: favoriteCount > 0 ? favoriteCount : null },
-    { id: 'notifications', label: 'Notifications', icon: mkIcon('M12 22a2.5 2.5 0 002.45-2h-4.9A2.5 2.5 0 0012 22zm8-6V11a8 8 0 10-16 0v5l-2 2v1h20v-1l-2-2z'), href: '/customer/notifications', badge: notificationCount > 0 ? notificationCount : null },
-    { id: 'reservations', label: 'Table Bookings', icon: mkIcon(ICONS.reservation), href: '/customer/reservations' },
-    { id: 'invitations', label: 'Invitations', icon: mkIcon('M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m16-11a4 4 0 010 8m4 3v-2a4 4 0 00-3-3.87M9 11a4 4 0 100-8 4 4 0 000 8z'), href: '/customer/invitations', badge: CUSTOMER_INVITATION_COUNT, section: 'Account' },
-    { id: 'settings', label: 'Settings', icon: mkIcon(ICONS.profile), href: '/customer/profile', section: 'Account' },
-  ];
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(CUSTOMER_SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  };
 
-  // Resolve active nav item based on pathname
-  const activeItem = navItems.find((item) => {
-    if (item.href === '/customer' && location.pathname === '/customer') return true;
-    if (item.href !== '/customer' && location.pathname.startsWith(item.href)) return true;
-    return false;
-  })?.id || 'home';
-
-  const mobileNavItems = [
-    { id: 'home', label: 'Home', href: '/customer', icon: mkIcon(ICONS.home) },
-    { id: 'restaurants', label: 'Browse', href: '/customer/restaurants', icon: mkIcon(ICONS.restaurants) },
-    { id: 'cart', label: 'Cart', href: '/customer/cart', icon: mkIcon(ICONS.cart), badge: totalItemCount > 0 ? totalItemCount : null },
-    { id: 'orders', label: 'Orders', href: '/customer/orders', icon: mkIcon(ICONS.orders) },
-    { id: 'reservations', label: 'Book', href: '/customer/reservations', icon: mkIcon(ICONS.reservation) },
-  ];
+  const navItems = useMemo(
+    () =>
+      CUSTOMER_NAV_CONFIG.map((item) => {
+        if (item.id === 'orders') {
+          return { ...item, dot: hasActiveOrder };
+        }
+        if (item.id === 'reservations') {
+          return { ...item, dot: hasReservationUpdate };
+        }
+        if (item.id === 'invitations') {
+          return { ...item, badge: CUSTOMER_INVITATION_COUNT };
+        }
+        return item;
+      }),
+    [hasActiveOrder, hasReservationUpdate]
+  );
 
   const profileName = user?.name || user?.username || 'Customer';
   const profileEmail = user?.email || user?.username || 'customer@salo.local';
   const profileInitials = getInitials(profileName);
 
-  const sidebarProfileMenuItems = [
+  const profileMenuItems = [
+    {
+      id: 'profile',
+      type: 'link',
+      label: 'Profile',
+      href: '/customer/profile',
+      icon: mkIcon('M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 3a4 4 0 100 8 4 4 0 000-8z'),
+    },
+    {
+      id: 'settings',
+      type: 'link',
+      label: 'Settings',
+      href: '/customer/profile',
+      icon: mkIcon('M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z'),
+    },
     {
       id: 'invitations',
       type: 'link',
       label: 'Invitations',
       href: '/customer/invitations',
-      badge: CUSTOMER_INVITATION_COUNT,
-      icon: mkIcon('M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m16-11a4 4 0 010 8m4 3v-2a4 4 0 00-3-3.87M9 11a4 4 0 100-8 4 4 0 000 8z'),
+      icon: mkIcon('M3 5h18v14H3z M3 7l9 6 9-6'),
     },
     {
-      id: 'settings',
-      label: 'Settings',
-      icon: mkIcon(ICONS.profile),
-      onClick: () => navigate('/customer/profile'),
-    },
-    ...(restaurantAccess.hasRestaurantAccess ? [{
-      id: 'owner-workspace',
-      label: 'Restaurant workspace',
-      icon: mkIcon(ICONS.restaurants),
-      onClick: () => navigate(ownerDestination),
-    }] : []),
-    {
-      id: 'theme',
-      label: 'Dark Mode',
-      toggle: true,
-      onClick: toggleTheme,
+      id: 'partner',
+      type: 'link',
+      label: 'Become a Partner',
+      href: '/customer/partner',
+      icon: mkIcon('M3 21h18M7 17V7a2 2 0 012-2h6a2 2 0 012 2v10M9 11h6'),
     },
     {
       id: 'logout',
-      label: 'Log out',
-      icon: mkIcon('M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7'),
-      onClick: async () => {
-        await logout();
-        navigate('/');
-      },
+      label: 'Logout',
+      icon: mkIcon('M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9'),
+      onClick: requestLogout,
       danger: true,
     },
   ];
 
-  const topbarProfileMenuItems = [
-    {
-      id: 'invitations',
-      type: 'link',
-      label: 'Invitations',
-      href: '/customer/invitations',
-      badge: CUSTOMER_INVITATION_COUNT,
-      icon: mkIcon('M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m16-11a4 4 0 010 8m4 3v-2a4 4 0 00-3-3.87M9 11a4 4 0 100-8 4 4 0 000 8z'),
-    },
-    {
-      id: 'settings',
-      label: 'Settings',
-      icon: mkIcon(ICONS.profile),
-      onClick: () => navigate('/customer/profile'),
-    },
-    ...(restaurantAccess.hasRestaurantAccess ? [{
-      id: 'owner-workspace',
-      label: 'Restaurant workspace',
-      icon: mkIcon(ICONS.restaurants),
-      onClick: () => navigate(ownerDestination),
-    }] : []),
-    {
-      id: 'become-rider',
-      label: 'Become a Rider',
-      icon: mkIcon('M5 16l2-8h10l2 8M7 16l1 4h8l1-4M9 8V6a3 3 0 016 0v2'),
-      onClick: () => navigate('/become-a-rider'),
-    },
-    {
-      id: 'partner',
-      label: 'Partner with SALO',
-      icon: mkIcon('M3 21h18M7 17V7a2 2 0 012-2h6a2 2 0 012 2v10M9 11h6'),
-      onClick: () => navigate('/customer/partner'),
-    },
-    {
-      id: 'theme',
-      label: 'Dark Mode',
-      toggle: true,
-      onClick: toggleTheme,
-    },
-    {
-      id: 'logout',
-      label: 'Log out',
-      icon: mkIcon('M10 17l5-5-5-5M15 12H3m9-9h7a2 2 0 012 2v14a2 2 0 01-2 2h-7'),
-      onClick: async () => {
-        await logout();
-        navigate('/');
-      },
-      danger: true,
-    },
-  ];
+  const handleModeSelect = (modeId) => {
+    setFulfillmentMode(modeId);
+    if (modeId === 'dine-in' && location.pathname !== '/customer/reservations') {
+      navigate('/customer/reservations');
+    }
+  };
 
   const handleSearchSubmit = (nextValue) => {
     const trimmed = String(nextValue || '').trim();
@@ -261,69 +234,111 @@ export default function CustomerLayout({ children }) {
   const addressOptions = customerService.getSavedAddresses();
 
   const topbarSearch = (
-    <div className="customer-topbar-search-panel">
-      <div className="customer-topbar-address-selector">
-        <button
-          type="button"
-          className="customer-topbar-address-button"
-          onClick={() => setAddressMenuOpen((value) => !value)}
-          aria-expanded={addressMenuOpen}
-          aria-label="Select delivery address"
-        >
-          <span className="customer-topbar-address-icon" aria-hidden="true">📍</span>
-          <span className="customer-topbar-address-copy">
-            <span className="customer-topbar-address-label">Deliver to</span>
-            <span className="customer-topbar-address-value">{defaultAddress ? `${defaultAddress.label} · ${defaultAddress.city}` : 'Set address'}</span>
-          </span>
-        </button>
+    <div className={`customer-topbar-controls ${mobileSearchOpen ? 'search-expanded' : ''}`}>
+      <div className="customer-topbar-location-group">
+        <div className="customer-topbar-address-selector">
+          <button
+            type="button"
+            className="customer-topbar-address-button"
+            onClick={() => setAddressMenuOpen((value) => !value)}
+            aria-expanded={addressMenuOpen}
+            aria-label="Select delivery address"
+          >
+            <span className="customer-topbar-address-icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+            </span>
+            <span className="customer-topbar-address-copy">
+              <span className="customer-topbar-address-label">Deliver to</span>
+              <span className="customer-topbar-address-value">
+                {defaultAddress ? `${defaultAddress.label} · ${defaultAddress.city}` : 'Set address'}
+              </span>
+            </span>
+          </button>
 
-        {addressMenuOpen && (
-          <div className="customer-topbar-address-menu" role="menu" aria-label="Delivery address menu">
-            {addressOptions.map((address) => (
+          {addressMenuOpen && (
+            <div className="customer-topbar-address-menu" role="menu" aria-label="Delivery address menu">
+              {addressOptions.map((address) => (
+                <button
+                  key={address.id}
+                  type="button"
+                  className={`customer-topbar-address-option ${defaultAddress?.id === address.id ? 'active' : ''}`}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    const next = customerService.setDefaultAddress(address.id);
+                    setDefaultAddress(next.find((item) => item.isDefault) || next[0] || null);
+                    setAddressMenuOpen(false);
+                  }}
+                >
+                  <span className="customer-topbar-address-option-name">{address.label}</span>
+                  <span className="customer-topbar-address-option-details">{address.city}</span>
+                  {defaultAddress?.id === address.id && <span className="customer-topbar-address-selected">Selected</span>}
+                </button>
+              ))}
+
               <button
-                key={address.id}
                 type="button"
-                className={`customer-topbar-address-option ${defaultAddress?.id === address.id ? 'active' : ''}`}
+                className="customer-topbar-address-option"
+                style={{ color: 'var(--accent)', fontWeight: 600 }}
                 onMouseDown={(event) => {
                   event.preventDefault();
-                  const next = customerService.setDefaultAddress(address.id);
-                  setDefaultAddress(next.find((item) => item.isDefault) || next[0] || null);
                   setAddressMenuOpen(false);
+                  navigate('/customer/addresses');
                 }}
               >
-                <span className="customer-topbar-address-option-name">{address.label}</span>
-                <span className="customer-topbar-address-option-details">{address.city}</span>
-                {defaultAddress?.id === address.id && <span className="customer-topbar-address-selected">Selected</span>}
+                + Add a new address
               </button>
-            ))}
 
-            <button
-              type="button"
-              className="customer-topbar-address-option"
-              style={{ color: 'var(--accent)', fontWeight: 600 }}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                setAddressMenuOpen(false);
-                navigate('/customer/addresses');
-              }}
-            >
-              + Add a new address
-            </button>
+              <button
+                type="button"
+                className="customer-topbar-address-option manage"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  setAddressMenuOpen(false);
+                  navigate('/customer/addresses');
+                }}
+              >
+                Manage saved addresses
+              </button>
+            </div>
+          )}
+        </div>
 
+        <div className="customer-mode-toggle" role="group" aria-label="Order fulfillment mode">
+          {FULFILLMENT_MODES.map((mode) => (
             <button
+              key={mode.id}
               type="button"
-              className="customer-topbar-address-option manage"
-              onMouseDown={(event) => {
-                event.preventDefault();
-                setAddressMenuOpen(false);
-                navigate('/customer/addresses');
-              }}
+              className={`customer-mode-toggle-btn ${fulfillmentMode === mode.id ? 'active' : ''}`}
+              aria-pressed={fulfillmentMode === mode.id}
+              onClick={() => handleModeSelect(mode.id)}
             >
-              Manage saved addresses
+              {mode.label}
             </button>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
+
+      <button
+        type="button"
+        className="customer-mobile-search-trigger"
+        onClick={() => setMobileSearchOpen((v) => !v)}
+        aria-label={mobileSearchOpen ? 'Close search' : 'Open search'}
+        aria-expanded={mobileSearchOpen}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          {mobileSearchOpen ? (
+            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+          ) : (
+            <>
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" />
+            </>
+          )}
+        </svg>
+      </button>
 
       <div className="customer-topbar-search" role="search">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -379,48 +394,24 @@ export default function CustomerLayout({ children }) {
       <div className={`customer-sidebar navigation-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <SideBar
           items={navItems}
-          activeId={activeItem}
           collapsed={collapsed}
-          onToggleCollapse={() => setCollapsed(!collapsed)}
+          onToggleCollapse={toggleCollapsed}
           mobileOpen={mobileOpen}
           onMobileClose={() => setMobileOpen(false)}
-          title="SALO"
-          subtitle="Order. Reserve. Gather."
-          profile={(
-            <ProfileMenu
-              placement="sidebar"
-              collapsed
-              profileName={profileName}
-              profileEmail={profileEmail}
-              profileInitials={profileInitials}
-              profileAvatar={user?.avatar}
-              theme={theme}
-              menuItems={sidebarProfileMenuItems}
-            />
-          )}
+          logoHref="/customer"
+          onLogout={requestLogout}
+          onItemClick={(item) => {
+            if (item.action === 'support') {
+              setSupportOpen(true);
+            }
+          }}
           footer={
-            <div className="customer-profile-footer">
-
-              <button
-                type="button"
-                className={`customer-partner-promo ${collapsed ? 'collapsed' : ''}`}
-                onClick={() => navigate('/customer/partner')}
-                title={collapsed ? 'Become a Partner' : undefined}
-              >
-                <span className="customer-partner-promo-icon" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M3 21h18M7 17V7a2 2 0 012-2h6a2 2 0 012 2v10M9 11h6" />
-                  </svg>
-                </span>
-                {!collapsed && (
-                  <span className="customer-partner-promo-copy">
-                    <span className="customer-partner-promo-title">Become a Partner</span>
-                    <span className="customer-partner-promo-text">Open your restaurant or start as a rider.</span>
-                    <span className="customer-partner-promo-link">Learn more</span>
-                  </span>
-                )}
-              </button>
-            </div>
+            !collapsed ? (
+              <Link to="/customer/partner" className="customer-partner-link" onClick={() => setMobileOpen(false)}>
+                <span>Become a Partner</span>
+                <span aria-hidden="true">→</span>
+              </Link>
+            ) : null
           }
         />
       </div>
@@ -429,7 +420,7 @@ export default function CustomerLayout({ children }) {
       <div className={`customer-main navigation-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
         <TopBar
           mobileMenuOpen={mobileOpen}
-          onMenuToggle={() => setMobileOpen(!mobileOpen)}
+          onMenuToggle={() => setMobileOpen((v) => !v)}
           notificationCount={notificationCount}
           showThemeToggle={false}
           showUserInfo={false}
@@ -440,42 +431,38 @@ export default function CustomerLayout({ children }) {
               profileEmail={profileEmail}
               profileInitials={profileInitials}
               profileAvatar={user?.avatar}
-              theme={theme}
-              menuItems={topbarProfileMenuItems}
+              menuItems={profileMenuItems}
             />
           )}
           actions={
             <>
-              <Link to="/customer/favorites" style={{ textDecoration: 'none' }} title="View favorites">
-                <button
-                  type="button"
-                  className="topbar-btn topbar-favorite-action"
-                  aria-label={`View favorites with ${favoriteCount} saved restaurants`}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M12 21s-8.5-4.9-10-9.5C1.2 8.5 3 5 6.8 5c2.1 0 3.3 1.1 4.2 2.5.9-1.4 2.1-2.5 4.2-2.5 3.8 0 5.6 3.5 5.6 6.5C20.5 16.1 12 21 12 21z" />
-                  </svg>
-                  {favoriteCount > 0 && (
-                    <span className="topbar-favorite-count">{favoriteCount > 9 ? '9+' : favoriteCount}</span>
-                  )}
-                </button>
+              <Link
+                to="/customer/favorites"
+                className="topbar-btn topbar-favorite-action"
+                aria-label="View favorites"
+                title="Favorites"
+                style={{ textDecoration: 'none' }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M12 21s-8.5-4.9-10-9.5C1.2 8.5 3 5 6.8 5c2.1 0 3.3 1.1 4.2 2.5.9-1.4 2.1-2.5 4.2-2.5 3.8 0 5.6 3.5 5.6 6.5C20.5 16.1 12 21 12 21z" />
+                </svg>
               </Link>
 
-              <Link to="/customer/cart" style={{ textDecoration: 'none' }} title="View Multi-Cart">
-                <button
-                  type="button"
-                  className="topbar-btn topbar-cart-action"
-                  aria-label={`Shopping cart with ${totalItemCount} items`}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z M3 6h18 M16 10a4 4 0 01-8 0" />
-                  </svg>
-                  {totalItemCount > 0 && (
-                    <span className="topbar-cart-count">
-                      {totalItemCount}
-                    </span>
-                  )}
-                </button>
+              <Link
+                to="/customer/cart"
+                className="topbar-btn topbar-cart-action"
+                aria-label={`Shopping cart with ${totalItemCount} items`}
+                title="Multi-Cart"
+                style={{ textDecoration: 'none' }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z M3 6h18 M16 10a4 4 0 01-8 0" />
+                </svg>
+                {totalItemCount > 0 && (
+                  <span className="topbar-cart-count">
+                    {totalItemCount > 99 ? '99+' : totalItemCount}
+                  </span>
+                )}
               </Link>
             </>
           }
@@ -484,33 +471,39 @@ export default function CustomerLayout({ children }) {
         <main className="customer-content">
           {children}
         </main>
-
-        <nav className="customer-mobile-bottom-nav navigation-mobile-bottom-nav" aria-label="Customer mobile navigation">
-          {mobileNavItems.map((item) => {
-            const isActive = item.href === '/customer'
-              ? location.pathname === '/customer'
-              : location.pathname.startsWith(item.href);
-
-            return (
-              <Link
-                key={item.id}
-                to={item.href}
-                className={`customer-mobile-nav-item navigation-mobile-nav-item ${isActive ? 'active' : ''}`}
-                aria-current={isActive ? 'page' : undefined}
-                title={item.label}
-              >
-                <span className="customer-mobile-nav-icon navigation-mobile-nav-icon" aria-hidden="true">
-                  {item.icon}
-                </span>
-                <span className="customer-mobile-nav-label">{item.label}</span>
-                {item.badge !== undefined && item.badge !== null && item.badge > 0 && (
-                  <span className="customer-mobile-nav-badge navigation-mobile-nav-badge">{item.badge > 9 ? '9+' : item.badge}</span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
       </div>
+
+      <Modal
+        open={supportOpen}
+        onClose={() => setSupportOpen(false)}
+        title="Help & Support"
+        size="sm"
+      >
+        <div className="customer-support-modal">
+          <p className="customer-support-intro">
+            Need help with an order, table reservation, or your SALO account?
+          </p>
+          <div className="customer-support-links">
+            <Link to="/customer/orders" onClick={() => setSupportOpen(false)} className="customer-support-link">
+              <span>Track or manage an order</span>
+              <span aria-hidden="true">→</span>
+            </Link>
+            <Link to="/customer/reservations" onClick={() => setSupportOpen(false)} className="customer-support-link">
+              <span>Check table reservations</span>
+              <span aria-hidden="true">→</span>
+            </Link>
+            <Link to="/customer/profile" onClick={() => setSupportOpen(false)} className="customer-support-link">
+              <span>Account &amp; security settings</span>
+              <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+          <p className="customer-support-contact">
+            Support email: <strong>support@salo.local</strong> · Daily 8:00 AM – 10:00 PM
+          </p>
+        </div>
+      </Modal>
+
+      <ConfirmDialog {...logoutDialogProps} />
     </div>
   );
 }
