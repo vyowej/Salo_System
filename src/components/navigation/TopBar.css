@@ -9,7 +9,9 @@
   align-items: center;
   padding: 0 var(--space-6);
   gap: var(--space-4);
-  background: var(--shell-bg);
+  background: color-mix(in srgb, var(--shell-bg) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
   color: var(--shell-text);
   border-bottom: 1px solid var(--shell-border);
   position: sticky;
@@ -28,12 +30,33 @@
   min-width: 0;
 }
 
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.topbar-breadcrumb-root {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.topbar-breadcrumb-sep {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
 .topbar-title {
   margin: 0;
   overflow: hidden;
   color: var(--text-primary);
   font-family: var(--font-body);
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-base, 16px);
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
   text-overflow: ellipsis;
@@ -68,8 +91,10 @@
   justify-content: center;
   width: 40px;
   height: 40px;
+  border: 1px solid var(--shell-border);
   border-radius: var(--radius-md);
-  color: var(--shell-text-muted);
+  background: var(--shell-bg);
+  color: var(--shell-text);
   position: relative;
   transition:
     background var(--transition-fast),
@@ -178,9 +203,13 @@
 
 .topbar-profile-button:hover,
 .topbar-profile-button.open {
-  background: var(--shell-hover);
-  border-color: rgba(243, 107, 43, 0.18);
-  box-shadow: 0 0 0 3px rgba(243, 107, 43, 0.08);
+  background: transparent;
+  box-shadow: 0 0 0 2px var(--shell-bg), 0 0 0 4px var(--border-primary);
+}
+
+/* The sidebar rail already shows the avatar on desktop */
+.topbar-profile-slot {
+  display: none;
 }
 
 .topbar-avatar {
@@ -238,8 +267,9 @@
   justify-content: center;
   width: 40px;
   height: 40px;
+  border: 1px solid var(--shell-border);
   border-radius: var(--radius-md);
-  color: var(--shell-text-muted);
+  color: var(--shell-text);
   flex: 0 0 auto;
 }
 
@@ -250,6 +280,9 @@
 
   .topbar-hamburger { display: flex; }
   .topbar-mobile-brand { display: block; }
+  .topbar-profile-slot { display: flex; }
+  .topbar-breadcrumb-root,
+  .topbar-breadcrumb-sep { display: none; }
   .topbar-search { display: none; }
 }
 

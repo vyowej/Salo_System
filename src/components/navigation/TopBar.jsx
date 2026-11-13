@@ -42,6 +42,18 @@ const PAGE_TITLES = {
   '/admin/settings': 'System Configuration',
 };
 
+const WORKSPACE_LABELS = {
+  customer: 'Customer',
+  owner: 'Restaurant',
+  rider: 'Rider',
+  admin: 'Admin',
+};
+
+function getWorkspaceLabel(pathname) {
+  const root = pathname.split('/').filter(Boolean)[0];
+  return WORKSPACE_LABELS[root] || '';
+}
+
 function getPageTitle(pathname) {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
   if (pathname.startsWith('/customer/restaurants/')) return 'Restaurant Details';
@@ -82,6 +94,8 @@ export default function TopBar({
   profileButton,
 }) {
   const { pathname } = useLocation();
+  const pageTitle = title || getPageTitle(pathname);
+  const workspaceLabel = pageTitle ? getWorkspaceLabel(pathname) : '';
 
   return (
     <header className="topbar">
@@ -107,7 +121,17 @@ export default function TopBar({
           </span>
         )}
 
-        <h1 className="topbar-title">{title || getPageTitle(pathname)}</h1>
+        <div className="topbar-breadcrumb">
+          {workspaceLabel && (
+            <>
+              <span className="topbar-breadcrumb-root">{workspaceLabel}</span>
+              <svg className="topbar-breadcrumb-sep" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </>
+          )}
+          <h1 className="topbar-title">{pageTitle}</h1>
+        </div>
       </div>
 
       {search && <div className="topbar-search">{search}</div>}
@@ -130,7 +154,7 @@ export default function TopBar({
           </Link>
         )}
 
-        {profileButton}
+        {profileButton && <div className="topbar-profile-slot">{profileButton}</div>}
 
         {showThemeToggle && <ThemeToggle />}
 
