@@ -54,7 +54,7 @@ export default function ApplicationProgress({
                   )}
                 </span>
                 <span className="wizard-step-text">
-                  <span className="wizard-step-title">{item.label}</span>
+                  <span className="wizard-step-title">{item.shortLabel || item.label}</span>
                 </span>
               </button>
             </li>
