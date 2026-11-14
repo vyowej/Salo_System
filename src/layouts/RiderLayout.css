@@ -246,3 +246,24 @@ html.rider-map-route-active::-webkit-scrollbar {
 .rider-status-pill--green { background: var(--status-success-bg, rgba(22, 163, 74, 0.12)); color: var(--status-success-text, #15803d); border-color: rgba(22, 163, 74, 0.28); }
 .rider-status-pill--orange { background: var(--accent-subtle); color: var(--accent); border-color: rgba(243, 107, 43, 0.28); }
 
+
+/* ── Rider top bar: title left, actions pinned right ────── */
+.rider-main .topbar-heading { flex: 1 1 auto; }
+.rider-main .topbar-actions { margin-left: auto; gap: var(--space-3); }
+.rider-main .topbar-profile-slot { order: 3; margin-left: var(--space-1); padding-left: var(--space-3); border-left: 1px solid var(--shell-border); }
+.rider-main .topbar-title { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); color: var(--text-heading, var(--text-primary)); }
+.rider-main .topbar-btn,
+.rider-main .theme-toggle { width: 40px; height: 40px; border-radius: var(--radius-full); }
+.rider-main .topbar-notification-dot { background: var(--salo-terracotta, #D65A2E); color: #fff; }
+.rider-main .rider-status-pill { height: 30px; padding: 0 12px; }
+.rider-main .topbar { box-shadow: var(--shadow-xs); }
+
+@media (max-width: 767px) {
+  .rider-main .topbar-profile-slot { padding-left: var(--space-2); }
+  .rider-main .topbar-actions { gap: var(--space-2); }
+  .rider-main .topbar-title { font-size: var(--font-size-base); }
+}
+
+@media (max-width: 479px) {
+  .rider-main .topbar-title { display: none; }
+}
