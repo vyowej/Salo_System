@@ -71,6 +71,7 @@ export default function TopBar({
   showNotifications = true,
   notificationCount = 0,
   notificationsHref = '/customer/notifications',
+  headingPrefix,
   headingExtras,
   onMenuToggle,
   mobileMenuOpen = false,
@@ -108,6 +109,7 @@ export default function TopBar({
           </span>
         )}
 
+        {headingPrefix}
         <h1 className="topbar-title">{pageTitle}</h1>
         {headingExtras}
       </div>
