@@ -2,27 +2,37 @@ import './Badge.css';
 
 /** Map of status → badge variant */
 const STATUS_MAP = {
-  pending:    'warning',
-  approved:   'success',
-  active:     'success',
-  completed:  'success',
-  delivered:  'success',
-  rejected:   'error',
-  cancelled:  'error',
-  failed:     'error',
-  inactive:   'default',
-  preparing:  'primary',
-  ready:      'primary',
-  'on the way': 'info',
+  pending:                  'upcoming',
+  confirmed:                'upcoming',
+  accepted:                 'upcoming',
+  preparing:                'upcoming',
+  'ready for pickup':       'upcoming',
+  ready:                    'upcoming',
+  'out for delivery':       'upcoming',
+  'on the way':             'upcoming',
+  'in progress':            'upcoming',
+  scheduled:                'upcoming',
+  'cancellation requested': 'upcoming',
+  'partially completed':    'upcoming',
+  approved:                 'completed',
+  active:                   'completed',
+  completed:                'completed',
+  delivered:                'completed',
+  'picked up':              'completed',
+  rejected:                 'cancelled',
+  cancelled:                'cancelled',
+  failed:                   'cancelled',
+  inactive:                 'default',
 };
 
 /**
  * SALO Badge Component
  *
- * @param {string}  variant   - 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info'
+ * @param {string}  variant   - 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info' | 'upcoming' | 'completed' | 'cancelled'
  * @param {string}  status    - Semantic status string (auto-maps to variant)
  * @param {string}  size      - 'sm' | 'md' | 'lg'
  * @param {boolean} dot       - Show a dot indicator
+ * @param {node}    icon      - Optional leading icon
  * @param {boolean} outlined
  */
 export default function Badge({
@@ -31,6 +41,7 @@ export default function Badge({
   status,
   size = 'md',
   dot = false,
+  icon = null,
   outlined = false,
   className = '',
 }) {
@@ -48,6 +59,7 @@ export default function Badge({
 
   return (
     <span className={classes}>
+      {icon}
       {dot && <span className="badge-dot" aria-hidden="true" />}
       {children || (status && capitalize(status))}
     </span>
