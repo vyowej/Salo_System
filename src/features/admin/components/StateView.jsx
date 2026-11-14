@@ -16,7 +16,7 @@ export default function StateView({ state = 'success', title, description, retry
     return (
       <div className="admin-state-view" role="alert">
         <h2>Unable to load {title || 'this section'}</h2>
-        <p>{description || 'The demo data could not be loaded. Please retry.'}</p>
+        <p>{description || 'The data could not be loaded. Please retry.'}</p>
         {retry && <Button variant="outline" onClick={retry}>Retry</Button>}
       </div>
     );
