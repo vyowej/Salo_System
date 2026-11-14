@@ -148,5 +148,5 @@ test('initial application state has expected default structure', () => {
   assert.equal(typeof INITIAL_APPLICATION_STATE.payout, 'object');
   assert.equal(typeof INITIAL_APPLICATION_STATE.configuration, 'object');
   assert.equal(INITIAL_APPLICATION_STATE.emailVerification.isVerified, false);
-  assert.equal(INITIAL_APPLICATION_STATE.configuration.services.dineIn, undefined, 'dineIn must be removed from services');
+  assert.equal(INITIAL_APPLICATION_STATE.configuration.services.dineIn, true, 'dineIn must be enabled by default in services');
 });
