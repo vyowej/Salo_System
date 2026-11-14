@@ -404,6 +404,7 @@ export default function ApplicationReviewStep({
               <div className="review-pill-tags">
                 {configuration.services?.delivery && <Badge variant="info" size="sm">🛵 Delivery</Badge>}
                 {configuration.services?.pickup && <Badge variant="info" size="sm">🛍️ Pickup</Badge>}
+                {configuration.services?.dineIn && <Badge variant="info" size="sm">🍽️ Dine-in</Badge>}
                 {configuration.services?.tableReservations && <Badge variant="info" size="sm">📅 Reservations</Badge>}
               </div>
             </div>
