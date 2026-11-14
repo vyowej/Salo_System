@@ -400,7 +400,7 @@ export default function CustomerLayout({ children }) {
           onMenuToggle={() => setMobileOpen((v) => !v)}
           showNotifications={false}
           headingPrefix={location.pathname.startsWith('/customer/restaurants/') ? <BackButton fallbackTo="/customer" /> : null}
-          showThemeToggle={false}
+          showThemeToggle
           showUserInfo={false}
           search={topbarSearch}
           profileButton={(
