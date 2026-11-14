@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom';
 import Button from '../../../components/common/Button';
 import { Card, CardBody } from '../../../components/common/Card';
 import MapSlot from '../../../components/common/MapSlot';
-import PageHeader from '../components/PageHeader';
 import PickupPhotoDialog from '../components/PickupPhotoDialog';
 import ScenarioLink from '../components/ScenarioLink';
 import StateView from '../components/StateView';
@@ -11,7 +10,6 @@ import StatusBadge from '../components/StatusBadge';
 import FileUploadField from '../components/FileUploadField';
 import { deliveryStatuses } from '../constants/statusConfig';
 import { getRiderMock } from '../mocks';
-import { previewCopy } from '../mocks/ui.mock';
 import useScenario from '../hooks/useScenario';
 import { advanceDeliveryStep, getDeliveryProgress, uploadPickupPhoto } from '../services/riderDeliveryService';
 import { formatPeso } from '../utils/format';
@@ -61,9 +59,14 @@ export default function RiderMapPage() {
   const [pickupDialogOpen, setPickupDialogOpen] = useState(false);
   const [, setDeliveryRevision] = useState(0);
 
-  const viewState = scenario === 'default' || scenario === 'active' || scenario === 'empty' || scenario === 'denied' || scenario === 'stale'
-    ? 'ready'
-    : scenario;
+  const viewState =
+    scenario === 'default' ||
+    scenario === 'active' ||
+    scenario === 'empty' ||
+    scenario === 'denied' ||
+    scenario === 'stale'
+      ? 'ready'
+      : scenario;
 
   const deliveryProgress = resolvedDelivery ? getDeliveryProgress(resolvedDelivery.id) : null;
   const currentDelivery = resolvedDelivery
@@ -72,25 +75,54 @@ export default function RiderMapPage() {
   const currentStop = currentDelivery?.status === 'picked_up' ? 'dropoff' : 'pickup';
   const challengeAction = ['accepted', 'arrived'].includes(currentDelivery?.status)
     ? 'Mark as Picked Up'
-    : currentDelivery?.status === 'picked_up' ? 'Mark as Delivered' : '';
-  const canShowActions = Boolean(currentDelivery && ['accepted', 'arrived', 'picked_up'].includes(currentDelivery.status));
-  const canShowProof = currentDelivery?.status === 'picked_up' && (currentDelivery.proof || currentDelivery.customerPhone || currentDelivery.phone);
+    : currentDelivery?.status === 'picked_up'
+      ? 'Mark as Delivered'
+      : '';
+  const canShowActions = Boolean(
+    currentDelivery && ['accepted', 'arrived', 'picked_up'].includes(currentDelivery.status),
+  );
+  const canShowProof =
+    currentDelivery?.status === 'picked_up' &&
+    (currentDelivery.proof || currentDelivery.customerPhone || currentDelivery.phone);
   const currentDeliveryId = currentDelivery?.id;
 
   const stops = [
     {
       key: 'pickup',
-      label: 'Pickup',
+      stepNum: '1',
+      label: 'Pickup · Restaurant',
       title: currentDelivery?.restaurant || 'Restaurant',
       address: currentDelivery?.restaurantAddress || currentDelivery?.pickup || 'Pickup address unavailable',
+      note: currentDelivery?.pickup || 'Front counter pickup · Verify order number',
+      phone: currentDelivery?.restaurantPhone || '+63 2 8555 0142',
     },
     {
       key: 'dropoff',
-      label: 'Drop-off',
+      stepNum: '2',
+      label: 'Drop-off · Customer',
       title: currentDelivery?.customerName || 'Customer',
       address: currentDelivery?.dropoff || 'Drop-off address unavailable',
+      note:
+        currentDelivery?.deliveryNotes ||
+        currentDelivery?.instructions ||
+        'Hand directly to customer or leave at designated lobby desk.',
+      phone: currentDelivery?.customerPhone || currentDelivery?.phone || '+63 912 345 6789',
     },
   ];
+
+  const stepOrder = ['accepted', 'arrived', 'picked_up', 'delivered'];
+  const stepIndex = Math.max(stepOrder.indexOf(currentDelivery?.status), 0);
+  const routeSteps = ['Accepted', 'At restaurant', 'Picked up', 'Delivered'];
+  const routeMetrics = currentDelivery
+    ? {
+        eta: currentDelivery.eta || (currentStop === 'pickup' ? '8 min' : '15 min'),
+        distance: currentDelivery.distance || (currentStop === 'pickup' ? '1.8 km' : '3.2 km'),
+      }
+    : null;
+
+  const itemsList = Array.isArray(currentDelivery?.items) ? currentDelivery.items : [];
+  const totalUnitCount = itemsList.reduce((acc, item) => acc + Number(item.quantity || item.qty || 1), 0);
+  const isCod = currentDelivery?.payment?.type === 'COD' || currentDelivery?.paymentType === 'cod';
 
   function handleProofUpload(event) {
     const file = event.target.files?.[0];
@@ -126,9 +158,10 @@ export default function RiderMapPage() {
   }
 
   function handleNavigationOpen() {
-    const targetAddress = currentStop === 'pickup'
-      ? resolvedDelivery?.restaurantAddress || resolvedDelivery?.pickup
-      : resolvedDelivery?.dropoff;
+    const targetAddress =
+      currentStop === 'pickup'
+        ? resolvedDelivery?.restaurantAddress || resolvedDelivery?.pickup
+        : resolvedDelivery?.dropoff;
 
     if (!targetAddress) return;
     window.open(buildNavigationUrl(targetAddress), '_blank', 'noopener,noreferrer');
@@ -136,18 +169,6 @@ export default function RiderMapPage() {
 
   return (
     <div className="rider-page-shell rider-map-page">
-      <PageHeader
-        title="Map & tracking"
-        eyebrow="Delivery route"
-        actions={(
-          <ScenarioLink to="/rider/deliveries" className="rider-map-back-button" aria-label="Back" title="Back">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-          </ScenarioLink>
-        )}
-      />
-
       <div className="rider-map-workspace">
         <StateView
           state={viewState}
@@ -157,61 +178,144 @@ export default function RiderMapPage() {
         >
           {!currentDelivery ? (
             <div className="rider-map-empty-shell">
-              <MapSlot label="Map will appear here" />
+              <MapSlot label="Map will appear here" hasRoute={false} />
               <div className="rider-map-empty-copy">
                 <strong>No active delivery. Accept an offer to see it here.</strong>
-                <Button as={ScenarioLink} to="/rider/deliveries" variant="primary">Browse deliveries</Button>
+                <Button as={ScenarioLink} to="/rider/deliveries" variant="primary">
+                  Browse deliveries
+                </Button>
               </div>
             </div>
           ) : (
-            <div className="rider-map-viewport">
-              <MapSlot className="rider-map-slot" />
-
-              <aside className="rider-map-floating-panel">
+            <div className="rider-map-layout">
+              {/* Left Column: Dedicated Delivery Dispatch Panel */}
+              <aside className="rider-map-sidebar">
                 <Card className="rider-map-detail-card">
                   <CardBody className="rider-map-detail-body">
+                    {/* Top Header with Back Button, Order ID & Status */}
                     <div className="rider-map-detail-header">
-                      <div>
-                        <p className="rider-map-title-label">Current delivery</p>
-                        <h2>{currentDelivery.orderReference || currentDelivery.reference}</h2>
-                        <span className="rider-map-subtitle">
-                          {['accepted', 'arrived'].includes(currentDelivery.status)
-                            ? 'Head to the restaurant to pick up'
-                            : currentDelivery.status === 'picked_up'
-                              ? 'Deliver to the customer'
-                              : 'Review delivery details'}
-                        </span>
+                      <div className="rider-map-header-left">
+                        <ScenarioLink
+                          to="/rider/deliveries"
+                          className="rider-map-back-button"
+                          aria-label="Back to deliveries"
+                          title="Back to deliveries"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                            <path d="M19 12H5M12 19l-7-7 7-7" />
+                          </svg>
+                        </ScenarioLink>
+                        <div className="rider-map-header-titles">
+                          <p className="rider-map-title-label">Current delivery</p>
+                          <h2>{currentDelivery.orderReference || currentDelivery.reference}</h2>
+                        </div>
                       </div>
                       <StatusBadge status={currentDelivery.status} config={deliveryStatuses} />
                     </div>
 
-                    <details className="rider-map-details">
-                      <summary>
-                        <span>Order summary</span>
-                        <strong>{currentDelivery.items?.length ? `${currentDelivery.items.length} items` : 'Order items'}</strong>
-                      </summary>
+                    {/* Active Leg Subtitle & Dispatch Time */}
+                    <div className="rider-map-status-banner">
+                      <span className="rider-map-subtitle">
+                        {['accepted', 'arrived'].includes(currentDelivery.status)
+                          ? 'Head to the restaurant to pick up'
+                          : currentDelivery.status === 'picked_up'
+                            ? 'Proceed to customer drop-off location'
+                            : 'Delivery completed'}
+                      </span>
+                      {currentDelivery.timestamp && (
+                        <small className="rider-map-timestamp">{currentDelivery.timestamp}</small>
+                      )}
+                    </div>
+
+                    {/* 4-Step Progress Tracker */}
+                    <ol className="rider-map-steps" aria-label="Delivery progress">
+                      {routeSteps.map((step, index) => (
+                        <li
+                          key={step}
+                          className={index < stepIndex ? 'is-done' : index === stepIndex ? 'is-current' : ''}
+                        >
+                          <span aria-hidden="true">{index < stepIndex ? '✓' : index + 1}</span>
+                          <small>{step}</small>
+                        </li>
+                      ))}
+                    </ol>
+
+                    {/* Route Timeline: Pickup & Drop-off Details */}
+                    <div className="rider-map-route-timeline" aria-label="Delivery route details">
+                      {stops.map((stop) => {
+                        const isActiveStop = currentStop === stop.key;
+                        return (
+                          <div
+                            key={stop.key}
+                            className={`rider-map-timeline-item is-${stop.key} ${isActiveStop ? 'is-active' : ''}`}
+                          >
+                            <div className="rider-map-timeline-marker" aria-hidden="true">
+                              {stop.stepNum}
+                            </div>
+                            <div className="rider-map-timeline-content">
+                              <div className="rider-map-timeline-topline">
+                                <span className="rider-map-timeline-label">{stop.label}</span>
+                                {stop.phone && (
+                                  <a
+                                    className="rider-map-mini-call"
+                                    href={`tel:${stop.phone.replace(/[^+\d]/g, '')}`}
+                                    title={`Call ${stop.title}`}
+                                  >
+                                    📞 Call
+                                  </a>
+                                )}
+                              </div>
+                              <strong className="rider-map-timeline-title">{stop.title}</strong>
+                              <p className="rider-map-timeline-address">{stop.address}</p>
+                              {stop.note && <p className="rider-map-timeline-note">“{stop.note}”</p>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Order Manifest & Handling Checklist */}
+                    <div className="rider-map-manifest-box">
+                      <div className="rider-map-manifest-header">
+                        <span>Order manifest</span>
+                        <strong>
+                          {itemsList.length} {itemsList.length === 1 ? 'item' : 'items'} ({totalUnitCount} units)
+                        </strong>
+                      </div>
                       <ul className="rider-map-item-list">
-                        {(currentDelivery.items || []).map((item) => (
+                        {itemsList.map((item) => (
                           <li key={item.name || item.id || `${item.quantity}-${item.label}`}>
-                            <span>{item.name || item.label}</span>
-                            <strong>{item.quantity || item.qty || 1}</strong>
+                            <span className="rider-map-item-qty">{item.quantity || item.qty || 1}×</span>
+                            <span className="rider-map-item-name">{item.name || item.label}</span>
                           </li>
                         ))}
                       </ul>
-                    </details>
-
-                    <div className="rider-map-payment-line">
-                      {currentDelivery.payment?.type === 'COD' || currentDelivery.paymentType === 'cod'
-                        ? <>COD · Collect {formatPeso(currentDelivery.payment?.amount || currentDelivery.amount)}</>
-                        : 'Paid online · Do not collect payment'}
+                      <div className="rider-map-handling-tags">
+                        <span className="rider-map-tag">Check thermal seal</span>
+                        <span className="rider-map-tag">Keep drinks upright</span>
+                        {currentDelivery.proof?.method && (
+                          <span className="rider-map-tag">{currentDelivery.proof.method}</span>
+                        )}
+                      </div>
                     </div>
 
-                    {currentDelivery.earnings && (
-                      <div className="rider-map-earnings-row">
-                        <span>Delivery pay</span>
-                        <strong>{formatPeso(currentDelivery.earnings)}</strong>
+                    {/* Financial Summary: Payment & Rider Pay */}
+                    <div className="rider-map-finance-grid">
+                      <div className={`rider-map-finance-box ${isCod ? 'is-cod' : 'is-paid'}`}>
+                        <span>{isCod ? 'COD to collect' : 'Payment status'}</span>
+                        <strong>
+                          {isCod
+                            ? formatPeso(currentDelivery.payment?.amount || currentDelivery.amount)
+                            : 'Paid online'}
+                        </strong>
+                        <small>{isCod ? 'Collect cash from customer' : 'Do not collect cash'}</small>
                       </div>
-                    )}
+                      <div className="rider-map-finance-box is-earnings">
+                        <span>Delivery pay</span>
+                        <strong>{formatPeso(currentDelivery.earnings || 180)}</strong>
+                        <small>Base + distance fee</small>
+                      </div>
+                    </div>
 
                     {canShowProof && (
                       <div className="rider-map-proof-block">
@@ -230,48 +334,62 @@ export default function RiderMapPage() {
                         <Button variant="primary" fullWidth loading={isSubmitting} onClick={handlePrimaryAction}>
                           {challengeAction}
                         </Button>
-                        <Button variant="secondary" fullWidth onClick={handleNavigationOpen} disabled={!currentDelivery.dropoff && !currentDelivery.restaurantAddress}>
+                        <Button
+                          variant="secondary"
+                          fullWidth
+                          onClick={handleNavigationOpen}
+                          disabled={!currentDelivery.dropoff && !currentDelivery.restaurantAddress}
+                        >
                           Open in navigation app
                         </Button>
                       </div>
                     )}
+
                     {transitionError && <p className="rider-map-error">{transitionError}</p>}
-                    <p className="rider-map-safety-note">{previewCopy.neverDriving}</p>
                   </CardBody>
                 </Card>
               </aside>
 
-              <div className="rider-map-stop-row" aria-label="Delivery stops">
-                {stops.map((stop) => (
-                  <div
-                    key={stop.key}
-                    className={`rider-map-stop-card is-${stop.key} ${currentStop === stop.key ? 'is-current' : ''}`}
-                  >
-                    <span>{stop.label}</span>
-                    <strong>{stop.title}</strong>
-                    <small>{stop.address}</small>
-                  </div>
-                ))}
+              {/* Right Column: Full-Visibility Interactive Route Map & Stop Cards */}
+              <div className="rider-map-canvas-column">
+                <div className="rider-map-viewport">
+                  <MapSlot
+                    className="rider-map-slot"
+                    stage={currentStop}
+                    pickup={stops[0]}
+                    dropoff={stops[1]}
+                    metrics={routeMetrics}
+                  />
+                </div>
+
+                {/* Docked Route Checkpoints Bar Below Map */}
+                <div className="rider-map-stop-row" aria-label="Delivery checkpoints">
+                  {stops.map((stop) => (
+                    <div
+                      key={stop.key}
+                      className={`rider-map-stop-card is-${stop.key} ${currentStop === stop.key ? 'is-current' : ''}`}
+                    >
+                      <div className="rider-map-stop-card-top">
+                        <span>
+                          Step {stop.stepNum} · {stop.key === 'pickup' ? 'Pickup' : 'Drop-off'}
+                        </span>
+                        <em className="rider-map-stop-badge">
+                          {currentStop === stop.key ? 'Active leg' : stop.key === 'pickup' ? 'Origin' : 'Destination'}
+                        </em>
+                      </div>
+                      <strong>{stop.title}</strong>
+                      <small>{stop.address}</small>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
         </StateView>
-        {currentDelivery && (
-          <ScenarioLink to="/rider/support" className="rider-map-report-button">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-              <path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18.6A2 2 0 003.2 21h17.6a2 2 0 001.4-3L13.7 3.9a2 2 0 00-3.4 0z" />
-            </svg>
-            <span>Report a problem</span>
-          </ScenarioLink>
-        )}
       </div>
 
       {currentDelivery && (
-        <PickupPhotoDialog
-          open={pickupDialogOpen}
-          onClose={closePickupDialog}
-          onConfirm={confirmPickup}
-        />
+        <PickupPhotoDialog open={pickupDialogOpen} onClose={closePickupDialog} onConfirm={confirmPickup} />
       )}
     </div>
   );
