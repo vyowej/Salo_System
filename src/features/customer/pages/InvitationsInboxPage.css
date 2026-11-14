@@ -1,318 +1,137 @@
 .customer-invitations-page {
-  width: min(100%, 980px);
-  margin: 0 auto;
+  width: 100%;
   color: var(--text-primary);
-}
-
-.customer-invitations-page *,
-.customer-invitations-page *::before,
-.customer-invitations-page *::after {
-  box-sizing: border-box;
-}
-
-.customer-invitations-preview {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 15px;
-  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border-primary));
-  border-radius: var(--radius-lg);
-  background: var(--accent-subtle);
-}
-
-.customer-invitations-preview strong,
-.customer-invitations-preview small {
-  display: block;
-}
-
-.customer-invitations-preview strong {
-  font-size: var(--font-size-sm);
-}
-
-.customer-invitations-preview small {
-  margin-top: 3px;
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.customer-invitations-preview label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-}
-
-.customer-invitations-preview select {
-  min-height: 38px;
-  padding: 7px 10px;
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-md);
-  background: var(--surface-primary);
-  color: var(--text-primary);
-  font: inherit;
 }
 
 .customer-invitation-list {
-  display: grid;
-  gap: 15px;
-}
-
-.customer-invitation-card {
-  padding: 19px;
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-xl);
-  background: var(--surface-primary);
-  box-shadow: var(--shadow-sm);
-}
-
-.customer-invitation-card.ownership {
-  border-color: color-mix(in srgb, var(--gold) 48%, var(--border-primary));
-  background: linear-gradient(145deg, var(--gold-subtle), var(--surface-primary) 58%);
-}
-
-.customer-invitation-card-top {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 12px;
 }
 
-.customer-invitation-card-top > div:nth-child(2) {
-  flex: 1;
+.customer-invitation-card {
+  padding: 12px 16px;
+  border: 1px solid var(--border-primary);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+}
+
+.customer-invitation-card.ownership {
+  border-left-color: var(--gold);
+}
+
+.customer-invitation-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.customer-invitation-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.customer-invitation-title-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   min-width: 0;
 }
 
 .customer-invitation-mark {
-  display: grid;
-  flex: 0 0 auto;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border-radius: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-md);
   background: var(--accent-subtle);
   color: var(--accent);
-  font-size: 20px;
+  flex-shrink: 0;
 }
 
 .customer-invitation-mark.ownership {
-  border: 1px solid color-mix(in srgb, var(--gold) 55%, var(--border-primary));
   background: var(--gold-subtle);
   color: var(--gold-text);
 }
 
 .customer-invitation-type {
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
   color: var(--accent);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
 }
 
 .customer-invitation-type.ownership {
   color: var(--gold-text);
 }
 
-.customer-invitation-card h2 {
-  margin: 3px 0;
-  font-size: var(--font-size-lg);
-}
-
-.customer-invitation-card-top p {
+.customer-invitation-title-group h2 {
   margin: 0;
+  font-size: 15px;
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+}
+
+.customer-invitation-meta {
+  margin: 0;
+  font-size: 13px;
   color: var(--text-secondary);
-  font-size: var(--font-size-xs);
 }
 
-.customer-invitation-details {
-  display: grid;
-  grid-template-columns: minmax(140px, .7fr) minmax(140px, .7fr) minmax(220px, 1.5fr);
-  gap: 12px;
-  margin-top: 18px;
-  padding: 14px 0;
-  border-top: 1px solid var(--border-secondary);
-  border-bottom: 1px solid var(--border-secondary);
+.customer-invitation-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
 }
 
-.customer-invitation-details > div > span {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--text-muted);
-  font-size: 10px;
-}
-
-.customer-invitation-details strong {
-  font-size: var(--font-size-xs);
-}
-
-.customer-invitation-responsibilities > div {
+.customer-invitation-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 
 .customer-invitation-chip {
-  display: inline-flex;
-  padding: 5px 8px;
-  border: 1px solid var(--border-primary);
-  border-radius: 99px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
   background: var(--surface-secondary);
+  border: 1px solid var(--border-primary);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
-.customer-ownership-warning {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border-left: 4px solid var(--gold);
-  border-radius: var(--radius-sm);
-  background: var(--gold-subtle);
-}
-
-.customer-ownership-warning strong {
-  color: var(--gold-text);
-  font-size: var(--font-size-xs);
-}
-
-.customer-ownership-warning p {
-  margin: 4px 0 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: 1.5;
+.customer-invitation-chip--more {
+  color: var(--text-muted);
+  font-weight: var(--font-weight-semibold);
 }
 
 .customer-invitation-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.customer-invitation-response {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: var(--status-success-bg);
-  color: var(--status-success-text);
-}
-
-.customer-invitation-response > span {
-  font-size: 20px;
-  font-weight: 800;
-}
-
-.customer-invitation-response p {
-  margin: 0;
-  font-size: var(--font-size-xs);
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .customer-invitations-count {
-  margin-top: 15px;
+  margin: 12px 0 0;
+  font-size: 12px;
   color: var(--text-muted);
-  font-size: var(--font-size-xs);
-}
-
-.customer-invitations-state {
-  display: grid;
-  min-height: 260px;
-  justify-items: center;
-  align-content: center;
-  padding: 25px;
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-xl);
-  background: var(--surface-primary);
-  text-align: center;
-}
-
-.customer-invitations-state h2 {
-  margin: 12px 0 4px;
-  font-size: var(--font-size-xl);
-}
-
-.customer-invitations-state p {
-  color: var(--text-secondary);
-}
-
-.customer-invitations-state-icon {
-  display: grid;
-  width: 46px;
-  height: 46px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--accent-subtle);
-  color: var(--accent);
-  font-size: 22px;
-}
-
-.customer-invitations-state-icon.error {
-  background: var(--status-error-bg);
-  color: var(--status-error-text);
-}
-
-.customer-invitations-spinner {
-  width: 30px;
-  height: 30px;
-  border: 3px solid var(--border-primary);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: customer-invitation-spin .8s linear infinite;
-}
-
-@keyframes customer-invitation-spin {
-  to { transform: rotate(360deg); }
-}
-
-:where(.customer-invitations-page) button:focus-visible,
-:where(.customer-invitations-page) select:focus-visible {
-  outline: 2px solid var(--border-focus);
-  outline-offset: 2px;
 }
 
 @media (max-width: 640px) {
-  .customer-invitations-preview {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .customer-invitations-preview label {
-    justify-content: space-between;
-    width: 100%;
-  }
-
-  .customer-invitations-preview select {
-    flex: 1;
-    max-width: 185px;
-  }
-
-  .customer-invitation-card {
-    padding: 14px;
-  }
-
-  .customer-invitation-card-top {
-    flex-wrap: wrap;
-  }
-
-  .customer-invitation-card-top > .badge {
-    margin-left: 54px;
-  }
-
-  .customer-invitation-details {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .customer-invitation-responsibilities {
-    grid-column: 1 / -1;
-  }
-
   .customer-invitation-actions {
-    flex-direction: column-reverse;
-  }
-
-  .customer-invitation-actions .btn {
     width: 100%;
+    justify-content: flex-end;
   }
 }

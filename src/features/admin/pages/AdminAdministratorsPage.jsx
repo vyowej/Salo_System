@@ -5,7 +5,7 @@ import {
   ADMIN_MODULES,
   ADMIN_PERMISSION_ACTIONS,
   ADMIN_PERMISSION_MATRIX,
-  ADMIN_ROLE_LIST,
+  ADMIN_ROLES,
 } from '../constants';
 import {
   ConfirmDialog,
@@ -13,11 +13,13 @@ import {
   DetailDrawer,
   PageHeader,
   StatusBadge,
+  Modal,
   Tabs,
   Timeline,
 } from '../components';
 import { getAdminMock } from '../mocks';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { formatDateTime } from '../utils/format';
 import './AdminPages.css';
 
@@ -64,9 +66,10 @@ function PermissionEditor({ value, onChange }) {
 }
 
 export default function AdminAdministratorsPage() {
-  const { permissions } = useAdminSession();
+  const { currentAdmin, permissions } = useAdminSession();
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Administrators', placeholder: 'Search administrators by name, email, username, status', searchableFields: ['name', 'email', 'username', 'status'] });
   const [admins, setAdmins] = useState(INITIAL_ADMINS);
-  const [roleFilter, setRoleFilter] = useState('All roles');
+
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [detailTab, setDetailTab] = useState('Profile');
@@ -74,14 +77,14 @@ export default function AdminAdministratorsPage() {
   const [inviteLookup, setInviteLookup] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
-  const [inviteRole, setInviteRole] = useState(ADMIN_ROLE_LIST[1]);
-  const [invitePermissions, setInvitePermissions] = useState(() => clonePermissions(ADMIN_PERMISSION_MATRIX[ADMIN_ROLE_LIST[1]]));
+
+  const [invitePermissions, setInvitePermissions] = useState(() => clonePermissions(ADMIN_PERMISSION_MATRIX[ADMIN_ROLES.ADMIN]));
   const [permissionDraft, setPermissionDraft] = useState(null);
   const [editingPermissions, setEditingPermissions] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
   const [notice, setNotice] = useState('');
   const canManagePermissions = permissions.administrators?.includes('manage_permissions') || permissions.administrators?.includes('create');
-  const lastActiveSuperAdmin = admins.filter((admin) => admin.role === 'Super Admin' && admin.status === 'Active').length <= 1;
+  const lastActiveAdmin = admins.filter((admin) => admin.status === 'Active').length <= 1;
 
   const matchingAccounts = useMemo(() => {
     const term = inviteLookup.trim().toLowerCase();
@@ -89,9 +92,9 @@ export default function AdminAdministratorsPage() {
     return DIRECTORY.filter((account) => account.email.toLowerCase().includes(term) || account.username?.toLowerCase().includes(term)).slice(0, 5);
   }, [inviteLookup]);
   const visibleAdmins = admins.filter((admin) => {
-    const term = search.trim().toLowerCase();
-    return (roleFilter === 'All roles' || admin.role === roleFilter)
-      && (!term || [admin.name, admin.email, admin.username, admin.status].some((value) => String(value || '').toLowerCase().includes(term)));
+    const term = (globalQuery || search).trim().toLowerCase();
+
+    return (!term || [admin.name, admin.email, admin.username, admin.status].some((value) => String(value || '').toLowerCase().includes(term)));
   });
 
   function chooseInviteAccount(account) {
@@ -105,8 +108,8 @@ export default function AdminAdministratorsPage() {
     setInviteLookup('');
     setInviteEmail('');
     setInviteName('');
-    setInviteRole(ADMIN_ROLE_LIST[1]);
-    setInvitePermissions(clonePermissions(ADMIN_PERMISSION_MATRIX[ADMIN_ROLE_LIST[1]]));
+
+    setInvitePermissions(clonePermissions(ADMIN_PERMISSION_MATRIX[ADMIN_ROLES.ADMIN]));
   }
 
   function sendInvitation() {
@@ -123,7 +126,7 @@ export default function AdminAdministratorsPage() {
         name: inviteName || account?.name || normalizedEmail.split('@')[0],
         username: account?.username || null,
         email: normalizedEmail,
-        role: inviteRole,
+        role: ADMIN_ROLES.ADMIN,
         status: 'Pending Invitation',
         invitationStatus: 'Pending',
         invitedAt: new Date().toISOString(),
@@ -136,8 +139,8 @@ export default function AdminAdministratorsPage() {
   }
 
   function requestAction(admin, action, nextRole, nextPermissions) {
-    if (admin.isSuperAdmin && admin.status === 'Active' && lastActiveSuperAdmin && ['Deactivate', 'Revoke access', 'Change role'].includes(action)) {
-      setNotice('This action is blocked because this is the last active Super Admin.');
+    if (admin.isSuperAdmin && admin.status === 'Active' && lastActiveAdmin && ['Deactivate', 'Revoke access'].includes(action)) {
+      setNotice('This action is blocked because this is the last active Admin.');
       return;
     }
     setPendingAction({ admin, action, nextRole, nextPermissions });
@@ -150,7 +153,7 @@ export default function AdminAdministratorsPage() {
         activity: [{
           id: `invited-${Date.now()}`,
           title: 'Administrator invitation recorded',
-          description: `Invitation prepared with ${pendingAction.invite.role} role. Reason: ${reason}. Access remains inactive until acceptance and required verification.`,
+          description: `Invitation prepared with ${ADMIN_ROLES.ADMIN} access. Reason: ${reason}. Access remains inactive until acceptance and required verification.`,
           time: new Date().toISOString(),
         }],
       };
@@ -158,7 +161,7 @@ export default function AdminAdministratorsPage() {
       setSelected(newAdmin);
       setDetailTab('Activity');
       setWizardStep(0);
-      setNotice(`Demo invitation recorded for ${newAdmin.email}. Access remains inactive until accepted and verified; no email was sent.`);
+      setNotice(`Invitation recorded for ${newAdmin.email}. Access remains inactive until accepted and verified.`);
       setPendingAction(null);
       return;
     }
@@ -180,19 +183,19 @@ export default function AdminAdministratorsPage() {
     if (action === 'Resend invitation') updated = { ...updated, status: 'Pending Invitation', invitationStatus: 'Pending' };
     updated.activity = [
       ...(updated.activity || []),
-      { id: `admin-action-${Date.now()}`, title: action, description: `Recorded by the current demo administrator. Reason: ${reason}`, time: now },
+      { id: `admin-action-${Date.now()}`, title: action, description: `Recorded by ${currentAdmin.name || 'administrator'}. Reason: ${reason}`, time: now },
     ];
     setAdmins((previous) => previous.map((item) => item.id === admin.id ? updated : item));
     setSelected(updated);
     setEditingPermissions(false);
     setPermissionDraft(null);
-    setNotice(`${admin.name}: ${action.toLowerCase()} recorded in demo history.`);
+    setNotice(`${admin.name}: ${action.toLowerCase()} recorded in history.`);
     setPendingAction(null);
   }
 
   const columns = [
     { key: 'name', label: 'Administrator', render: (admin) => <button className="admin-text-link" type="button" onClick={() => { setSelected(admin); setDetailTab('Profile'); }}><strong>{admin.name}</strong><span>{admin.email}</span></button> },
-    { key: 'role', label: 'Role' },
+
     { key: 'status', label: 'Account / invitation', render: (admin) => <><StatusBadge status={admin.status} /><br /><span className="admin-muted">{admin.invitationStatus || '—'}</span></> },
     { key: 'invitedAt', label: 'Added', render: (admin) => formatDateTime(admin.invitedAt) },
     { key: 'lastActive', label: 'Last active', render: (admin) => admin.lastActive ? formatDateTime(admin.lastActive) : 'Never' },
@@ -211,11 +214,11 @@ export default function AdminAdministratorsPage() {
           description="Manage individual staff accounts, scoped permissions, invitations, and administrator activity."
           actions={canManagePermissions ? <Button variant="primary" onClick={startInvite}>Add Administrator</Button> : null}
         />
-        <div className="admin-shell-note"><strong>Individual accounts only.</strong> Shared administrator credentials are not allowed. Demo invitations do not grant access until accepted and verified; backend enforcement is required in production.</div>
+        <div className="admin-shell-note"><strong>Individual accounts only.</strong> Shared administrator credentials are not allowed. Invitations do not grant access until accepted and verified.</div>
         {notice && <p className="admin-inline-notice" role="status">{notice}</p>}
 
-        {wizardStep > 0 && (
-          <section className="admin-record-panel admin-invite-wizard" aria-label="Add Administrator workflow">
+        <Modal open={wizardStep > 0} onClose={() => setWizardStep(0)} size="wide" title={`Add Administrator · Step ${wizardStep} of 3`}>
+          <div className="admin-invite-wizard" aria-label="Add Administrator workflow">
             <header><h2>Add Administrator · Step {wizardStep} of 3</h2><button className="admin-action-button" type="button" onClick={() => setWizardStep(0)}>Cancel</button></header>
             {wizardStep === 1 && <>
               <p>Find an existing SALO account by registered email or username.</p>
@@ -223,33 +226,51 @@ export default function AdminAdministratorsPage() {
               {matchingAccounts.length > 0 && <ul className="admin-suggestion-list">{matchingAccounts.map((account) => <li key={account.id}><button type="button" onClick={() => chooseInviteAccount(account)}>{account.name} · @{account.username} · {account.email}</button></li>)}</ul>}
               <label className="admin-filter-control">Registered email<input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="person@example.com" /></label>
               <label className="admin-filter-control">Administrator name<input value={inviteName} onChange={(event) => setInviteName(event.target.value)} /></label>
-              <label className="admin-filter-control">Predefined role<select value={inviteRole} onChange={(event) => { setInviteRole(event.target.value); setInvitePermissions(clonePermissions(ADMIN_PERMISSION_MATRIX[event.target.value])); }}>{ADMIN_ROLE_LIST.filter((role) => role !== 'Super Admin').map((role) => <option key={role}>{role}</option>)}</select></label>
+
               <Button variant="primary" onClick={() => { if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim())) { setNotice('Choose an existing SALO account or enter a valid email address.'); return; } setWizardStep(2); }}>Continue to permissions</Button>
             </>}
+
+
+
             {wizardStep === 2 && <>
               <p>Review and adjust permissions by module and action. Unchecked actions remain unavailable.</p>
               <PermissionEditor value={invitePermissions} onChange={setInvitePermissions} />
               <div className="admin-action-row"><Button variant="outline" onClick={() => setWizardStep(1)}>Back</Button><Button variant="primary" onClick={() => setWizardStep(3)}>Review invitation</Button></div>
             </>}
+
+
+
             {wizardStep === 3 && <>
               <h3>Invitation review</h3>
-              <ul className="admin-detail-list"><li><strong>Account</strong>{inviteName || inviteEmail} · {inviteEmail}</li><li><strong>Role</strong>{inviteRole}</li><li><strong>Assigned permissions</strong>{ADMIN_MODULES.reduce((count, module) => count + (invitePermissions[module]?.length || 0), 0)} actions across all modules</li><li><strong>Access status</strong>Pending acceptance and verification; no active permissions</li></ul>
-              <p>For a person without a SALO account, secure account creation and verification must be completed before access is activated. This demo records an invitation only; it does not send email.</p>
+              <ul className="admin-detail-list"><li><strong>Account</strong>{inviteName || inviteEmail} · {inviteEmail}</li><li><strong>Role</strong>{ADMIN_ROLES.ADMIN}</li><li><strong>Assigned permissions</strong>{ADMIN_MODULES.reduce((count, module) => count + (invitePermissions[module]?.length || 0), 0)} actions across all modules</li><li><strong>Access status</strong>Pending acceptance and verification; no active permissions</li></ul>
+              <p>For a person without a SALO account, account creation and verification must be completed before access is activated.</p>
               <div className="admin-action-row"><Button variant="outline" onClick={() => setWizardStep(2)}>Back</Button><Button variant="primary" onClick={sendInvitation}>Send invitation</Button></div>
             </>}
-          </section>
-        )}
+          </div>
+        </Modal>
+
+
+
+
+
+
+
+
+
+
+
+
 
         <div className="admin-filter-bar">
           <label className="admin-filter-control">Search<input aria-label="Search administrators" placeholder="Name, email, username, or status" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-          <label className="admin-filter-control">Role<select aria-label="Filter administrators by role" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}><option>All roles</option>{ADMIN_ROLE_LIST.map((role) => <option key={role}>{role}</option>)}</select></label>
+
         </div>
-        <DataTable columns={columns} rows={visibleAdmins} emptyTitle="No matching administrators" emptyDescription="Try a different search or role filter." />
+        <DataTable columns={columns} rows={visibleAdmins} tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} emptyTitle="No matching administrators" emptyDescription="Try a different search or role filter." />
       </section>
 
       <DetailDrawer open={Boolean(selected)} title={selected?.name || 'Administrator details'} onClose={() => setSelected(null)}>
         {selected && <>
-          <p className="admin-muted">{selected.email} · {selected.role} · <StatusBadge status={selected.invitationStatus || selected.status} /></p>
+          <p className="admin-muted">{selected.email} · {ADMIN_ROLES.ADMIN} · <StatusBadge status={selected.invitationStatus || selected.status} /></p>
           <Tabs items={['Profile', 'Permissions', 'Activity']} value={detailTab} onChange={setDetailTab} label="Administrator detail sections" />
           {detailTab === 'Profile' && <div className="admin-drawer-content">
             <ul className="admin-detail-list">
@@ -259,21 +280,21 @@ export default function AdminAdministratorsPage() {
               <li><strong>Account status</strong><StatusBadge status={selected.status} /></li>
             </ul>
             {canManagePermissions && <div className="admin-action-row">
-              <label className="admin-filter-control">Change role<select aria-label="Change administrator role" value={selected.role} onChange={(event) => requestAction(selected, 'Change role', event.target.value)}>{ADMIN_ROLE_LIST.map((role) => <option key={role}>{role}</option>)}</select></label>
+
               {selected.status === 'Active' ? <button className="admin-action-button" type="button" onClick={() => requestAction(selected, 'Deactivate')}>Deactivate</button> : selected.invitationStatus === 'Accepted' && <button className="admin-action-button" type="button" onClick={() => requestAction(selected, 'Activate')}>Activate</button>}
               {(selected.invitationStatus === 'Pending' || selected.invitationStatus === 'Expired') && <button className="admin-action-button" type="button" onClick={() => requestAction(selected, 'Resend invitation')}>Resend invitation</button>}
               {['Pending', 'Expired', 'Accepted'].includes(selected.invitationStatus) && <button className="admin-action-button admin-action-button--danger" type="button" onClick={() => requestAction(selected, 'Revoke access')}>Revoke access</button>}
             </div>}
-            {selected.isSuperAdmin && <p className="admin-shell-note">This is the demo Super Admin account. The last active Super Admin cannot be deactivated, revoked, or demoted.</p>}
+
           </div>}
           {detailTab === 'Permissions' && <div className="admin-record-panel">
             <h3>Assigned permissions</h3>
-            {canManagePermissions && !editingPermissions && <Button variant="outline" onClick={() => { setPermissionDraft(clonePermissions(selected.assignedPermissions || ADMIN_PERMISSION_MATRIX[selected.role])); setEditingPermissions(true); }}>Edit permissions</Button>}
+            {canManagePermissions && !editingPermissions && <Button variant="outline" onClick={() => { setPermissionDraft(clonePermissions(selected.assignedPermissions || ADMIN_PERMISSION_MATRIX[selected.role] || ADMIN_PERMISSION_MATRIX[ADMIN_ROLES.ADMIN])); setEditingPermissions(true); }}>Edit permissions</Button>}
             {editingPermissions && <><PermissionEditor value={permissionDraft || {}} onChange={setPermissionDraft} /><div className="admin-action-row"><Button variant="ghost" onClick={() => { setEditingPermissions(false); setPermissionDraft(null); }}>Cancel</Button><Button variant="primary" onClick={() => requestAction(selected, 'Update permissions', undefined, permissionDraft)}>Review permission change</Button></div></>}
             {!editingPermissions && ADMIN_MODULES.map((module) => {
               const assigned = selected.assignedPermissions && Object.hasOwn(selected.assignedPermissions, module)
                 ? selected.assignedPermissions[module]
-                : ADMIN_PERMISSION_MATRIX[selected.role]?.[module] || [];
+                : (ADMIN_PERMISSION_MATRIX[selected.role] || ADMIN_PERMISSION_MATRIX[ADMIN_ROLES.ADMIN])?.[module] || [];
               return <p key={module}><strong>{MODULE_LABELS[module]}:</strong> {assigned.join(', ') || 'No access'}</p>;
             })}
             <p className="admin-muted">Pending invitations have no active permissions. Backend authorization must enforce these permissions independently.</p>
@@ -286,8 +307,8 @@ export default function AdminAdministratorsPage() {
         open={Boolean(pendingAction)}
         title={pendingAction?.action === 'Send invitation' ? 'Confirm administrator invitation' : `${pendingAction?.action || 'Confirm'} administrator`}
         description={pendingAction?.action === 'Send invitation'
-          ? 'Record a demo invitation. No email will be sent, and access remains disabled until acceptance and required verification.'
-          : 'This administrative change is recorded in the demo activity history and requires a reason. Verify the operator again in a real backend.'}
+          ? 'Send an administrator invitation. Access remains disabled until acceptance and verification.'
+          : 'This administrative change is recorded in the activity history and requires a reason.'}
         confirmLabel={pendingAction?.action || 'Confirm'}
         requireReauthentication
         requireReason

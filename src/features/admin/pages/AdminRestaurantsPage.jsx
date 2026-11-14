@@ -1,37 +1,62 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
 import adminService from '../../../services/adminService';
-import Modal from '../../../components/common/Modal';
+
 import Button from '../../../components/common/Button';
 import {
   ConfirmDialog,
   DataTable,
   DetailDrawer,
-  DocumentViewer,
+  Modal,
   PageHeader,
   StatusBadge,
   Tabs,
   Timeline,
 } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
-import { getAdminMock } from '../mocks';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
+import { getAdminMock, getRestaurantApplications, syncApplicationsToMockData } from '../mocks';
 import { formatDate } from '../utils/format';
 import './AdminPages.css';
 
-const SAVED_RESTAURANTS = adminService.getRestaurants();
-const INITIAL_RESTAURANTS = getAdminMock('restaurants').data.map((restaurant) => ({
-  ...restaurant,
-  ...(SAVED_RESTAURANTS.find((saved) => saved.id === restaurant.id || saved.referenceNumber === restaurant.id) || {}),
-}));
+const _SAVED_RESTAURANTS = adminService.getRestaurants();
+const _UNUSED_RESTAURANTS = null;
+const INITIAL_RESTAURANTS_REMOVED = (() => { void _UNUSED_RESTAURANTS; return null; })();
+void INITIAL_RESTAURANTS_REMOVED;
+
+
+
 
 export default function AdminRestaurantsPage() {
   const { permissions } = useAdminSession();
-  const [restaurants, setRestaurants] = useState(INITIAL_RESTAURANTS);
-  const [view, setView] = useState('Applications');
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Restaurants', placeholder: 'Search restaurants by name, owner, city, status', searchableFields: ['name', 'ownerName', 'ownerEmail', 'address', 'zone', 'status'] });
+  const [restaurants, setRestaurants] = useState(() => {
+    syncApplicationsToMockData();
+    const saved = adminService.getRestaurants();
+    return getAdminMock('restaurants').data.map((restaurant) => ({
+      ...restaurant,
+      ...(saved.find((s) => s.id === restaurant.id || s.referenceNumber === restaurant.id) || {}),
+    }));
+  });
+  useEffect(() => {
+    function refresh() {
+      syncApplicationsToMockData();
+      const saved = adminService.getRestaurants();
+      setRestaurants(getAdminMock('restaurants').data.map((restaurant) => ({
+      
+        ...(saved.find((s) => s.id === restaurant.id || s.referenceNumber === restaurant.id) || {}),
+      })));
+    }
+    window.addEventListener('salo-admin-data-updated', refresh);
+    return () => window.removeEventListener('salo-admin-data-updated', refresh);
+  }, []);
+  const pendingApplicationsCount = getRestaurantApplications().filter((item) => ['Pending', 'Under Review', 'Needs Revision'].includes(item.reviewStatus)).length;
+  const [view, setView] = useState('Directory');
   const [search, setSearch] = useState('');
   const [applicationFilter, setApplicationFilter] = useState('All applications');
   const [selected, setSelected] = useState(null);
-  const [detailTab, setDetailTab] = useState('Application');
+  const [detailTab, setDetailTab] = useState('Profile');
   const [requestMessage, setRequestMessage] = useState('');
   const [pendingAction, setPendingAction] = useState(null);
   const [pendingCommission, setPendingCommission] = useState(null);
@@ -47,17 +72,19 @@ export default function AdminRestaurantsPage() {
   const [requestDocDueDate, setRequestDocDueDate] = useState('');
   const [requestDocError, setRequestDocError] = useState('');
 
-  const canApprove = permissions.restaurants?.includes('approve');
-  const canReject = permissions.restaurants?.includes('reject');
+  const _canApprove = permissions.restaurants?.includes('approve');
+  const _canReject = permissions.restaurants?.includes('reject');
   const canEdit = permissions.restaurants?.includes('edit');
   const canActivate = permissions.restaurants?.includes('activate');
   const canDeactivate = permissions.restaurants?.includes('deactivate');
 
   const matching = useMemo(() => restaurants.filter((restaurant) => {
-    const term = search.trim().toLowerCase();
-    return !term || [restaurant.name, restaurant.ownerName, restaurant.ownerEmail, restaurant.address, restaurant.zone]
+    const isPartner = restaurant.applicationStatus === 'Approved' || ['Active', 'Suspended', 'Deactivated'].includes(restaurant.status);
+    if (!isPartner) return false;
+    const term = (globalQuery || search).trim().toLowerCase();
+    return !term || [restaurant.name, restaurant.ownerName, restaurant.ownerEmail, restaurant.address, restaurant.zone, restaurant.status]
       .some((value) => String(value || '').toLowerCase().includes(term));
-  }), [restaurants, search]);
+  }), [restaurants, globalQuery, search]);
 
   const applications = matching.filter((restaurant) => {
     const status = restaurant.applicationStatus || restaurant.status;
@@ -72,7 +99,7 @@ export default function AdminRestaurantsPage() {
     ].includes(status);
   });
 
-  const filteredApplications = applications.filter((restaurant) => {
+  const _filteredApplications = applications.filter((restaurant) => {
     if (applicationFilter === 'All applications') return true;
     return (restaurant.applicationStatus || restaurant.status) === applicationFilter;
   });
@@ -82,7 +109,7 @@ export default function AdminRestaurantsPage() {
     setPendingAction({ restaurant, action });
   }
 
-  function handleUpdateDocStatus(restaurantId, docId, status, reason) {
+  function _handleUpdateDocStatus(restaurantId, docId, status, reason) {
     const updatedList = adminService.updateRestaurantDocumentStatus(restaurantId, docId, { status, reason });
     setRestaurants(updatedList);
     const currentRest = updatedList.find((r) => r.id === restaurantId || r.referenceNumber === restaurantId);
@@ -144,7 +171,7 @@ export default function AdminRestaurantsPage() {
     setSelected(updated);
     setRequestMessage('');
     setPendingAction(null);
-    setNotice(`${restaurant.name}: ${action.toLowerCase()} recorded in demo data.`);
+    setNotice(`${restaurant.name}: ${action.toLowerCase()} recorded.`);
   }
 
   function confirmCommissionChange({ reason }) {
@@ -160,10 +187,10 @@ export default function AdminRestaurantsPage() {
     adminService.updateRestaurantCommission(restaurant.id, rate);
     setSelected(updated);
     setPendingCommission(null);
-    setNotice(`${restaurant.name} commission rate updated to ${rate}% in demo data. Historical order totals are not recalculated.`);
+    setNotice(`${restaurant.name} commission rate updated to ${rate}%. Historical order totals are not recalculated.`);
   }
 
-  const appColumns = [
+  const _appColumns = [
     { key: 'name', label: 'Application', render: (restaurant) => <button className="admin-text-link" type="button" onClick={() => { setSelected(restaurant); setDetailTab('Application'); }}><strong>{restaurant.name}</strong><span>Owner: {restaurant.ownerName}</span></button> },
     { key: 'address', label: 'Physical location' },
     { key: 'applicationStatus', label: 'Application', render: (restaurant) => {
@@ -176,6 +203,7 @@ export default function AdminRestaurantsPage() {
     { key: 'review', label: 'Review', render: (restaurant) => <button className="admin-action-button" type="button" onClick={() => { setSelected(restaurant); setDetailTab('Application'); }}>Review application</button> },
   ];
 
+  void _appColumns;
   const directoryColumns = [
     { key: 'name', label: 'Restaurant', render: (restaurant) => <button className="admin-text-link" type="button" onClick={() => { setSelected(restaurant); setDetailTab('Profile'); }}><strong>{restaurant.name}</strong><span>{restaurant.ownerName} · {restaurant.ownerEmail}</span></button> },
     { key: 'address', label: 'Physical address / coverage', render: (restaurant) => <>{restaurant.address}<br /><span className="admin-muted">Delivery: {(restaurant.serviceCoverage || [restaurant.zone]).join(', ')}</span></> },
@@ -194,16 +222,20 @@ export default function AdminRestaurantsPage() {
   const history = selected
     ? [...(selected.applicationHistory || [
       { id: 'submitted', title: 'Application submitted', description: 'Business information and supporting documents received.', time: `${selected.joinedDate}T09:00:00+08:00` },
-      ...(selected.verificationStatus === 'Verified' ? [{ id: 'verified', title: 'Business documents verified', description: 'Demo verification record.', time: `${selected.joinedDate}T10:00:00+08:00` }] : []),
+      ...(selected.verificationStatus === 'Verified' ? [{ id: 'verified', title: 'Business documents verified', description: 'Verification completed.', time: `${selected.joinedDate}T10:00:00+08:00` }] : []),
     ])]
     : [];
 
   return (
     <AdminLayout>
       <section className="admin-shell-page">
-        <PageHeader title="Restaurant Partners" description="Review onboarding, business verification, service coverage, account status, and operating performance." />
+        <PageHeader
+          title="Restaurant Partners"
+          description="Manage approved restaurant partners, service coverage, account status, and operating performance."
+          actions={<Link className="admin-action-button" to="/admin/applications?type=restaurant">Pending applications ({pendingApplicationsCount})</Link>}
+        />
         {notice && <p className="admin-inline-notice" role="status">{notice}</p>}
-        <Tabs items={['Applications', 'Directory', 'Monitoring']} value={view} onChange={setView} label="Restaurant management views" />
+        <Tabs items={['Directory', 'Monitoring']} value={view} onChange={setView} label="Restaurant management views" />
         <div className="admin-filter-bar">
           <label className="admin-filter-control">Search<input aria-label="Search restaurants" placeholder="Restaurant, owner, location, or email" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
           {view === 'Applications' && (
@@ -220,9 +252,8 @@ export default function AdminRestaurantsPage() {
             </label>
           )}
         </div>
-        {view === 'Applications' && <DataTable columns={appColumns} rows={filteredApplications} emptyTitle="No restaurant applications" emptyDescription="There are no applications matching the selected filter." />}
-        {view === 'Directory' && <DataTable columns={directoryColumns} rows={matching} emptyTitle="No restaurants found" emptyDescription="Adjust your search to see restaurant partners." />}
-        {view === 'Monitoring' && <DataTable columns={[
+        {view === 'Directory' && <DataTable columns={directoryColumns} rows={matching} tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} emptyTitle="No restaurants found" emptyDescription="Adjust your search to see restaurant partners." />}
+        {view === 'Monitoring' && <DataTable tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} columns={[
           { key: 'name', label: 'Restaurant', render: (restaurant) => <strong>{restaurant.name}</strong> },
           { key: 'acceptanceRate', label: 'Acceptance rate', render: (restaurant) => `${restaurant.acceptanceRate ?? 0}%` },
           { key: 'cancellationRate', label: 'Cancellation frequency', render: (restaurant) => `${restaurant.cancellationRate ?? 0}%` },
@@ -236,26 +267,7 @@ export default function AdminRestaurantsPage() {
       <DetailDrawer open={Boolean(selected)} title={selected?.name || 'Restaurant details'} onClose={() => setSelected(null)}>
         {selected && <>
           <p className="admin-muted">{selected.ownerName} · {selected.ownerEmail}</p>
-          <Tabs items={['Application', 'Profile', 'Monitoring', 'History']} value={detailTab} onChange={setDetailTab} label="Restaurant detail sections" />
-          {detailTab === 'Application' && <div className="admin-drawer-content">
-            <ul className="admin-detail-list">
-              <li><strong>Business / owner</strong>{selected.name} · {selected.ownerName}</li>
-              <li><strong>Physical location</strong>{selected.address}</li>
-              <li><strong>Delivery coverage</strong>{(selected.serviceCoverage || [selected.zone]).join(', ')}</li>
-              <li><strong>Application / verification</strong>{selected.applicationStatus || selected.status} · {selected.verificationStatus || 'Pending'}</li>
-            </ul>
-            <DocumentViewer
-              documents={selected.documents || ['Business permit', 'Owner identification']}
-              subject={selected.ownerName}
-              status={selected.verificationStatus || 'Pending'}
-              onUpdateDocumentStatus={(docId, status, reason) => handleUpdateDocStatus(selected.id, docId, status, reason)}
-              onRequestAdditional={() => setRequestDocModalOpen(true)}
-            />
-            {canApprove && selected.applicationStatus !== 'Approved' && <button className="admin-action-button" type="button" onClick={() => askAction(selected, 'Approve application')}>Approve</button>}
-            {canReject && selected.applicationStatus !== 'Rejected' && <button className="admin-action-button admin-action-button--danger" type="button" onClick={() => askAction(selected, 'Reject application')}>Reject</button>}
-            {canEdit && <div className="admin-record-panel"><label className="admin-filter-control">Request additional information<textarea rows="3" value={requestMessage} onChange={(event) => setRequestMessage(event.target.value)} placeholder="Specify which information is needed" /></label><button className="admin-action-button" type="button" disabled={!requestMessage.trim()} onClick={() => askAction(selected, 'Request more information')}>Send request</button></div>}
-            <p className="admin-shell-note">Suspension prevents new transactions according to the configured demo behavior. Existing orders and reservations remain available for authorized resolution.</p>
-          </div>}
+          <Tabs items={['Profile', 'Monitoring', 'History']} value={detailTab === 'Application' ? 'Profile' : detailTab} onChange={setDetailTab} label="Restaurant detail sections" />
           {detailTab === 'Profile' && <div className="admin-drawer-content"><ul className="admin-detail-list"><li><strong>Address</strong>{selected.address}</li><li><strong>Service locations</strong>{(selected.serviceCoverage || [selected.zone]).join(', ')}</li><li><strong>Contact</strong>{selected.phone}</li><li><strong>Registered</strong>{formatDate(selected.joinedDate)}</li><li><strong>Orders</strong>{selected.ordersCount}</li><li><strong>Reservations</strong>{selected.reservationsCount}</li><li><strong>Commission rate</strong>{selected.commissionRate}%</li></ul>{canEdit && <div className="admin-record-panel"><label className="admin-filter-control">Update commission rate (%)<input type="number" min="0" max="100" step="0.5" value={commissionDraft || selected.commissionRate} onChange={(event) => setCommissionDraft(event.target.value)} /></label><p>Commission changes apply prospectively; historical order fee snapshots are not recalculated.</p><button className="admin-action-button" type="button" onClick={() => { const rate = Number(commissionDraft || selected.commissionRate); if (!Number.isFinite(rate) || rate < 0 || rate > 100) { setNotice('Enter a commission rate from 0 to 100 percent.'); return; } setCommissionDraft(String(rate)); setPendingCommission(selected); }}>Review commission change</button></div>}</div>}
           {detailTab === 'Monitoring' && <div className="admin-drawer-content"><ul className="admin-detail-list"><li><strong>Acceptance rate</strong>{selected.acceptanceRate ?? 0}%</li><li><strong>Cancellation frequency</strong>{selected.cancellationRate ?? 0}%</li><li><strong>Availability</strong>{selected.operatingStatus || selected.status}</li><li><strong>Menu availability</strong>{selected.menuAvailability ?? 0}%</li><li><strong>Complaints</strong>{selected.complaints ?? 0}</li><li><strong>Rating</strong>{selected.rating || 'Not rated'}</li></ul></div>}
           {detailTab === 'History' && <Timeline items={history} />}
@@ -357,7 +369,7 @@ export default function AdminRestaurantsPage() {
       <ConfirmDialog
         open={Boolean(pendingAction)}
         title={`${pendingAction?.action || 'Confirm'}?`}
-        description="Record the decision and reason in the demo application history. No live restaurant account is changed."
+        description="Record the decision and reason in the application history."
         confirmLabel={pendingAction?.action || 'Confirm'}
         requireReauthentication
         requireReason

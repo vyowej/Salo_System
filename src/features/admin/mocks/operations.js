@@ -62,9 +62,9 @@ export function getAdminWorkspaceRecords(topic) {
   if (topic === 'activity') {
     const audit = getAdminAuditLog();
     const samples = [
-      { id: 'audit-seed-1', who: 'Mika Santos', role: 'Super Admin', action: 'Updated restaurant application', record: { type: 'Restaurant', id: 'rest-4' }, time: '2026-11-09T10:15:00+08:00', previousValue: 'Pending Review', newValue: 'Under Review', reason: 'Application documents received', reference: 'rest-4' },
+      { id: 'audit-seed-1', who: 'Mika Santos', role: 'Admin', action: 'Updated restaurant application', record: { type: 'Restaurant', id: 'rest-4' }, time: '2026-11-09T10:15:00+08:00', previousValue: 'Pending Review', newValue: 'Under Review', reason: 'Application documents received', reference: 'rest-4' },
       { id: 'audit-seed-2', who: 'Jules Navarro', role: 'Finance', action: 'Reviewed COD remittance', record: { type: 'Order', id: 'SALO-MNL-2039' }, time: '2026-11-08T16:25:00+08:00', previousValue: 'Submitted', newValue: 'Discrepancy', reason: 'Submitted amount requires reconciliation', reference: 'SALO-MNL-2039' },
-      { id: 'audit-seed-3', who: 'Mika Santos', role: 'Super Admin', action: 'Scheduled platform announcement', record: { type: 'Announcement', id: 'notice-1' }, time: '2026-11-08T12:00:00+08:00', previousValue: null, newValue: 'Scheduled', reason: 'Notify users of maintenance window', reference: 'notice-1' },
+      { id: 'audit-seed-3', who: 'Mika Santos', role: 'Admin', action: 'Scheduled platform announcement', record: { type: 'Announcement', id: 'notice-1' }, time: '2026-11-08T12:00:00+08:00', previousValue: null, newValue: 'Scheduled', reason: 'Notify users of maintenance window', reference: 'notice-1' },
     ];
     const ids = new Set(audit.map((item) => item.id));
     return [...audit, ...samples.filter((item) => !ids.has(item.id))]

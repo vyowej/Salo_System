@@ -4,10 +4,12 @@ import {
   ConfirmDialog,
   DataTable,
   PageHeader,
+  Modal,
   StatusBadge,
   Tabs,
 } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { hasAdminPermission, ADMIN_FEE_STATUS_TRANSITIONS } from '../constants';
 import {
   ADMIN_MOCK_DATA,
@@ -48,6 +50,7 @@ function createDraft(category) {
 
 export default function AdminFeesPage() {
   const { currentAdmin } = useAdminSession();
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Fees and Commissions', placeholder: 'Search fee rules by name, model, or status', searchableFields: ['name', 'model', 'status'] });
   const canEdit = hasAdminPermission(currentAdmin.role, 'fees', 'edit');
   const canActivate = hasAdminPermission(currentAdmin.role, 'fees', 'activate');
   const [activeTab, setActiveTab] = useState('Delivery Fees');
@@ -70,7 +73,11 @@ export default function AdminFeesPage() {
   const [previewConfigId, setPreviewConfigId] = useState('');
   const serviceAreas = ADMIN_MOCK_DATA.serviceAreas;
 
-  const currentRows = useMemo(() => configurations.filter((item) => item.category === activeTab), [activeTab, configurations]);
+  const currentRows = useMemo(() => configurations.filter((item) => {
+    const term = globalQuery.trim().toLowerCase();
+    return item.category === activeTab
+      && (!term || [item.name, item.model, item.description, item.status].some((v) => String(v || '').toLowerCase().includes(term)));
+  }), [activeTab, configurations, globalQuery]);
   const previewDraft = draft || configurations.find((item) => item.id === previewConfigId) || null;
   const currentDelivery = configurations.find((item) => item.category === 'Delivery Fees' && item.status === 'Active');
   const proposedDelivery = previewDraft?.category === 'Delivery Fees' ? previewDraft : currentDelivery;
@@ -132,8 +139,22 @@ export default function AdminFeesPage() {
     if (!draft || draft.category !== activeTab || activeTab === 'History') return null;
     const serviceAreaIds = draft.serviceAreaIds || [];
     const orderTypes = draft.orderTypes || [];
+
+
     return (
-      <section className="admin-record-panel" aria-label="Fee configuration editor">
+      <Modal
+        open={Boolean(draft)}
+        onClose={() => setDraft(null)}
+        size="wide"
+        title={configurations.some((item) => item.id === draft.id) ? 'Edit configuration' : 'New draft configuration'}
+        footer={(
+          <>
+            <button className="admin-action-button" type="button" onClick={() => setDraft(null)}>Close</button>
+            <button className="admin-action-button" type="button" onClick={startSave} disabled={!canEdit}>Save changes</button>
+          </>
+        )}
+      >
+        <div aria-label="Fee configuration editor">
         <h2>{configurations.some((item) => item.id === draft.id) ? 'Edit configuration' : 'New draft configuration'}</h2>
         <fieldset className="admin-finance-form-grid" disabled={!canEdit}>
           <label className="admin-filter-control">Name{draft.category === 'Other Fees'
@@ -173,7 +194,8 @@ export default function AdminFeesPage() {
           <button className="admin-action-button" type="button" onClick={() => setDraft(null)}>Close editor</button>
           {!canEdit && <span className="admin-shell-note">This role is view-only for fee configuration.</span>}
         </div>
-      </section>
+        </div>
+      </Modal>
     );
   }
 
@@ -210,8 +232,8 @@ export default function AdminFeesPage() {
         <p className="admin-shell-note">Historical transaction safety: a fee or commission change never recalculates a placed or completed order. Each order keeps its original fee breakdown snapshot.</p>
         <Tabs items={TABS} value={activeTab} onChange={(tab) => { setActiveTab(tab); setDraft(null); }} label="Fee configuration sections" />
         {activeTab === 'History'
-          ? <DataTable columns={historyColumns} rows={historyRows} emptyTitle="No fee version history" emptyDescription="Configuration changes will appear here with actor, timestamp, values, and reason." />
-          : <DataTable columns={columns} rows={currentRows} emptyTitle={`No ${activeTab.toLowerCase()} configurations`} emptyDescription="Create a draft configuration to begin. Drafts are not applied to historical orders." />}
+          ? <DataTable columns={historyColumns} rows={historyRows} tableSearch={globalQuery} defaultOrder={[[0, 'desc']]} emptyTitle="No fee version history" emptyDescription="Configuration changes will appear here with actor, timestamp, values, and reason." />
+          : <DataTable columns={columns} rows={currentRows} tableSearch={globalQuery} emptyTitle={`No ${activeTab.toLowerCase()} configurations`} emptyDescription="Create a draft configuration to begin. Drafts are not applied to historical orders." />}
         {renderEditor()}
         {activeTab !== 'History' && (
           <section className="admin-record-panel">
@@ -230,13 +252,16 @@ export default function AdminFeesPage() {
               <label className="admin-filter-control"><span>Promo code applied</span><input type="checkbox" checked={previewInput.promo} onChange={(event) => setPreviewInput((previous) => ({ ...previous, promo: event.target.checked }))} /></label>
               <label className="admin-filter-control"><span>Scheduled delivery</span><input type="checkbox" checked={previewInput.scheduled} onChange={(event) => setPreviewInput((previous) => ({ ...previous, scheduled: event.target.checked }))} /></label>
               <label className="admin-filter-control">Proposal to preview<select value={previewConfigId} onChange={(event) => setPreviewConfigId(event.target.value)}><option value="">Current active configuration</option>{configurations.filter((item) => item.category === 'Delivery Fees' || item.category === 'Commission').map((item) => <option key={item.id} value={item.id}>{item.name} · {item.status}</option>)}</select></label>
-            </div>
+    
             <div className="admin-finance-preview-grid">
               {[['Current', currentPreview], ['Proposed', proposedPreview]].map(([label, preview]) => <div className="admin-record-panel" key={label}><h3>{label}{label === 'Proposed' && previewDraft ? ` · ${previewDraft.name}` : ''}</h3><ul className="admin-detail-list"><li><strong>Customer delivery fee</strong>{formatPeso(preview.deliveryFee)}</li><li><strong>Service fees</strong>{formatPeso(preview.serviceFees)}</li><li><strong>Restaurant commission ({preview.commissionRate}%)</strong>{formatPeso(preview.commission)}</li><li><strong>Discount deduction · {preview.discountFunding}</strong>{formatPeso(preview.discount)}</li><li><strong>Platform earnings</strong>{formatPeso(preview.platformEarnings)}</li><li><strong>Restaurant payable</strong>{formatPeso(preview.restaurantPayable)}</li><li><strong>Customer total</strong>{formatPeso(preview.customerTotal)}</li></ul></div>)}
             </div>
+            </div>
           </section>
+    
+    
         )}
-        {activeTab === 'Commission' && <p className="admin-shell-note">Commission edits are permission-gated. The Finance demo role can view these records, but cannot edit or activate them unless its permissions are explicitly granted.</p>}
+        {activeTab === 'Commission' && <p className="admin-shell-note">Commission edits are permission-gated. View-only roles can inspect these records, but cannot edit or activate them.</p>}
         <ConfirmDialog
           open={Boolean(pendingAction)}
           title={pendingAction?.title}
@@ -247,6 +272,7 @@ export default function AdminFeesPage() {
           onClose={() => setPendingAction(null)}
           onConfirm={confirmChange}
         />
+
       </section>
     </AdminLayout>
   );

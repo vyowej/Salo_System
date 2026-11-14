@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
 import { ConfirmDialog, DataTable, FilterBar, PageHeader, StatusBadge, Timeline } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { hasAdminPermission } from '../constants';
 import { ADMIN_MOCK_DATA, getAdminDisputes, saveAdminDisputes } from '../mocks';
 import { formatDateTime } from '../utils/format';
@@ -13,6 +14,7 @@ const CASE_STATUSES = ['Open', 'Investigating', 'Awaiting customer', 'Awaiting r
 export default function AdminDisputesPage() {
   const { caseId } = useParams();
   const { currentAdmin } = useAdminSession();
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Disputes', placeholder: 'Search disputes by case ID, type, or order', searchableFields: ['id', 'type', 'relatedRecordId', 'status'] });
   const [cases, setCases] = useState(getAdminDisputes);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -25,7 +27,7 @@ export default function AdminDisputesPage() {
     || hasAdminPermission(currentAdmin.role, 'orders', 'edit');
   const selectedCase = useMemo(() => cases.find((item) => item.id === caseId), [cases, caseId]);
   const filteredCases = cases.filter((item) => (
-    (!search || `${item.id} ${item.type} ${item.relatedRecordId}`.toLowerCase().includes(search.trim().toLowerCase()))
+    (!globalQuery.trim() && !search ? true : `${item.id} ${item.type} ${item.relatedRecordId}`.toLowerCase().includes((globalQuery || search).trim().toLowerCase()))
     && (!filterStatus || item.status === filterStatus)
   ));
 
@@ -73,7 +75,7 @@ export default function AdminDisputesPage() {
   }
 
   if (caseId && !selectedCase) {
-    return <AdminLayout><section className="admin-shell-page"><PageHeader title="Dispute not found" description={`No demo case matches ${caseId}.`} /><Link to="/admin/orders/disputes">Back to disputes</Link></section></AdminLayout>;
+    return <AdminLayout><section className="admin-shell-page"><PageHeader title="Dispute not found" description={`No case matches ${caseId}.`} /><Link to="/admin/orders/disputes">Back to disputes</Link></section></AdminLayout>;
   }
 
   if (!selectedCase) {
@@ -93,7 +95,7 @@ export default function AdminDisputesPage() {
           <FilterBar search={search} onSearchChange={setSearch} searchLabel="Search case, type, or record">
             <label className="admin-filter-control">Status<select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)}><option value="">All statuses</option>{[...new Set(cases.map((item) => item.status))].map((item) => <option key={item}>{item}</option>)}</select></label>
           </FilterBar>
-          <DataTable columns={columns} rows={filteredCases} emptyTitle="No matching cases" emptyDescription="No disputes match the current search or status." />
+          <DataTable columns={columns} rows={filteredCases} tableSearch={globalQuery} defaultOrder={[[0, 'desc']]} emptyTitle="No matching cases" emptyDescription="No disputes match the current search or status." />
         </section>
       </AdminLayout>
     );
@@ -137,8 +139,8 @@ export default function AdminDisputesPage() {
           {selectedCase.evidence.length ? selectedCase.evidence.map((file) => (
             <div className="admin-record-panel" key={file}>
               <strong>{file}</strong>
-              <button className="admin-action-button" type="button" onClick={() => setPreviewFile(previewFile === file ? '' : file)}>{previewFile === file ? 'Hide preview' : 'Preview mock file'}</button>
-              {previewFile === file && <div className="admin-document-preview" role="img" aria-label={`Illustrative preview placeholder for ${file}`}><strong>Mock attachment preview</strong><span>{file} · illustrative placeholder, not an actual customer document</span></div>}
+              <button className="admin-action-button" type="button" onClick={() => setPreviewFile(previewFile === file ? '' : file)}>{previewFile === file ? 'Hide preview' : 'Preview file'}</button>
+              {previewFile === file && <div className="admin-document-preview" role="img" aria-label={`Attachment preview for ${file}`}><strong>Attachment preview</strong><span>{file}</span></div>}
             </div>
           )) : <p>No evidence attachments are recorded.</p>}
         </div>
@@ -147,7 +149,7 @@ export default function AdminDisputesPage() {
         <ConfirmDialog
           open={Boolean(pendingAction)}
           title={pendingAction?.title}
-          description="The action and reason will be recorded in the mock audit log."
+          description="The action and reason will be recorded in the audit log."
           confirmLabel={pendingAction?.label}
           requireReauthentication
           requireReason

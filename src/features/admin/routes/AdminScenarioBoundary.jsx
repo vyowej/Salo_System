@@ -9,7 +9,7 @@ export default function AdminScenarioBoundary({ topic, module, children }) {
   if (scenario.state !== 'success') {
     return (
       <AdminLayout>
-        <PageHeader title={title} description="Demo data state for this administrative section." />
+        <PageHeader title={title} description="Administrative section status." />
         <StateView state={scenario.state} title={topic} description={scenario.error || undefined} retry={scenario.retry} />
       </AdminLayout>
     );

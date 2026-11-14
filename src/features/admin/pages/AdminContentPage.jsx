@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import AdminLayout from '../../../layouts/AdminLayout';
-import { ConfirmDialog, DataTable, PageHeader, StatusBadge, Tabs } from '../components';
+import { ConfirmDialog, DataTable, Modal, PageHeader, StatusBadge, Tabs } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { ADMIN_MOCK_DATA, getAdminContentData, saveAdminWorkspaceRecords } from '../mocks';
 import { appendAdminAuditLog } from '../utils/auditLog';
 import { formatDateTime, formatDateTimeInput } from '../utils/format';
@@ -38,6 +39,7 @@ function nameFor(type, item, categories) {
 
 export default function AdminContentPage() {
   const { currentAdmin, permissions } = useAdminSession();
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Content', placeholder: 'Search banners, featured items, announcements, or categories', searchableFields: ['title', 'name', 'placement', 'audience', 'status'] });
   const initial = getAdminContentData();
   const [records, setRecords] = useState(initial);
   const [activeTab, setActiveTab] = useState('banners');
@@ -49,7 +51,12 @@ export default function AdminContentPage() {
   const canEdit = permissions.content?.includes('edit');
   const canActivate = permissions.content?.includes('activate');
   const categories = records.categories;
-  const rows = records[activeTab] || [];
+  const rows = useMemo(() => {
+    const base = records[activeTab] || [];
+    const term = globalQuery.trim().toLowerCase();
+    if (!term) return base;
+    return base.filter((item) => [nameFor(activeTab, item, categories), item.placement, item.audience, item.description, item.status].some((v) => String(v || '').toLowerCase().includes(term)));
+  }, [records, activeTab, categories, globalQuery]);
 
   const columns = useMemo(() => {
     const base = [
@@ -132,7 +139,7 @@ export default function AdminContentPage() {
         reason,
         reference: saved.id,
       });
-      setNotice(`${LABELS[activeTab]} saved in browser demo state.`);
+      setNotice(`${LABELS[activeTab]} saved.`);
       setDraft(null);
       setEditing(null);
     } else {
@@ -159,13 +166,28 @@ export default function AdminContentPage() {
   function renderEditor() {
     if (!draft) return null;
     const field = (label, key, props = {}) => <label className="admin-filter-control">{label}<input value={draft[key] ?? ''} onChange={(event) => updateField(key, event.target.value)} {...props} /></label>;
+
+
+  
     return (
-      <form className="admin-record-panel admin-workspace-form" onSubmit={submitDraft}>
-        <div className="admin-workspace-heading"><h2>{editing ? 'Edit' : 'Create'} {LABELS[activeTab]}</h2><button className="admin-action-button" type="button" onClick={() => { setDraft(null); setEditing(null); }}>Cancel</button></div>
+      <Modal
+        open={Boolean(draft)}
+        onClose={() => { setDraft(null); setEditing(null); }}
+        size="md"
+        title={`${editing ? 'Edit' : 'Create'} ${LABELS[activeTab]}`}
+        footer={(
+          <>
+            <button className="admin-action-button" type="button" onClick={() => { setDraft(null); setEditing(null); }}>Cancel</button>
+            <button className="admin-action-button" type="submit" form="content-editor-form">{editing ? 'Review changes' : 'Review and create'}</button>
+          </>
+        )}
+      >
+        <form id="content-editor-form" className="admin-modal-form admin-modal-form--two-col" onSubmit={submitDraft}>
+
         {activeTab === 'banners' && <>
           {field('Title', 'title', { required: true })}
           <label className="admin-filter-control">Placement<select value={draft.placement} onChange={(event) => updateField('placement', event.target.value)}>{['Homepage hero', 'Homepage secondary', 'Promotional banner'].map((value) => <option key={value}>{value}</option>)}</select></label>
-          {field('Artwork description (demo preview only)', 'imageLabel', { required: true })}
+          {field('Artwork description', 'imageLabel', { required: true })}
           {field('Destination link', 'link', { type: 'text' })}
           {field('Starts at', 'startAt', { type: 'datetime-local', required: true })}
           {field('Ends at', 'endAt', { type: 'datetime-local', required: true })}
@@ -194,26 +216,30 @@ export default function AdminContentPage() {
           <label className="admin-filter-control">Description<input value={draft.description} onChange={(event) => updateField('description', event.target.value)} /></label>
         </>}
         {activeTab === 'banners' && <div className="admin-content-preview admin-content-preview--large"><strong>{draft.imageLabel || 'Artwork preview'}</strong><span>{draft.title || 'Banner title preview'}</span><small>{draft.placement}</small></div>}
-        <button className="admin-action-button" type="submit">{editing ? 'Review changes' : 'Review and create'}</button>
-      </form>
+  
+        </form>
+      </Modal>
+
     );
   }
+
+
 
   return (
     <AdminLayout>
       <section className="admin-shell-page">
         <PageHeader title="Content Management" description="Manage homepage banners, featured collections, announcements, and platform restaurant categories." actions={canCreate && <button className="admin-action-button" type="button" onClick={() => { setEditing(null); setDraft(blankRecord(activeTab)); setNotice(''); }}>Create {LABELS[activeTab].toLowerCase()}</button>} />
-        <p className="admin-shell-note">Content records and image descriptions are browser-local demo data. No image upload or external storage is configured.</p>
+
         {notice && <p className="admin-inline-notice" role="status">{notice}</p>}
         <Tabs items={CONTENT_TABS} value={activeTab} onChange={(value) => { setActiveTab(value); setDraft(null); setEditing(null); setNotice(''); }} label="Content management areas" />
         {renderEditor()}
         {activeTab === 'banners' && rows.map((item) => <div className="admin-content-preview" key={`preview-${item.id}`}><strong>{item.imageLabel}</strong><span>{item.title}</span><small>{item.placement} · {item.status}</small></div>)}
-        <DataTable columns={columns} rows={rows} emptyTitle={`No ${LABELS[activeTab].toLowerCase()} records`} emptyDescription="Create a demo record to populate this content list." />
+        <DataTable columns={columns} rows={rows} tableSearch={globalQuery} emptyTitle={`No ${LABELS[activeTab].toLowerCase()} records`} emptyDescription="Create a record to populate this content list." />
       </section>
       <ConfirmDialog
         open={Boolean(pendingAction)}
         title={pendingAction?.title}
-        description="This content change is saved only in browser demo state and recorded in the audit log."
+        description="This content change is recorded in the audit log."
         confirmLabel={pendingAction?.confirmLabel}
         requireReauthentication
         requireReason

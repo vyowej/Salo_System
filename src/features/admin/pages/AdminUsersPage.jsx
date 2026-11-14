@@ -1,18 +1,21 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
 import { getAdminMock } from '../mocks';
 import {
   ConfirmDialog,
   DataTable,
-  DetailDrawer,
+  Modal,
+  showAdminToast,
   PageHeader,
   StatusBadge,
   Tabs,
   Timeline,
 } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { ADMIN_ACCOUNT_CAPABILITIES, ADMIN_ACCOUNT_STATUSES } from '../constants';
-import { formatDate } from '../utils/format';
+import { formatDate, formatDateTime, formatPeso } from '../utils/format';
 import './AdminPages.css';
 
 const INITIAL_ACCOUNTS = getAdminMock('accounts').data.map((account) => ({ ...account }));
@@ -21,18 +24,19 @@ const RESERVATIONS = getAdminMock('reservations').data;
 
 export default function AdminUsersPage() {
   const { permissions } = useAdminSession();
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Accounts', placeholder: 'Search accounts by name, email, phone, status', searchableFields: ['name', 'username', 'email', 'phone', 'status'] });
   const [accounts, setAccounts] = useState(INITIAL_ACCOUNTS);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All statuses');
   const [capabilityFilter, setCapabilityFilter] = useState('All capabilities');
   const [selected, setSelected] = useState(null);
-  const [tab, setTab] = useState('Overview');
+  const [tab, setTab] = useState('Profile');
   const [confirm, setConfirm] = useState(null);
   const [notice, setNotice] = useState('');
   const canEdit = Boolean(permissions.accounts?.some((action) => ['edit', 'activate', 'deactivate', 'delete'].includes(action)));
 
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = (globalQuery || search).trim().toLowerCase();
     return accounts.filter((account) => {
       const matchesSearch = !term || [
         account.name, account.username, account.email, account.phone, account.id,
@@ -41,7 +45,7 @@ export default function AdminUsersPage() {
       const matchesCapability = capabilityFilter === 'All capabilities' || account.capabilities.includes(capabilityFilter);
       return matchesSearch && matchesStatus && matchesCapability;
     });
-  }, [accounts, search, statusFilter, capabilityFilter]);
+  }, [accounts, globalQuery, search, statusFilter, capabilityFilter]);
 
   const accountOrders = selected
     ? ORDERS.filter((order) => order.customerEmail === selected.email)
@@ -49,9 +53,19 @@ export default function AdminUsersPage() {
   const accountReservations = selected
     ? RESERVATIONS.filter((reservation) => reservation.customerEmail === selected.email)
     : [];
+  function maskEmail(email) {
+    if (!email || canEdit) return email || '—';
+    const [local, domain] = String(email).split('@');
+    return `${local.slice(0, 2)}***@${domain || '***'}`;
+  }
+  function maskPhone(phone) {
+    if (!phone || canEdit) return phone || 'Not provided';
+    const digits = String(phone).replace(/\s+/g, '');
+    return digits.length > 4 ? `***-***-${digits.slice(-4)}` : '***';
+  }
   const columns = [
     { key: 'name', label: 'Account', render: (account) => <button className="admin-text-link" type="button" onClick={() => { setSelected(account); setTab('Overview'); }}><strong>{account.name}</strong><span>@{account.username || '—'}</span></button> },
-    { key: 'contact', label: 'Contact', render: (account) => <>{account.email}<br />{account.phone || 'No phone on file'}</> },
+    { key: 'contact', label: 'Contact', render: (account) => <>{maskEmail(account.email)}<br />{maskPhone(account.phone)}</> },
     { key: 'capabilities', label: 'Capabilities', render: (account) => account.capabilities.join(', ') },
     { key: 'joined', label: 'Registered', render: (account) => formatDate(account.joined) },
     { key: 'ordersCount', label: 'Orders / Reservations', render: (account) => `${account.ordersCount} / ${account.reservationsCount}` },
@@ -98,11 +112,12 @@ export default function AdminUsersPage() {
     };
     setAccounts((previous) => previous.map((item) => item.id === account.id ? updated : item));
     setSelected((previous) => previous?.id === account.id ? updated : previous);
-    setNotice(`Demo sessions for ${account.name} have been marked revoked.`);
+    setNotice(`Sessions for ${account.name} have been marked revoked.`);
+    showAdminToast(`Sessions revoked for ${account.name}.`);
     setConfirm(null);
   }
 
-  const historyItems = selected
+  const _historyItems = selected
     ? [
       ...accountOrders.map((order) => ({ id: order.id, title: `Order ${order.id}`, description: `${order.status} · ${order.restaurants.join(', ')}`, time: order.createdAt })),
       ...accountReservations.map((reservation) => ({ id: reservation.id, title: `Reservation ${reservation.id}`, description: `${reservation.status} · ${reservation.restaurantName} · ${reservation.guests} guests`, time: reservation.reservedAt })),
@@ -110,8 +125,8 @@ export default function AdminUsersPage() {
     : [];
   const accountActivity = selected
     ? [
-      { id: `${selected.id}-registered`, title: 'Account registered', description: 'SALO account registration date from the demo record.', time: `${selected.joined}T09:00:00+08:00` },
-      ...(selected.verificationStatus === 'Verified' ? [{ id: `${selected.id}-verified`, title: 'Verification completed', description: 'Verification status is marked as verified in the demo record.', time: `${selected.joined}T09:30:00+08:00` }] : []),
+      { id: `${selected.id}-registered`, title: 'Account registered', description: 'SALO account registration date.', time: `${selected.joined}T09:00:00+08:00` },
+      ...(selected.verificationStatus === 'Verified' ? [{ id: `${selected.id}-verified`, title: 'Verification completed', description: 'Account verification status is verified.', time: `${selected.joined}T09:30:00+08:00` }] : []),
       ...(selected.accountActivity || []),
     ]
     : [];
@@ -126,18 +141,21 @@ export default function AdminUsersPage() {
           <label className="admin-filter-control">Status<select aria-label="Filter by account status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All statuses</option>{ADMIN_ACCOUNT_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
           <label className="admin-filter-control">Capability<select aria-label="Filter by account capability" value={capabilityFilter} onChange={(event) => setCapabilityFilter(event.target.value)}><option>All capabilities</option>{ADMIN_ACCOUNT_CAPABILITIES.map((capability) => <option key={capability}>{capability}</option>)}</select></label>
         </div>
-        <DataTable columns={columns} rows={filtered} emptyTitle="No matching accounts" emptyDescription="Adjust the search or filters to find another account." />
+        <DataTable columns={columns} rows={filtered} tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} onRowClick={(account) => { setSelected(account); setTab('Profile'); }} rowActions={() => [{ label: 'View', onClick: (row) => { setSelected(row); setTab('Profile'); } }]} emptyTitle="No matching accounts" emptyDescription="Adjust the search or filters to find another account." />
       </section>
 
-      <DetailDrawer open={Boolean(selected)} title={selected?.name || 'Account details'} onClose={() => setSelected(null)}>
+      <Modal open={Boolean(selected)} onClose={() => setSelected(null)} size="wide" title={selected?.name || 'Account details'} subtitle={selected ? `@${selected.username || 'user'} · ${maskEmail(selected.email)}` : undefined} headerExtra={selected ? <StatusBadge status={selected.status} /> : null} footer={selected ? (<><button className="admin-action-button" type="button" onClick={() => setSelected(null)}>Close</button>{canEdit && (<>{selected.status !== 'Active' && <button className="admin-action-button" type="button" onClick={() => requestStatus(selected, 'Active')}>Activate / Reactivate</button>}{selected.status === 'Active' && <button className="admin-action-button" type="button" onClick={() => requestStatus(selected, 'Suspended')}>Suspend</button>}{selected.status !== 'Deactivated' && <button className="admin-action-button admin-action-button--danger" type="button" onClick={() => requestStatus(selected, 'Deactivated')}>Deactivate</button>}<button className="admin-action-button" type="button" onClick={() => requestSessionRevocation(selected)}>Revoke sessions</button></>)}</>) : null}>
         {selected && (
           <div className="admin-drawer-content">
             <p className="admin-muted">@{selected.username || 'No username'} · {selected.email}</p>
-            <Tabs items={['Overview', 'History', 'Activity', 'Verification']} value={tab} onChange={setTab} label="Account detail sections" />
-            {tab === 'Overview' && (
+            <Tabs items={['Profile', 'Activity', 'Linked roles', 'Security / history']} value={tab} onChange={setTab} label="Account detail sections" />
+            {tab === 'Profile' && (
               <>
                 <ul className="admin-detail-list">
-                  <li><strong>Contact</strong>{selected.phone || 'Not provided'}</li>
+                  <li><strong>Contact</strong>{maskPhone(selected.phone)}</li>
+                  <li><strong>Email</strong>{maskEmail(selected.email)}</li>
+                  <li><strong>Last login</strong>{formatDateTime(selected.lastLogin || `${selected.joined}T14:20:00+08:00`)}</li>
+                  <li><strong>Default address</strong>{selected.defaultAddress || 'Quezon City, Metro Manila'}</li>
                   <li><strong>Registered</strong>{formatDate(selected.joined)}</li>
                   <li><strong>Account status</strong><StatusBadge status={selected.status} /></li>
                   <li><strong>Verification</strong><StatusBadge status={selected.verificationStatus} /></li>
@@ -152,29 +170,69 @@ export default function AdminUsersPage() {
                     <button className="admin-action-button" type="button" onClick={() => requestSessionRevocation(selected)}>Revoke sessions</button>
                   </div>
                 )}
+    
+    
+
                 <p className="admin-shell-note">Deactivation prevents access to the relevant SALO services. Orders, reservations, payments, and audit history are preserved.</p>
               </>
+
             )}
-            {tab === 'History' && <><p className="admin-muted">{accountOrders.length} recent order record(s) · {accountReservations.length} reservation record(s)</p><Timeline items={historyItems} /></>}
-            {tab === 'Activity' && <Timeline items={accountActivity} />}
-            {tab === 'Verification' && (
+            {tab === 'Activity' && (
+              <DataTable
+                columns={[
+                  { key: 'id', label: 'ID', render: (row) => <Link to={row.to}>{row.id}</Link> },
+                  { key: 'kind', label: 'Type' },
+                  { key: 'date', label: 'Date', sortValue: (row) => new Date(row.date).getTime(), render: (row) => formatDateTime(row.date) },
+                  { key: 'restaurant', label: 'Restaurant' },
+                  { key: 'amount', label: 'Amount', align: 'right', sortValue: (row) => row.amount, render: (row) => formatPeso(row.amount) },
+                  { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+                ]}
+                rows={[
+                  ...accountOrders.map((order) => ({ id: order.id, kind: 'Order', date: order.createdAt, restaurant: order.restaurants.join(', '), amount: order.feeBreakdown?.orderTotal ?? 0, status: order.status, to: `/admin/orders/${order.id}` })),
+                  ...accountReservations.map((res) => ({ id: res.id, kind: 'Reservation', date: res.reservedAt, restaurant: res.restaurantName, amount: res.feeBreakdown?.reservationFee ?? 0, status: res.status, to: `/admin/reservations/${res.id}` })),
+                ]}
+                defaultOrder={[[2, 'desc']]}
+                emptyTitle="No account activity"
+                emptyDescription="No orders or reservations recorded for this account."
+              />
+            )}
+
+            {tab === 'Linked roles' && (
               <div className="admin-record-panel">
-                <h3>Identity verification</h3>
-                <p>Status: <StatusBadge status={selected.verificationStatus} /></p>
-                <p>Evidence and verification results are demo records. Sensitive documents are not displayed in this mock.</p>
-                {selected.sessionsRevoked && <p>Sessions marked revoked: {selected.sessionRevocationReason}</p>}
+
+                {selected.capabilities.filter((cap) => cap !== 'Customer').length === 0 ? (
+                  <p className="admin-muted">This account only holds the Customer capability.</p>
+                ) : (
+                  <ul className="admin-detail-list">
+                    {selected.capabilities.map((cap) => {
+                      const target = cap.toLowerCase().includes('restaurant') ? '/admin/restaurants' : cap.toLowerCase().includes('rider') ? '/admin/riders' : cap.toLowerCase().includes('admin') ? '/admin/administrators' : '/admin/accounts';
+                      return <li key={cap}><strong>{cap}</strong><Link to={target}>Open {cap.toLowerCase()} module</Link></li>;
+                    })}
+                  </ul>
+                )}
+    
+
+
+              </div>
+            )}
+            {tab === 'Security / history' && (
+              <div className="admin-record-panel">
+
+                {selected.sessionsRevoked && <p className="admin-shell-note">Sessions marked revoked: {selected.sessionRevocationReason}</p>}
+                <Timeline items={accountActivity.map((entry) => ({ ...entry, time: formatDateTime(entry.time) }))} />
               </div>
             )}
           </div>
         )}
-      </DetailDrawer>
 
+
+      </Modal>
       <ConfirmDialog
         open={Boolean(confirm)}
         title={confirm?.status === 'Revoke active sessions' ? 'Revoke account sessions?' : `${confirm?.status} account?`}
         description={confirm?.status === 'Revoke active sessions'
-          ? 'This demo will mark the account sessions as revoked. No live sessions are affected.'
-          : 'This is a demo account action. Historical SALO records remain preserved.'}
+          ? 'This will mark the account sessions as revoked.'
+          : 'Historical SALO records remain preserved.'}
         confirmLabel={confirm?.status === 'Revoke active sessions' ? 'Revoke sessions' : confirm?.status}
         requireReauthentication
         requireReason

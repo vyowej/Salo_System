@@ -1,0 +1,230 @@
+.customer-orders-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.customer-orders-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-primary);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.customer-orders-tab:hover {
+  background: var(--surface-hover);
+}
+
+.customer-orders-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.customer-orders-tab-dot--upcoming { background: var(--status-upcoming-accent); }
+.customer-orders-tab-dot--completed { background: var(--status-completed-accent); }
+.customer-orders-tab-dot--cancelled { background: var(--status-cancelled-accent); }
+.customer-orders-tab-dot--all { background: var(--text-muted); }
+
+.customer-orders-tab-count {
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+}
+
+.customer-orders-tab.active.customer-orders-tab--upcoming {
+  background: var(--status-upcoming-bg);
+  border-color: var(--status-upcoming-border);
+  color: var(--status-upcoming-fg);
+}
+
+.customer-orders-tab.active.customer-orders-tab--completed {
+  background: var(--status-completed-bg);
+  border-color: var(--status-completed-border);
+  color: var(--status-completed-fg);
+}
+
+.customer-orders-tab.active.customer-orders-tab--cancelled {
+  background: var(--status-cancelled-bg);
+  border-color: var(--status-cancelled-border);
+  color: var(--status-cancelled-fg);
+}
+
+.customer-orders-tab.active.customer-orders-tab--all {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.customer-orders-tab.active.customer-orders-tab--all .customer-orders-tab-dot--all {
+  background: var(--accent-text);
+}
+
+.customer-orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.customer-order-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  border-left-width: 4px;
+  background: var(--surface-primary);
+  cursor: pointer;
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.customer-order-card:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.customer-order-card--upcoming {
+  border-left-color: var(--status-upcoming-accent);
+  background: color-mix(in srgb, var(--status-upcoming-bg) 45%, var(--surface-primary));
+}
+
+.customer-order-card--completed {
+  border-left-color: var(--status-completed-accent);
+  background: color-mix(in srgb, var(--status-completed-bg) 45%, var(--surface-primary));
+}
+
+.customer-order-card--cancelled {
+  border-left-color: var(--status-cancelled-accent);
+  background: color-mix(in srgb, var(--status-cancelled-bg) 45%, var(--surface-primary));
+}
+
+.customer-order-card__row1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.customer-order-card__id-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.customer-order-card__id-group h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: var(--font-weight-bold);
+}
+
+.customer-order-card__warn-chip {
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: var(--status-upcoming-bg);
+  color: var(--status-upcoming-fg);
+  border: 1px solid var(--status-upcoming-border);
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-order-card__total {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
+
+.customer-order-card__meta {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.customer-order-card__row3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-secondary);
+  flex-wrap: wrap;
+}
+
+.customer-order-card__suborders {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.customer-order-card__suborder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-primary);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.customer-order-card__subdot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.customer-order-card__subdot--upcoming { background: var(--status-upcoming-accent); }
+.customer-order-card__subdot--completed { background: var(--status-completed-accent); }
+.customer-order-card__subdot--cancelled { background: var(--status-cancelled-accent); }
+
+.customer-order-card__restaurant {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.customer-order-card__suborder-status {
+  color: var(--text-secondary);
+}
+
+.customer-order-card__suborder--more {
+  color: var(--text-muted);
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-order-card__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.customer-orders-load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}

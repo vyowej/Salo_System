@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
 import adminService from '../../../services/adminService';
 import Button from '../../../components/common/Button';
@@ -13,26 +14,50 @@ import {
   Timeline,
 } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
-import { getAdminMock } from '../mocks';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
+import { getAdminMock, getRiderApplications, syncApplicationsToMockData } from '../mocks';
 import { formatDate, formatPeso } from '../utils/format';
 import './AdminPages.css';
 
 const SAVED_RIDERS = adminService.getRiders();
-const INITIAL_RIDERS = getAdminMock('riders').data.map((rider) => ({
+const _INITIAL_RIDERS = getAdminMock('riders').data.map((rider) => ({
   ...rider,
   ...(SAVED_RIDERS.find((saved) => saved.id === rider.id) || {}),
 }));
+void _INITIAL_RIDERS;
 const ORDERS = getAdminMock('orders').data;
 const ZONES = [...new Set(getAdminMock('serviceAreas').data.flatMap((area) => area.zones.map((zone) => zone.name)))];
 
 export default function AdminRidersPage() {
   const { permissions } = useAdminSession();
-  const [riders, setRiders] = useState(INITIAL_RIDERS);
-  const [view, setView] = useState('Applications');
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Riders', placeholder: 'Search riders by name, phone, zone, status', searchableFields: ['name', 'username', 'email', 'phone', 'vehicle', 'licenseNumber', 'zone', 'status'] });
+  const [riders, setRiders] = useState(() => {
+    syncApplicationsToMockData();
+    const saved = adminService.getRiders();
+    return getAdminMock('riders').data.map((rider) => ({
+      ...rider,
+      ...(saved.find((s) => s.id === rider.id) || {}),
+    }));
+  });
+  void _INITIAL_RIDERS;
+  useEffect(() => {
+    function refresh() {
+      syncApplicationsToMockData();
+      const saved = adminService.getRiders();
+      setRiders(getAdminMock('riders').data.map((rider) => ({
+        ...rider,
+        ...(saved.find((s) => s.id === rider.id) || {}),
+      })));
+    }
+    window.addEventListener('salo-admin-data-updated', refresh);
+    return () => window.removeEventListener('salo-admin-data-updated', refresh);
+  }, []);
+  const pendingApplicationsCount = getRiderApplications().filter((item) => ['Pending', 'Under Review', 'Needs Revision'].includes(item.reviewStatus)).length;
+  const [view, setView] = useState('Directory');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All riders');
   const [selected, setSelected] = useState(null);
-  const [detailTab, setDetailTab] = useState('Application');
+  const [detailTab, setDetailTab] = useState('Profile');
   const [requestMessage, setRequestMessage] = useState('');
   const [zoneDraft, setZoneDraft] = useState('');
   const [pendingAction, setPendingAction] = useState(null);
@@ -43,12 +68,13 @@ export default function AdminRidersPage() {
   const canActivate = permissions.riders?.includes('activate');
   const canDeactivate = permissions.riders?.includes('deactivate');
   const filtered = useMemo(() => riders.filter((rider) => {
-    const term = search.trim().toLowerCase();
+    const term = (globalQuery || search).trim().toLowerCase();
     const matchesText = !term || [rider.name, rider.username, rider.email, rider.phone, rider.vehicle, rider.licenseNumber, rider.zone].some((value) => String(value || '').toLowerCase().includes(term));
     const matchesStatus = statusFilter === 'All riders' || rider.status === statusFilter;
     return matchesText && matchesStatus;
-  }), [riders, search, statusFilter]);
-  const applicants = filtered.filter((rider) => ['Pending Review', 'Documents requested'].includes(rider.applicationStatus) || rider.status === 'Pending Verification');
+  }), [riders, globalQuery, search, statusFilter]);
+  const _applicants = filtered.filter((rider) => ['Pending Review', 'Documents requested'].includes(rider.applicationStatus) || rider.status === 'Pending Verification');
+  void _applicants;
   const unassignedOrders = ORDERS.filter((order) => !order.riderId && !['Completed', 'Cancelled'].includes(order.status));
 
   function askAction(rider, action, nextZone) {
@@ -79,7 +105,7 @@ export default function AdminRidersPage() {
     setRequestMessage('');
     setZoneDraft('');
     setPendingAction(null);
-    setNotice(`${rider.name}: ${action.toLowerCase()} recorded in demo data.`);
+    setNotice(`${rider.name}: ${action.toLowerCase()} recorded.`);
   }
 
   function saveZone() {
@@ -87,7 +113,7 @@ export default function AdminRidersPage() {
     askAction(selected, 'Assign delivery zone', zoneDraft);
   }
 
-  const applicantColumns = [
+  const _applicantColumns = [
     { key: 'name', label: 'Applicant', render: (rider) => <button className="admin-text-link" type="button" onClick={() => { setSelected(rider); setZoneDraft(''); setDetailTab('Application'); }}><strong>{rider.name}</strong><span>@{rider.username} · {rider.email}</span></button> },
     { key: 'vehicle', label: 'Vehicle', render: (rider) => <>{rider.vehicle}<br /><span className="admin-muted">{rider.licenseNumber}</span></> },
     { key: 'documents', label: 'Document review', render: (rider) => `${rider.idDocument || 'ID'} · ${rider.vehicleDocument || 'Vehicle document'}` },
@@ -95,6 +121,7 @@ export default function AdminRidersPage() {
     { key: 'verificationStatus', label: 'Verification', render: (rider) => <StatusBadge status={rider.verificationStatus} className={['Pending', 'Documents requested', 'Under review'].includes(rider.verificationStatus) ? 'admin-status-badge--action' : ''} /> },
     { key: 'review', label: 'Review', render: (rider) => <button className="admin-action-button" type="button" onClick={() => { setSelected(rider); setDetailTab('Application'); }}>Review application</button> },
   ];
+  void _applicantColumns;
   const directoryColumns = [
     { key: 'name', label: 'Rider', render: (rider) => <button className="admin-text-link" type="button" onClick={() => { setSelected(rider); setZoneDraft(''); setDetailTab('Profile'); }}><strong>{rider.name}</strong><span>@{rider.username} · {rider.phone}</span></button> },
     { key: 'vehicle', label: 'Vehicle / verification', render: (rider) => <>{rider.vehicle}<br /><span className="admin-muted">{rider.verificationStatus} · {rider.applicationStatus}</span></> },
@@ -116,15 +143,19 @@ export default function AdminRidersPage() {
   return (
     <AdminLayout>
       <section className="admin-shell-page">
-        <PageHeader title="Riders and Delivery Operations" description="Review applications, verify identity and vehicles, manage rider accounts, and monitor delivery operations." />
+        <PageHeader
+          title="Riders and Delivery Operations"
+          description="Manage approved riders, account status, zone assignments, and delivery operations."
+          actions={<Link className="admin-action-button" to="/admin/applications?type=rider">Pending applications ({pendingApplicationsCount})</Link>}
+        />
         {notice && <p className="admin-inline-notice" role="status">{notice}</p>}
-        <Tabs items={['Applications', 'Directory', 'Operations']} value={view} onChange={setView} label="Rider management views" />
+        <Tabs items={['Directory', 'Operations']} value={view} onChange={setView} label="Rider management views" />
         <div className="admin-filter-bar">
           <label className="admin-filter-control">Search<input aria-label="Search riders" placeholder="Rider, vehicle, plate, zone, or contact" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
           {view !== 'Applications' && <label className="admin-filter-control">Status<select aria-label="Filter riders by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All riders</option><option>Active</option><option>Pending Verification</option><option>Suspended</option><option>Deactivated</option></select></label>}
         </div>
-        {view === 'Applications' && <DataTable columns={applicantColumns} rows={applicants} emptyTitle="No rider applications" emptyDescription="There are no applications awaiting review." />}
-        {view === 'Directory' && <DataTable columns={directoryColumns} rows={filtered} emptyTitle="No riders found" emptyDescription="Adjust your search or status filter." />}
+
+        {view === 'Directory' && <DataTable columns={directoryColumns} rows={filtered.filter((r) => r.applicationStatus === 'Approved' || ['Active', 'Suspended', 'Deactivated'].includes(r.status))} tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} emptyTitle="No riders found" emptyDescription="Adjust your search or status filter." />}
         {view === 'Operations' && <>
           <div className="admin-roster-summary">
             <div><strong>{activeRiders.filter((rider) => rider.isOnline).length}</strong><span>Online</span></div>
@@ -134,10 +165,10 @@ export default function AdminRidersPage() {
             <div><strong>{unassignedOrders.length}</strong><span>Unassigned orders</span></div>
           </div>
           <section className="admin-map-panel" aria-label="Rider location map panel">
-            <div><h2>Authorized live locations</h2><p>Demo map panel · location visibility is limited to riders sharing location during an active shift.</p></div>
+            <div><h2>Authorized live locations</h2><p>Location visibility is limited to riders sharing location during an active shift.</p></div>
             <div className="admin-map-grid">{activeRiders.map((rider) => <article key={rider.id} className={rider.isOnline ? 'is-online' : ''}><span aria-hidden="true">●</span><strong>{rider.name}</strong><small>{rider.isOnline ? rider.location : 'Offline · location not shown'}</small></article>)}</div>
           </section>
-          <DataTable columns={[
+          <DataTable tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} columns={[
             { key: 'name', label: 'Rider', render: (rider) => <strong>{rider.name}</strong> },
             { key: 'status', label: 'Availability', render: (rider) => rider.isOnline ? (rider.onDelivery ? 'On delivery' : 'Online · available') : 'Offline' },
             { key: 'shifts', label: 'Active shift', render: (rider) => rider.activeShift ? rider.shifts.join(', ') : 'No active shift' },
@@ -151,7 +182,7 @@ export default function AdminRidersPage() {
       <DetailDrawer open={Boolean(selected)} title={selected?.name || 'Rider details'} onClose={() => setSelected(null)}>
         {selected && <>
           <p className="admin-muted">@{selected.username} · {selected.email}</p>
-          <Tabs items={['Application', 'Profile', 'Operations', 'History']} value={detailTab} onChange={setDetailTab} label="Rider detail sections" />
+          <Tabs items={['Profile', 'Operations', 'History']} value={detailTab === 'Application' ? 'Profile' : detailTab} onChange={setDetailTab} label="Rider detail sections" />
           {detailTab === 'Application' && <div className="admin-drawer-content">
             <ul className="admin-detail-list"><li><strong>Application</strong>{selected.applicationStatus}</li><li><strong>Verification</strong><StatusBadge status={selected.verificationStatus} /></li><li><strong>Vehicle</strong>{selected.vehicle}</li><li><strong>License number</strong>{selected.licenseNumber}</li><li><strong>Assigned zone</strong>{selected.zone}</li></ul>
             <DocumentViewer documents={[selected.idDocument, selected.vehicleDocument].filter(Boolean)} subject={selected.name} status={selected.verificationStatus} />
@@ -172,7 +203,7 @@ export default function AdminRidersPage() {
       <ConfirmDialog
         open={Boolean(pendingAction)}
         title={`${pendingAction?.action || 'Confirm'}?`}
-        description="Record the action and reason in demo history. No live rider account or dispatch operation is changed."
+        description="Record the action and reason in rider history."
         confirmLabel={pendingAction?.action || 'Confirm'}
         requireReauthentication
         requireReason

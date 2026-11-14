@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
-import { ConfirmDialog, DataTable, DetailDrawer, FilterBar, PageHeader, StatusBadge, Tabs, Timeline } from '../components';
+import { ConfirmDialog, DataTable, FilterBar, Modal, PageHeader, showAdminToast, StatusBadge, Tabs, Timeline } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { ADMIN_MOCK_DATA, createAdminDispute, getAdminWorkspaceRecords, saveAdminWorkspaceRecords } from '../mocks';
 import { ADMIN_TICKET_STATUSES, hasAdminPermission } from '../constants';
 import { appendAdminAuditLog } from '../utils/auditLog';
@@ -21,6 +22,7 @@ const STATUS_OPTIONS = {
 
 export default function AdminSupportPage() {
   const { currentAdmin, permissions } = useAdminSession();
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Support', placeholder: 'Search tickets by ID, requester, subject, or reference', searchableFields: ['id', 'requester', 'subject', 'relatedRecordId'] });
   const [tickets, setTickets] = useState(getAdminWorkspaceRecords('support'));
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -39,11 +41,11 @@ export default function AdminSupportPage() {
   const selected = tickets.find((ticket) => ticket.id === selectedId);
 
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = (globalQuery || search).trim().toLowerCase();
     return tickets.filter((ticket) => (!term || `${ticket.id} ${ticket.requester} ${ticket.subject} ${ticket.relatedRecordId}`.toLowerCase().includes(term))
       && (!statusFilter || ticket.status === statusFilter)
       && (!categoryFilter || ticket.category === categoryFilter));
-  }, [tickets, search, statusFilter, categoryFilter]);
+  }, [tickets, globalQuery, search, statusFilter, categoryFilter]);
 
   function recordAction(ticket, action, previousValue, newValue, reason) {
     appendAdminAuditLog({
@@ -148,6 +150,7 @@ export default function AdminSupportPage() {
         history: [{ title: `Ticket ${status.toLowerCase()}`, description: reason, time }, ...ticket.history],
       }));
     }
+    showAdminToast(`Updated ${action.ticket.id} (${action.title.toLowerCase()}).`, 'success');
     setPendingAction(null);
     setNextStatus('');
     setNextPriority('');
@@ -158,10 +161,10 @@ export default function AdminSupportPage() {
     event.preventDefault();
     if (!selected || !message.trim()) return;
     const body = message.trim();
-    commitTicket(selected.id, 'Sent simulated support communication', null, body, body, (ticket, time) => ({
+    commitTicket(selected.id, 'Sent support reply', null, body, body, (ticket, time) => ({
       ...ticket,
       messages: [...ticket.messages, { author: currentAdmin.name, type: 'Admin', body, time }],
-      history: [{ title: 'Reply sent', description: 'Simulated communication recorded in local demo state.', time }, ...ticket.history],
+      history: [{ title: 'Reply sent', description: 'Support reply recorded.', time }, ...ticket.history],
     }));
     setMessage('');
   }
@@ -180,16 +183,24 @@ export default function AdminSupportPage() {
   return (
     <AdminLayout>
       <section className="admin-shell-page">
-        <PageHeader title="Support and Complaints" description="Review requests from customers, restaurant owners and staff, and riders. Communication is simulated in this demo." />
+        <PageHeader title="Support and Complaints" description="Review requests from customers, restaurant owners and staff, and riders." />
         <FilterBar search={search} onSearchChange={setSearch} searchLabel="Search ticket, requester, reference, or subject">
           <label className="admin-filter-control">Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{ADMIN_TICKET_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
           <label className="admin-filter-control">Category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">All categories</option>{[...new Set(tickets.map((ticket) => ticket.category))].map((category) => <option key={category}>{category}</option>)}</select></label>
         </FilterBar>
         {canCreate && <p className="admin-shell-note">New customer-facing tickets enter through the customer, restaurant, or rider modules. This workspace manages existing requests and does not fabricate a requester submission.</p>}
-        {!canEdit && <p className="admin-shell-note">Your role can review tickets but cannot change assignment or status. Frontend permissions are for presentation only; backend enforcement is required.</p>}
-        <DataTable columns={columns} rows={filtered} emptyTitle="No matching tickets" emptyDescription="Try a different search or filter." />
+        {!canEdit && <p className="admin-shell-note">Your role can review tickets but cannot change assignment or status.</p>}
+        <DataTable columns={columns} rows={filtered} tableSearch={globalQuery} defaultOrder={[[0, 'desc']]} emptyTitle="No matching tickets" emptyDescription="Try a different search or filter." />
       </section>
-      <DetailDrawer open={Boolean(selected)} title={selected ? `${selected.id} · ${selected.subject}` : 'Ticket details'} onClose={() => setSelectedId('')}>
+      <Modal
+        open={Boolean(selected)}
+        onClose={() => setSelectedId('')}
+        size="wide"
+        title={selected ? `${selected.id} · ${selected.subject}` : 'Ticket details'}
+        subtitle={selected ? `${selected.requester} · ${selected.requesterType} · ${selected.category}` : undefined}
+        headerExtra={selected ? <StatusBadge status={selected.status} /> : null}
+        footer={<button className="admin-action-button" type="button" onClick={() => setSelectedId('')}>Close</button>}
+      >
         {selected && (
           <div className="admin-drawer-content">
             <ul className="admin-detail-list">
@@ -207,8 +218,8 @@ export default function AdminSupportPage() {
                 <div className="admin-conversation">
                   {selected.messages.map((item, index) => <article key={`${item.time}-${index}`}><strong>{item.author} · {item.type}</strong><p>{item.body}</p><time>{formatDateTime(item.time)}</time></article>)}
                 </div>
-                {canEdit && <form className="admin-record-panel" onSubmit={sendMessage}><label className="admin-filter-control">Simulated reply<textarea required value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Write a response for the demo conversation" /></label><button className="admin-action-button" type="submit">Record simulated reply</button></form>}
-                <p className="admin-muted">No message is sent outside this browser demo.</p>
+                {canEdit && <form className="admin-record-panel" onSubmit={sendMessage}><label className="admin-filter-control">Reply<textarea required value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Write a response" /></label><button className="admin-action-button" type="submit">Send reply</button></form>}
+
               </>
             )}
             {tab === 'Internal notes' && (
@@ -242,11 +253,11 @@ export default function AdminSupportPage() {
             )}
           </div>
         )}
-      </DetailDrawer>
+      </Modal>
       <ConfirmDialog
         open={Boolean(pendingAction)}
         title={pendingAction?.title}
-        description="This simulated support action is saved only in browser demo state and recorded in the audit log."
+        description="This support action is recorded in the audit log."
         confirmLabel={pendingAction?.confirmLabel}
         requireReauthentication
         requireReason

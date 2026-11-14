@@ -15,4 +15,4 @@ export {
   ADMIN_HIGH_VALUE_REFUND_THRESHOLD,
   ADMIN_TICKET_STATUSES,
 } from './statuses';
-export { ADMIN_NAV_ITEMS, getAdminNavItems } from './navItems';
+export { ADMIN_NAV_ITEMS, ADMIN_COLLAPSED_IMPORTANT_IDS, getAdminNavItems } from './navItems';

@@ -4,11 +4,13 @@ import Button from '../../../components/common/Button';
 import {
   ConfirmDialog,
   DataTable,
+  Modal,
   PageHeader,
   StatusBadge,
   Tabs,
 } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { getAdminMock } from '../mocks';
 import './AdminPages.css';
 
@@ -22,6 +24,7 @@ const RIDERS = getAdminMock('riders').data;
 
 export default function AdminServiceAreasPage() {
   const { permissions } = useAdminSession();
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Service Areas', placeholder: 'Search service areas by name, city, or zone', searchableFields: ['name', 'city', 'zoneNames', 'status'] });
   const [areas, setAreas] = useState(INITIAL_AREAS);
   const [view, setView] = useState('Areas and zones');
   const [selectedAreaId, setSelectedAreaId] = useState(INITIAL_AREAS[0]?.id || '');
@@ -40,12 +43,15 @@ export default function AdminServiceAreasPage() {
   const selectedArea = areas.find((area) => area.id === selectedAreaId);
   const selectedZone = selectedArea?.zones.find((zone) => zone.name === selectedZoneName);
 
-  const areaRows = useMemo(() => areas.map((area) => ({
+  const areaRows = useMemo(() => {
+    const term = globalQuery.trim().toLowerCase();
+    return areas.map((area) => ({
     ...area,
     zoneNames: area.zones.map((zone) => zone.name).join(', '),
     riderCount: new Set(area.zones.flatMap((zone) => zone.riderIds)).size,
     restaurantCount: new Set(area.zones.flatMap((zone) => zone.restaurantIds)).size,
-  })), [areas]);
+    })).filter((area) => !term || [area.name, area.city, area.zoneNames, area.status].some((v) => String(v || '').toLowerCase().includes(term)));
+  }, [areas, globalQuery]);
 
   function openCreate() {
     setEditing(null);
@@ -83,13 +89,13 @@ export default function AdminServiceAreasPage() {
       setAreas((previous) => previous.map((area) => area.id === areaToEdit.id ? updated : area));
       setSelectedAreaId(areaToEdit.id);
       setSelectedZoneName(zoneNames[0] || '');
-      setNotice(`${updated.name} was updated in the demo data.`);
+      setNotice(`${updated.name} was updated.`);
     } else {
       const area = { id: `area-${Date.now()}`, name, city, neighborhoods, zones: zoneNames.map((zoneName) => ({ name: zoneName, riderIds: [], restaurantIds: [] })), status: 'Active', updateReason: reason };
       setAreas((previous) => [...previous, area]);
       setSelectedAreaId(area.id);
       setSelectedZoneName(area.zones[0]?.name || '');
-      setNotice(`${area.name} was created in the demo data.`);
+      setNotice(`${area.name} was created.`);
     }
     setPendingAreaSave(null);
     setFormOpen(false);
@@ -103,7 +109,7 @@ export default function AdminServiceAreasPage() {
     const { area, status } = pendingArea;
     setAreas((previous) => previous.map((item) => item.id === area.id ? { ...item, status, statusReason: reason } : item));
     setPendingArea(null);
-    setNotice(`${area.name} is now ${status.toLowerCase()} in the demo data.`);
+    setNotice(`${area.name} is now ${status.toLowerCase()}.`);
   }
 
   function saveAssignments() {
@@ -162,7 +168,7 @@ export default function AdminServiceAreasPage() {
         <div className="admin-shell-note"><strong>Coverage policy:</strong> Delivery is blocked outside active service coverage. Pickup and reservation availability are evaluated separately from delivery coverage.</div>
         <Tabs items={['Areas and zones', 'Restaurant coverage', 'Rider availability']} value={view} onChange={setView} label="Service area views" />
         {view === 'Areas and zones' && <>
-          <DataTable columns={[
+          <DataTable tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} columns={[
             { key: 'name', label: 'Area / city', render: (area) => <><strong>{area.name}</strong><br /><span className="admin-muted">{area.city}</span></> },
             { key: 'neighborhoods', label: 'Neighborhoods', render: (area) => area.neighborhoods.join(', ') || 'None listed' },
             { key: 'zoneNames', label: 'Delivery zones' },
@@ -181,13 +187,13 @@ export default function AdminServiceAreasPage() {
             {canEdit && selectedZone && <Button variant="outline" onClick={saveAssignments}>Save rider assignments</Button>}
           </section>}
         </>}
-        {view === 'Restaurant coverage' && <><p className="admin-muted">Physical restaurant location is shown separately from its declared delivery coverage.</p><DataTable columns={[
+        {view === 'Restaurant coverage' && <><p className="admin-muted">Physical restaurant location is shown separately from its declared delivery coverage.</p><DataTable tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} columns={[
           { key: 'name', label: 'Restaurant', render: (restaurant) => <strong>{restaurant.name}</strong> },
           { key: 'physicalLocation', label: 'Physical location' },
           { key: 'deliveryCoverage', label: 'Declared delivery coverage' },
           { key: 'coverageStatus', label: 'Area review', render: (restaurant) => <StatusBadge status={restaurant.coverageStatus} /> },
         ]} rows={coverageRows} emptyTitle="No restaurant coverage records" emptyDescription="There are no restaurant records available for coverage review." /></>}
-        {view === 'Rider availability' && <DataTable columns={[
+        {view === 'Rider availability' && <DataTable tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} columns={[
           { key: 'area', label: 'Service area' },
           { key: 'zone', label: 'Delivery zone' },
           { key: 'assigned', label: 'Assigned riders' },
@@ -197,17 +203,21 @@ export default function AdminServiceAreasPage() {
         ]} rows={availabilityRows} emptyTitle="No rider zones" emptyDescription="Create an area and zones to review rider coverage." />}
       </section>
 
-      {formOpen && <div className="admin-form-overlay"><section className="admin-form-panel" role="dialog" aria-modal="true" aria-labelledby="service-area-form-title">
-        <header><h2 id="service-area-form-title">{editing ? 'Edit service area' : 'Create service area'}</h2><button className="admin-icon-button" type="button" aria-label="Close service area form" onClick={() => setFormOpen(false)}>×</button></header>
-        <form onSubmit={saveArea}>
+      <Modal open={formOpen} onClose={() => setFormOpen(false)} size="md" title={editing ? 'Edit service area' : 'Create service area'} footer={<><Button variant="ghost" type="button" onClick={() => setFormOpen(false)}>Cancel</Button><Button variant="primary" type="submit" form="service-area-form">{editing ? 'Review changes' : 'Review new area'}</Button></>}>
+        <form id="service-area-form" className="admin-modal-form" onSubmit={saveArea}>
+
+
           <label className="admin-filter-control">Area name<input required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
           <label className="admin-filter-control">City<input required value={form.city} onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))} /></label>
           <label className="admin-filter-control">Neighborhoods (comma-separated)<input value={form.neighborhoods} onChange={(event) => setForm((current) => ({ ...current, neighborhoods: event.target.value }))} /></label>
           <label className="admin-filter-control">Delivery zones (comma-separated)<input required value={form.zones} onChange={(event) => setForm((current) => ({ ...current, zones: event.target.value }))} /></label>
           <p>Pickup and reservation availability do not automatically follow delivery coverage.</p>
-          <div className="admin-action-row"><Button variant="ghost" type="button" onClick={() => setFormOpen(false)}>Cancel</Button><Button variant="primary" type="submit">{editing ? 'Review changes' : 'Review new area'}</Button></div>
+          <p className="admin-shell-note">Pickup and reservation availability do not automatically follow delivery coverage.</p>
+
         </form>
-      </section></div>}
+      </Modal>
+
+
 
       <ConfirmDialog
         open={Boolean(pendingAreaSave)}
@@ -222,7 +232,7 @@ export default function AdminServiceAreasPage() {
       <ConfirmDialog
         open={Boolean(pendingAssignments)}
         title={`Confirm rider assignments for ${pendingAssignments?.zoneName || 'zone'}`}
-        description="This assignment is a demo change and does not dispatch orders or contact riders."
+        description="Zone assignments are recorded for coverage planning."
         confirmLabel="Save assignments"
         requireReauthentication
         requireReason

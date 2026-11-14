@@ -27,8 +27,8 @@ export default function AdminSectionPage({ title, description, routeName }) {
             <StatCard label="Restaurant sales" value={formatPeso(totals.restaurantSales)} hint="Before commission and adjustments" tone="gold" />
             <StatCard label="Refunds / adjustments" value={formatPeso(totals.refunds)} hint="Recorded order refund adjustments" tone="brown" />
           </div>
-          <p className="admin-shell-note">This demo report uses the same immutable mock transaction snapshots as order details. GMV is not platform revenue, and later fee changes never recalculate past orders.</p>
-          <DataTable columns={columns} rows={transactions} emptyTitle="No financial transactions" emptyDescription="There are no transaction snapshots in this demo data." />
+          <p className="admin-shell-note">This report uses the same transaction snapshots as order details. GMV is not platform revenue, and later fee changes never recalculate past orders.</p>
+          <DataTable columns={columns} rows={transactions} emptyTitle="No financial transactions" emptyDescription="There are no transaction snapshots available." />
         </section>
       </AdminLayout>
     );
@@ -39,7 +39,7 @@ export default function AdminSectionPage({ title, description, routeName }) {
         <PageHeader title={title} description={description} />
         <EmptyState
           title={`No ${title.toLowerCase()} records`}
-          description={`There are no ${title.toLowerCase()} records in the demo data. This section is reserved for the ${routeName} workflow; no live data or actions are available in this batch.`}
+          description={`There are no ${title.toLowerCase()} records available for ${routeName}.`}
         />
       </section>
     </AdminLayout>

@@ -8,6 +8,8 @@ import SideBar from '../components/navigation/SideBar';
 import ProfileMenu from '../components/navigation/ProfileMenu';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
+import BackButton from '../components/common/BackButton';
+import CustomerNotificationsMenu from '../features/customer/components/CustomerNotificationsMenu';
 import {
   CUSTOMER_NAV_CONFIG,
   CUSTOMER_SIDEBAR_COLLAPSED_KEY,
@@ -17,11 +19,7 @@ import { CUSTOMER_INVITATION_COUNT } from '../features/restaurant/pages/team/tea
 import '../components/navigation/NavigationShell.css';
 import './CustomerLayout.css';
 
-const FULFILLMENT_MODES = [
-  { id: 'delivery', label: 'Delivery' },
-  { id: 'pickup', label: 'Pickup' },
-  { id: 'dine-in', label: 'Dine-in' },
-];
+
 
 const mkIcon = (path) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -52,7 +50,7 @@ function readSidebarCollapsed() {
 
 export default function CustomerLayout({ children }) {
   const { user } = useAuth();
-  const { totalItemCount, fulfillmentMode, setFulfillmentMode } = useCart();
+  const { totalItemCount } = useCart();
   const { requestLogout, logoutDialogProps } = useLogout();
   const location = useLocation();
   const navigate = useNavigate();
@@ -62,7 +60,6 @@ export default function CustomerLayout({ children }) {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
 
-  const [notificationCount, setNotificationCount] = useState(0);
   const [hasActiveOrder, setHasActiveOrder] = useState(false);
   const [hasReservationUpdate, setHasReservationUpdate] = useState(false);
 
@@ -86,7 +83,6 @@ export default function CustomerLayout({ children }) {
     const syncAttentionState = () => {
       const notifications = customerService.getNotifications();
       const unread = notifications.filter((item) => !item.read);
-      setNotificationCount(unread.length);
 
       const orders = customerService.getOrders();
       setHasActiveOrder(
@@ -208,12 +204,7 @@ export default function CustomerLayout({ children }) {
     },
   ];
 
-  const handleModeSelect = (modeId) => {
-    setFulfillmentMode(modeId);
-    if (modeId === 'dine-in' && location.pathname !== '/customer/reservations') {
-      navigate('/customer/reservations');
-    }
-  };
+
 
   const handleSearchSubmit = (nextValue) => {
     const trimmed = String(nextValue || '').trim();
@@ -304,20 +295,6 @@ export default function CustomerLayout({ children }) {
               </button>
             </div>
           )}
-        </div>
-
-        <div className="customer-mode-toggle" role="group" aria-label="Order fulfillment mode">
-          {FULFILLMENT_MODES.map((mode) => (
-            <button
-              key={mode.id}
-              type="button"
-              className={`customer-mode-toggle-btn ${fulfillmentMode === mode.id ? 'active' : ''}`}
-              aria-pressed={fulfillmentMode === mode.id}
-              onClick={() => handleModeSelect(mode.id)}
-            >
-              {mode.label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -421,7 +398,8 @@ export default function CustomerLayout({ children }) {
         <TopBar
           mobileMenuOpen={mobileOpen}
           onMenuToggle={() => setMobileOpen((v) => !v)}
-          notificationCount={notificationCount}
+          showNotifications={false}
+          headingPrefix={location.pathname.startsWith('/customer/restaurants/') ? <BackButton fallbackTo="/customer" /> : null}
           showThemeToggle={false}
           showUserInfo={false}
           search={topbarSearch}
@@ -464,6 +442,8 @@ export default function CustomerLayout({ children }) {
                   </span>
                 )}
               </Link>
+
+              <CustomerNotificationsMenu />
             </>
           }
         />

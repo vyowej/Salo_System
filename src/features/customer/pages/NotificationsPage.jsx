@@ -1,132 +1,191 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import Button from '../../../components/common/Button';
+import { StateView } from '../../../components/feedback';
+import { getNotificationTarget } from '../../../utils/format';
 import customerService from '../../../services/customerService';
+import './NotificationsPage.css';
 
 const TYPE_LABELS = {
   order: 'Order update',
   reservation: 'Reservation',
+  invitation: 'Invitation',
   promo: 'Promotion',
   account: 'Account',
+  system: 'System',
 };
 
+function getDateBucket(notification) {
+  if (notification.createdAt) {
+    const dt = new Date(notification.createdAt);
+    if (!Number.isNaN(dt.getTime())) {
+      const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' });
+      const todayKey = fmt.format(new Date());
+      const yestKey = fmt.format(new Date(Date.now() - 86400000));
+      const itemKey = fmt.format(dt);
+      if (itemKey === todayKey) return 'Today';
+      if (itemKey === yestKey) return 'Yesterday';
+      return 'Earlier';
+    }
+  }
+  const timeText = String(notification.time || '').toLowerCase();
+  if (timeText.includes('today') || timeText.includes('minute') || timeText.includes('hour')) return 'Today';
+  if (timeText.includes('yesterday')) return 'Yesterday';
+  return 'Earlier';
+}
+
 export default function NotificationsPage() {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  const loadNotifications = () => {
-    setLoading(true);
-    try {
-      const items = customerService.getNotifications();
-      setNotifications(items);
-    } catch {
-      setNotifications([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    loadNotifications();
+    const sync = () => {
+      try {
+        setNotifications(customerService.getNotifications());
+      } catch {
+        setNotifications([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    sync();
+    window.addEventListener('salo:notificationsUpdated', sync);
+    window.addEventListener('salo:demoStoreUpdated', sync);
+    return () => {
+      window.removeEventListener('salo:notificationsUpdated', sync);
+      window.removeEventListener('salo:demoStoreUpdated', sync);
+    };
   }, []);
 
-  const handleMarkRead = (id) => {
-    const updated = customerService.markNotificationRead(id);
-    setNotifications(updated);
-  };
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const visible = useMemo(
+    () => (filter === 'unread' ? notifications.filter((n) => !n.read) : notifications),
+    [notifications, filter],
+  );
 
-  const handleClearAll = () => {
-    setNotifications(customerService.clearNotifications());
+  const grouped = useMemo(() => {
+    const buckets = { Today: [], Yesterday: [], Earlier: [] };
+    visible.forEach((item) => {
+      buckets[getDateBucket(item)].push(item);
+    });
+    return ['Today', 'Yesterday', 'Earlier']
+      .filter((key) => buckets[key].length > 0)
+      .map((key) => ({ label: key, items: buckets[key] }));
+  }, [visible]);
+
+  const handleCardClick = (notification) => {
+    if (!notification.read) {
+      customerService.markNotificationRead(notification.id);
+    }
+    navigate(getNotificationTarget(notification));
   };
 
   return (
     <CustomerLayout>
-      {notifications.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-4)' }}>
-          <Button variant="ghost" size="sm" onClick={handleClearAll}>Clear all</Button>
-        </div>
-      )}
+      <div className="customer-notifications-page">
+        <div className="customer-notifications-toolbar">
+          <div className="customer-notifications-filters" role="tablist" aria-label="Filter notifications">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filter === 'all'}
+              className={`customer-notifications-tab ${filter === 'all' ? 'active' : ''}`}
+              onClick={() => setFilter('all')}
+            >
+              All ({notifications.length})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filter === 'unread'}
+              className={`customer-notifications-tab ${filter === 'unread' ? 'active' : ''}`}
+              onClick={() => setFilter('unread')}
+            >
+              Unread ({unreadCount})
+            </button>
+          </div>
 
-      {loading ? (
-        <div style={{ padding: 'var(--space-12) 0', textAlign: 'center', color: 'var(--text-muted)' }}>
-          Loading notifications...
-        </div>
-      ) : notifications.length === 0 ? (
-        <div style={{
-          background: 'var(--surface-primary)',
-          border: '1px solid var(--border-primary)',
-          borderRadius: 'var(--radius-xl)',
-          padding: 'var(--space-8)',
-          textAlign: 'center',
-        }}>
-          <p style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 700 }}>You are all caught up.</p>
-          <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--text-secondary)' }}>
-            New order updates, reservation alerts, and promos will appear here.
-          </p>
-          <Link to="/customer" style={{ textDecoration: 'none' }}>
-            <Button variant="primary" size="md" style={{ marginTop: 'var(--space-4)' }}>
-              Back to explore
-            </Button>
-          </Link>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-          {notifications.map((notification) => (
-            <div key={notification.id} style={{
-              background: 'var(--surface-primary)',
-              border: notification.read ? '1px solid var(--border-primary)' : '1.5px solid var(--accent)',
-              borderRadius: 'var(--radius-xl)',
-              padding: 'var(--space-4)',
-              boxShadow: 'var(--shadow-sm)',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
-                    <span style={{
-                      padding: 'var(--space-1) var(--space-2)',
-                      borderRadius: 'var(--radius-full)',
-                      background: 'var(--surface-secondary)',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
-                      color: 'var(--text-secondary)',
-                    }}>
-                      {TYPE_LABELS[notification.type] || 'Notice'}
-                    </span>
-                    {!notification.read && (
-                      <span style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        background: 'var(--accent)',
-                        display: 'inline-block',
-                      }} />
-                    )}
-                  </div>
-
-                  <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)' }}>{notification.title}</h3>
-                  <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                    {notification.description}
-                  </p>
-                </div>
-
-                <div style={{ textAlign: 'right', minWidth: 110 }}>
-                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>
-                    {notification.time}
-                  </div>
-                  {!notification.read && (
-                    <Button variant="secondary" size="sm" onClick={() => handleMarkRead(notification.id)}>
-                      Mark read
-                    </Button>
-                  )}
-                </div>
-              </div>
+          {notifications.length > 0 && (
+            <div className="customer-notifications-actions">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={unreadCount === 0}
+                onClick={() => customerService.markAllNotificationsRead()}
+              >
+                Mark all as read
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => customerService.clearNotifications()}
+              >
+                Clear all
+              </Button>
             </div>
-          ))}
+          )}
         </div>
-      )}
+
+        {loading ? (
+          <StateView state="loading" title="Loading notifications..." />
+        ) : visible.length === 0 ? (
+          <StateView
+            state="empty"
+            title={filter === 'unread' ? 'No unread notifications' : "You're all caught up"}
+            description="New order updates, reservation alerts, invitations, and promos will appear here."
+            action={(
+              <Link to="/customer" style={{ textDecoration: 'none' }}>
+                <Button variant="primary" size="sm">Back to explore</Button>
+              </Link>
+            )}
+          />
+        ) : (
+          grouped.map((group) => (
+            <section className="customer-notifications-group" key={group.label}>
+              <h2 className="customer-notifications-group-title">{group.label}</h2>
+              {group.items.map((notification) => (
+                <article
+                  key={notification.id}
+                  className={`customer-notifications-card ${notification.read ? '' : 'unread'}`.trim()}
+                  onClick={() => handleCardClick(notification)}
+                >
+                  <div className="customer-notifications-card-main">
+                    <div className="customer-notifications-card-meta">
+                      <span className="customer-notifications-type">
+                        {TYPE_LABELS[notification.type] || 'Notice'}
+                      </span>
+                      {!notification.read && <span className="customer-notifications-dot" aria-label="Unread" />}
+                    </div>
+                    <h3>{notification.title}</h3>
+                    <p>{notification.description}</p>
+                  </div>
+
+                  <div className="customer-notifications-card-side">
+                    <span className="customer-notifications-time">{notification.time}</span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (notification.read) {
+                          customerService.markNotificationUnread(notification.id);
+                        } else {
+                          customerService.markNotificationRead(notification.id);
+                        }
+                      }}
+                    >
+                      {notification.read ? 'Mark as unread' : 'Mark as read'}
+                    </Button>
+                  </div>
+                </article>
+              ))}
+            </section>
+          ))
+        )}
+      </div>
     </CustomerLayout>
   );
 }

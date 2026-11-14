@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import AdminLayout from '../../../layouts/AdminLayout';
 import { DataTable, PageHeader, StatCard, Tabs } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { ADMIN_MOCK_DATA, getAdminReportData, getReportFilterOptions } from '../mocks';
 import { appendAdminAuditLog } from '../utils/auditLog';
 import { formatPeso } from '../utils/format';
@@ -30,11 +31,17 @@ function escapeCsv(value) {
 
 export default function AdminReportsPage() {
   const { currentAdmin, permissions } = useAdminSession();
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Reports', placeholder: 'Search report rows', searchableFields: ['metric', 'name', 'status'] });
   const [reportType, setReportType] = useState('Platform');
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const filterOptions = getReportFilterOptions();
   const report = useMemo(() => getAdminReportData(reportType, filters), [reportType, filters]);
-  const rows = report.rows || [];
+  const rows = useMemo(() => {
+    const base = report.rows || [];
+    const term = globalQuery.trim().toLowerCase();
+    if (!term) return base;
+    return base.filter((row) => Object.values(row).some((v) => String(v ?? '').toLowerCase().includes(term)));
+  }, [report.rows, globalQuery]);
   const canExport = permissions.reports?.includes('export');
   const columns = rows.length ? Object.keys(rows[0]).map((key) => ({
     key,
@@ -95,7 +102,7 @@ export default function AdminReportsPage() {
       <section className="admin-shell-page admin-report-page">
         <PageHeader
           title="Reports and Analytics"
-          description="Explore platform, financial, restaurant, rider, customer, discount, and location performance using shared demo records."
+          description="Explore platform, financial, restaurant, rider, customer, discount, and location performance."
           actions={canExport ? <>
             <button className="admin-action-button" type="button" onClick={downloadCsv} disabled={!rows.length}>Download CSV (Excel-compatible)</button>
             <button className="admin-action-button" type="button" onClick={printPdf}>Print / Save PDF</button>
@@ -124,8 +131,8 @@ export default function AdminReportsPage() {
           <StatCard label="Restaurant payable" value={formatPeso(report.totals.restaurantPayable)} hint="Stored order-level payable snapshots" tone="brown" />
           <StatCard label="Refunds / adjustments" value={formatPeso(report.totals.refunds)} hint="Recorded refunds and reservation adjustments" tone="brown" />
         </div>}
-        <div className="admin-print-heading"><h2>{reportType} report</h2><p>Generated from SALO demo snapshots</p></div>
-        <DataTable columns={columns} rows={rows} emptyTitle="No report rows" emptyDescription="No records match the selected filters. Try a broader date range or remove a filter." />
+        <div className="admin-print-heading"><h2>{reportType} report</h2><p>Generated from SALO platform records</p></div>
+        <DataTable columns={columns} rows={rows} tableSearch={globalQuery} exportFileName={`salo-report-${reportType.toLowerCase().replace(/\s+/g, '-')}`} canExport={canExport} emptyTitle="No report rows" emptyDescription="No records match the selected filters. Try a broader date range or remove a filter." />
       </section>
     </AdminLayout>
   );

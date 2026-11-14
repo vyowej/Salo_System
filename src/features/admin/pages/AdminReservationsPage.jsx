@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
 import { ConfirmDialog, DataTable, FilterBar, PageHeader, StatusBadge, Timeline } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { hasAdminPermission } from '../constants';
 import { ADMIN_MOCK_DATA, createAdminDispute, getReservationBreakdown } from '../mocks';
 import { formatDateTime, formatPeso } from '../utils/format';
@@ -12,6 +13,7 @@ export default function AdminReservationsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentAdmin } = useAdminSession();
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Reservations', placeholder: 'Search reservations by ID, customer, restaurant, status', searchableFields: ['id', 'customerName', 'restaurantName', 'status'] });
   const reservation = useMemo(() => ADMIN_MOCK_DATA.reservations.find((item) => item.id === id), [id]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
@@ -22,7 +24,7 @@ export default function AdminReservationsPage() {
     || hasAdminPermission(currentAdmin.role, 'reservations', 'create');
 
   if (id && !reservation) {
-    return <AdminLayout><section className="admin-shell-page"><PageHeader title="Reservation not found" description={`No demo reservation matches reference ${id}.`} /><Link to="/admin/reservations">Back to reservations</Link></section></AdminLayout>;
+    return <AdminLayout><section className="admin-shell-page"><PageHeader title="Reservation not found" description={`No reservation matches reference ${id}.`} /><Link to="/admin/reservations">Back to reservations</Link></section></AdminLayout>;
   }
 
   function confirmEscalation({ reason }) {
@@ -91,7 +93,7 @@ export default function AdminReservationsPage() {
 
   const reservations = ADMIN_MOCK_DATA.reservations;
   const filtered = reservations.filter((item) => (
-    (!search || item.id.toLowerCase().includes(search.trim().toLowerCase()))
+    (!globalQuery.trim() && !search ? true : [item.id, item.customerName, item.restaurantName, item.status].some((v) => String(v || '').toLowerCase().includes((globalQuery || search).trim().toLowerCase())))
     && (!status || item.status === status)
     && (!restaurant || item.restaurantId === restaurant)
     && (!dateRange.from || item.reservedAt.slice(0, 10) >= dateRange.from)
@@ -120,7 +122,7 @@ export default function AdminReservationsPage() {
           <label className="admin-filter-control">From<input aria-label="Reservation date from" type="date" value={dateRange.from} onChange={(event) => setDateRange((previous) => ({ ...previous, from: event.target.value }))} /></label>
           <label className="admin-filter-control">To<input aria-label="Reservation date to" type="date" value={dateRange.to} onChange={(event) => setDateRange((previous) => ({ ...previous, to: event.target.value }))} /></label>
         </FilterBar>
-        <DataTable columns={columns} rows={filtered} emptyTitle="No matching reservations" emptyDescription="Try changing the search term or filters." />
+        <DataTable columns={columns} rows={filtered} tableSearch={globalQuery} defaultOrder={[[0, 'desc']]} emptyTitle="No matching reservations" emptyDescription="Try changing the search term or filters." />
       </section>
     </AdminLayout>
   );

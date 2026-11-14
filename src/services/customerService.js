@@ -328,6 +328,8 @@ export const INITIAL_NOTIFICATIONS = [
     title: 'Your order is on the way',
     description: 'Dalisay Heritage Grill is preparing your food and rider assignment is in progress.',
     time: '3 minutes ago',
+    createdAt: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+    href: '/customer/orders?tab=upcoming',
     read: false,
   },
   {
@@ -336,6 +338,8 @@ export const INITIAL_NOTIFICATIONS = [
     title: 'Reservation confirmation',
     description: 'Your table at Dalisay Heritage Grill has been confirmed for Friday at 7:30 PM.',
     time: 'Today, 9:15 AM',
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    href: '/customer/reservations',
     read: true,
   },
   {
@@ -344,6 +348,18 @@ export const INITIAL_NOTIFICATIONS = [
     title: 'Weekend meal deal',
     description: 'Enjoy ₱150 off on selected Filipino combos when you order before 11:59 PM.',
     time: 'Yesterday',
+    createdAt: new Date(Date.now() - 28 * 60 * 60 * 1000).toISOString(),
+    href: '/customer',
+    read: false,
+  },
+  {
+    id: 'notif-4',
+    type: 'invitation',
+    title: 'Restaurant team invitation',
+    description: 'You received a staff invitation from Casa Reyes Bistro.',
+    time: '2 days ago',
+    createdAt: new Date(Date.now() - 52 * 60 * 60 * 1000).toISOString(),
+    href: '/customer/invitations',
     read: false,
   },
 ];
@@ -491,6 +507,24 @@ export const customerService = {
     const updated = notifications.map((item) => (
       item.id === notificationId ? { ...item, read: true } : item
     ));
+    localStorage.setItem('salo_notifications', JSON.stringify(updated));
+    window.dispatchEvent(new Event('salo:notificationsUpdated'));
+    return updated;
+  },
+
+  markNotificationUnread(notificationId) {
+    const notifications = this.getNotifications();
+    const updated = notifications.map((item) => (
+      item.id === notificationId ? { ...item, read: false } : item
+    ));
+    localStorage.setItem('salo_notifications', JSON.stringify(updated));
+    window.dispatchEvent(new Event('salo:notificationsUpdated'));
+    return updated;
+  },
+
+  markAllNotificationsRead() {
+    const notifications = this.getNotifications();
+    const updated = notifications.map((item) => ({ ...item, read: true }));
     localStorage.setItem('salo_notifications', JSON.stringify(updated));
     window.dispatchEvent(new Event('salo:notificationsUpdated'));
     return updated;

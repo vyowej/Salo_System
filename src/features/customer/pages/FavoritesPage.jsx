@@ -118,7 +118,7 @@ export default function FavoritesPage() {
 
                 <div style={{ marginTop: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)' }}>
                   <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)' }}>
-                    ★ {restaurant.rating} · {restaurant.deliveryTime}
+                    ★ {restaurant.rating}
                   </span>
                   <Link to={`/customer/restaurants/${restaurant.id}`} style={{ textDecoration: 'none' }}>
                     <Button variant="primary" size="sm">View menu</Button>

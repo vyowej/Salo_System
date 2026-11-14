@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import AdminLayout from '../../../layouts/AdminLayout';
-import { ConfirmDialog, DataTable, DetailDrawer, PageHeader, StatCard, StatusBadge, Tabs, Timeline } from '../components';
+import { ConfirmDialog, DataTable, DetailDrawer, Modal, PageHeader, StatCard, StatusBadge, Tabs, Timeline } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { ADMIN_MOCK_DATA, getAdminWorkspaceRecords, saveAdminWorkspaceRecords } from '../mocks';
 import { appendAdminAuditLog } from '../utils/auditLog';
 import { formatDateTime, formatDateTimeInput, formatPeso } from '../utils/format';
@@ -65,6 +66,7 @@ function splitList(value) {
 
 export default function AdminDiscountsPage() {
   const { currentAdmin, permissions } = useAdminSession();
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Discounts', placeholder: 'Search promotions by name, code, or type', searchableFields: ['name', 'code', 'type'] });
   const [campaigns, setCampaigns] = useState(getAdminWorkspaceRecords('discounts'));
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -80,10 +82,10 @@ export default function AdminDiscountsPage() {
 
   const filtered = useMemo(() => campaigns.filter((campaign) => {
     const status = effectiveStatus(campaign);
-    const term = search.trim().toLowerCase();
+    const term = (globalQuery || search).trim().toLowerCase();
     return (!term || `${campaign.name} ${campaign.code} ${campaign.type}`.toLowerCase().includes(term))
       && (!statusFilter || status === statusFilter);
-  }), [campaigns, search, statusFilter]);
+  }), [campaigns, globalQuery, search, statusFilter]);
 
   function updateField(key, value) {
     setDraft((previous) => ({ ...previous, [key]: value }));
@@ -165,7 +167,7 @@ export default function AdminDiscountsPage() {
       setCampaigns(next);
       saveAdminWorkspaceRecords('discounts', next);
       audit(editing ? 'Updated discount campaign' : 'Created discount campaign', campaign, editing?.name || null, campaign.name, reason);
-      setNotice(`${campaign.name} saved in browser demo state. Historical order discounts remain unchanged.`);
+      setNotice(`${campaign.name} saved. Historical order discounts remain unchanged.`);
       setEditing(null);
       setDraft(null);
     } else {
@@ -196,9 +198,24 @@ export default function AdminDiscountsPage() {
   function renderEditor() {
     if (!draft) return null;
     const field = (label, key, props = {}) => <label className="admin-filter-control">{label}<input value={draft[key] ?? ''} onChange={(event) => updateField(key, event.target.value)} {...props} /></label>;
+
+
+  
     return (
-      <form className="admin-record-panel admin-workspace-form" onSubmit={submitDraft}>
-        <div className="admin-workspace-heading"><h2>{editing ? 'Edit campaign' : 'Create campaign'}</h2><button className="admin-action-button" type="button" onClick={() => { setDraft(null); setEditing(null); }}>Cancel</button></div>
+      <Modal
+        open={Boolean(draft)}
+        onClose={() => { setDraft(null); setEditing(null); }}
+        size="wide"
+        title={editing ? 'Edit campaign' : 'Create campaign'}
+        footer={(
+          <>
+            <button className="admin-action-button" type="button" onClick={() => { setDraft(null); setEditing(null); }}>Cancel</button>
+            <button className="admin-action-button" type="submit" form="discount-editor-form">{editing ? 'Review campaign changes' : 'Review campaign'}</button>
+          </>
+        )}
+      >
+        <form id="discount-editor-form" className="admin-modal-form admin-modal-form--two-col" onSubmit={submitDraft}>
+
         {field('Promotion name', 'name', { required: true })}
         <label className="admin-filter-control">Description<textarea required value={draft.description} onChange={(event) => updateField('description', event.target.value)} /></label>
         <label className="admin-filter-control">Discount type<select value={draft.type} onChange={(event) => updateField('type', event.target.value)}>{DISCOUNT_TYPES.map((type) => <option key={type}>{type}</option>)}</select></label>
@@ -220,8 +237,10 @@ export default function AdminDiscountsPage() {
         {field('Restaurant funding share (%)', 'restaurantShare', { type: 'number', min: 0, max: 100 })}
         {field('Campaign budget (optional)', 'budget', { type: 'number', min: 0, step: '0.01' })}
         <div className="admin-shell-note">Shared funding allocation must total 100%. Saving or editing a campaign never changes the discount snapshot stored on completed orders.</div>
-        <button className="admin-action-button" type="submit">{editing ? 'Review campaign changes' : 'Review campaign'}</button>
-      </form>
+  
+        </form>
+      </Modal>
+
     );
   }
 
@@ -232,6 +251,8 @@ export default function AdminDiscountsPage() {
     platform: campaigns.reduce((sum, item) => sum + (item.fundingSource === 'Platform-funded' ? Number(item.discountTotal || 0) : item.fundingSource === 'Shared-funded' ? Number(item.discountTotal || 0) * Number(item.platformShare || 0) / 100 : 0), 0),
     restaurant: campaigns.reduce((sum, item) => sum + (item.fundingSource === 'Restaurant-funded' ? Number(item.discountTotal || 0) : item.fundingSource === 'Shared-funded' ? Number(item.discountTotal || 0) * Number(item.restaurantShare || 0) / 100 : 0), 0),
   };
+
+
 
   return (
     <AdminLayout>
@@ -247,24 +268,24 @@ export default function AdminDiscountsPage() {
               <label className="admin-filter-control">Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{['Draft', 'Scheduled', 'Active', 'Expired', 'Deactivated'].map((status) => <option key={status}>{status}</option>)}</select></label>
             </div>
             {renderEditor()}
-            <DataTable columns={columns} rows={filtered} emptyTitle="No campaigns found" emptyDescription="Create a campaign or adjust search and status filters." />
+            <DataTable columns={columns} rows={filtered} tableSearch={globalQuery} showLocalSearch emptyTitle="No campaigns found" emptyDescription="Create a campaign or adjust search and status filters." />
           </>
         ) : (
           <>
             <div className="admin-stat-grid">
               <StatCard label="Active campaigns" value={activeCampaignCount} hint="Scheduled and expired campaigns are excluded" tone="gold" />
-              <StatCard label="Discount uses" value={totalUsage} hint="Recorded mock campaign redemptions" tone="brown" />
+              <StatCard label="Discount uses" value={totalUsage} hint="Recorded campaign redemptions" tone="brown" />
               <StatCard label="Discount expenditure" value={formatPeso(totalDiscount)} hint="All campaign funding sources" tone="gold" />
               <StatCard label="Platform-funded share" value={formatPeso(fundingTotals.platform)} hint={`Restaurant-funded share ${formatPeso(fundingTotals.restaurant)}`} tone="gold" />
             </div>
-            <DataTable columns={[
+            <DataTable tableSearch={globalQuery} showLocalSearch columns={[
               { key: 'name', label: 'Campaign', render: (item) => <button className="admin-text-link" type="button" onClick={() => setSelected(item)}><strong>{item.name}</strong><span>{item.type}</span></button> },
               { key: 'usageCount', label: 'Uses / customers', render: (item) => `${item.usageCount} / ${item.customerCount}` },
               { key: 'ordersGenerated', label: 'Orders generated' },
               { key: 'discountTotal', label: 'Discount total', render: (item) => formatPeso(item.discountTotal) },
               { key: 'conversion', label: 'Conversion', render: (item) => item.usageCount ? `${Math.round(item.ordersGenerated / Math.max(1, item.customerCount) * 100)}% orders per customer` : 'No redemptions yet' },
               { key: 'budget', label: 'Remaining budget', render: (item) => item.budget ? formatPeso(Math.max(0, item.budget - item.discountTotal)) : 'Not configured' },
-            ]} rows={campaigns} emptyTitle="No campaign performance" emptyDescription="Campaign performance appears after demo redemptions are recorded." />
+            ]} rows={campaigns} emptyTitle="No campaign performance" emptyDescription="Campaign performance appears after redemptions are recorded." />
           </>
         )}
       </section>
@@ -286,7 +307,7 @@ export default function AdminDiscountsPage() {
       <ConfirmDialog
         open={Boolean(pendingAction)}
         title={pendingAction?.title}
-        description="This campaign change is browser-local demo state. It does not alter historical order snapshots or issue discounts."
+        description="This change is recorded in the audit log. It does not alter historical order snapshots."
         confirmLabel={pendingAction?.confirmLabel}
         requireReauthentication
         requireReason

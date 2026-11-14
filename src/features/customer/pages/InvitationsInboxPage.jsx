@@ -1,51 +1,152 @@
 import { useState } from 'react';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { StateView } from '../../../components/feedback';
 import CustomerLayout from '../../../layouts/CustomerLayout';
-import {
-  CUSTOMER_INVITATION_COUNT,
-  CUSTOMER_INVITATION_SAMPLES,
-  TEAM_PREVIEW_STATES,
-} from '../../restaurant/pages/team/teamSamples';
+import { CUSTOMER_INVITATION_SAMPLES } from '../../restaurant/pages/team/teamSamples';
 import './InvitationsInboxPage.css';
 
-function PreviewState({ state, onRetry }) {
-  if (state === 'Loading') return <div className="customer-invitations-state" aria-label="Loading invitations"><span className="customer-invitations-spinner" /><p>Loading invitations…</p></div>;
-  if (state === 'Empty') return <div className="customer-invitations-state"><span className="customer-invitations-state-icon" aria-hidden="true">✦</span><h2>You’re all caught up</h2><p>Invitations to join a restaurant team will appear here.</p></div>;
-  if (state === 'Error') return <div className="customer-invitations-state" role="alert"><span className="customer-invitations-state-icon error" aria-hidden="true">!</span><h2>Invitations couldn’t load</h2><p>This sample error state demonstrates how a retry message will appear.</p><Button variant="outline" onClick={onRetry}>Try again</Button></div>;
-  return null;
-}
-
 export default function InvitationsInboxPage() {
-  const [previewState, setPreviewState] = useState('Sample data');
   const [decisions, setDecisions] = useState({});
-  const pendingCount = CUSTOMER_INVITATION_COUNT - Object.keys(decisions).length;
-  const setPreviewSample = () => setPreviewState('Sample data');
+  const [confirmTarget, setConfirmTarget] = useState(null);
 
-  const decide = (invitation, response) => {
+  const invitations = CUSTOMER_INVITATION_SAMPLES;
+  const pendingCount = invitations.filter((inv) => !decisions[inv.id]).length;
+
+  const applyDecision = (invitation, response) => {
     setDecisions((current) => ({ ...current, [invitation.id]: response }));
   };
 
-  return <CustomerLayout>
-    <main className="customer-invitations-page">
-      <div className="customer-invitations-preview"><span><strong>Design preview - sample data</strong><small>Presentation only · responses are not sent or saved</small></span>{import.meta.env.DEV && <label>Preview state<select value={previewState} onChange={(event) => setPreviewState(event.target.value)} aria-label="Choose invitation inbox preview state">{TEAM_PREVIEW_STATES.map((state) => <option key={state}>{state}</option>)}</select></label>}</div>
-      {previewState !== 'Sample data' ? <PreviewState state={previewState} onRetry={setPreviewSample} /> : CUSTOMER_INVITATION_SAMPLES.length === 0 ? <PreviewState state="Empty" /> : <div className="customer-invitation-list" aria-live="polite">
-        {CUSTOMER_INVITATION_SAMPLES.map((invitation) => {
-          const decision = decisions[invitation.id];
-          const isOwnership = invitation.type === 'ownership';
-          return <article className={`customer-invitation-card ${isOwnership ? 'ownership' : 'staff'}`} key={invitation.id}>
-            <div className="customer-invitation-card-top"><div className={`customer-invitation-mark ${isOwnership ? 'ownership' : ''}`} aria-hidden="true">{isOwnership ? '♛' : '✦'}</div><div><span className={`customer-invitation-type ${isOwnership ? 'ownership' : ''}`}>{isOwnership ? 'Ownership invitation' : 'Staff invitation'}</span><h2>{invitation.restaurant}</h2><p>Invited by <strong>{invitation.invitingOwner}</strong></p></div><Badge variant={decision ? (decision === 'Accepted' ? 'success' : 'default') : isOwnership ? 'warning' : 'info'}>{decision || 'Awaiting response'}</Badge></div>
-            <div className="customer-invitation-details">
-              <div><span>{isOwnership ? 'Membership' : 'Position'}</span><strong>{invitation.position}</strong></div>
-              <div><span>Invitation date</span><strong>{invitation.date}</strong></div>
-              <div className="customer-invitation-responsibilities"><span>{isOwnership ? 'Ownership details' : 'Requested responsibilities'}</span><div>{invitation.details.map((detail) => <span className="customer-invitation-chip" key={detail}>{detail}</span>)}</div></div>
+  const handleAcceptClick = (invitation) => {
+    if (invitation.type === 'ownership') {
+      setConfirmTarget(invitation);
+      return;
+    }
+    applyDecision(invitation, 'Accepted');
+  };
+
+  return (
+    <CustomerLayout>
+      <main className="customer-invitations-page">
+        {invitations.length === 0 ? (
+          <StateView
+            state="empty"
+            title="You're all caught up"
+            description="Invitations to join a restaurant team will appear here."
+          />
+        ) : (
+          <>
+            <div className="customer-invitation-list" aria-live="polite">
+              {invitations.map((invitation) => {
+                const decision = decisions[invitation.id];
+                const isOwnership = invitation.type === 'ownership';
+                const details = invitation.details || [];
+                const shownDetails = details.slice(0, 3);
+                const extraDetails = details.slice(3);
+
+                return (
+                  <article
+                    key={invitation.id}
+                    className={`customer-invitation-card ${isOwnership ? 'ownership' : 'staff'}`}
+                  >
+                    <div className="customer-invitation-main">
+                      <div className="customer-invitation-top">
+                        <div className="customer-invitation-title-group">
+                          <span className={`customer-invitation-mark ${isOwnership ? 'ownership' : ''}`} aria-hidden="true">
+                            {isOwnership ? (
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M2 18h20l-2-11-5 4-3-6-3 6-5-4-2 11z" />
+                              </svg>
+                            ) : (
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                                <circle cx="8.5" cy="7" r="4" />
+                                <line x1="20" y1="8" x2="20" y2="14" />
+                                <line x1="23" y1="11" x2="17" y2="11" />
+                              </svg>
+                            )}
+                          </span>
+                          <span className={`customer-invitation-type ${isOwnership ? 'ownership' : ''}`}>
+                            {isOwnership ? 'OWNERSHIP INVITATION' : 'STAFF INVITATION'}
+                          </span>
+                          <h2>{invitation.restaurant}</h2>
+                        </div>
+
+                        <Badge
+                          variant={decision ? (decision === 'Accepted' ? 'completed' : 'default') : isOwnership ? 'upcoming' : 'info'}
+                          size="sm"
+                        >
+                          {decision || 'Awaiting response'}
+                        </Badge>
+                      </div>
+
+                      <p className="customer-invitation-meta">
+                        Invited by <strong>{invitation.invitingOwner}</strong> · {invitation.position} · {invitation.date}
+                      </p>
+
+                      <div className="customer-invitation-bottom">
+                        <div className="customer-invitation-chips">
+                          {shownDetails.map((detail) => (
+                            <span className="customer-invitation-chip" key={detail}>
+                              {detail}
+                            </span>
+                          ))}
+                          {extraDetails.length > 0 && (
+                            <span
+                              className="customer-invitation-chip customer-invitation-chip--more"
+                              title={extraDetails.join(', ')}
+                            >
+                              +{extraDetails.length} more
+                            </span>
+                          )}
+                        </div>
+
+                        {!decision && (
+                          <div className="customer-invitation-actions">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => applyDecision(invitation, 'Declined')}
+                            >
+                              Decline
+                            </Button>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleAcceptClick(invitation)}
+                            >
+                              Accept invitation
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
-            {isOwnership && <div className="customer-ownership-warning" role="note"><strong>Important: co-owner access</strong><p>Accepting an ownership invitation grants full owner-level access to this restaurant. This is different from staff access.</p></div>}
-            {decision ? <div className="customer-invitation-response" role="status"><span aria-hidden="true">{decision === 'Accepted' ? '✓' : '↗'}</span><p><strong>{decision} in this preview</strong><br />No invitation response was sent or saved.</p></div> : <div className="customer-invitation-actions"><Button variant="outline" onClick={() => decide(invitation, 'Declined')}>Decline</Button><Button onClick={() => decide(invitation, 'Accepted')}>{isOwnership ? 'Accept ownership invitation' : 'Accept invitation'}</Button></div>}
-          </article>;
-        })}
-      </div>}
-      {previewState === 'Sample data' && <p className="customer-invitations-count" aria-live="polite">{Math.max(0, pendingCount)} sample invitations awaiting response</p>}
-    </main>
-  </CustomerLayout>;
+            <p className="customer-invitations-count" aria-live="polite">
+              {pendingCount} {pendingCount === 1 ? 'invitation' : 'invitations'} awaiting response
+            </p>
+          </>
+        )}
+      </main>
+
+      <ConfirmDialog
+        open={Boolean(confirmTarget)}
+        title="Accept ownership invitation?"
+        message={confirmTarget ? `Accepting co-owner access for ${confirmTarget.restaurant} grants full owner-level permissions, distinct from staff access.` : ''}
+        confirmLabel="Accept ownership"
+        cancelLabel="Cancel"
+        onClose={() => setConfirmTarget(null)}
+        onConfirm={() => {
+          if (confirmTarget) {
+            applyDecision(confirmTarget, 'Accepted');
+          }
+          setConfirmTarget(null);
+        }}
+      />
+    </CustomerLayout>
+  );
 }

@@ -171,14 +171,6 @@ export default function CustomerDashboard() {
                     {rest.cuisine}
                   </p>
 
-                  <div className="customer-restaurant-card__metadata">
-                    <span>🕒 {rest.deliveryTime}</span>
-                    <span>•</span>
-                    <span>🛵 ₱{rest.deliveryFee} Fee</span>
-                    <span>•</span>
-                    <span>Min ₱{rest.minOrder}</span>
-                  </div>
-
                   {/* Dual Action Strip */}
                   <div className="customer-restaurant-card__actions">
                     <Button

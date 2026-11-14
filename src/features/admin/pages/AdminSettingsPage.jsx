@@ -4,6 +4,7 @@ import AdminLayout from '../../../layouts/AdminLayout';
 import { ConfirmDialog, PageHeader, Tabs } from '../components';
 import adminService from '../../../services/adminService';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { appendAdminAuditLog } from '../utils/auditLog';
 import { formatDateTimeInput } from '../utils/format';
 import './AdminPages.css';
@@ -11,6 +12,7 @@ import './AdminPages.css';
 const SETTINGS_TABS = ['Branding', 'Contact', 'Notifications', 'Payments', 'Maintenance', 'Legal', 'Operations'];
 
 export default function AdminSettingsPage() {
+  useAdminPageSearch({ disabled: true });
   const { currentAdmin, permissions } = useAdminSession();
   const [settings, setSettings] = useState(() => {
     const saved = adminService.getConfig();
@@ -68,7 +70,7 @@ export default function AdminSettingsPage() {
     });
     setSettings(next);
     setPendingSave(false);
-    setNotice(`${activeTab} settings saved in browser demo state.`);
+    setNotice(`${activeTab} settings saved.`);
   }
 
   const textField = (label, key, props = {}) => (
@@ -82,7 +84,7 @@ export default function AdminSettingsPage() {
     <AdminLayout>
       <section className="admin-shell-page">
         <PageHeader title="Platform Settings" description="Manage public platform identity, contact channels, notifications, payment availability, maintenance notices, and legal links." actions={<Link className="admin-action-button" to="/admin/settings/security">Review security and sessions</Link>} />
-        <p className="admin-shell-note">Settings are stored in this browser’s demo configuration only. Payment provider credentials and other sensitive technical configuration are intentionally not exposed here.</p>
+
         {notice && <p className="admin-inline-notice" role="status">{notice}</p>}
         {!canEdit && <p className="admin-shell-note">Your role can view settings but cannot change them. Backend authorization is required for production.</p>}
         <Tabs items={SETTINGS_TABS} value={activeTab} onChange={setActiveTab} label="Platform settings sections" />
@@ -93,8 +95,8 @@ export default function AdminSettingsPage() {
               {textField('Platform name', 'platformName', { required: true })}
               {textField('Tagline', 'tagline', { required: true })}
               <label className="admin-filter-control">Brand description<textarea value={settings.brandDescription || ''} onChange={(event) => setField('brandDescription', event.target.value)} /></label>
-              {textField('Logo / brand asset reference (local demo label only)', 'brandAssetLabel', { placeholder: 'SALO wordmark' })}
-              <div className="admin-content-preview"><strong>{settings.platformName || 'SALO'}</strong><span>{settings.tagline}</span><small>{settings.brandAssetLabel || 'Text-only demo brand preview'}</small></div>
+              {textField('Logo / brand asset reference', 'brandAssetLabel', { placeholder: 'SALO wordmark' })}
+              <div className="admin-content-preview"><strong>{settings.platformName || 'SALO'}</strong><span>{settings.tagline}</span><small>{settings.brandAssetLabel || 'Brand preview'}</small></div>
             </>}
             {activeTab === 'Contact' && <>
               <h2>Platform contact details</h2>
@@ -105,7 +107,7 @@ export default function AdminSettingsPage() {
             </>}
             {activeTab === 'Notifications' && <>
               <h2>Customer notification channels</h2>
-              <p className="admin-muted">These switches are preference mock values, not an email/SMS provider configuration.</p>
+              <p className="admin-muted">Configure default customer notification channel preferences.</p>
               {toggle('customerNotifications', 'email', 'Customer email notifications enabled')}
               {toggle('customerNotifications', 'sms', 'Customer SMS notifications enabled')}
               {toggle('customerNotifications', 'push', 'Customer push notifications enabled')}
@@ -114,7 +116,7 @@ export default function AdminSettingsPage() {
             </>}
             {activeTab === 'Payments' && <>
               <h2>Supported payment methods</h2>
-              <p className="admin-shell-note">Toggling demo availability does not connect or configure payment providers and cannot verify transactions.</p>
+              <p className="admin-shell-note">Select which payment methods are available to customers at checkout.</p>
               {toggle('paymentMethods', 'cod', 'Cash on Delivery')}
               {toggle('paymentMethods', 'gcash', 'GCash')}
               {toggle('paymentMethods', 'maya', 'Maya')}
@@ -123,7 +125,7 @@ export default function AdminSettingsPage() {
             </>}
             {activeTab === 'Maintenance' && <>
               <h2>Maintenance notice</h2>
-              <label className="admin-setting-toggle"><input type="checkbox" checked={Boolean(settings.maintenanceMode)} onChange={(event) => setField('maintenanceMode', event.target.checked)} /><span>Enable maintenance mode (demo configuration only)</span></label>
+              <label className="admin-setting-toggle"><input type="checkbox" checked={Boolean(settings.maintenanceMode)} onChange={(event) => setField('maintenanceMode', event.target.checked)} /><span>Enable maintenance mode</span></label>
               <label className="admin-filter-control">Public maintenance notice<textarea value={settings.maintenanceNotice || ''} onChange={(event) => setField('maintenanceNotice', event.target.value)} placeholder="Explain the planned maintenance to SALO users." /></label>
               <label className="admin-filter-control">Starts at<input type="datetime-local" value={formatDateTimeInput(settings.maintenanceStartsAt)} onChange={(event) => setField('maintenanceStartsAt', event.target.value)} /></label>
               <label className="admin-filter-control">Ends at<input type="datetime-local" value={formatDateTimeInput(settings.maintenanceEndsAt)} onChange={(event) => setField('maintenanceEndsAt', event.target.value)} /></label>
@@ -145,12 +147,12 @@ export default function AdminSettingsPage() {
           </fieldset>
           {canEdit && <button className="admin-action-button" type="submit">Review and save settings</button>}
         </form>
-        <p className="admin-muted">Frontend permission checks only shape this demo UI. The backend must enforce authorization and persist approved configuration changes.</p>
+
       </section>
       <ConfirmDialog
         open={pendingSave}
         title={`Save ${activeTab.toLowerCase()} settings?`}
-        description="This updates browser-local demo settings only."
+        description="Changes are recorded in the audit log."
         confirmLabel="Save settings"
         requireReauthentication
         requireReason

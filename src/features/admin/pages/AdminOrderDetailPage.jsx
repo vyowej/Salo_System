@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
 import { ConfirmDialog, PageHeader, StatusBadge, Tabs, Timeline } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { hasAdminPermission } from '../constants';
 import { ADMIN_MOCK_DATA, createAdminDispute, getOrderBreakdown, getOrdersWithFinancials } from '../mocks';
 import { formatDateTime, formatPeso } from '../utils/format';
@@ -16,6 +17,7 @@ const DISPUTE_TYPES = [
 export default function AdminOrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  useAdminPageSearch({ disabled: true });
   const { currentAdmin } = useAdminSession();
   const order = useMemo(() => getOrdersWithFinancials().find((item) => item.id === id), [id]);
   const [activeTab, setActiveTab] = useState('Overview');
@@ -33,7 +35,7 @@ export default function AdminOrderDetailPage() {
     || hasAdminPermission(currentAdmin.role, 'orders', 'create');
 
   if (!order) {
-    return <AdminLayout><section className="admin-shell-page"><PageHeader title="Order not found" description={`No demo order matches reference ${id}.`} /><Link to="/admin/orders">Back to orders</Link></section></AdminLayout>;
+    return <AdminLayout><section className="admin-shell-page"><PageHeader title="Order not found" description={`No order matches reference ${id}.`} /><Link to="/admin/orders">Back to orders</Link></section></AdminLayout>;
   }
 
   const breakdown = getOrderBreakdown(order.id);
@@ -163,13 +165,13 @@ export default function AdminOrderDetailPage() {
               </>}
             </div>
           )}
-          {(canIntervene || canCreateCase) && <p className="admin-shell-note">Interventions change operational demo state only. The stored financial amounts are read-only and are never edited here.</p>}
+          {(canIntervene || canCreateCase) && <p className="admin-shell-note">Interventions update operational state only. Stored financial amounts are read-only.</p>}
         </section>
 
         <ConfirmDialog
           open={Boolean(pendingAction)}
           title={pendingAction?.title}
-          description="This operation is recorded in the demo audit log. Provide a reason to continue."
+          description="This operation is recorded in the audit log. Provide a reason to continue."
           confirmLabel={pendingAction?.label}
           requireReauthentication
           requireReason

@@ -97,6 +97,22 @@
   --status-info-bg:      #E8F0F5;
   --status-info-text:    #2A5272;
 
+  /* Order status segregation */
+  --status-upcoming-fg:     var(--status-warning-text);
+  --status-upcoming-bg:     var(--status-warning-bg);
+  --status-upcoming-border: #F59E0B;
+  --status-upcoming-accent: #D97706;
+
+  --status-completed-fg:     var(--olive-text);
+  --status-completed-bg:     var(--status-success-bg);
+  --status-completed-border: #86EFAC;
+  --status-completed-accent: var(--salo-green);
+
+  --status-cancelled-fg:     var(--status-error-text);
+  --status-cancelled-bg:     var(--status-error-bg);
+  --status-cancelled-border: #FCA5A5;
+  --status-cancelled-accent: #DC2626;
+
   --shadow-xs:  0 1px 2px rgba(23, 23, 23, 0.04);
   --shadow-sm:  0 2px 6px rgba(23, 23, 23, 0.06);
   --shadow-md:  0 4px 16px rgba(23, 23, 23, 0.08);
@@ -259,6 +275,22 @@
   --status-error-text:   #FCA5A5;
   --status-info-bg:      #1E2A35;
   --status-info-text:    #93C5FD;
+
+  /* Order status segregation */
+  --status-upcoming-fg:     var(--status-warning-text);
+  --status-upcoming-bg:     var(--status-warning-bg);
+  --status-upcoming-border: rgba(252, 211, 77, 0.35);
+  --status-upcoming-accent: #FBBF24;
+
+  --status-completed-fg:     var(--status-success-text);
+  --status-completed-bg:     var(--status-success-bg);
+  --status-completed-border: rgba(183, 226, 186, 0.35);
+  --status-completed-accent: #65A86A;
+
+  --status-cancelled-fg:     var(--status-error-text);
+  --status-cancelled-bg:     var(--status-error-bg);
+  --status-cancelled-border: rgba(252, 165, 165, 0.35);
+  --status-cancelled-accent: #F87171;
 
   /* Shadows */
   --shadow-xs:  0 1px 3px rgba(0, 0, 0, 0.5);

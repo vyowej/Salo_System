@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import AdminLayout from '../../../layouts/AdminLayout';
 import { DataTable, DetailDrawer, FilterBar, PageHeader, StateView, StatusBadge } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { getAdminWorkspaceRecords } from '../mocks';
 import { appendAdminAuditLog } from '../utils/auditLog';
 import { formatDateTime } from '../utils/format';
@@ -18,6 +19,7 @@ function valueSummary(value) {
 
 export default function AdminActivityPage() {
   const { currentAdmin, permissions } = useAdminSession();
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Activity Logs', placeholder: 'Search logs by actor, action, record, or reference', searchableFields: ['who', 'role', 'action', 'record', 'reference'] });
   const [records, setRecords] = useState(getAdminWorkspaceRecords('activity'));
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
@@ -28,7 +30,7 @@ export default function AdminActivityPage() {
   const canExport = permissions.activity?.includes('export');
 
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = (globalQuery || search).trim().toLowerCase();
     return records.filter((item) => {
       const time = item.time || item.createdAt || '';
       return (!term || `${item.who} ${item.role} ${item.action} ${recordSummary(item.record)} ${item.reference || ''}`.toLowerCase().includes(term))
@@ -37,7 +39,7 @@ export default function AdminActivityPage() {
         && (!from || time.slice(0, 10) >= from)
         && (!to || time.slice(0, 10) <= to);
     });
-  }, [records, search, role, action, from, to]);
+  }, [records, globalQuery, search, role, action, from, to]);
 
   function exportRecords() {
     if (!canExport) return;
@@ -91,7 +93,7 @@ export default function AdminActivityPage() {
           description="Read-only audit history for administrative actions. Historical records cannot be edited or deleted from this workspace."
           actions={canExport ? <button className="admin-action-button" type="button" onClick={exportRecords}>Export filtered CSV</button> : null}
         />
-        <div className="admin-shell-note">This frontend demo stores newly generated audit entries in this browser only. Production audit records must be immutable and enforced by the backend.</div>
+
         <FilterBar search={search} onSearchChange={setSearch} searchLabel="Search actor, action, record, or reference">
           <label className="admin-filter-control">Role<select value={role} onChange={(event) => setRole(event.target.value)}><option value="">All roles</option>{[...new Set(records.map((item) => item.role).filter(Boolean))].map((item) => <option key={item}>{item}</option>)}</select></label>
           <label className="admin-filter-control">Action<select value={action} onChange={(event) => setAction(event.target.value)}><option value="">All actions</option>{[...new Set(records.map((item) => item.action).filter(Boolean))].map((item) => <option key={item}>{item}</option>)}</select></label>
@@ -99,7 +101,7 @@ export default function AdminActivityPage() {
           <label className="admin-filter-control">To<input aria-label="Activity to date" type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
         </FilterBar>
         <StateView state={filtered.length ? 'success' : 'empty'} title="activity log" description="No audit events match the current filters.">
-          <DataTable columns={columns} rows={filtered} emptyTitle="No audit events" emptyDescription="No audit events match the current filters." />
+          <DataTable columns={columns} rows={filtered} tableSearch={globalQuery} defaultOrder={[[0, 'desc']]} exportFileName="salo-activity-logs" canExport={canExport} emptyTitle="No audit events" emptyDescription="No audit events match the current filters." />
         </StateView>
       </section>
       <DetailDrawer open={Boolean(selected)} title="Audit record details" onClose={() => setSelected(null)}>

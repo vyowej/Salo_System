@@ -1,4 +1,4 @@
-﻿import { ADMIN_MOCK_DATA } from './data';
+import { ADMIN_MOCK_DATA } from './data';
 import {
   getCodRemittances,
   getFeeConfigurations,
@@ -10,6 +10,7 @@ import {
 } from './financials';
 import { getAdminDisputes } from './disputes';
 import { getAdminWorkspaceRecords, getAdminContentData } from './operations';
+import { getRestaurantApplications, getRiderApplications } from './applications';
 
 const accountDirectory = [
   ...ADMIN_MOCK_DATA.customers.map((customer) => ({
@@ -78,6 +79,7 @@ const topics = {
   administrators: ADMIN_MOCK_DATA.administrators,
   restaurants: ADMIN_MOCK_DATA.restaurants,
   riders: ADMIN_MOCK_DATA.riders,
+  applications: [...getRestaurantApplications(), ...getRiderApplications()],
   orders: getOrdersWithFinancials(),
   reservations: ADMIN_MOCK_DATA.reservations,
   finance: { ...ADMIN_MOCK_DATA.finance, totals: getPlatformTotals(), transactions: getFinancialTransactions(), cod: getCodRemittances(), refunds: getRefundRecords(), payouts: getPayoutRecords() },
@@ -125,5 +127,12 @@ export {
 export { createAdminDispute, getAdminDisputes, saveAdminDisputes } from './disputes';
 export { getAdminWorkspaceRecords, saveAdminWorkspaceRecords, getAdminCategories, getAdminContentData } from './operations';
 export { getDashboardMetrics } from './dashboard';
+export {
+  applyApplicationDecision,
+  getRestaurantApplications,
+  getRiderApplications,
+  saveApplicationDraft,
+  syncApplicationsToMockData,
+} from './applications';
 export { getAdminReportData, getReportFilterOptions } from './reports';
 
