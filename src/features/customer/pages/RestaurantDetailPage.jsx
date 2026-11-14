@@ -15,11 +15,25 @@ import { useScrollSpy } from '../hooks/useScrollSpy';
 import { normalizeMenuCategories, normalizeMenuItem } from '../../restaurant/menu/menuData';
 import './RestaurantDetailPage.css';
 
-/**
- * Builds a stable section element id for a category name.
- */
 function categoryToId(cat) {
   return `rdp-cat-${cat.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
+function getHeroFallbackCover(restaurant) {
+  const id = String(restaurant?.id || '').toLowerCase();
+  const cuisine = String(restaurant?.cuisine || '').toLowerCase();
+  if (id.includes('dalisay') || cuisine.includes('filipino')) return '/images/landing/hero-food.png';
+  if (id.includes('pizza') || cuisine.includes('pizza') || cuisine.includes('italian')) return '/images/landing/food-gathering.png';
+  return '/images/landing/restaurant-interior.png';
+}
+
+function getInitials(name = '') {
+  return String(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join('') || 'S';
 }
 
 export default function RestaurantDetailPage() {
@@ -31,7 +45,6 @@ export default function RestaurantDetailPage() {
   const [reservationOpen, setReservationOpen] = useState(searchParams.get('tab') === 'reserve');
   const [isFavorite, setIsFavorite] = useState(false);
   const [menuSearch, setMenuSearch] = useState('');
-  // Which tab the user clicked most recently (overrides scroll-spy for a beat)
   const [manualActiveTab, setManualActiveTab] = useState(null);
 
   // ── Data fetching ──────────────────────────────────────────
@@ -83,14 +96,9 @@ export default function RestaurantDetailPage() {
           : '';
 
   // ── Category + menu logic ──────────────────────────────────
-  // Memoize so the array reference is stable across renders.
   const categories = useMemo(() => restaurant?.categories || [], [restaurant]);
   const allTabs = useMemo(() => ['All', ...categories], [categories]);
 
-  /**
-   * Sorted category groups: available items first, sold-out last.
-   * Shape: [{ name, items: [...] }]
-   */
   const categoryGroups = useMemo(() => {
     if (!restaurant?.menu) return [];
     return categories.map((cat) => {
@@ -101,7 +109,6 @@ export default function RestaurantDetailPage() {
     });
   }, [restaurant, categories]);
 
-  // Apply search filter using the shared hook, then re-group by category
   const allMenuItems = useMemo(
     () => categoryGroups.flatMap((g) => g.items),
     [categoryGroups]
@@ -121,25 +128,21 @@ export default function RestaurantDetailPage() {
       .filter((group) => group.items.length > 0);
   }, [categoryGroups, menuSearch, filteredItems]);
 
-  // Section ids for scroll-spy (All tabs excluded — scroll-spy tracks individual categories)
   const sectionIds = useMemo(() => categories.map(categoryToId), [categories]);
   const scrollSpyActiveId = useScrollSpy(sectionIds, { rootMargin: '-10% 0px -80% 0px' });
 
-  // Active tab: manual click wins temporarily, scroll-spy otherwise
   const activeTabId = manualActiveTab
     ? manualActiveTab
     : scrollSpyActiveId
       ? categories.find((c) => categoryToId(c) === scrollSpyActiveId) ?? 'All'
       : 'All';
 
-  // Clear manual override after 1.2s so scroll-spy takes over again
   useEffect(() => {
     if (!manualActiveTab) return;
     const t = setTimeout(() => setManualActiveTab(null), 1200);
     return () => clearTimeout(t);
   }, [manualActiveTab]);
 
-  // Tab click handler
   const handleTabClick = useCallback((tab) => {
     setManualActiveTab(tab);
     if (tab === 'All') {
@@ -151,7 +154,6 @@ export default function RestaurantDetailPage() {
     }
   }, []);
 
-  // ── Loading state ──────────────────────────────────────────
   if (!restaurant) {
     return (
       <CustomerLayout>
@@ -161,6 +163,10 @@ export default function RestaurantDetailPage() {
       </CustomerLayout>
     );
   }
+
+  const activePromos = Array.isArray(restaurant.promotions)
+    ? restaurant.promotions.filter((p) => p.status === 'active')
+    : [];
 
   return (
     <CustomerLayout>
@@ -187,54 +193,24 @@ export default function RestaurantDetailPage() {
       />
 
       {/* ── Restaurant Hero Header ────────────────────────────── */}
-      <div style={{
-        background: 'var(--surface-primary)',
-        border: '1px solid var(--border-primary)',
-        borderRadius: 'var(--radius-2xl)',
-        overflow: 'hidden',
-        marginBottom: 'var(--space-8)',
-        boxShadow: 'var(--shadow-sm)',
-      }}>
-        {/* Cover visual banner */}
-        <div style={{
-          height: 180,
-          background: 'var(--bg-tertiary)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 64,
-          borderBottom: '1px solid var(--border-secondary)',
-          position: 'relative',
-        }}>
+      <header className="rdp-hero-card">
+        <div className="rdp-hero-banner">
           <RestaurantImage
             image={restaurant.coverPhoto}
             alt={`${restaurant.name} cover photo`}
-            fallback={restaurant.coverImage || restaurant.name?.[0] || 'R'}
-            style={{ position: 'absolute', inset: 0 }}
+            fallback={restaurant.coverImage || getInitials(restaurant.name)}
+            fallbackSrc={getHeroFallbackCover(restaurant)}
+            className="rdp-hero-cover-img"
           />
+          <div className="rdp-hero-scrim" aria-hidden="true" />
           <button
+            type="button"
             onClick={() => {
               if (!restaurant) return;
               const next = customerService.toggleFavoriteRestaurant(restaurant.id);
               setIsFavorite(next.includes(restaurant.id));
             }}
-            style={{
-              position: 'absolute',
-              top: 16,
-              right: 16,
-              background: 'var(--surface-primary)',
-              border: '1px solid var(--border-primary)',
-              borderRadius: 'var(--radius-full)',
-              width: 36,
-              height: 36,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: isFavorite ? 'var(--salo-error)' : 'var(--text-muted)',
-              fontSize: 16,
-              boxShadow: 'var(--shadow-xs)',
-            }}
+            className={`rdp-hero-favorite${isFavorite ? ' is-favorite' : ''}`}
             aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           >
             {isFavorite ? '♥' : '♡'}
@@ -242,38 +218,38 @@ export default function RestaurantDetailPage() {
         </div>
 
         {/* Info row */}
-        <div style={{ padding: 'var(--space-6)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
-              {restaurant.logoImage && (
-                <RestaurantImage
-                  image={restaurant.logoImage}
-                  alt={`${restaurant.name} logo`}
-                  style={{ width: 52, height: 52, borderRadius: 'var(--radius-lg)', flex: '0 0 52px' }}
-                />
-              )}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-1)', flexWrap: 'wrap' }}>
-                  <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {restaurant.name}
-                  </h1>
+        <div className="rdp-hero-body">
+          <div className="rdp-hero-main">
+            <div className="rdp-hero-identity">
+              <div className="rdp-hero-logo">
+                {restaurant.logoImage ? (
+                  <RestaurantImage
+                    image={restaurant.logoImage}
+                    alt={`${restaurant.name} logo`}
+                    fallback={getInitials(restaurant.name)}
+                  />
+                ) : (
+                  <span className="rdp-hero-logo-fallback">{getInitials(restaurant.name)}</span>
+                )}
+              </div>
+              <div className="rdp-hero-text">
+                <div className="rdp-hero-title-row">
+                  <h1>{restaurant.name}</h1>
                   <Badge variant={restaurant.isOpen ? 'success' : 'default'} dot size="sm">
                     {restaurant.isOpen ? 'Open Now' : 'Closed'}
                   </Badge>
                 </div>
 
-                <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
-                  {restaurant.cuisine}
-                </p>
-                <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
+                <p className="rdp-hero-cuisine">{restaurant.cuisine}</p>
+                <p className="rdp-hero-desc">
                   {restaurant.description || restaurant.bio || restaurant.tagline}
                 </p>
 
-                <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                <p className="rdp-hero-meta-line">
                   📍 {restaurant.address} · 🕒 {restaurant.operatingHours}
                 </p>
                 {(restaurant.contactEmail || restaurant.phone) && (
-                  <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                  <p className="rdp-hero-meta-line">
                     {[restaurant.phone, restaurant.contactEmail].filter(Boolean).join(' · ')}
                   </p>
                 )}
@@ -281,7 +257,7 @@ export default function RestaurantDetailPage() {
             </div>
 
             {/* Quick Actions */}
-            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            <div className="rdp-hero-actions">
               <Button
                 variant="primary"
                 size="md"
@@ -295,7 +271,7 @@ export default function RestaurantDetailPage() {
               </Button>
 
               <Button
-                variant="secondary"
+                variant="outline"
                 size="md"
                 disabled={!acceptingReservations}
                 onClick={() => setReservationOpen(true)}
@@ -303,53 +279,76 @@ export default function RestaurantDetailPage() {
                 {acceptingReservations ? 'Reserve a Table' : 'Reservations unavailable'}
               </Button>
             </div>
-            {!canStartOrder && (
-              <p role="status" style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)', margin: 'var(--space-2) 0 0' }}>
-                This restaurant is not accepting orders right now.
-              </p>
-            )}
-            {!restaurant.isOpen && acceptingOrders && (
-              <p role="status" style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)', margin: 'var(--space-2) 0 0' }}>
-                Currently outside regular hours · Orders will be prepared upon opening.
-              </p>
-            )}
-            {!acceptingReservations && (
-              <p role="status" style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)', margin: 'var(--space-2) 0 0' }}>
-                This restaurant is not accepting reservation requests right now.
-              </p>
-            )}
           </div>
 
-          <div style={{
-            display: 'flex',
-            gap: 'var(--space-6)',
-            marginTop: 'var(--space-5)',
-            paddingTop: 'var(--space-4)',
-            borderTop: '1px solid var(--border-secondary)',
-            fontSize: 'var(--font-size-xs)',
-            color: 'var(--text-secondary)',
-            flexWrap: 'wrap',
-          }}>
-            <div>
-              <span style={{ color: 'var(--text-muted)' }}>Rating: </span>
+          {!canStartOrder && (
+            <p role="status" className="rdp-hero-notice">
+              This restaurant is not accepting orders right now.
+            </p>
+          )}
+          {!restaurant.isOpen && acceptingOrders && (
+            <p role="status" className="rdp-hero-notice">
+              Currently outside regular hours · Orders will be prepared upon opening.
+            </p>
+          )}
+          {!acceptingReservations && (
+            <p role="status" className="rdp-hero-notice">
+              This restaurant is not accepting reservation requests right now.
+            </p>
+          )}
+
+          <div className="rdp-hero-stats">
+            <div className="rdp-hero-stat-pill">
+              <span>Rating</span>
               <strong>★ {restaurant.rating} ({restaurant.reviewCount} reviews)</strong>
             </div>
+            {restaurant.deliveryTime && (
+              <div className="rdp-hero-stat-pill">
+                <span>Est. Delivery</span>
+                <strong>{restaurant.deliveryTime}</strong>
+              </div>
+            )}
+            {restaurant.deliveryFee != null && (
+              <div className="rdp-hero-stat-pill">
+                <span>Delivery Fee</span>
+                <strong>₱{restaurant.deliveryFee}</strong>
+              </div>
+            )}
+            {restaurant.minOrder != null && (
+              <div className="rdp-hero-stat-pill">
+                <span>Minimum Order</span>
+                <strong>₱{restaurant.minOrder}</strong>
+              </div>
+            )}
             {coverageText && (
-              <div>
-                <span style={{ color: 'var(--text-muted)' }}>Delivery area: </span>
+              <div className="rdp-hero-stat-pill">
+                <span>Delivery Area</span>
                 <strong>{coverageText}</strong>
               </div>
             )}
           </div>
+
+          {activePromos.length > 0 && (
+            <div className="rdp-promo-strip" aria-label="Active restaurant promotions">
+              {activePromos.map((promo) => (
+                <div key={promo.id || promo.code} className="rdp-promo-chip">
+                  <span className="rdp-promo-chip__badge">★ PROMO</span>
+                  <strong>{promo.code || promo.title}</strong>
+                  <span>{promo.description}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {restaurant.foodCategories?.length > 0 && (
-            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-4)' }} aria-label="Food categories">
+            <div className="rdp-hero-categories" aria-label="Food categories">
               {restaurant.foodCategories.map((category) => (
                 <Badge key={category} variant="default" size="sm">{category}</Badge>
               ))}
             </div>
           )}
         </div>
-      </div>
+      </header>
 
       {/* ── Restaurant gallery ───────────────────────────────── */}
       {restaurant.profilePhotos?.length > 0 && (
@@ -369,7 +368,7 @@ export default function RestaurantDetailPage() {
       )}
 
       {/* ══════════════════════════════════════════════════════
-          REDESIGNED MENU SECTION
+          MENU SECTION
           ══════════════════════════════════════════════════════ */}
       <div id="restaurant-menu-section">
 
@@ -423,7 +422,7 @@ export default function RestaurantDetailPage() {
           <div className="rdp-menu-col">
             {filteredGroups.length === 0 ? (
               <p className="rdp-no-results">
-                No items match "{menuSearch}". Try a different search.
+                No items match &ldquo;{menuSearch}&rdquo;. Try a different search.
               </p>
             ) : (
               filteredGroups.map((group) => (

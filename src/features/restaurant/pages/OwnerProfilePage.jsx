@@ -25,7 +25,12 @@ function copy(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function OwnerProfilePreview({ profile }) {
+function getPreviewFallbackCover(restaurantId) {
+  if (restaurantId === 'manila-artisan-pizza') return '/images/landing/food-gathering.png';
+  return '/images/landing/restaurant-interior.png';
+}
+
+function OwnerProfilePreview({ profile, restaurantId, stagedLogoPreview, stagedCoverPreview }) {
   const address = formatBusinessAddress(profile.location);
   const coverage = profile.deliveryCoverage;
   const coverageDescription = coverage.method === 'cities'
@@ -42,24 +47,42 @@ function OwnerProfilePreview({ profile }) {
     profile.fulfillment.pickup && 'Pickup',
   ].filter(Boolean);
 
+  const effectiveCover = stagedCoverPreview || profile.coverPhoto;
+  const effectiveLogo = stagedLogoPreview || profile.logoImage;
+  const initials = (profile.name || 'S')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+
   return (
     <section className="owner-profile-card owner-profile-preview" aria-labelledby="profile-preview-title">
       <div className="owner-profile-preview-cover">
         <RestaurantImage
-          image={profile.coverPhoto}
+          image={effectiveCover}
           alt="Restaurant cover photo"
           fallback="Customer storefront preview"
+          fallbackSrc={getPreviewFallbackCover(restaurantId)}
         />
-        {profile.logoImage && (
-          <div className="owner-profile-preview-logo">
-            <RestaurantImage image={profile.logoImage} alt="Restaurant logo" fallback="Logo" />
-          </div>
+        <div className="owner-profile-preview-cover-scrim" aria-hidden="true" />
+        <div className="owner-profile-preview-logo">
+          {effectiveLogo ? (
+            <RestaurantImage image={effectiveLogo} alt="Restaurant logo" fallback={initials || 'Logo'} />
+          ) : (
+            <span className="owner-profile-preview-logo-fallback" aria-label="Default restaurant emblem">
+              {initials || '🍽️'}
+            </span>
+          )}
+        </div>
+        {(stagedCoverPreview || stagedLogoPreview) && (
+          <span className="owner-profile-preview-staged-pill">Unuploaded Preview</span>
         )}
       </div>
       <div className="owner-profile-preview-body">
         <div className="owner-profile-preview-heading">
           <div>
-            <p className="owner-profile-eyebrow">Draft storefront preview</p>
+            <p className="owner-profile-eyebrow">Live storefront preview</p>
             <h2 id="profile-preview-title">{profile.name || 'Restaurant name'}</h2>
             <p className="owner-profile-preview-cuisine">{profile.cuisine || 'Cuisine type'}</p>
           </div>
@@ -129,6 +152,8 @@ export default function OwnerProfilePage() {
   }), [access]);
   const [initial, setInitial] = useState(null);
   const [formData, setFormData] = useState(null);
+  const [stagedLogoPreview, setStagedLogoPreview] = useState(null);
+  const [stagedCoverPreview, setStagedCoverPreview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -145,6 +170,8 @@ export default function OwnerProfilePage() {
     setLoading(true);
     setError('');
     setFieldErrors({});
+    setStagedLogoPreview(null);
+    setStagedCoverPreview(null);
     const pendingImages = [...stagedImageIds.current];
     stagedImageIds.current.clear();
     if (pendingImages.length) {
@@ -200,6 +227,8 @@ export default function OwnerProfilePage() {
     if (!initial) return;
     setSaving(true);
     setError('');
+    setStagedLogoPreview(null);
+    setStagedCoverPreview(null);
     const cleanupResults = await Promise.allSettled(
       [...stagedImageIds.current].map((id) => restaurantService.removeImage({ id })),
     );
@@ -303,6 +332,13 @@ export default function OwnerProfilePage() {
     <OwnerLayout>
       <div className="owner-profile-page">
         <header className="owner-profile-header">
+          <div className="owner-profile-header-intro">
+            <p className="owner-profile-eyebrow">Storefront Identity & Brand Settings</p>
+            <h1>{formData.name || 'Business Profile'}</h1>
+            <p className="owner-profile-header-subtitle">
+              Customize your public storefront details, upload your restaurant logo and cover photo, and configure delivery coverage.
+            </p>
+          </div>
           <div className="owner-profile-header-actions">
             <Link to={`/customer/restaurants/${selectedRestaurantId}`} target="_blank" rel="noreferrer">
               <Button type="button" variant="outline">Open customer page</Button>
@@ -310,7 +346,7 @@ export default function OwnerProfilePage() {
           </div>
         </header>
 
-        {saved && <p className="owner-profile-success" role="status">Profile changes saved.</p>}
+        {saved && <p className="owner-profile-success" role="status">✓ Profile changes saved and published to your storefront.</p>}
         {error && <p className="owner-profile-error" role="alert">{error}</p>}
 
         {!hasEditAccess && (
@@ -411,25 +447,51 @@ export default function OwnerProfilePage() {
               <section className="owner-profile-card">
                 <div className="owner-profile-section-heading">
                   <div>
-                    <h2>Restaurant photos</h2>
-                    <p>Images are optimized and stored locally in the demo adapter.</p>
+                    <h2>Restaurant photos & brand assets</h2>
+                    <p>
+                      Upload your restaurant logo, wide cover banner, and dining gallery. Images are validated, previewed before upload, and structured for Laravel&apos;s local public disk.
+                    </p>
                   </div>
                 </div>
+
+                <div className="owner-profile-storage-banner">
+                  <div>
+                    <strong>Local Storage Path Ready</strong>
+                    <span>
+                      Relative paths are stored in MySQL while image files reside in{' '}
+                      <code>storage/app/public/restaurants/{selectedRestaurantId}/&#123;logo,cover,menu,gallery&#125;</code>
+                    </span>
+                  </div>
+                  <Badge variant="default">Public Disk</Badge>
+                </div>
+
                 <div className="owner-profile-media-fields">
                   <ImageUploader
                     id="profile-logo"
                     key={`profile-logo-${selectedRestaurantId}`}
                     label="Restaurant logo"
+                    variant="logo"
+                    restaurantId={selectedRestaurantId}
+                    storageCategory="logo"
+                    stageBeforeUpload
                     value={formData.logoImage}
+                    onStagedPreviewChange={setStagedLogoPreview}
                     onChange={(logoImage) => handlePhotoChange('logoImage', logoImage, selectedRestaurantId, formData, initial)}
+                    helperText="Recommended: Square (1:1) PNG or WebP, minimum 300 × 300 px, up to 5 MB."
                     deferCleanup
                   />
                   <ImageUploader
                     id="profile-cover"
                     key={`profile-cover-${selectedRestaurantId}`}
                     label="Restaurant cover photo"
+                    variant="cover"
+                    restaurantId={selectedRestaurantId}
+                    storageCategory="cover"
+                    stageBeforeUpload
                     value={formData.coverPhoto}
+                    onStagedPreviewChange={setStagedCoverPreview}
                     onChange={(coverPhoto) => handlePhotoChange('coverPhoto', coverPhoto, selectedRestaurantId, formData, initial)}
+                    helperText="Recommended: Wide (16:9) JPG, PNG, or WebP, minimum 300 × 300 px, up to 5 MB."
                     deferCleanup
                   />
                 </div>
@@ -437,6 +499,7 @@ export default function OwnerProfilePage() {
                   id="profile-gallery"
                   key={`profile-gallery-${selectedRestaurantId}`}
                   label="Restaurant photo gallery"
+                  restaurantId={selectedRestaurantId}
                   value={formData.profilePhotos}
                   onChange={(profilePhotos) => handlePhotoChange('profilePhotos', profilePhotos, selectedRestaurantId, formData, initial)}
                   deferCleanup
@@ -556,8 +619,13 @@ export default function OwnerProfilePage() {
           </form>
 
           <div className="owner-profile-aside">
+            <OwnerProfilePreview
+              profile={formData}
+              restaurantId={selectedRestaurantId}
+              stagedLogoPreview={stagedLogoPreview}
+              stagedCoverPreview={stagedCoverPreview}
+            />
             <OperatingHoursEditor key={selectedRestaurantId} restaurantId={selectedRestaurantId} />
-            <OwnerProfilePreview profile={formData} />
             <section className="owner-profile-card owner-profile-note-card">
               <h2>Public page preview</h2>
               <p>Customer storefront data comes from this same shared restaurant record. Save your changes before opening the customer page.</p>
