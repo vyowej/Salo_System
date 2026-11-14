@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import './ProfileMenu.css';
 
@@ -17,7 +18,7 @@ export default function ProfileMenu({
   const [open, setOpen] = useState(false);
   const [popoverStyle, setPopoverStyle] = useState({});
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return undefined;
 
     const updatePosition = () => {
@@ -48,6 +49,7 @@ export default function ProfileMenu({
       });
     };
 
+    updatePosition();
     const frame = requestAnimationFrame(updatePosition);
     const closeOnOutsideClick = (event) => {
       if (!triggerRef.current?.contains(event.target) && !popoverRef.current?.contains(event.target)) {
@@ -106,7 +108,7 @@ export default function ProfileMenu({
         )}
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
           ref={popoverRef}
           className="profile-menu-popover"
@@ -183,7 +185,7 @@ export default function ProfileMenu({
             })}
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }
