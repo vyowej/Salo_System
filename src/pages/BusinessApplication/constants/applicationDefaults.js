@@ -204,6 +204,7 @@ export const INITIAL_APPLICATION_STATE = {
     services: {
       delivery: true,
       pickup: true,
+      dineIn: true,
       tableReservations: false,
     },
     reservationSettings: {
