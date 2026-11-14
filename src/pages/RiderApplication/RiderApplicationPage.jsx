@@ -249,14 +249,24 @@ export default function RiderApplicationPage() {
         if (!formData.vehicleInfo.motoModel?.trim()) {
           errors.motoModel = 'Motorcycle model is required.';
         }
+        const parsedYear = Number(formData.vehicleInfo.motoYear);
+        const maxYear = new Date().getFullYear() + 1;
+        if (!String(formData.vehicleInfo.motoYear ?? '').trim() || !Number.isInteger(parsedYear) || parsedYear < 1980 || parsedYear > maxYear) {
+          errors.motoYear = `Valid motorcycle model year (1980–${maxYear}) is required.`;
+        }
+        if (!formData.vehicleInfo.motoColor?.trim()) {
+          errors.motoColor = 'Motorcycle body color is required.';
+        }
         if (!formData.vehicleInfo.plateNumber?.trim()) {
           errors.plateNumber = 'License plate or MV file number is required.';
         }
-        if (
-          formData.vehicleInfo.ownership !== 'Personally Owned' &&
-          !formData.vehicleInfo.ownerName?.trim()
-        ) {
-          errors.ownerName = 'Registered owner name is required for borrowed/rented vehicles.';
+        if (formData.vehicleInfo.ownership !== 'Personally Owned') {
+          if (!formData.vehicleInfo.ownerName?.trim()) {
+            errors.ownerName = 'Registered owner name is required for borrowed/rented vehicles.';
+          }
+          if (!formData.vehicleInfo.ownerRelationship?.trim()) {
+            errors.ownerRelationship = 'Relationship to the registered owner is required.';
+          }
         }
       } else if (method === 'bicycle') {
         if (!formData.vehicleInfo.bikeBrand?.trim()) {
