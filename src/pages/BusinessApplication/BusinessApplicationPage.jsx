@@ -207,9 +207,10 @@ export default function BusinessApplicationPage() {
     }
 
     if (stepNumber === 7) {
-      const hasAnyService = Object.values(formData.configuration.services || {}).some(Boolean);
+      const services = formData.configuration.services || {};
+      const hasAnyService = Boolean(services.delivery || services.pickup || services.dineIn);
       if (!hasAnyService) {
-        errors.services = 'Please select at least one restaurant service (Delivery, Pickup, or Table Reservations).';
+        errors.services = 'Please select at least one restaurant service (Delivery, Pickup, or Dine-in).';
       }
     }
 
