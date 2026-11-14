@@ -30,3 +30,19 @@ backend/.env.*
 *.njsproj
 *.sln
 *.sw?
+
+# Laravel local public storage uploads & symbolic links
+public/storage
+backend/public/storage
+storage/app/public/**/*.jpg
+storage/app/public/**/*.jpeg
+storage/app/public/**/*.png
+storage/app/public/**/*.webp
+storage/app/public/**/*.pdf
+backend/storage/app/public/**/*.jpg
+backend/storage/app/public/**/*.jpeg
+backend/storage/app/public/**/*.png
+backend/storage/app/public/**/*.webp
+backend/storage/app/public/**/*.pdf
+!storage/app/public/**/.gitkeep
+!backend/storage/app/public/**/.gitkeep
