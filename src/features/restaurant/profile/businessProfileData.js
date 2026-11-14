@@ -6,15 +6,16 @@ function listFromValue(value) {
 }
 
 function imageReference(image) {
-  if (!image?.id) return null;
+  if (!image?.id && !image?.path) return null;
   return {
-    id: image.id,
+    id: image.id || '',
     name: image.name || '',
     type: image.type || '',
     size: image.size || 0,
     width: image.width || 0,
     height: image.height || 0,
     alt: image.alt || '',
+    ...(image.path ? { path: image.path } : {}),
   };
 }
 
