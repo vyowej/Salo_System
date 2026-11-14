@@ -12,14 +12,44 @@
   margin-bottom: var(--space-4);
 }
 
+.rider-earnings-card {
+  background: var(--surface-primary);
+  border: 1px solid var(--border-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.rider-earnings-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.rider-earnings-card-head .rider-earnings-section-title {
+  margin-bottom: 0;
+}
+
+.rider-earnings-period-tag {
+  padding: 4px 10px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
 .rider-earnings-section-title,
 .rider-earnings-subtitle {
   margin: 0 0 var(--space-4);
-  color: var(--text-primary);
+  color: var(--text-heading, var(--text-primary));
+  font-size: var(--font-size-lg);
 }
 
 .rider-earnings-subtitle {
   margin-top: var(--space-5);
+  margin-bottom: var(--space-3);
   font-size: var(--font-size-md);
 }
 
@@ -29,7 +59,10 @@
   gap: var(--space-2);
   align-items: end;
   min-height: 220px;
-  padding: var(--space-3) 0;
+  padding: var(--space-4) var(--space-2);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--bg-primary);
 }
 
 .rider-earnings-chart-column {
@@ -44,8 +77,9 @@
 }
 
 .rider-earnings-chart-column strong {
-  color: var(--text-primary);
-  font-size: 10px;
+  color: var(--text-heading, var(--text-primary));
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
   white-space: nowrap;
 }
 
@@ -56,65 +90,126 @@
   height: 100%;
   overflow: hidden;
   border-radius: var(--radius-pill);
-  background: var(--surface-secondary);
+  background: var(--bg-tertiary);
 }
 
 .rider-earnings-bar {
   display: block;
   width: 100%;
   border-radius: var(--radius-pill);
-  background: var(--accent);
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-hover, #B8471F) 100%);
+  transition: height var(--transition-base);
 }
 
 .rider-earnings-breakdown {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-primary);
+  margin-top: var(--space-4);
 }
 
-.rider-earnings-breakdown div,
-.rider-payout-row,
-.rider-payout-row > div {
+.rider-earnings-breakdown-item {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
 }
 
-.rider-earnings-breakdown span,
-.rider-payout-row span,
-.rider-payout-method small {
+.rider-earnings-breakdown-item span {
   color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rider-earnings-breakdown-item strong {
+  color: var(--text-heading, var(--text-primary));
+  font-size: var(--font-size-sm);
 }
 
 .rider-payout-method {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
   padding: var(--space-4);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
-  background: var(--surface-secondary);
+  background: var(--bg-secondary);
+}
+
+.rider-payout-method-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.rider-payout-method-head strong {
+  color: var(--text-heading, var(--text-primary));
+  font-size: var(--font-size-md);
+}
+
+.rider-payout-verified {
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--status-success-bg);
+  color: var(--status-success-text);
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+}
+
+.rider-payout-method span {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.rider-payout-method code {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+
+.rider-payout-method small {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
 }
 
 .rider-payout-history {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .rider-payout-row {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
+  gap: var(--space-3);
   padding: var(--space-3) 0;
   border-bottom: 1px solid var(--border-secondary);
 }
 
+.rider-payout-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
 .rider-payout-row > div {
+  display: flex;
   flex-direction: column;
   align-items: flex-end;
+  gap: 3px;
 }
 
 .rider-payout-row > div:first-child {
   align-items: flex-start;
+}
+
+.rider-payout-row span {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
 }
 
 .rider-earnings-table-wrap {
@@ -132,20 +227,51 @@
 .rider-earnings-table td {
   padding: var(--space-3);
   border-bottom: 1px solid var(--border-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .rider-earnings-table th {
+  padding-block: var(--space-2);
+  background: var(--bg-secondary);
   color: var(--text-muted);
   font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.rider-earnings-table th:first-child {
+  border-top-left-radius: var(--radius-md);
+}
+
+.rider-earnings-table th:last-child {
+  border-top-right-radius: var(--radius-md);
+}
+
+.rider-earnings-table tbody tr {
+  transition: background var(--transition-fast);
+}
+
+.rider-earnings-table tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+.rider-earnings-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .rider-earnings-records {
   margin-bottom: var(--space-4);
+  background: var(--surface-primary);
+  border: 1px solid var(--border-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 @media (max-width: 760px) {
   .rider-earnings-summary-grid,
-  .rider-earnings-columns {
+  .rider-earnings-columns,
+  .rider-earnings-breakdown {
     grid-template-columns: 1fr;
   }
 
