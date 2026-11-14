@@ -61,6 +61,24 @@
   color: var(--status-info-text);
 }
 
+.badge-upcoming {
+  background: var(--status-upcoming-bg);
+  color: var(--status-upcoming-fg);
+  border: 1px solid var(--status-upcoming-border);
+}
+
+.badge-completed {
+  background: var(--status-completed-bg);
+  color: var(--status-completed-fg);
+  border: 1px solid var(--status-completed-border);
+}
+
+.badge-cancelled {
+  background: var(--status-cancelled-bg);
+  color: var(--status-cancelled-fg);
+  border: 1px solid var(--status-cancelled-border);
+}
+
 /* ── Sizes ───────────────────────────────────────────── */
 .badge-sm {
   padding: 2px 6px;
