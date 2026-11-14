@@ -12,6 +12,8 @@ import useScenario from '../hooks/useScenario';
 import { formatDateTime, formatPeso } from '../utils/format';
 import './RiderEarningsPage.css';
 
+const SUMMARY_TONES = ['green', 'orange', 'brown'];
+
 export default function RiderEarningsPage() {
   const scenario = useScenario();
   const earnings = getRiderMock('earnings', scenario);
@@ -28,15 +30,24 @@ export default function RiderEarningsPage() {
         onRetry={() => window.location.reload()}
       >
         <div className="rider-earnings-summary-grid">
-          {earnings.summaries.map((item) => (
-            <StatCard key={item.key} label={item.label} value={item.amount} helper={item.detail} tone="gold" />
+          {earnings.summaries.map((item, index) => (
+            <StatCard
+              key={item.key}
+              label={item.label}
+              value={item.amount}
+              helper={item.detail}
+              tone={SUMMARY_TONES[index % SUMMARY_TONES.length]}
+            />
           ))}
         </div>
 
         <div className="rider-earnings-columns">
-          <Card className="card--tint-gold">
+          <Card className="rider-earnings-card">
             <CardBody>
-              <h2 className="rider-earnings-section-title">Earnings activity</h2>
+              <div className="rider-earnings-card-head">
+                <h2 className="rider-earnings-section-title">Earnings activity</h2>
+                <span className="rider-earnings-period-tag">Last 7 days</span>
+              </div>
               <div className="rider-earnings-chart" role="img" aria-label="Daily earnings chart with visible daily amounts">
                 {earnings.chartSeries.map((item) => (
                   <div className="rider-earnings-chart-column" key={item.key}>
@@ -50,7 +61,7 @@ export default function RiderEarningsPage() {
               </div>
               <div className="rider-earnings-breakdown">
                 {earnings.breakdown.map((item) => (
-                  <div key={item.key}>
+                  <div className="rider-earnings-breakdown-item" key={item.key}>
                     <span>{item.label}</span>
                     <strong>{item.amount}</strong>
                   </div>
@@ -59,13 +70,16 @@ export default function RiderEarningsPage() {
             </CardBody>
           </Card>
 
-          <Card className="card--tint-gold">
+          <Card className="rider-earnings-card">
             <CardBody>
               <h2 className="rider-earnings-section-title">Payout method</h2>
               <div className="rider-payout-method">
-                <strong>{earnings.payoutMethod.provider}</strong>
+                <div className="rider-payout-method-head">
+                  <strong>{earnings.payoutMethod.provider}</strong>
+                  <span className="rider-payout-verified">Verified</span>
+                </div>
                 <span>{earnings.payoutMethod.accountName}</span>
-                <span>{earnings.payoutMethod.maskedAccount}</span>
+                <code>{earnings.payoutMethod.maskedAccount}</code>
                 <small>{earnings.payoutMethod.note}</small>
               </div>
               <h3 className="rider-earnings-subtitle">Payout history</h3>
