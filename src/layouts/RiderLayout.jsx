@@ -143,7 +143,7 @@ export default function RiderLayout({ children }) {
           showNotifications
           notificationCount={unreadNotifications}
           notificationsHref={withScenario('/rider/notifications', location.search)}
-          showThemeToggle={false}
+          showThemeToggle
           showUserInfo={false}
           headingExtras={(
             <ScenarioLink
