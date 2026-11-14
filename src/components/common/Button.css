@@ -78,32 +78,37 @@
 .btn-icon.btn-sm { width: 32px; }
 .btn-icon.btn-lg { width: 48px; }
 
-/* ── Primary (orange) ────────────────────────────────── */
+/* ── Primary (Terracotta Orange) ─────────────────────── */
 .btn-primary {
   background: var(--accent);
   color: var(--accent-text);
   border-color: var(--accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 36%, transparent);
+  transform: translateY(-1px);
 }
 .btn-primary:active:not(:disabled) {
   background: var(--accent-active);
   border-color: var(--accent-active);
+  transform: translateY(0);
 }
 
 /* ── Secondary ───────────────────────────────────────── */
 .btn-secondary {
   background: var(--surface-primary);
-  color: var(--text-primary);
+  color: var(--text-heading, var(--text-primary));
   border: 1px solid var(--border-primary);
-  box-shadow: none;
+  box-shadow: var(--shadow-xs);
 }
 .btn-secondary:hover:not(:disabled) {
   background: var(--surface-secondary);
-  border-color: var(--border-primary);
-  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--salo-brown) 28%, var(--border-primary));
+  color: var(--text-heading, var(--text-primary));
+  transform: translateY(-1px);
 }
 
 /* ── Tertiary ────────────────────────────────────────── */
