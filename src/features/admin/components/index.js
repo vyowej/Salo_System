@@ -5,6 +5,7 @@ export { default as StatCard } from './StatCard';
 export { default as DataTable } from './DataTable';
 export { default as FilterBar } from './FilterBar';
 export { default as ConfirmDialog } from './ConfirmDialog';
+export { Modal, ConfirmModal, AdminToastViewport, showAdminToast } from './Modal';
 export { default as DetailDrawer } from './DetailDrawer';
 export { default as Timeline } from './Timeline';
 export { default as Tabs } from './Tabs';
