@@ -1,145 +1,361 @@
+/* ============================================================
+   SALO — Rider COD Section
+   Clean, organized layout with proper visual hierarchy
+   ============================================================ */
+
 .rider-cod-section {
   width: 100%;
+  margin-top: var(--space-2);
 }
 
-.rider-section-label {
-  margin: 0;
-  color: var(--text-muted);
+.rider-cod-card {
+  background: var(--surface-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.rider-cod-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-6);
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.rider-cod-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.rider-cod-eyebrow {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--accent-primary, var(--salo-terracotta, #D65A2E));
   font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.rider-cod-header {
+.rider-cod-title {
+  margin: 0 0 var(--space-1);
+  color: var(--text-heading, var(--text-primary));
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+.rider-cod-subtitle {
+  margin: 0;
+  max-width: 640px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.rider-cod-header-status {
+  flex-shrink: 0;
+}
+
+/* ── Metrics Grid ───────────────────────────────────────── */
+.rider-cod-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.rider-cod-metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.rider-cod-metric-card--highlight {
+  border-color: var(--card-orange-border, var(--border-primary));
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.rider-cod-metric-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: var(--space-2);
 }
 
-.rider-cod-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  margin-bottom: 1rem;
+.rider-cod-metric-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.rider-cod-balance-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 1rem;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-primary);
-  background: var(--surface-secondary);
+.rider-cod-metric-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
 }
 
-.rider-cod-balance-card span,
-.rider-cod-balance-card small {
+.rider-cod-metric-tag--neutral {
+  background: var(--bg-tertiary);
   color: var(--text-muted);
 }
 
-.rider-cod-balance-card strong {
-  font-size: var(--font-size-xl);
+.rider-cod-metric-tag--warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-text);
+  border: 1px solid var(--status-warning-border, transparent);
+}
+
+.rider-cod-metric-value {
+  color: var(--text-heading, var(--text-primary));
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 1.1;
+}
+
+.rider-cod-metric-hint {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.rider-cod-metric-actions {
+  margin-top: var(--space-2);
+}
+
+/* ── Pending Confirmation Banner ───────────────────────── */
+.rider-cod-pending-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--status-warning-border, rgba(245, 158, 11, 0.3));
+  border-radius: var(--radius-lg);
+  background: var(--status-warning-bg, #fffbeb);
   color: var(--text-primary);
 }
 
-.rider-cod-balance-card--brown {
-  padding: var(--card-padding);
-  border-color: var(--card-brown-border);
-  border-radius: var(--card-radius);
-  background: var(--card-brown-bg);
+.rider-cod-pending-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-full);
+  background: var(--surface-primary);
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-xs);
 }
 
-.rider-cod-balance-card--brown span,
-.rider-cod-balance-card--brown small {
-  color: var(--card-brown-text);
+.rider-cod-pending-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
-.rider-remittance-panel--brown {
-  padding: var(--card-padding);
-  border-color: var(--card-brown-border);
-  border-radius: var(--card-radius);
-  background: var(--card-brown-bg);
+.rider-cod-pending-info strong {
+  color: var(--text-heading, var(--text-primary));
+  font-size: var(--font-size-sm);
 }
 
-.rider-cod-actions {
-  margin-bottom: 1rem;
+.rider-cod-pending-info span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
 }
 
-.rider-remittance-panel {
-  display: grid;
-  gap: 0.75rem;
-  padding: 1rem;
-  border: 1px solid var(--border-primary);
+.rider-cod-pending-info small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.rider-cod-pending-badge {
+  flex-shrink: 0;
+}
+
+/* ── Remittance Form ────────────────────────────────────── */
+.rider-cod-form-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border: 1px solid var(--border-secondary);
   border-radius: var(--radius-lg);
-  background: var(--surface-secondary);
+  background: var(--bg-secondary);
+}
+
+.rider-cod-form-title {
+  margin: 0;
+  color: var(--text-heading, var(--text-primary));
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+}
+
+.rider-cod-form-subtitle {
+  margin: 0 0 var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
 }
 
 .rider-remittance-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.75rem;
-  align-items: end;
-  margin-top: 1rem;
-}
-
-.rider-remittance-form .rider-field {
-  grid-column: 1 / -1;
-}
-
-.rider-remittance-row {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
   align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
-.rider-history-table {
-  margin-top: 1rem;
-  border-top: 1px solid var(--border-primary);
-}
-
-.rider-history-header,
-.rider-history-row {
-  display: grid;
-  grid-template-columns: 1fr 1.2fr auto;
-  gap: 0.75rem;
+.rider-remittance-input-wrap {
+  position: relative;
+  display: flex;
   align-items: center;
-  padding: 0.8rem 0;
-  border-bottom: 1px solid var(--border-primary);
+  flex: 1;
+  min-width: 200px;
 }
 
-.rider-history-header {
+.rider-remittance-currency-symbol {
+  position: absolute;
+  left: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  pointer-events: none;
+}
+
+.rider-remittance-input-wrap input {
+  width: 100%;
+  height: 44px;
+  padding: 0 var(--space-4) 0 calc(var(--space-4) + 18px);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  color: var(--text-heading, var(--text-primary));
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.rider-remittance-input-wrap input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+/* ── History Table ──────────────────────────────────────── */
+.rider-cod-history-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.rider-cod-history-title {
+  margin: 0;
+  color: var(--text-heading, var(--text-primary));
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+}
+
+.rider-cod-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+}
+
+.rider-cod-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: var(--font-size-sm);
+}
+
+.rider-cod-table th {
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-secondary);
   color: var(--text-muted);
   font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border-secondary);
 }
 
-.rider-history-empty {
-  padding: 1rem 0 0;
+.rider-cod-table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-secondary);
   color: var(--text-secondary);
+  vertical-align: middle;
 }
 
-@media (max-width: 640px) {
-  .rider-cod-grid,
-  .rider-history-header {
+.rider-cod-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.rider-cod-table tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+.rider-cod-ref {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rider-cod-row-new {
+  background: var(--status-warning-bg);
+}
+
+.rider-cod-col-status {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rider-cod-table-empty {
+  text-align: center;
+  padding: var(--space-6) !important;
+  color: var(--text-muted);
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .rider-cod-metrics-grid {
     grid-template-columns: 1fr;
   }
 
-  .rider-history-row {
-    grid-template-columns: 1fr;
-  }
-
-  .rider-remittance-row,
-  .rider-cod-header {
+  .rider-cod-pending-banner {
     flex-direction: column;
     align-items: flex-start;
   }
 
   .rider-remittance-form {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rider-remittance-form .btn {
+    width: 100%;
+  }
+
+  .rider-cod-card-body {
+    padding: var(--space-4);
   }
 }
