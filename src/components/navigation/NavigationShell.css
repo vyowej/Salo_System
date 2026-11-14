@@ -1,7 +1,7 @@
 .navigation-shell {
   display: flex;
   min-height: 100dvh;
-  background: var(--bg-primary);
+  background: transparent; /* page gradient comes from body */
 }
 
 .navigation-sidebar {

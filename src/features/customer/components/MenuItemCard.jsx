@@ -4,22 +4,20 @@ import { getMenuCustomerPrice } from '../../restaurant/menu/menuData';
 import RestaurantImage from './RestaurantImage';
 import './MenuItemCard.css';
 
-/**
- * MenuItemCard
- *
- * Displays a single menu item as a photo-top card.
- * - Available item with no addOns → tapping + adds immediately.
- * - Available item with addOns  → tapping + calls onOpenModal.
- * - After item is in cart       → + button becomes −  qty  + stepper.
- * - Sold-out / unavailable      → greyed overlay, pill, button disabled.
- *
- * Props
- * ─────
- * @param {object}   item           - Normalised menu item (from normalizeMenuItem)
- * @param {object}   restaurant     - Restaurant object (id, name, deliveryFee)
- * @param {boolean}  orderingDisabled
- * @param {Function} onOpenModal    - Called with the item when addOns picker is needed
- */
+const DISH_FALLBACK_PHOTOS = [
+  '/images/landing/hero-food.png',
+  '/images/landing/food-gathering.png',
+  '/images/auth/login-food.png',
+  '/images/landing/restaurant-interior.png',
+];
+
+function getDishFallbackPhoto(item) {
+  const seed = String(item?.id || item?.name || '0')
+    .split('')
+    .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return DISH_FALLBACK_PHOTOS[seed % DISH_FALLBACK_PHOTOS.length];
+}
+
 export default function MenuItemCard({ item, restaurant, orderingDisabled, onOpenModal }) {
   const { items: cartItems, addItem, updateQuantity, removeItem } = useCart();
 
@@ -74,7 +72,6 @@ export default function MenuItemCard({ item, restaurant, orderingDisabled, onOpe
     (e) => {
       e.stopPropagation();
       if (hasRequiredOptions) {
-        // For items with required variants, open the picker again to add another configuration
         onOpenModal(item);
       } else if (cartEntries.length > 0) {
         updateQuantity(cartEntries[0].cartItemId, cartEntries[0].quantity + 1);
@@ -88,11 +85,8 @@ export default function MenuItemCard({ item, restaurant, orderingDisabled, onOpe
       e.stopPropagation();
       if (cartEntries.length === 0) return;
       if (hasRequiredOptions && cartEntries.length > 1) {
-        // Multiple add-on configurations: remove the last-added entry
         removeItem(cartEntries[cartEntries.length - 1].cartItemId);
       } else {
-        // Single entry (with or without addOns): decrease its quantity
-        // updateQuantity(id, 0) triggers removeItem internally in CartContext
         updateQuantity(cartEntries[0].cartItemId, cartEntries[0].quantity - 1);
       }
     },
@@ -110,16 +104,16 @@ export default function MenuItemCard({ item, restaurant, orderingDisabled, onOpe
     >
       {/* ── Photo ─────────────────────────────────────── */}
       <div className="mic-photo-wrap">
-        {item.photo ? (
-          <RestaurantImage
-            image={item.photo}
-            alt={item.photo.alt || item.name}
-            className="mic-photo-img"
-          />
-        ) : (
-          <div className="mic-photo-placeholder" aria-hidden="true">
-            {item.image || initials}
-          </div>
+        <RestaurantImage
+          image={item.photo}
+          alt={item.photo?.alt || item.name}
+          fallback={item.image || initials}
+          fallbackSrc={getDishFallbackPhoto(item)}
+          className="mic-photo-img"
+        />
+
+        {item.popular && !isSoldOut && (
+          <span className="mic-popular-pill">★ Popular</span>
         )}
 
         {/* Sold-out overlay */}
