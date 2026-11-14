@@ -1,0 +1,37 @@
+.salo-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px 6px 8px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.salo-back-button:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+
+.salo-back-button:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .salo-back-button {
+    padding: 6px 8px;
+  }
+
+  .salo-back-button-label {
+    display: none;
+  }
+}
