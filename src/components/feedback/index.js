@@ -7,3 +7,4 @@ export {
   ErrorState,
   LoadingSpinner,
 } from './Feedback';
+export { default as StateView } from './StateView';
