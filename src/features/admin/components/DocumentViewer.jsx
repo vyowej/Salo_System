@@ -75,7 +75,7 @@ export default function DocumentViewer({
   }, [normalizedDocs]);
 
   if (!normalizedDocs.length) {
-    return <p>No submitted documents are attached to this demo record.</p>;
+    return <p>No submitted documents are attached to this record.</p>;
   }
 
   const activeDoc = normalizedDocs.find((d) => d.id === selectedDocId) || normalizedDocs[0];
@@ -282,7 +282,7 @@ export default function DocumentViewer({
         )}
 
         <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: '8px 0 0', maxWidth: '380px' }}>
-          Illustrative document preview. This demo record contains no original file or personal document image.
+          Document preview placeholder.
         </p>
       </div>
     </section>
