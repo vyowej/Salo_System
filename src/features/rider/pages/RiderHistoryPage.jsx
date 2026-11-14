@@ -100,7 +100,7 @@ export default function RiderHistoryPage() {
           </div>
         ) : (
           <>
-            <Card className="rider-history-filters">
+            <Card className="rider-history-filters"><div className="rider-history-filters-title"><strong>Filter deliveries</strong><span>{filtered.length} of {records.length} records</span></div>
               <CardBody>
                 <label className="rider-field" htmlFor="rider-history-search">
                   <span>Search deliveries</span>
@@ -112,7 +112,7 @@ export default function RiderHistoryPage() {
             {filtered.length === 0 ? (
               <div className="rider-history-empty-state">No delivery records match your filters.</div>
             ) : (
-              <Card>
+              <Card className="rider-history-table-card">
                 <CardBody>
                   <div className="rider-history-table-wrap">
                     <table className="rider-history-table">
