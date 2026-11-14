@@ -11,7 +11,6 @@ const VALID_MIME_TYPES = [
   'image/jpeg',
   'image/png',
   'image/jpg',
-  'image/webp',
 ];
 
 function formatBytes(bytes) {
@@ -190,7 +189,7 @@ export default function DocumentUploadCard({
         ref={fileInputRef}
         type="file"
         id={`doc-input-${id}`}
-        accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+        accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
         className="doc-file-input"
         onChange={handleInputChange}
         aria-label={`Upload ${title}`}
