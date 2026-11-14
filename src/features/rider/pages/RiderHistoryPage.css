@@ -165,3 +165,81 @@
     text-align: left;
   }
 }
+
+/* ── Polished filters & table ───────────────────────────── */
+.rider-history-filters-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) 0;
+  color: var(--text-heading, var(--text-primary));
+}
+
+.rider-history-filters-title span {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.rider-history-filters .rider-field {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rider-history-filters .rider-field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+}
+
+.rider-history-filters .rider-field input:focus,
+.rider-filter-field select:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.rider-filter-bar {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.rider-filter-field {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rider-filter-field select {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.rider-history-table th {
+  padding-block: var(--space-2);
+  background: var(--bg-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
+
+.rider-history-table th:first-child { border-top-left-radius: var(--radius-md); }
+.rider-history-table th:last-child { border-top-right-radius: var(--radius-md); text-align: right; }
+.rider-history-table td:last-child { text-align: right; font-weight: var(--font-weight-bold); white-space: nowrap; }
+
+.rider-history-table tbody tr { transition: background var(--transition-fast); }
+.rider-history-table tbody tr:hover { background: var(--bg-secondary); }
+.rider-history-table tbody tr:last-child td { border-bottom: 0; }
+
+.rider-history-table td { color: var(--text-secondary); font-size: var(--font-size-sm); }
+.rider-history-table td:first-child a { color: var(--accent); }
