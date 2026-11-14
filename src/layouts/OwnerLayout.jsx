@@ -269,7 +269,7 @@ export default function OwnerLayout({ children }) {
           showNotifications
           notificationCount={totalPendingAlerts}
           notificationsHref={bellTarget}
-          showThemeToggle={false}
+          showThemeToggle
           showUserInfo={false}
           headingExtras={restaurantControl}
           profileButton={(
