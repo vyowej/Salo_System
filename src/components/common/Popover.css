@@ -1,0 +1,38 @@
+.salo-popover {
+  position: fixed;
+  width: min(360px, calc(100vw - 16px));
+  max-width: 92vw;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg);
+  z-index: calc(var(--z-dropdown) + 12);
+  overflow: hidden;
+}
+
+.salo-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+
+.salo-popover-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.salo-popover-footer {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-primary);
+  background: var(--surface-secondary);
+  flex-shrink: 0;
+}
