@@ -5,9 +5,9 @@
 
 export const RIDER_DOC_TYPES = {
   // Identity
-  GOV_ID_FRONT: 'id_front',
-  GOV_ID_BACK: 'id_back',
-  SELFIE_PHOTO: 'selfie_photo',
+  GOV_ID_FRONT: 'government_id_front',
+  GOV_ID_BACK: 'government_id_back',
+  SELFIE_PHOTO: 'selfie',
 
   // Vehicle (Motorcycle)
   DRIVER_LICENSE: 'driver_license',
@@ -34,7 +34,7 @@ export const RIDER_DOC_TYPES = {
   MEDICAL_CLEARANCE: 'medical_clearance',
 
   // Payout Proof
-  PAYOUT_PROOF: 'payout_proof',
+  PAYOUT_PROOF: 'bank_proof',
 };
 
 export const RIDER_DOC_CATALOG = {

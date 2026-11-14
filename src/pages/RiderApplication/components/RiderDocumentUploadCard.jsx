@@ -3,11 +3,12 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import CameraCaptureModal from './CameraCaptureModal';
 import { isPhotoRequirement } from '../constants/cameraConfig';
+import { RIDER_DOC_TYPES } from '../constants/riderDocumentMatrix';
 import { compressImageToDataUrl } from '../services/riderDraftStorage';
 import './RiderDocumentUploadCard.css';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
-const VALID_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+const VALID_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return '0 B';
@@ -40,8 +41,8 @@ export default function RiderDocumentUploadCard({
     acceptedFormats = 'JPG, PNG, PDF',
   } = docConfig;
 
-  const isPhoto = isPhotoRequirement(id) || id === 'driver_license';
-  const isSelfie = id === 'selfie_photo';
+  const isPhoto = isPhotoRequirement(id) || id === RIDER_DOC_TYPES.DRIVER_LICENSE;
+  const isSelfie = id === RIDER_DOC_TYPES.SELFIE_PHOTO;
 
   const handleFileProcess = async (file) => {
     if (!file) return;
@@ -177,7 +178,7 @@ export default function RiderDocumentUploadCard({
         ref={fileInputRef}
         type="file"
         id={`rider-doc-input-${id}`}
-        accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+        accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
         className="rider-file-input"
         onChange={handleInputChange}
         aria-label={`Upload ${title}`}

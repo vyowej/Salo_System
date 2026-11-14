@@ -9,9 +9,9 @@ export const CAMERA_FACING_MODES = {
 };
 
 export const PHOTO_DOC_TYPES = [
-  'selfie_photo',
-  'id_front',
-  'id_back',
+  'selfie',
+  'government_id_front',
+  'government_id_back',
   'driver_license',
   'motorcycle_photo',
   'bicycle_photo',
@@ -35,9 +35,9 @@ export const CAMERA_CONFIG = {
 
   // Facing mode preference by document category / type
   facingModeMap: {
-    selfie_photo: CAMERA_FACING_MODES.USER,
-    id_front: CAMERA_FACING_MODES.ENVIRONMENT,
-    id_back: CAMERA_FACING_MODES.ENVIRONMENT,
+    selfie: CAMERA_FACING_MODES.USER,
+    government_id_front: CAMERA_FACING_MODES.ENVIRONMENT,
+    government_id_back: CAMERA_FACING_MODES.ENVIRONMENT,
     motorcycle_photo: CAMERA_FACING_MODES.ENVIRONMENT,
     bicycle_photo: CAMERA_FACING_MODES.ENVIRONMENT,
     ebike_photo: CAMERA_FACING_MODES.ENVIRONMENT,

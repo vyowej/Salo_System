@@ -5,42 +5,45 @@
    ============================================================ */
 
 :root {
-  /* ── Core brand colors ──────────────────────────────── */
-  --salo-orange:        #F36B2B;
-  --salo-orange-hover:  #B54724;
-  --salo-orange-active: #9E3D1E;
-  --salo-orange-light:  #F9EDE7;
+  /* ── Core brand colors (Official SALO Logo Palette) ────── */
+  --salo-orange:        #D65A2E;
+  --salo-orange-hover:  #BD4C23;
+  --salo-orange-active: #A33F1B;
+  --salo-orange-light:  #FAEDE7;
 
-  --salo-gold:          #F59E0B;
-  --salo-gold-hover:    #C98E34;
-  --salo-gold-light:    #FBF3E2;
+  --salo-gold:          #F4C542;
+  --salo-mustard:       #F4C542;
+  --salo-gold-hover:    #D9AB2B;
+  --salo-gold-light:    #FEF7DF;
 
-  --salo-green:         #2E7D32;
-  --salo-green-hover:   #5A6133;
-  --salo-green-light:   #EEF3ED;
+  --salo-green:         #6B8F5B;
+  --salo-green-hover:   #567648;
+  --salo-green-light:   #EEF4EB;
 
-  --salo-brown:         #5D4037;
-  --salo-brown-mid:     #55301C;
-  --salo-brown-hover:   #38200F;
+  --salo-brown:         #5B3A29;
+  --salo-brown-mid:     #4A2E20;
+  --salo-brown-hover:   #362015;
+  --salo-cream:         #FFF8F0;
+  --salo-cream-muted:   #F7EFE5;
 
   /* Brand colors reserved for semantic card tints */
-  --card-brand-orange: #C85428;
-  --card-brand-gold:   #DFA03E;
-  --card-brand-green:  #68733C;
-  --card-brand-brown:  #55301C;
+  --card-brand-orange: #D65A2E;
+  --card-brand-gold:   #F4C542;
+  --card-brand-green:  #6B8F5B;
+  --card-brand-brown:  #5B3A29;
 
   /* Shared card geometry */
-  --card-radius: 16px;
+  --card-radius: 18px;
   --card-padding: 24px;
   --card-border-width: 1px;
   --card-status-border-width: 1.5px;
-  --card-accent-strip-height: 3px;
+  --card-accent-strip-height: 4px;
   --card-focus-ring-width: 2px;
   --card-focus-ring-offset: 2px;
   --card-label-letter-spacing: 0.06em;
-  --customer-restaurant-card-min-width: 320px;
-  --customer-restaurant-cover-height: 140px;
-  --customer-favorite-button-size: 32px;
+  --customer-restaurant-card-min-width: 310px;
+  --customer-restaurant-cover-height: 176px;
+  --customer-favorite-button-size: 36px;
   --customer-cover-icon-size: 48px;
   --card-detail-min-width: 200px;
   --card-grid-min-width: 220px;

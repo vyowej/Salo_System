@@ -8,14 +8,14 @@
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  background: var(--bg-primary);
+  background: transparent; /* page gradient comes from body */
 }
 
 /* ── Dashboard shell: topbar + sidebar + main ────────── */
 .dashboard-shell {
   display: flex;
   min-height: 100dvh;
-  background: var(--bg-primary);
+  background: transparent; /* page gradient comes from body */
 }
 
 .dashboard-sidebar {

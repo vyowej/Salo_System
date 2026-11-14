@@ -107,7 +107,7 @@ export const RIDER_PAYOUT_ACCOUNT_TYPES = [
 ];
 
 export const RIDER_SHIFTS = [
-  { key: 'morning', label: 'Breakfast Shift (6:00 AM – 11:00 AM)' },
+  { key: 'breakfast', label: 'Breakfast Shift (6:00 AM – 11:00 AM)' },
   { key: 'lunch', label: 'Lunch Rush (11:00 AM – 2:00 PM)' },
   { key: 'afternoon', label: 'Afternoon Merienda (2:00 PM – 6:00 PM)' },
   { key: 'dinner', label: 'Dinner Gathering (6:00 PM – 10:00 PM)' },

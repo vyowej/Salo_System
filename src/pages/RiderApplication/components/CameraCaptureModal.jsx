@@ -6,6 +6,7 @@ import {
   CAMERA_FACING_MODES,
   getPreferredFacingMode,
 } from '../constants/cameraConfig';
+import { RIDER_DOC_TYPES } from '../constants/riderDocumentMatrix';
 import { compressImageToDataUrl } from '../services/riderDraftStorage';
 import './CameraCaptureModal.css';
 
@@ -272,7 +273,7 @@ export default function CameraCaptureModal({
     onClose?.();
   };
 
-  const isSelfie = docId === 'selfie_photo';
+  const isSelfie = docId === RIDER_DOC_TYPES.SELFIE_PHOTO;
 
   return (
     <Modal
