@@ -1,3 +1,5 @@
+import './FilterBar.css';
+
 export default function FilterBar({ filters = [], values = {}, onChange }) {
   return (
     <div className="rider-filter-bar">
