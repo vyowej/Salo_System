@@ -65,7 +65,7 @@
   display: grid;
   place-items: center;
   padding: var(--space-6);
-  background: var(--bg-primary);
+  background: transparent; /* page gradient comes from body */
 }
 
 .owner-access-card {
