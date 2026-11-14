@@ -1,19 +1,35 @@
 import { useEffect, useState } from 'react';
-import restaurantService from '../../../services/restaurantService';
+import restaurantService, { resolvePublicStorageUrl } from '../../../services/restaurantService';
 
-export default function RestaurantImage({ image, alt, fallback = '', className, style }) {
+export default function RestaurantImage({
+  image,
+  alt,
+  fallback = '',
+  fallbackSrc = '',
+  className,
+  style,
+}) {
   const [src, setSrc] = useState('');
+  const [imgFailed, setImgFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
+    setImgFailed(false);
+
     if (image?.id) {
       restaurantService.getImageUrl(image).then((url) => {
-        if (active) setSrc(url || '');
+        if (active) setSrc(url || resolvePublicStorageUrl(image) || '');
       }).catch(() => {
-        if (active) setSrc('');
+        if (active) setSrc(resolvePublicStorageUrl(image) || '');
       });
+    } else if (typeof image === 'string') {
+      const trimmed = image.trim();
+      const isUrlOrPath = /^(https?:|data:|blob:|\/)/i.test(trimmed) || /^(restaurants|users|riders|promotions)\//i.test(trimmed);
+      setSrc(isUrlOrPath ? resolvePublicStorageUrl(trimmed) : '');
+    } else if (image && (image.src || image.url || image.path)) {
+      setSrc(resolvePublicStorageUrl(image));
     } else {
-      setSrc(typeof image === 'string' && /^(https?:|data:|blob:)/.test(image) ? image : image?.src || '');
+      setSrc('');
     }
 
     return () => {
@@ -21,8 +37,22 @@ export default function RestaurantImage({ image, alt, fallback = '', className, 
     };
   }, [image]);
 
-  if (src) {
-    return <img className={className} src={src} alt={alt} style={{ width: '100%', height: '100%', objectFit: 'cover', ...style }} />;
+  const effectiveSrc = !imgFailed && src ? src : fallbackSrc;
+
+  if (effectiveSrc) {
+    return (
+      <img
+        className={className}
+        src={effectiveSrc}
+        alt={alt}
+        onError={() => {
+          if (src && effectiveSrc === src) {
+            setImgFailed(true);
+          }
+        }}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', ...style }}
+      />
+    );
   }
 
   return (

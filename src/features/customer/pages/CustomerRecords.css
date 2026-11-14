@@ -300,3 +300,801 @@
   border-top: var(--card-border-width) solid var(--border-secondary);
   font-weight: var(--font-weight-bold);
 }
+
+
+/* ==========================================================================
+   Customer Live Order Tracking & Interactive Map Layout
+   ========================================================================== */
+
+.customer-concurrent-orders-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius-lg, 12px);
+  background: var(--surface-primary, #ffffff);
+  border: 1px solid var(--border-primary, rgba(91, 58, 41, 0.14));
+  box-shadow: var(--shadow-sm);
+}
+
+.customer-concurrent-orders-bar__label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.customer-concurrent-orders-bar__pills {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.customer-concurrent-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-primary);
+  background: var(--surface-secondary, #faf8f5);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.customer-concurrent-pill:hover {
+  border-color: var(--salo-terracotta, #D65A2E);
+}
+
+.customer-concurrent-pill.is-active {
+  background: var(--salo-terracotta, #D65A2E);
+  border-color: var(--salo-terracotta, #D65A2E);
+  color: #ffffff;
+}
+
+.customer-concurrent-pill span {
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+
+.customer-track-layout {
+  display: grid;
+  grid-template-columns: 390px minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: stretch;
+  margin-bottom: 2rem;
+}
+
+.customer-track-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.customer-track-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  flex: 1 1 auto;
+  padding: 1.15rem;
+  background: var(--surface-primary, #ffffff);
+  border: 1px solid var(--card-orange-border, rgba(214, 90, 46, 0.25));
+  border-radius: var(--radius-lg, 14px);
+  box-shadow: var(--shadow-sm);
+}
+
+.customer-track-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.customer-track-header__left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.customer-track-back-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-secondary, #faf8f5);
+  color: var(--text-primary);
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.customer-track-back-btn:hover {
+  background: var(--surface-hover, #f3ece2);
+  border-color: var(--salo-terracotta, #D65A2E);
+}
+
+.customer-track-eyebrow {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.customer-track-title {
+  margin: 0;
+  font-size: 1.18rem;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+/* Sub-order Tabs for Multi-Kitchen Orders */
+.customer-track-suborders-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.45rem;
+}
+
+.customer-track-subtab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-secondary, #faf8f5);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.customer-track-subtab strong {
+  font-size: 0.76rem;
+  color: var(--text-primary);
+}
+
+.customer-track-subtab span {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.customer-track-subtab.is-active {
+  border-color: var(--salo-terracotta, #D65A2E);
+  background: rgba(214, 90, 46, 0.08);
+}
+
+.customer-track-subtab.is-active span {
+  color: var(--salo-terracotta, #D65A2E);
+  font-weight: 700;
+}
+
+/* Status Banner */
+.customer-track-status-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-md, 8px);
+  background: rgba(214, 90, 46, 0.08);
+  border: 1px solid rgba(214, 90, 46, 0.2);
+}
+
+.customer-track-status-banner.is-standby {
+  background: rgba(107, 143, 91, 0.1);
+  border-color: rgba(107, 143, 91, 0.28);
+}
+
+.customer-track-status-banner strong {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+.customer-track-status-banner span {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+/* Customer 6-Step Progress Bar */
+.customer-track-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(46px, 1fr));
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.2rem 0;
+  list-style: none;
+}
+
+.customer-track-steps li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.customer-track-steps li::before {
+  position: absolute;
+  top: 11px;
+  right: 50%;
+  left: -50%;
+  height: 2px;
+  background: var(--border-primary);
+  content: "";
+}
+
+.customer-track-steps li:first-child::before {
+  display: none;
+}
+
+.customer-track-steps li.is-done::before,
+.customer-track-steps li.is-current::before {
+  background: var(--salo-green, #6B8F5B);
+}
+
+.customer-track-steps li span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border: 2px solid var(--border-primary);
+  border-radius: 50%;
+  background: var(--surface-primary);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.customer-track-steps li.is-done span {
+  border-color: var(--salo-green, #6B8F5B);
+  background: var(--salo-green, #6B8F5B);
+  color: #ffffff;
+}
+
+.customer-track-steps li.is-current span {
+  border-color: var(--salo-terracotta, #D65A2E);
+  background: var(--salo-terracotta, #D65A2E);
+  color: #ffffff;
+}
+
+.customer-track-steps li.is-current small {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.customer-track-steps small {
+  font-size: 10px;
+  line-height: 1.15;
+}
+
+/* Assigned Rider Card */
+.customer-track-rider-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-secondary, #faf8f5);
+}
+
+.customer-track-rider-top {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.customer-track-rider-avatar {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: rgba(214, 90, 46, 0.12);
+  font-size: 1.15rem;
+}
+
+.customer-track-rider-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.customer-track-rider-info strong {
+  font-size: 0.86rem;
+  color: var(--text-primary);
+}
+
+.customer-track-rider-info small {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.customer-track-eta-highlight {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--salo-terracotta, #D65A2E);
+}
+
+.customer-track-call-btn {
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-primary);
+  background: var(--surface-primary, #ffffff);
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.customer-track-call-btn:hover {
+  border-color: var(--salo-terracotta, #D65A2E);
+  color: var(--salo-terracotta, #D65A2E);
+}
+
+.customer-track-quick-msgs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--border-primary);
+}
+
+.customer-track-quick-msgs__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.customer-track-quick-msgs__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.customer-track-msg-chip {
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-primary);
+  background: var(--surface-primary, #ffffff);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.customer-track-msg-chip:hover {
+  border-color: var(--salo-terracotta, #D65A2E);
+  color: var(--salo-terracotta, #D65A2E);
+}
+
+.customer-track-msg-feedback {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #3f6832;
+}
+
+/* Sections & Drop-off Preferences */
+.customer-track-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.customer-track-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.customer-track-section__head span,
+.customer-track-section__label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.customer-track-inline-link {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--salo-terracotta, #D65A2E);
+  text-decoration: none;
+}
+
+.customer-track-route-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-secondary, #faf8f5);
+}
+
+.customer-track-route-icon {
+  font-size: 1.15rem;
+}
+
+.customer-track-route-card strong {
+  display: block;
+  font-size: 0.84rem;
+  color: var(--text-primary);
+}
+
+.customer-track-route-card p {
+  margin: 2px 0 0;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.customer-track-pref-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.customer-track-pref-pill {
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-primary);
+  background: var(--surface-secondary, #faf8f5);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.customer-track-pref-pill.is-active {
+  background: rgba(107, 143, 91, 0.14);
+  border-color: var(--salo-green, #6B8F5B);
+  color: #355829;
+  font-weight: 700;
+}
+
+.customer-track-pref-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.customer-track-pref-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-secondary, #faf8f5);
+  text-align: left;
+  cursor: pointer;
+}
+
+.customer-track-pref-btn.is-active {
+  border-color: var(--salo-green, #6B8F5B);
+  background: rgba(107, 143, 91, 0.1);
+}
+
+.customer-track-pref-btn strong {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+}
+
+.customer-track-pref-btn small {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+/* Order Lookup in Standby View */
+.customer-track-lookup-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-secondary, #faf8f5);
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.customer-track-lookup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.customer-track-lookup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-primary, #ffffff);
+  text-align: left;
+  cursor: pointer;
+}
+
+.customer-track-lookup-item:hover {
+  border-color: var(--salo-terracotta, #D65A2E);
+}
+
+.customer-track-lookup-item div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.customer-track-lookup-item strong {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+}
+
+.customer-track-lookup-item span {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.customer-track-empty-note {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Order Items & Bill Summary */
+.customer-track-manifest {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-primary, #ffffff);
+}
+
+.customer-track-manifest__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.customer-track-manifest__head span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.customer-track-manifest__head strong {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.customer-track-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.customer-track-items-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.customer-track-item-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.customer-track-item-qty {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(214, 90, 46, 0.12);
+  color: var(--salo-terracotta, #D65A2E);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.customer-track-item-left strong {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.customer-track-item-left small {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.customer-track-item-price {
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.customer-track-bill-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border-primary);
+}
+
+.customer-track-bill-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.customer-track-bill-row.is-total {
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.customer-track-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.25rem;
+}
+
+.customer-track-actions__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+/* Right Column: Map Viewport & Docked Checkpoints */
+.customer-track-map-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.customer-track-map-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 490px;
+  border-radius: var(--radius-lg, 14px);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.customer-track-checkpoints {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.customer-track-checkpoint {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--surface-primary, #ffffff);
+  box-shadow: var(--shadow-sm);
+}
+
+.customer-track-checkpoint.is-pickup {
+  border-color: var(--card-orange-border, rgba(214, 90, 46, 0.3));
+  background: linear-gradient(180deg, rgba(214, 90, 46, 0.06) 0%, var(--surface-primary, #ffffff) 100%);
+}
+
+.customer-track-checkpoint.is-dropoff {
+  border-color: var(--card-green-border, rgba(107, 143, 91, 0.35));
+  background: linear-gradient(180deg, rgba(107, 143, 91, 0.07) 0%, var(--surface-primary, #ffffff) 100%);
+}
+
+.customer-track-checkpoint.is-current.is-pickup {
+  box-shadow: 0 0 0 2px var(--salo-terracotta, #D65A2E), var(--shadow-sm);
+}
+
+.customer-track-checkpoint.is-current.is-dropoff {
+  box-shadow: 0 0 0 2px var(--salo-green, #6B8F5B), var(--shadow-sm);
+}
+
+.customer-track-checkpoint__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.customer-track-checkpoint__top span {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.customer-track-checkpoint__top em {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 0.66rem;
+  font-weight: 700;
+  background: rgba(91, 58, 41, 0.08);
+  color: var(--text-secondary);
+}
+
+.customer-track-checkpoint strong {
+  font-size: 0.92rem;
+  color: var(--text-primary);
+}
+
+.customer-track-checkpoint small {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 1024px) {
+  .customer-track-layout {
+    grid-template-columns: 350px minmax(0, 1fr);
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 840px) {
+  .customer-track-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-track-map-viewport {
+    min-height: 420px;
+  }
+}
+
+@media (max-width: 540px) {
+  .customer-track-checkpoints,
+  .customer-track-actions__row {
+    grid-template-columns: 1fr;
+  }
+}
