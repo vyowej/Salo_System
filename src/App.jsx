@@ -4,6 +4,8 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 import RequireAccess from './routes/RequireAccess';
 import { RestaurantAccessProvider } from './features/restaurant/access/RestaurantAccessContext.jsx';
 import { AdminSessionProvider } from './features/admin/contexts/AdminSessionContext.jsx';
+import { AdminNotificationsProvider } from './features/admin/contexts/AdminNotificationsContext.jsx';
+import { AdminSearchProvider } from './features/admin/contexts/AdminSearchContext.jsx';
 
 // ── Lazy-Loaded Pages for Code-Splitting ─────────────────────────
 
@@ -75,7 +77,7 @@ const AdminUsersPage = lazy(() => import('./features/admin/pages/AdminUsersPage'
 const AdminServiceAreasPage = lazy(() => import('./features/admin/pages/AdminServiceAreasPage'));
 const AdminSettingsPage = lazy(() => import('./features/admin/pages/AdminSettingsPage'));
 const AdminSecuritySettingsPage = lazy(() => import('./features/admin/pages/AdminSecuritySettingsPage'));
-const AdminMfaPage = lazy(() => import('./features/admin/pages/AdminMfaPage'));
+const AdminApplicationsPage = lazy(() => import('./features/admin/pages/AdminApplicationsPage'));
 const AdminAdministratorsPage = lazy(() => import('./features/admin/pages/AdminAdministratorsPage'));
 const AdminFeesPage = lazy(() => import('./features/admin/pages/AdminFeesPage'));
 const AdminFinancePage = lazy(() => import('./features/admin/pages/AdminFinancePage'));
@@ -250,9 +252,9 @@ function AppShell() {
         title: 'Admin Dashboard | SALO',
         description: 'Monitor platform performance, partners, riders, and operational insights.',
       },
-      '/admin/mfa': {
-        title: 'Verify Administrator | SALO Admin',
-        description: 'Complete demo administrator multi-factor verification.',
+      '/admin/applications': {
+        title: 'Applications | SALO Admin',
+        description: 'Review pending restaurant and rider applications.',
       },
       '/admin/accounts': {
         title: 'Accounts | SALO Admin',
@@ -417,9 +419,20 @@ function AppShell() {
           </Route>
 
           {/* ── Admin Module (Phase 6) ── */}
-          <Route path="/admin" element={<AdminSessionProvider><AdminRouteGuard /></AdminSessionProvider>}>
+          <Route
+            path="/admin"
+            element={(
+              <AdminSessionProvider>
+                <AdminNotificationsProvider>
+                  <AdminSearchProvider>
+                    <AdminRouteGuard />
+                  </AdminSearchProvider>
+                </AdminNotificationsProvider>
+              </AdminSessionProvider>
+            )}
+          >
             <Route index element={<AdminPermissionRoute module="dashboard" topic="dashboard"><AdminDashboard /></AdminPermissionRoute>} />
-            <Route path="mfa" element={<AdminMfaPage />} />
+            <Route path="applications" element={<AdminPermissionRoute module="applications" topic="applications"><AdminApplicationsPage /></AdminPermissionRoute>} />
             <Route path="accounts" element={<AdminPermissionRoute module="accounts" topic="accounts"><AdminUsersPage /></AdminPermissionRoute>} />
             <Route path="users" element={<AdminPermissionRoute module="accounts" topic="accounts"><AdminUsersPage /></AdminPermissionRoute>} />
             <Route path="administrators" element={<AdminPermissionRoute module="administrators" topic="administrators"><AdminAdministratorsPage /></AdminPermissionRoute>} />
