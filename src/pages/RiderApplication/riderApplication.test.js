@@ -146,15 +146,15 @@ test('camera config maps facing mode and identifies photo requirements', async (
     CAMERA_FACING_MODES,
   } = await import('./constants/cameraConfig.js');
 
-  assert.equal(isPhotoRequirement('selfie_photo'), true);
+  assert.equal(isPhotoRequirement('selfie'), true);
   assert.equal(isPhotoRequirement('motorcycle_photo'), true);
-  assert.equal(isPhotoRequirement('id_front'), true);
+  assert.equal(isPhotoRequirement('government_id_front'), true);
   assert.equal(isPhotoRequirement('nbi_clearance'), false);
   assert.equal(isPhotoRequirement('lto_or'), false);
 
-  assert.equal(getPreferredFacingMode('selfie_photo'), CAMERA_FACING_MODES.USER);
+  assert.equal(getPreferredFacingMode('selfie'), CAMERA_FACING_MODES.USER);
   assert.equal(getPreferredFacingMode('motorcycle_photo'), CAMERA_FACING_MODES.ENVIRONMENT);
-  assert.equal(getPreferredFacingMode('id_front'), CAMERA_FACING_MODES.ENVIRONMENT);
+  assert.equal(getPreferredFacingMode('government_id_front'), CAMERA_FACING_MODES.ENVIRONMENT);
 });
 
 test('riderDraftStorage saves, restores, and clears application drafts safely', async () => {
@@ -190,7 +190,7 @@ test('riderDraftStorage saves, restores, and clears application drafts safely', 
       identity: {
         ...INITIAL_RIDER_APPLICATION_STATE.identity,
         selfiePhoto: {
-          id: 'selfie_photo',
+          id: 'selfie',
           name: 'selfie_123.jpg',
           dataUrl: 'data:image/jpeg;base64,mockImageContent',
           previewUrl: 'data:image/jpeg;base64,mockImageContent',
