@@ -31,7 +31,7 @@
 -- Ledger rules (enforced by the application)
 --   • Post each journal and its entries in one transaction. Each journal needs at least
 --     two entries, and its debits must equal its credits.
---   • Idempotency keys are required for payment, refund, payout, and COD remittance journals.
+--   • Idempotency keys are required for payment, refund, payout, cod_remittance, and provider_settlement journals.
 --   • Run ledger_unbalanced_journals as a reconciliation check. It must return no rows.
 --
 -- Open items (not blocking the baseline)
@@ -1225,8 +1225,8 @@ CREATE TABLE ledger_accounts (
 CREATE TABLE ledger_journals (
     journal_id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     journal_reference   VARCHAR(40)     NOT NULL COMMENT 'Unique, human-readable, traceable',
-    journal_type        ENUM('payment','sales','commission','delivery_fee','rider_pay','tip','discount_funding','deposit','service_fee','refund','cod_collection','cod_remittance','payout','adjustment','reversal') NULL COMMENT 'Required; see chk_ledger_journals_required',
-    idempotency_key     VARCHAR(64)     NULL COMMENT 'Required for payment, refund, payout and cod_remittance journals',
+    journal_type        ENUM('payment','sales','commission','delivery_fee','rider_pay','tip','discount_funding','deposit','service_fee','refund','cod_collection','cod_remittance','provider_settlement','payout','adjustment','reversal') NULL COMMENT 'Required; see chk_ledger_journals_required',
+    idempotency_key     VARCHAR(64)     NULL COMMENT 'Required for payment, refund, payout, cod_remittance, and provider_settlement journals',
     currency            CHAR(3)         NOT NULL DEFAULT 'PHP',
     description         VARCHAR(255)    NULL,
     checkout_id         BIGINT UNSIGNED NULL,
@@ -1257,7 +1257,7 @@ CREATE TABLE ledger_journals (
     CONSTRAINT fk_ledger_journals_posted_by FOREIGN KEY (posted_by) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT chk_ledger_journals_required CHECK (journal_type IS NOT NULL AND CHAR_LENGTH(TRIM(journal_reference)) > 0),
     CONSTRAINT chk_ledger_journals_idempotency CHECK (
-        journal_type NOT IN ('payment','refund','payout','cod_remittance') OR idempotency_key IS NOT NULL
+        journal_type NOT IN ('payment','refund','payout','cod_remittance','provider_settlement') OR idempotency_key IS NOT NULL
     ),
     CONSTRAINT chk_ledger_journals_payment_link CHECK (
         journal_type NOT IN ('payment','refund') OR payment_id IS NOT NULL
