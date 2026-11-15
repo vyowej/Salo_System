@@ -56,10 +56,19 @@ export default function ItemModal({ open, onClose, item, restaurant, orderingDis
   };
 
   const basePrice = getMenuCustomerPrice(menuItem);
+  const isItemUnavailable = menuItem.availability !== 'available';
+  const cannotAdd = orderingDisabled || isItemUnavailable;
+  const itemUnavailableMessage = menuItem.availability === 'sold_out'
+    ? 'This item is currently sold out.'
+    : 'This item is temporarily unavailable.';
   const unitTotal = basePrice + addOnsTotal;
   const grandItemTotal = unitTotal * quantity;
 
   const handleAddToCart = () => {
+    if (cannotAdd) {
+      setError(isItemUnavailable ? itemUnavailableMessage : orderingDisabledMessage);
+      return;
+    }
     // Validate required groups
     if (menuItem.addOns) {
       for (const group of menuItem.addOns.filter((entry) => entry.isAvailable)) {
@@ -130,18 +139,22 @@ export default function ItemModal({ open, onClose, item, restaurant, orderingDis
             variant="primary"
             size="md"
             onClick={handleAddToCart}
-            disabled={orderingDisabled}
+            disabled={cannotAdd}
             style={{ flex: 1, maxWidth: 260 }}
           >
-            {orderingDisabled ? 'Ordering unavailable' : `Add to Multi-Cart · ₱${grandItemTotal.toLocaleString()}`}
+            {isItemUnavailable
+              ? (menuItem.availability === 'sold_out' ? 'Sold Out' : 'Temporarily Unavailable')
+              : orderingDisabled
+                ? 'Ordering unavailable'
+                : `Add to Multi-Cart · ₱${grandItemTotal.toLocaleString()}`}
           </Button>
         </div>
       }
     >
       <div>
-        {orderingDisabled && (
+        {(isItemUnavailable || orderingDisabled) && (
           <p role="status" style={{ margin: '0 0 var(--space-3)', color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)' }}>
-            {orderingDisabledMessage}
+            {isItemUnavailable ? itemUnavailableMessage : orderingDisabledMessage}
           </p>
         )}
         <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start', marginBottom: 'var(--space-4)' }}>

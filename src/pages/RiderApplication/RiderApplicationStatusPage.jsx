@@ -1,58 +1,54 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import BrandMark from '../../components/common/BrandMark';
 import Button from '../../components/common/Button';
 import RiderApplicationStatus from './components/RiderApplicationStatus';
+import applicationService, { mapBackendApplicationStatus } from '../../services/applicationService';
 import './RiderApplicationStatusPage.css';
 
-const STORAGE_KEY = 'salo_rider_applications';
-
 export default function RiderApplicationStatusPage() {
-  const [applicationData] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const app = Array.isArray(parsed) ? parsed[0] : parsed;
+  const [applicationData, setApplicationData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const app = await applicationService.getCurrentRiderApplication();
+        if (!active) return;
         if (app) {
-          return {
-            referenceNumber: app.referenceNumber || app.id || 'SALO-RIDER-20261109-7814',
-            name: app.name || (app.personal ? `${app.personal.firstName} ${app.personal.lastName}` : 'Juan Dela Cruz'),
-            deliveryMethod: app.deliveryMethod || 'motorcycle',
-            status: app.applicationStatus || app.status || 'Pending Review',
-            submittedAt: app.submittedAt || new Date().toISOString(),
-          };
+          setApplicationData({
+            id: app.rider_application_id,
+            referenceNumber: app.reference_number,
+            name: `${app.legal_first_name} ${app.legal_last_name}`.trim(),
+            deliveryMethod: app.vehicle_type,
+            status: mapBackendApplicationStatus(app.application_status),
+            submittedAt: app.submitted_at,
+            reviewerNote: app.reviewer_note,
+            requestedDocuments: (app.document_requests || []).map((req) => ({
+              id: req.request_id,
+              name: req.document_name,
+              reason: req.reason,
+              instructions: req.instructions,
+              dueDate: req.due_date,
+              status: req.request_status,
+            })),
+            documents: app.documents || [],
+          });
+        } else {
+          setApplicationData(null);
         }
+      } catch (err) {
+        if (active) setError(err?.message || 'Unable to load rider application status.');
+      } finally {
+        if (active) setLoading(false);
       }
-    } catch {
-      // fallback
-    }
-    return {
-      referenceNumber: 'SALO-RIDER-20261109-7814',
-      name: 'Juan Dela Cruz',
-      deliveryMethod: 'motorcycle',
-      status: 'Pending Review',
-      submittedAt: new Date().toISOString(),
+    })();
+    return () => {
+      active = false;
     };
-  });
-
-  const [currentStatus, setCurrentStatus] = useState(applicationData?.status || 'Pending Review');
-
-  const handleStatusChange = (newStatus) => {
-    setCurrentStatus(newStatus);
-    // Update local storage so status stays synchronized
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      const parsed = stored ? JSON.parse(stored) : [];
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        parsed[0].applicationStatus = newStatus;
-        parsed[0].status = newStatus === 'Approved' ? 'Active' : newStatus === 'Rejected' ? 'Rejected' : 'Pending Verification';
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      }
-    } catch {
-      // ignore
-    }
-  };
+  }, []);
 
   return (
     <div className="rider-status-page">
@@ -75,11 +71,23 @@ export default function RiderApplicationStatusPage() {
 
       <main className="rider-status-content">
         <div className="rider-status-inner">
-          <RiderApplicationStatus
-            initialStatus={currentStatus}
-            applicationData={applicationData}
-            onStatusChange={handleStatusChange}
-          />
+          {loading && <p>Loading application status...</p>}
+          {!loading && error && <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>}
+          {!loading && !error && !applicationData && (
+            <div style={{ textAlign: 'center', padding: '40px 16px' }}>
+              <h2>No Rider Application Found</h2>
+              <p>You have not submitted a rider partner application yet.</p>
+              <Button as={Link} to="/become-a-rider" variant="primary" size="md">
+                Start Rider Application
+              </Button>
+            </div>
+          )}
+          {!loading && !error && applicationData && (
+            <RiderApplicationStatus
+              initialStatus={applicationData.status}
+              applicationData={applicationData}
+            />
+          )}
         </div>
       </main>
     </div>

@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
+import adminApiService from '../../../services/adminApiService';
 import { getAdminMock } from '../mocks';
 import {
   ConfirmDialog,
@@ -18,14 +19,40 @@ import { ADMIN_ACCOUNT_CAPABILITIES, ADMIN_ACCOUNT_STATUSES } from '../constants
 import { formatDate, formatDateTime, formatPeso } from '../utils/format';
 import './AdminPages.css';
 
-const INITIAL_ACCOUNTS = getAdminMock('accounts').data.map((account) => ({ ...account }));
 const ORDERS = getAdminMock('orders').data;
 const RESERVATIONS = getAdminMock('reservations').data;
+
+function mapBackendUser(user) {
+  const fullName = [user.first_name, user.middle_initial ? `${user.middle_initial}.` : '', user.last_name]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  const statusMap = {
+    active: 'Active',
+    inactive: 'Inactive',
+    suspended: 'Suspended',
+    pending: 'Pending',
+  };
+  return {
+    id: user.user_id,
+    name: fullName || user.username,
+    username: user.username,
+    email: user.email,
+    phone: user.phone_number || '',
+    capabilities: [user.user_role === 'admin' ? 'Admin' : 'Customer'],
+    joined: user.created_at,
+    ordersCount: 0,
+    reservationsCount: 0,
+    verificationStatus: user.email_verified_at ? 'Verified' : 'Pending',
+    status: statusMap[user.account_status] || user.account_status,
+    accountActivity: [],
+  };
+}
 
 export default function AdminUsersPage() {
   const { permissions } = useAdminSession();
   const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Accounts', placeholder: 'Search accounts by name, email, phone, status', searchableFields: ['name', 'username', 'email', 'phone', 'status'] });
-  const [accounts, setAccounts] = useState(INITIAL_ACCOUNTS);
+  const [accounts, setAccounts] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All statuses');
   const [capabilityFilter, setCapabilityFilter] = useState('All capabilities');
@@ -34,6 +61,22 @@ export default function AdminUsersPage() {
   const [confirm, setConfirm] = useState(null);
   const [notice, setNotice] = useState('');
   const canEdit = Boolean(permissions.accounts?.some((action) => ['edit', 'activate', 'deactivate', 'delete'].includes(action)));
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await adminApiService.getUsers({ per_page: 50 });
+        if (!active) return;
+        setAccounts((res.items || []).map(mapBackendUser));
+      } catch (err) {
+        if (active) setNotice(err?.message || 'Unable to load accounts.');
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     const term = (globalQuery || search).trim().toLowerCase();
@@ -78,21 +121,32 @@ export default function AdminUsersPage() {
     setConfirm({ account, status });
   }
 
-  function confirmStatus({ reason }) {
+  async function confirmStatus({ reason }) {
     const { account, status } = confirm;
-    const updated = {
-      ...account,
-      status,
-      statusReason: reason,
-      accountActivity: [
-        ...(account.accountActivity || []),
-        { id: `account-status-${Date.now()}`, title: `Account ${status.toLowerCase()}`, description: reason, time: new Date().toISOString() },
-      ],
-    };
-    setAccounts((previous) => previous.map((item) => item.id === account.id ? updated : item));
-    setSelected((previous) => previous?.id === account.id ? updated : previous);
-    setNotice(`${account.name} is now ${status.toLowerCase()}. Account history is preserved.`);
-    setConfirm(null);
+    const backendStatus = status === 'Deactivated' ? 'inactive' : String(status || 'active').toLowerCase();
+    try {
+      await adminApiService.updateUser(account.id, {
+        account_status: backendStatus,
+        reason,
+      });
+      const updated = {
+        ...account,
+        status,
+        statusReason: reason,
+        accountActivity: [
+          ...(account.accountActivity || []),
+          { id: `account-status-${Date.now()}`, title: `Account ${status.toLowerCase()}`, description: reason, time: new Date().toISOString() },
+        ],
+      };
+      setAccounts((previous) => previous.map((item) => item.id === account.id ? updated : item));
+      setSelected((previous) => previous?.id === account.id ? updated : previous);
+      setNotice(`${account.name} is now ${status.toLowerCase()}. Account history is preserved.`);
+      showAdminToast(`${account.name} updated to ${status}.`, 'success');
+    } catch (err) {
+      showAdminToast(err?.message || 'Unable to update account status.', 'danger');
+    } finally {
+      setConfirm(null);
+    }
   }
 
   function requestSessionRevocation(account) {
@@ -125,8 +179,8 @@ export default function AdminUsersPage() {
     : [];
   const accountActivity = selected
     ? [
-      { id: `${selected.id}-registered`, title: 'Account registered', description: 'SALO account registration date.', time: `${selected.joined}T09:00:00+08:00` },
-      ...(selected.verificationStatus === 'Verified' ? [{ id: `${selected.id}-verified`, title: 'Verification completed', description: 'Account verification status is verified.', time: `${selected.joined}T09:30:00+08:00` }] : []),
+      { id: `${selected.id}-registered`, title: 'Account registered', description: 'SALO account registration date.', time: selected.joined },
+      ...(selected.verificationStatus === 'Verified' ? [{ id: `${selected.id}-verified`, title: 'Verification completed', description: 'Account verification status is verified.', time: selected.joined }] : []),
       ...(selected.accountActivity || []),
     ]
     : [];
@@ -154,7 +208,7 @@ export default function AdminUsersPage() {
                 <ul className="admin-detail-list">
                   <li><strong>Contact</strong>{maskPhone(selected.phone)}</li>
                   <li><strong>Email</strong>{maskEmail(selected.email)}</li>
-                  <li><strong>Last login</strong>{formatDateTime(selected.lastLogin || `${selected.joined}T14:20:00+08:00`)}</li>
+                  <li><strong>Last login</strong>{formatDateTime(selected.lastLogin || selected.joined)}</li>
                   <li><strong>Default address</strong>{selected.defaultAddress || 'Quezon City, Metro Manila'}</li>
                   <li><strong>Registered</strong>{formatDate(selected.joined)}</li>
                   <li><strong>Account status</strong><StatusBadge status={selected.status} /></li>
@@ -170,12 +224,9 @@ export default function AdminUsersPage() {
                     <button className="admin-action-button" type="button" onClick={() => requestSessionRevocation(selected)}>Revoke sessions</button>
                   </div>
                 )}
-    
-    
 
                 <p className="admin-shell-note">Deactivation prevents access to the relevant SALO services. Orders, reservations, payments, and audit history are preserved.</p>
               </>
-
             )}
             {tab === 'Activity' && (
               <DataTable
@@ -199,7 +250,6 @@ export default function AdminUsersPage() {
 
             {tab === 'Linked roles' && (
               <div className="admin-record-panel">
-
                 {selected.capabilities.filter((cap) => cap !== 'Customer').length === 0 ? (
                   <p className="admin-muted">This account only holds the Customer capability.</p>
                 ) : (
@@ -210,22 +260,16 @@ export default function AdminUsersPage() {
                     })}
                   </ul>
                 )}
-    
-
-
               </div>
             )}
             {tab === 'Security / history' && (
               <div className="admin-record-panel">
-
                 {selected.sessionsRevoked && <p className="admin-shell-note">Sessions marked revoked: {selected.sessionRevocationReason}</p>}
                 <Timeline items={accountActivity.map((entry) => ({ ...entry, time: formatDateTime(entry.time) }))} />
               </div>
             )}
           </div>
         )}
-
-
       </Modal>
       <ConfirmDialog
         open={Boolean(confirm)}

@@ -1,32 +1,52 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
-import { DataTable, PageHeader, StatusBadge } from '../components';
+import { DataTable, PageHeader, StatusBadge, showAdminToast } from '../components';
 import ApplicationReviewModal from '../components/ApplicationReviewModal';
 import { hasAdminPermission } from '../constants';
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import useAdminSession from '../contexts/useAdminSession';
-import { getRestaurantApplications, getRiderApplications } from '../mocks';
+import adminApiService from '../../../services/adminApiService';
+import { mapBackendApplicationStatus } from '../../../services/applicationService';
 import { formatDate } from '../utils/format';
 import './AdminPages.css';
 
-const STATUS_CHIPS = ['All', 'Pending', 'Under Review', 'Needs Revision', 'Approved', 'Rejected'];
+const STATUS_CHIPS = [
+  { label: 'All', value: 'all' },
+  { label: 'Submitted', value: 'submitted' },
+  { label: 'Pending Review', value: 'pending_review' },
+  { label: 'Under Review', value: 'under_review' },
+  { label: 'Needs Correction', value: 'needs_correction' },
+  { label: 'Resubmitted', value: 'resubmitted' },
+  { label: 'Approved', value: 'approved' },
+  { label: 'Rejected', value: 'rejected' },
+];
 
-function matchesDateRange(dateStr, range) {
-  if (range === 'all' || !dateStr) return true;
-  const target = new Date(`${dateStr}T00:00:00`).getTime();
-  const now = Date.now();
-  const days = range === '7d' ? 7 : 30;
-  return now - target <= days * 24 * 60 * 60 * 1000;
+function mapListItem(item, kind) {
+  return {
+    ...item,
+    kind,
+    applicationId: item.reference_number,
+    ownerName: item.owner_name || item.name,
+    vehicle: item.vehicle_type ? item.vehicle_type.replace('_', ' ').toUpperCase() : '',
+    joinedDate: item.submitted_at ? String(item.submitted_at).slice(0, 10) : '',
+    verifiedDocsCount: Number(item.verified_docs_count ?? 0),
+    totalDocsCount: Number(item.total_docs_count ?? 0),
+    reviewStatus: mapBackendApplicationStatus(item.application_status) || item.application_status,
+  };
 }
 
 export default function AdminApplicationsPage() {
   const { currentAdmin } = useAdminSession();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [dateRange, setDateRange] = useState('all');
   const [revision, setRevision] = useState(0);
   const [selectedApp, setSelectedApp] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [restaurantApps, setRestaurantApps] = useState([]);
+  const [riderApps, setRiderApps] = useState([]);
 
   const canViewRestaurants = hasAdminPermission(currentAdmin.role, 'restaurants', 'view')
     || hasAdminPermission(currentAdmin.role, 'applications', 'view');
@@ -53,41 +73,56 @@ export default function AdminApplicationsPage() {
     searchableFields: ['applicationId', 'name', 'ownerName', 'zone', 'vehicle', 'reviewStatus'],
   });
 
-  const restaurantApps = useMemo(() => {
-    void revision;
-    return getRestaurantApplications();
-  }, [revision]);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
 
-  const riderApps = useMemo(() => {
-    void revision;
-    return getRiderApplications();
-  }, [revision]);
+    (async () => {
+      try {
+        const params = {
+          status: statusFilter,
+          date_range: dateRange,
+          search: globalQuery || undefined,
+          per_page: 50,
+        };
 
-  const pendingRestaurantCount = restaurantApps.filter((item) =>
-    ['Pending', 'Under Review', 'Needs Revision'].includes(item.reviewStatus),
-  ).length;
-  const pendingRiderCount = riderApps.filter((item) =>
-    ['Pending', 'Under Review', 'Needs Revision'].includes(item.reviewStatus),
-  ).length;
+        const [restRes, riderRes] = await Promise.all([
+          canViewRestaurants ? adminApiService.getApplications({ ...params, type: 'restaurant' }) : Promise.resolve({ items: [] }),
+          canViewRiders ? adminApiService.getApplications({ ...params, type: 'rider' }) : Promise.resolve({ items: [] }),
+        ]);
 
-  const filteredRestaurants = useMemo(
-    () =>
-      restaurantApps.filter((item) => {
-        if (statusFilter !== 'All' && item.reviewStatus !== statusFilter) return false;
-        if (!matchesDateRange(item.joinedDate, dateRange)) return false;
-        return true;
-      }),
-    [restaurantApps, statusFilter, dateRange],
+        if (!active) return;
+        setRestaurantApps((restRes.items || []).map((item) => mapListItem(item, 'restaurant')));
+        setRiderApps((riderRes.items || []).map((item) => mapListItem(item, 'rider')));
+      } catch (err) {
+        if (active) setError(err?.message || 'Failed to load applications from server.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [statusFilter, dateRange, globalQuery, revision, canViewRestaurants, canViewRiders]);
+
+  async function openApplicationDetail(kind, item) {
+    try {
+      const detail = await adminApiService.getApplicationDetail(kind, item.id);
+      setSelectedApp({ kind, item: detail });
+    } catch (err) {
+      showAdminToast(err?.message || 'Unable to load application details.', 'danger');
+    }
+  }
+
+  const pendingRestaurantCount = useMemo(
+    () => restaurantApps.filter((item) => ['submitted', 'pending_review', 'under_review', 'needs_correction', 'additional_documents_required', 'resubmitted'].includes(item.application_status)).length,
+    [restaurantApps],
   );
-
-  const filteredRiders = useMemo(
-    () =>
-      riderApps.filter((item) => {
-        if (statusFilter !== 'All' && item.reviewStatus !== statusFilter) return false;
-        if (!matchesDateRange(item.joinedDate, dateRange)) return false;
-        return true;
-      }),
-    [riderApps, statusFilter, dateRange],
+  const pendingRiderCount = useMemo(
+    () => riderApps.filter((item) => ['submitted', 'pending_review', 'under_review', 'needs_correction', 'additional_documents_required', 'resubmitted'].includes(item.application_status)).length,
+    [riderApps],
   );
 
   function switchType(type) {
@@ -127,7 +162,7 @@ export default function AdminApplicationsPage() {
           className="admin-action-button"
           onClick={(event) => {
             event.stopPropagation();
-            setSelectedApp({ kind: 'restaurant', item });
+            openApplicationDetail('restaurant', item);
           }}
         >
           Review
@@ -168,7 +203,7 @@ export default function AdminApplicationsPage() {
           className="admin-action-button"
           onClick={(event) => {
             event.stopPropagation();
-            setSelectedApp({ kind: 'rider', item });
+            openApplicationDetail('rider', item);
           }}
         >
           Review
@@ -214,15 +249,15 @@ export default function AdminApplicationsPage() {
         />
 
         <div className="admin-status-chips" role="group" aria-label="Filter applications by status">
-          {STATUS_CHIPS.map((status) => (
+          {STATUS_CHIPS.map((chip) => (
             <button
-              key={status}
+              key={chip.value}
               type="button"
-              className={`admin-status-chip ${statusFilter === status ? 'is-active' : ''}`}
-              aria-pressed={statusFilter === status}
-              onClick={() => setStatusFilter(status)}
+              className={`admin-status-chip ${statusFilter === chip.value ? 'is-active' : ''}`}
+              aria-pressed={statusFilter === chip.value}
+              onClick={() => setStatusFilter(chip.value)}
             >
-              {status}
+              {chip.label}
             </button>
           ))}
           <label className="admin-filter-control" style={{ marginLeft: 'auto' }}>
@@ -235,23 +270,26 @@ export default function AdminApplicationsPage() {
           </label>
         </div>
 
+        {error && <p role="alert" style={{ color: '#b91c1c', marginBottom: 12 }}>{error}</p>}
+        {loading && <p className="admin-muted" style={{ marginBottom: 12 }}>Loading applications...</p>}
+
         {activeType === 'restaurant' ? (
           <DataTable
             columns={restaurantColumns}
-            data={filteredRestaurants}
+            data={restaurantApps}
             tableSearch={globalQuery}
             defaultOrder={[[4, 'desc']]}
-            onRowClick={(item) => setSelectedApp({ kind: 'restaurant', item })}
+            onRowClick={(item) => openApplicationDetail('restaurant', item)}
             emptyTitle="No restaurant applications"
             emptyDescription="No restaurant applications match the current filter."
           />
         ) : (
           <DataTable
             columns={riderColumns}
-            data={filteredRiders}
+            data={riderApps}
             tableSearch={globalQuery}
             defaultOrder={[[4, 'desc']]}
-            onRowClick={(item) => setSelectedApp({ kind: 'rider', item })}
+            onRowClick={(item) => openApplicationDetail('rider', item)}
             emptyTitle="No rider applications"
             emptyDescription="No rider applications match the current filter."
           />
@@ -262,7 +300,6 @@ export default function AdminApplicationsPage() {
           kind={selectedApp?.kind || activeType}
           application={selectedApp?.item}
           canApprove={selectedApp?.kind === 'rider' ? canApproveRider : canApproveRestaurant}
-          currentAdmin={currentAdmin}
           onClose={() => setSelectedApp(null)}
           onUpdated={() => setRevision((value) => value + 1)}
         />

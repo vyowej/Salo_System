@@ -112,6 +112,7 @@ CREATE TABLE addresses (
     postal_code          CHAR(4)         NULL,
     latitude             DECIMAL(10,8)   NULL,
     longitude            DECIMAL(11,8)   NULL,
+    gps_accuracy         DECIMAL(8,2)    NULL COMMENT 'GPS accuracy in meters when captured from device',
     created_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (address_id),
@@ -1328,7 +1329,62 @@ CREATE TRIGGER trg_ledger_entries_no_delete BEFORE DELETE ON ledger_entries FOR 
 
 -- ============================================================================
 -- END OF SALO DATABASE SCHEMA
--- Total tables: 41
+-- ----------------------------------------------------------------------------
+-- 42. PLATFORM SERVICE AREAS (Admin-managed official SALO coverage)
+-- Separate from restaurant-specific delivery coverage (service_areas).
+-- ----------------------------------------------------------------------------
+CREATE TABLE platform_service_areas (
+    platform_service_area_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    province_id              BIGINT UNSIGNED NOT NULL,
+    city_id                  BIGINT UNSIGNED NULL COMMENT 'NULL = entire province',
+    barangay_id              BIGINT UNSIGNED NULL COMMENT 'NULL = entire city',
+    area_level               ENUM('province','city','barangay') NOT NULL DEFAULT 'barangay',
+    city_key                 BIGINT UNSIGNED GENERATED ALWAYS AS (IFNULL(city_id, 0)) STORED,
+    barangay_key             BIGINT UNSIGNED GENERATED ALWAYS AS (IFNULL(barangay_id, 0)) STORED,
+    is_active                TINYINT(1)      NOT NULL DEFAULT 1,
+    center_latitude          DECIMAL(10,8)   NULL,
+    center_longitude         DECIMAL(11,8)   NULL,
+    boundary_geojson         LONGTEXT        NULL,
+    notes                    VARCHAR(255)    NULL,
+    updated_by               BIGINT UNSIGNED NULL,
+    created_at               TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at               TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (platform_service_area_id),
+    UNIQUE KEY uk_platform_service_area (province_id, city_key, barangay_key),
+    KEY idx_platform_service_areas_active (is_active),
+    KEY idx_platform_service_areas_city (city_id),
+    KEY idx_platform_service_areas_barangay (barangay_id, city_id),
+    CONSTRAINT fk_platform_sa_province FOREIGN KEY (province_id) REFERENCES provinces (province_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_platform_sa_city FOREIGN KEY (city_id) REFERENCES cities (city_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_platform_sa_barangay_city FOREIGN KEY (barangay_id, city_id) REFERENCES barangays (barangay_id, city_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_platform_sa_updated_by FOREIGN KEY (updated_by) REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
+-- 43. RIDER LOCATIONS (Actual device GPS updates during online/active delivery)
+-- ----------------------------------------------------------------------------
+CREATE TABLE rider_locations (
+    rider_location_id        BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    rider_id                 BIGINT UNSIGNED NOT NULL,
+    delivery_id              BIGINT UNSIGNED NULL,
+    latitude                 DECIMAL(10,8)   NOT NULL,
+    longitude                DECIMAL(11,8)   NOT NULL,
+    accuracy_meters          DECIMAL(8,2)    NULL,
+    heading                  DECIMAL(6,2)    NULL,
+    speed_mps                DECIMAL(6,2)    NULL,
+    recorded_at              TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at               TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (rider_location_id),
+    KEY idx_rider_locations_rider_time (rider_id, recorded_at),
+    KEY idx_rider_locations_delivery_time (delivery_id, recorded_at),
+    CONSTRAINT fk_rider_locations_rider FOREIGN KEY (rider_id) REFERENCES riders (rider_id) ON DELETE CASCADE ON UPDATE RESTRICT,
+    CONSTRAINT fk_rider_locations_delivery FOREIGN KEY (delivery_id) REFERENCES deliveries (delivery_id) ON DELETE SET NULL ON UPDATE RESTRICT,
+    CONSTRAINT chk_rider_locations_coords CHECK (
+        latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Total tables: 43
 -- ============================================================================
 -- Location hierarchy:
 --   provinces → cities → barangays → addresses  (Philippines only)

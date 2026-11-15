@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
 import customerService from '../../../services/customerService';
+import locationApiService from '../../../services/locationApiService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
@@ -45,6 +46,7 @@ export default function OrderDetailPage() {
   const [sentMessage, setSentMessage] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
   const [lookupQuery, setLookupQuery] = useState('');
+  const [liveTracking, setLiveTracking] = useState(null);
 
   useEffect(() => {
     const refreshData = async () => {
@@ -87,6 +89,31 @@ export default function OrderDetailPage() {
     () => restaurants.find((r) => r.id === activeSub?.restaurantId || r.name === activeSub?.restaurantName),
     [restaurants, activeSub],
   );
+
+  useEffect(() => {
+    const numericOrderId = Number(order?.backendOrderId || order?.order_id || (/^\d+$/.test(String(order?.id || '')) ? order.id : 0));
+    if (!numericOrderId || !isUpcomingOrder(order)) {
+      setLiveTracking(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const fetchTracking = async () => {
+      try {
+        const data = await locationApiService.getCustomerOrderTracking(numericOrderId);
+        if (!cancelled && data) setLiveTracking(data);
+      } catch {
+        // Fallback gracefully to order snapshot coordinates if backend order is local demo
+      }
+    };
+
+    fetchTracking();
+    const timer = setInterval(fetchTracking, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [order]);
 
   // Standby / Direct Track My Order Map View when no upcoming orders exist
   if (!order && id === 'track') {
@@ -229,20 +256,25 @@ export default function OrderDetailPage() {
                 pickup={{
                   title: previewKitchen.name,
                   address: previewKitchen.address,
+                  lat: previewKitchen.location?.latitude ?? null,
+                  lng: previewKitchen.location?.longitude ?? null,
                 }}
                 secondaryPickup={{
                   title: previewSecondaryKitchen.name,
                   address: previewSecondaryKitchen.address,
+                  lat: previewSecondaryKitchen.location?.latitude ?? null,
+                  lng: previewSecondaryKitchen.location?.longitude ?? null,
                 }}
                 dropoff={{
                   title: defaultAddress?.label || 'Your Address',
                   address: customerAddressText,
+                  lat: defaultAddress?.lat ?? defaultAddress?.latitude ?? null,
+                  lng: defaultAddress?.lng ?? defaultAddress?.longitude ?? null,
                 }}
-                riderName="Standby Zone"
-                customerStatusText="Delivery Coverage Active · Nearby kitchens ready to dispatch"
+                riderLocation={null}
+                customerStatusText="No active delivery in transit · Your pinned delivery address is ready"
                 metrics={{
                   eta: previewKitchen.deliveryTime || '25–35 min',
-                  distance: '2.4 km zone',
                 }}
               />
             </div>
@@ -681,8 +713,10 @@ export default function OrderDetailPage() {
               mode="customer"
               stage={isOutForDelivery ? 'dropoff' : 'pickup'}
               pickup={{
-                title: activeSub?.restaurantName || 'Kitchen',
-                address: kitchenAddress,
+                title: liveTracking?.pickup?.restaurant_name || activeSub?.restaurantName || 'Kitchen',
+                address: liveTracking?.pickup?.address || kitchenAddress,
+                lat: liveTracking?.pickup?.latitude ?? matchedRestaurant?.location?.latitude ?? null,
+                lng: liveTracking?.pickup?.longitude ?? matchedRestaurant?.location?.longitude ?? null,
               }}
               secondaryPickup={
                 secondarySub
@@ -694,13 +728,21 @@ export default function OrderDetailPage() {
               }
               dropoff={{
                 title: 'Your Address',
-                address: customerDeliveryAddress,
+                address: liveTracking?.dropoff?.address || customerDeliveryAddress,
+                lat: liveTracking?.dropoff?.latitude ?? activeSub?.deliveryCoordinates?.lat ?? defaultAddress?.lat ?? null,
+                lng: liveTracking?.dropoff?.longitude ?? activeSub?.deliveryCoordinates?.lng ?? defaultAddress?.lng ?? null,
               }}
-              riderName={isOutForDelivery ? riderInfo.name : 'Rider'}
-              customerStatusText={customerMapStatusText}
+              riderName={liveTracking?.rider?.name || (isOutForDelivery ? riderInfo.name : null)}
+              riderLocation={liveTracking?.rider_location || null}
+              lastUpdatedAt={liveTracking?.rider_location?.recorded_at || null}
+              isStale={Boolean(liveTracking?.rider_location?.is_stale)}
+              customerStatusText={
+                liveTracking?.rider_location
+                  ? customerMapStatusText
+                  : (liveTracking?.rider ? 'Rider assigned · Waiting for live GPS signal' : 'Awaiting rider assignment')
+              }
               metrics={{
-                eta: riderInfo.eta || '15 min',
-                distance: isOutForDelivery ? '1.9 km away' : '2.8 km route',
+                eta: riderInfo.eta || '',
               }}
             />
           </div>

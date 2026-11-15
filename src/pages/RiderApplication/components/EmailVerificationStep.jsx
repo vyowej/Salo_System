@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import { Input } from '../../../components/forms';
+import otpService from '../../../services/otpService';
 
 const COUNTDOWN_INITIAL_SECONDS = 60;
 
@@ -82,8 +83,7 @@ export default function EmailVerificationStep({
     setStatusMessage(null);
   };
 
-  // Step 1: Send OTP Simulation (Frontend ready for backend POST /api/v1/auth/email-otp)
-  const handleSendOtp = (e) => {
+  const handleSendOtp = async (e) => {
     e?.preventDefault();
 
     const trimmed = (emailInput || '').trim();
@@ -98,11 +98,15 @@ export default function EmailVerificationStep({
     setSendingOtp(true);
     setStatusMessage(null);
 
-    setTimeout(() => {
-      setSendingOtp(false);
+    try {
+      const result = await otpService.sendOtp({
+        email: trimmed,
+        purpose: 'rider_application',
+      });
+
       setOtpSent(true);
       setIsEditingEmail(false);
-      setSecondsRemaining(COUNTDOWN_INITIAL_SECONDS);
+      setSecondsRemaining(result?.cooldown_seconds || COUNTDOWN_INITIAL_SECONDS);
       setCanResend(false);
       setOtpDigits(['', '', '', '', '', '']);
 
@@ -117,9 +121,16 @@ export default function EmailVerificationStep({
 
       setStatusMessage({
         type: 'info',
-        text: `Verification code sent to ${trimmed}. Check your inbox or use prototype code 123456.`,
+        text: `Verification code sent to ${trimmed}. Please check your email inbox.`,
       });
-    }, 600);
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        text: error?.message || 'Failed to send verification code. Please try again.',
+      });
+    } finally {
+      setSendingOtp(false);
+    }
   };
 
   const handleDigitChange = (index, value) => {
@@ -156,8 +167,7 @@ export default function EmailVerificationStep({
     }
   };
 
-  // Step 2: Verify OTP Simulation (Frontend ready for backend POST /api/v1/auth/verify-otp)
-  const handleVerifyOtp = () => {
+  const handleVerifyOtp = async () => {
     const fullCode = otpDigits.join('');
     if (fullCode.length < 6) {
       setStatusMessage({
@@ -167,30 +177,20 @@ export default function EmailVerificationStep({
       return;
     }
 
+    const targetEmail = (emailInput || data.email || '').trim();
     setVerifying(true);
     setStatusMessage(null);
 
-    setTimeout(() => {
-      setVerifying(false);
+    try {
+      const result = await otpService.verifyOtp({
+        email: targetEmail,
+        purpose: 'rider_application',
+        code: fullCode,
+      });
 
-      if (fullCode === '000000') {
-        setStatusMessage({
-          type: 'error',
-          text: 'Invalid verification code. Please check your code or request a new one.',
-        });
-        return;
-      }
+      const verifiedEmail = result?.email || targetEmail;
+      const verifiedTimestamp = result?.verified_at || new Date().toISOString();
 
-      if (fullCode === '999999') {
-        setStatusMessage({
-          type: 'error',
-          text: 'This verification code has expired. Please click "Resend Code" to receive a fresh one.',
-        });
-        return;
-      }
-
-      // Success
-      const verifiedTimestamp = new Date().toISOString();
       setStatusMessage({
         type: 'success',
         text: 'Email verified successfully! You may now proceed to Personal Information.',
@@ -199,31 +199,25 @@ export default function EmailVerificationStep({
       onChange?.({
         ...data,
         companyName: companyNameInput,
-        email: emailInput,
+        email: verifiedEmail,
         isVerified: true,
-        verifiedEmail: emailInput,
+        verifiedEmail,
         verifiedAt: verifiedTimestamp,
       });
-    }, 600);
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        text: error?.message || 'Verification failed. Please check your code and try again.',
+      });
+    } finally {
+      setVerifying(false);
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (!canResend) return;
-
-    setSendingOtp(true);
-    setStatusMessage(null);
-
-    setTimeout(() => {
-      setSendingOtp(false);
-      setSecondsRemaining(COUNTDOWN_INITIAL_SECONDS);
-      setCanResend(false);
-      setOtpDigits(['', '', '', '', '', '']);
-      setStatusMessage({
-        type: 'info',
-        text: `A new 6-digit verification code has been dispatched to ${emailInput}.`,
-      });
-      inputRefs.current[0]?.focus();
-    }, 500);
+    await handleSendOtp();
+    inputRefs.current[0]?.focus();
   };
 
   const handleResetVerification = () => {

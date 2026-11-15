@@ -120,7 +120,11 @@ export default function MenuItemCard({ item, restaurant, orderingDisabled, onOpe
         {isSoldOut && (
           <div className="mic-soldout-overlay" aria-hidden="true">
             <span className="mic-soldout-pill">
-              {item.availability === 'sold_out' ? 'Sold out' : 'Unavailable'}
+              {item.availability === 'sold_out'
+                ? 'Sold out'
+                : item.availability === 'temporarily_unavailable'
+                  ? 'Temporarily unavailable'
+                  : 'Unavailable'}
             </span>
           </div>
         )}

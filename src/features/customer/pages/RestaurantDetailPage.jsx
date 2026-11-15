@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import customerService from '../../../services/customerService';
+import publicRestaurantService from '../../../services/publicRestaurantService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
+import { StateView } from '../../../components/feedback';
 import ItemModal from '../components/ItemModal';
 import ReservationModal from '../components/ReservationModal';
 import RestaurantImage from '../components/RestaurantImage';
@@ -12,7 +14,6 @@ import OrderPanel from '../components/OrderPanel';
 import MobileOrderBar from '../components/MobileOrderBar';
 import { useMenuSearch } from '../hooks/useMenuSearch';
 import { useScrollSpy } from '../hooks/useScrollSpy';
-import { normalizeMenuCategories, normalizeMenuItem } from '../../restaurant/menu/menuData';
 import './RestaurantDetailPage.css';
 
 function categoryToId(cat) {
@@ -38,9 +39,13 @@ function getInitials(name = '') {
 
 export default function RestaurantDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [restaurant, setRestaurant] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [notFound, setNotFound] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [reservationOpen, setReservationOpen] = useState(searchParams.get('tab') === 'reserve');
   const [isFavorite, setIsFavorite] = useState(false);
@@ -48,27 +53,34 @@ export default function RestaurantDetailPage() {
   const [manualActiveTab, setManualActiveTab] = useState(null);
 
   // ── Data fetching ──────────────────────────────────────────
-  useEffect(() => {
-    let active = true;
-    async function fetchRest() {
-      const data = await customerService.getRestaurantById(id);
-      if (active && data) {
-        const categories = normalizeMenuCategories(data).filter((category) => category.visible);
-        const visibleCategoryNames = new Set(categories.map((category) => category.name));
-        const menu = (data.menu || [])
-          .map(normalizeMenuItem)
-          .filter((item) => item.availability !== 'hidden' && visibleCategoryNames.has(item.category));
-        setRestaurant({ ...data, categories: categories.map((category) => category.name), menu });
+  const fetchRest = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setNotFound(false);
+    try {
+      const data = await publicRestaurantService.getRestaurantWithMenu(id);
+      if (!data) {
+        setNotFound(true);
+        setRestaurant(null);
+      } else {
+        setRestaurant(data);
         setIsFavorite(customerService.getFavoriteRestaurants().includes(data.id));
       }
+    } catch (err) {
+      if (err?.status === 404) {
+        setNotFound(true);
+        setRestaurant(null);
+      } else {
+        setError(err?.message || 'Unable to load restaurant details.');
+      }
+    } finally {
+      setLoading(false);
     }
-    fetchRest();
-    window.addEventListener('salo:demoStoreUpdated', fetchRest);
-    return () => {
-      active = false;
-      window.removeEventListener('salo:demoStoreUpdated', fetchRest);
-    };
   }, [id]);
+
+  useEffect(() => {
+    fetchRest();
+  }, [fetchRest]);
 
   useEffect(() => {
     const syncFavoriteState = () => {
@@ -154,12 +166,37 @@ export default function RestaurantDetailPage() {
     }
   }, []);
 
-  if (!restaurant) {
+  if (loading) {
     return (
       <CustomerLayout>
-        <div style={{ padding: 'var(--space-16) 0', textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-muted)' }}>Loading restaurant details...</p>
-        </div>
+        <StateView state="loading" title="restaurant details" />
+      </CustomerLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <CustomerLayout>
+        <StateView
+          state="error"
+          title="restaurant details"
+          errorDescription={error}
+          onRetry={fetchRest}
+        />
+      </CustomerLayout>
+    );
+  }
+
+  if (notFound || !restaurant) {
+    return (
+      <CustomerLayout>
+        <StateView
+          state="empty"
+          title="Restaurant not found"
+          emptyTitle="Restaurant unavailable"
+          emptyDescription="This restaurant does not exist or is currently not active."
+          action={<Button variant="primary" size="sm" onClick={() => navigate('/customer')}>Back to Restaurants</Button>}
+        />
       </CustomerLayout>
     );
   }
@@ -298,28 +335,22 @@ export default function RestaurantDetailPage() {
           )}
 
           <div className="rdp-hero-stats">
+            {restaurant.rating != null && restaurant.reviewCount != null && (
+              <div className="rdp-hero-stat-pill">
+                <span>Rating</span>
+                <strong>★ {restaurant.rating} ({restaurant.reviewCount} reviews)</strong>
+              </div>
+            )}
             <div className="rdp-hero-stat-pill">
-              <span>Rating</span>
-              <strong>★ {restaurant.rating} ({restaurant.reviewCount} reviews)</strong>
+              <span>Fulfillment</span>
+              <strong>
+                {[
+                  restaurant.fulfillment?.delivery && 'Delivery',
+                  restaurant.fulfillment?.pickup && 'Pickup',
+                  restaurant.fulfillment?.dineIn && 'Dine-in',
+                ].filter(Boolean).join(' · ') || 'Unavailable'}
+              </strong>
             </div>
-            {restaurant.deliveryTime && (
-              <div className="rdp-hero-stat-pill">
-                <span>Est. Delivery</span>
-                <strong>{restaurant.deliveryTime}</strong>
-              </div>
-            )}
-            {restaurant.deliveryFee != null && (
-              <div className="rdp-hero-stat-pill">
-                <span>Delivery Fee</span>
-                <strong>₱{restaurant.deliveryFee}</strong>
-              </div>
-            )}
-            {restaurant.minOrder != null && (
-              <div className="rdp-hero-stat-pill">
-                <span>Minimum Order</span>
-                <strong>₱{restaurant.minOrder}</strong>
-              </div>
-            )}
             {coverageText && (
               <div className="rdp-hero-stat-pill">
                 <span>Delivery Area</span>
@@ -422,7 +453,9 @@ export default function RestaurantDetailPage() {
           <div className="rdp-menu-col">
             {filteredGroups.length === 0 ? (
               <p className="rdp-no-results">
-                No items match &ldquo;{menuSearch}&rdquo;. Try a different search.
+                {menuSearch.trim()
+                  ? `No items match "${menuSearch}". Try a different search.`
+                  : 'No menu items are currently available for this restaurant.'}
               </p>
             ) : (
               filteredGroups.map((group) => (

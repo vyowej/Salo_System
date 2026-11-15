@@ -11,6 +11,7 @@ import FileUploadField from '../components/FileUploadField';
 import { deliveryStatuses } from '../constants/statusConfig';
 import { getRiderMock } from '../mocks';
 import useScenario from '../hooks/useScenario';
+import useRiderGpsTracker from '../hooks/useRiderGpsTracker';
 import { advanceDeliveryStep, getDeliveryProgress, uploadPickupPhoto } from '../services/riderDeliveryService';
 import { formatPeso } from '../utils/format';
 import { buildNavigationUrl } from '../utils/navigation';
@@ -85,6 +86,10 @@ export default function RiderMapPage() {
     currentDelivery?.status === 'picked_up' &&
     (currentDelivery.proof || currentDelivery.customerPhone || currentDelivery.phone);
   const currentDeliveryId = currentDelivery?.id;
+  const { location: riderGps, gpsError } = useRiderGpsTracker({
+    enabled: canShowActions,
+    deliveryId: currentDelivery?.delivery_id || currentDeliveryId,
+  });
 
   const stops = [
     {
@@ -93,6 +98,8 @@ export default function RiderMapPage() {
       label: 'Pickup · Restaurant',
       title: currentDelivery?.restaurant || 'Restaurant',
       address: currentDelivery?.restaurantAddress || currentDelivery?.pickup || 'Pickup address unavailable',
+      lat: currentDelivery?.pickupCoordinates?.lat ?? currentDelivery?.pickup_latitude ?? null,
+      lng: currentDelivery?.pickupCoordinates?.lng ?? currentDelivery?.pickup_longitude ?? null,
       note: currentDelivery?.pickup || 'Front counter pickup · Verify order number',
       phone: currentDelivery?.restaurantPhone || '+63 2 8555 0142',
     },
@@ -102,6 +109,8 @@ export default function RiderMapPage() {
       label: 'Drop-off · Customer',
       title: currentDelivery?.customerName || 'Customer',
       address: currentDelivery?.dropoff || 'Drop-off address unavailable',
+      lat: currentDelivery?.dropoffCoordinates?.lat ?? currentDelivery?.delivery_latitude ?? null,
+      lng: currentDelivery?.dropoffCoordinates?.lng ?? currentDelivery?.delivery_longitude ?? null,
       note:
         currentDelivery?.deliveryNotes ||
         currentDelivery?.instructions ||
@@ -358,6 +367,9 @@ export default function RiderMapPage() {
                     stage={currentStop}
                     pickup={stops[0]}
                     dropoff={stops[1]}
+                    riderLocation={riderGps}
+                    lastUpdatedAt={riderGps?.recordedAt || null}
+                    gpsError={gpsError}
                     metrics={routeMetrics}
                   />
                 </div>

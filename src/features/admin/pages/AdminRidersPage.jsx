@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
-import adminService from '../../../services/adminService';
-import Button from '../../../components/common/Button';
+import adminApiService from '../../../services/adminApiService';
 import {
   ConfirmDialog,
   DataTable,
   DetailDrawer,
-  DocumentViewer,
   PageHeader,
   StatusBadge,
   Tabs,
@@ -15,118 +13,160 @@ import {
 } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
-import { getAdminMock, getRiderApplications, syncApplicationsToMockData } from '../mocks';
+import { getAdminMock } from '../mocks';
 import { formatDate, formatPeso } from '../utils/format';
 import './AdminPages.css';
 
-const SAVED_RIDERS = adminService.getRiders();
-const _INITIAL_RIDERS = getAdminMock('riders').data.map((rider) => ({
-  ...rider,
-  ...(SAVED_RIDERS.find((saved) => saved.id === rider.id) || {}),
-}));
-void _INITIAL_RIDERS;
 const ORDERS = getAdminMock('orders').data;
-const ZONES = [...new Set(getAdminMock('serviceAreas').data.flatMap((area) => area.zones.map((zone) => zone.name)))];
+
+const STATUS_LABELS = {
+  active: 'Active',
+  approved: 'Approved',
+  suspended: 'Suspended',
+  inactive: 'Deactivated',
+  pending: 'Pending',
+  rejected: 'Rejected',
+};
+
+function mapRider(row) {
+  const rawStatus = String(row.rider_status || '').toLowerCase();
+  const statusLabel = STATUS_LABELS[rawStatus] || row.rider_status || 'Pending';
+  const vehicleParts = [row.vehicle_brand, row.vehicle_model].filter(Boolean);
+  const vehicleLabel = vehicleParts.length > 0
+    ? `${vehicleParts.join(' ')} (${row.vehicle_type || 'vehicle'})`
+    : (row.vehicle_type || '—');
+
+  return {
+    id: row.rider_id,
+    rider_id: row.rider_id,
+    user_id: row.user_id,
+    name: `${row.first_name || ''} ${row.last_name || ''}`.trim() || row.username || '—',
+    username: row.username || '—',
+    email: row.email || '—',
+    phone: row.phone_number || '—',
+    vehicle: vehicleLabel,
+    vehicleType: row.vehicle_type || '—',
+    plateNumber: row.plate_number || '—',
+    zone: row.zone || '—',
+    shifts: row.preferred_shifts ? String(row.preferred_shifts).split(',').map((s) => s.trim()).filter(Boolean) : [],
+    availableDays: row.available_days ? String(row.available_days).split(',').map((s) => s.trim()).filter(Boolean) : [],
+    emergencyContactName: row.emergency_contact_name || '—',
+    emergencyContactPhone: row.emergency_contact_phone || '—',
+    status: statusLabel,
+    rawStatus,
+    approvedAt: row.approved_at || null,
+    joinedDate: row.created_at,
+  };
+}
 
 export default function AdminRidersPage() {
   const { permissions } = useAdminSession();
-  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Riders', placeholder: 'Search riders by name, phone, zone, status', searchableFields: ['name', 'username', 'email', 'phone', 'vehicle', 'licenseNumber', 'zone', 'status'] });
-  const [riders, setRiders] = useState(() => {
-    syncApplicationsToMockData();
-    const saved = adminService.getRiders();
-    return getAdminMock('riders').data.map((rider) => ({
-      ...rider,
-      ...(saved.find((s) => s.id === rider.id) || {}),
-    }));
-  });
-  void _INITIAL_RIDERS;
-  useEffect(() => {
-    function refresh() {
-      syncApplicationsToMockData();
-      const saved = adminService.getRiders();
-      setRiders(getAdminMock('riders').data.map((rider) => ({
-        ...rider,
-        ...(saved.find((s) => s.id === rider.id) || {}),
-      })));
-    }
-    window.addEventListener('salo-admin-data-updated', refresh);
-    return () => window.removeEventListener('salo-admin-data-updated', refresh);
-  }, []);
-  const pendingApplicationsCount = getRiderApplications().filter((item) => ['Pending', 'Under Review', 'Needs Revision'].includes(item.reviewStatus)).length;
+  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Riders', placeholder: 'Search riders by name, phone, zone, status', searchableFields: ['name', 'username', 'email', 'phone', 'vehicle', 'plateNumber', 'zone', 'status'] });
+  const [riders, setRiders] = useState([]);
+  const [meta, setMeta] = useState({ current_page: 1, last_page: 1, per_page: 15, total: 0 });
+  const [pendingApplicationsCount, setPendingApplicationsCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [view, setView] = useState('Directory');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All riders');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
   const [detailTab, setDetailTab] = useState('Profile');
-  const [requestMessage, setRequestMessage] = useState('');
-  const [zoneDraft, setZoneDraft] = useState('');
   const [pendingAction, setPendingAction] = useState(null);
+  const [savingAction, setSavingAction] = useState(false);
   const [notice, setNotice] = useState('');
-  const canApprove = permissions.riders?.includes('approve');
-  const canReject = permissions.riders?.includes('reject');
-  const canEdit = permissions.riders?.includes('edit');
+
   const canActivate = permissions.riders?.includes('activate');
   const canDeactivate = permissions.riders?.includes('deactivate');
-  const filtered = useMemo(() => riders.filter((rider) => {
-    const term = (globalQuery || search).trim().toLowerCase();
-    const matchesText = !term || [rider.name, rider.username, rider.email, rider.phone, rider.vehicle, rider.licenseNumber, rider.zone].some((value) => String(value || '').toLowerCase().includes(term));
-    const matchesStatus = statusFilter === 'All riders' || rider.status === statusFilter;
-    return matchesText && matchesStatus;
-  }), [riders, globalQuery, search, statusFilter]);
-  const _applicants = filtered.filter((rider) => ['Pending Review', 'Documents requested'].includes(rider.applicationStatus) || rider.status === 'Pending Verification');
-  void _applicants;
+
+  const effectiveSearch = (globalQuery || search).trim();
+
+  const loadRiders = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [ridersData, appsData] = await Promise.all([
+        adminApiService.getRiders({
+          search: effectiveSearch,
+          status: statusFilter,
+          page,
+          per_page: 15,
+        }),
+        adminApiService.getApplications({ type: 'rider', per_page: 100 }),
+      ]);
+
+      const mapped = (ridersData?.items || []).map(mapRider);
+      setRiders(mapped);
+      setMeta(ridersData?.meta || { current_page: 1, last_page: 1, per_page: 15, total: mapped.length });
+
+      const pendingCount = (appsData?.items || []).filter((item) =>
+        ['pending', 'under_review', 'needs_revision'].includes(String(item.application_status || '').toLowerCase())
+      ).length;
+      setPendingApplicationsCount(pendingCount);
+    } catch (err) {
+      setError(err?.message || 'Failed to load riders from the server.');
+    } finally {
+      setLoading(false);
+    }
+  }, [effectiveSearch, statusFilter, page]);
+
+  useEffect(() => {
+    loadRiders();
+  }, [loadRiders]);
+
   const unassignedOrders = ORDERS.filter((order) => !order.riderId && !['Completed', 'Cancelled'].includes(order.status));
 
-  function askAction(rider, action, nextZone) {
+  function askAction(rider, action) {
     setSelected(rider);
-    setPendingAction({ rider, action, nextZone });
+    setPendingAction({ rider, action });
   }
 
-  function applyAction({ reason }) {
-    const { rider, action, nextZone } = pendingAction;
-    let updated = { ...rider };
-    const event = { id: `rider-history-${Date.now()}`, title: action, description: `${reason}${action === 'Request documents' ? ` · ${requestMessage.trim()}` : ''}`, time: new Date().toISOString() };
-    if (action === 'Approve application' || action === 'Activate' || action === 'Reactivate') updated = { ...updated, status: 'Active', applicationStatus: 'Approved', verificationStatus: 'Verified' };
-    if (action === 'Reject application') updated = { ...updated, status: 'Rejected', applicationStatus: 'Rejected' };
-    if (action === 'Request documents') updated = { ...updated, applicationStatus: 'Documents requested' };
-    if (action === 'Suspend') updated = { ...updated, status: 'Suspended' };
-    if (action === 'Deactivate') updated = { ...updated, status: 'Deactivated' };
-    if (action === 'Assign delivery zone') updated = { ...updated, zone: nextZone };
-    updated.applicationHistory = [...(updated.applicationHistory || []), event];
-    setRiders((previous) => previous.map((item) => item.id === rider.id ? updated : item));
-    if (['Approve application', 'Activate', 'Reactivate', 'Reject application', 'Suspend', 'Deactivate', 'Assign delivery zone'].includes(action)) {
-      adminService.updateRiderStatus(rider.id, updated.status, {
-        applicationStatus: updated.applicationStatus,
-        verificationStatus: updated.verificationStatus,
-        zone: updated.zone,
-      });
+  async function applyAction({ reason }) {
+    if (!pendingAction || savingAction) return;
+    const { rider, action } = pendingAction;
+    const statusMap = {
+      Activate: 'active',
+      Reactivate: 'active',
+      Suspend: 'suspended',
+      Deactivate: 'inactive',
+    };
+    const backendStatus = statusMap[action];
+    if (!backendStatus) {
+      setPendingAction(null);
+      return;
     }
-    setSelected(updated);
-    setRequestMessage('');
-    setZoneDraft('');
-    setPendingAction(null);
-    setNotice(`${rider.name}: ${action.toLowerCase()} recorded.`);
+
+    setSavingAction(true);
+    setError('');
+    try {
+      const updatedRow = await adminApiService.updateRiderStatus(rider.rider_id, {
+        status: backendStatus,
+        reason,
+      });
+      const nextStatusLabel = STATUS_LABELS[String(updatedRow?.rider_status || backendStatus).toLowerCase()] || rider.status;
+      const updated = {
+        ...rider,
+        rawStatus: updatedRow?.rider_status || backendStatus,
+        status: nextStatusLabel,
+        approvedAt: updatedRow?.approved_at || rider.approvedAt,
+      };
+      setRiders((previous) => previous.map((item) => item.id === rider.id ? updated : item));
+      setSelected(updated);
+      setNotice(`${rider.name}: ${action.toLowerCase()} saved.`);
+    } catch (err) {
+      setError(err?.message || 'Failed to update rider status.');
+    } finally {
+      setSavingAction(false);
+      setPendingAction(null);
+    }
   }
 
-  function saveZone() {
-    if (!selected || !zoneDraft) return;
-    askAction(selected, 'Assign delivery zone', zoneDraft);
-  }
-
-  const _applicantColumns = [
-    { key: 'name', label: 'Applicant', render: (rider) => <button className="admin-text-link" type="button" onClick={() => { setSelected(rider); setZoneDraft(''); setDetailTab('Application'); }}><strong>{rider.name}</strong><span>@{rider.username} · {rider.email}</span></button> },
-    { key: 'vehicle', label: 'Vehicle', render: (rider) => <>{rider.vehicle}<br /><span className="admin-muted">{rider.licenseNumber}</span></> },
-    { key: 'documents', label: 'Document review', render: (rider) => `${rider.idDocument || 'ID'} · ${rider.vehicleDocument || 'Vehicle document'}` },
-    { key: 'zone', label: 'Requested zone' },
-    { key: 'verificationStatus', label: 'Verification', render: (rider) => <StatusBadge status={rider.verificationStatus} className={['Pending', 'Documents requested', 'Under review'].includes(rider.verificationStatus) ? 'admin-status-badge--action' : ''} /> },
-    { key: 'review', label: 'Review', render: (rider) => <button className="admin-action-button" type="button" onClick={() => { setSelected(rider); setDetailTab('Application'); }}>Review application</button> },
-  ];
-  void _applicantColumns;
   const directoryColumns = [
-    { key: 'name', label: 'Rider', render: (rider) => <button className="admin-text-link" type="button" onClick={() => { setSelected(rider); setZoneDraft(''); setDetailTab('Profile'); }}><strong>{rider.name}</strong><span>@{rider.username} · {rider.phone}</span></button> },
-    { key: 'vehicle', label: 'Vehicle / verification', render: (rider) => <>{rider.vehicle}<br /><span className="admin-muted">{rider.verificationStatus} · {rider.applicationStatus}</span></> },
-    { key: 'zone', label: 'Zone / shifts', render: (rider) => <>{rider.zone}<br /><span className="admin-muted">{(rider.shifts || []).join(', ')}</span></> },
-    { key: 'totalTrips', label: 'Deliveries / registered', render: (rider) => `${rider.totalTrips} · ${formatDate(rider.joinedDate || '2026-08-20')}` },
+    { key: 'name', label: 'Rider', render: (rider) => <button className="admin-text-link" type="button" onClick={() => { setSelected(rider); setDetailTab('Profile'); }}><strong>{rider.name}</strong><span>@{rider.username} · {rider.phone}</span></button> },
+    { key: 'vehicle', label: 'Vehicle / plate', render: (rider) => <>{rider.vehicle}<br /><span className="admin-muted">{rider.plateNumber !== '—' ? `Plate: ${rider.plateNumber}` : rider.vehicleType}</span></> },
+    { key: 'zone', label: 'Zone / shifts', render: (rider) => <>{rider.zone}<br /><span className="admin-muted">{rider.shifts.length > 0 ? rider.shifts.join(', ') : '—'}</span></> },
+    { key: 'joinedDate', label: 'Registered', render: (rider) => formatDate(rider.joinedDate) },
     { key: 'status', label: 'Status', render: (rider) => <StatusBadge status={rider.status} /> },
     { key: 'actions', label: 'Actions', render: (rider) => <div className="admin-action-row">
       {rider.status === 'Active' && canDeactivate && <button className="admin-action-button admin-action-button--danger" type="button" onClick={() => askAction(rider, 'Suspend')}>Suspend</button>}
@@ -136,9 +176,12 @@ export default function AdminRidersPage() {
     </div> },
   ];
   const history = selected
-    ? [...(selected.applicationHistory || [{ id: 'rider-submitted', title: 'Rider application submitted', description: 'Identity and vehicle documents received.', time: `${selected.joinedDate || '2026-08-20'}T09:00:00+08:00` }])]
+    ? [
+      { id: 'rider-submitted', title: 'Rider registered', description: `Status: ${selected.status} · Zone: ${selected.zone}`, time: selected.joinedDate },
+      ...(selected.approvedAt ? [{ id: 'rider-approved', title: 'Rider approved', description: 'Rider account activated.', time: selected.approvedAt }] : []),
+    ]
     : [];
-  const activeRiders = filtered.filter((rider) => rider.status === 'Active');
+  const activeRiders = riders.filter((rider) => rider.status === 'Active');
 
   return (
     <AdminLayout>
@@ -149,53 +192,130 @@ export default function AdminRidersPage() {
           actions={<Link className="admin-action-button" to="/admin/applications?type=rider">Pending applications ({pendingApplicationsCount})</Link>}
         />
         {notice && <p className="admin-inline-notice" role="status">{notice}</p>}
+        {error && (
+          <div className="admin-inline-notice" role="alert" style={{ borderColor: 'var(--salo-error)', color: 'var(--salo-error)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+            <span>{error}</span>
+            <button className="admin-action-button" type="button" onClick={loadRiders}>Retry</button>
+          </div>
+        )}
         <Tabs items={['Directory', 'Operations']} value={view} onChange={setView} label="Rider management views" />
         <div className="admin-filter-bar">
-          <label className="admin-filter-control">Search<input aria-label="Search riders" placeholder="Rider, vehicle, plate, zone, or contact" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-          {view !== 'Applications' && <label className="admin-filter-control">Status<select aria-label="Filter riders by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All riders</option><option>Active</option><option>Pending Verification</option><option>Suspended</option><option>Deactivated</option></select></label>}
+          <label className="admin-filter-control">
+            Search
+            <input
+              aria-label="Search riders"
+              placeholder="Rider, vehicle, plate, zone, or email"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+            />
+          </label>
+          <label className="admin-filter-control">
+            Status
+            <select
+              aria-label="Filter riders by status"
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="all">All riders</option>
+              <option value="active">Active</option>
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="suspended">Suspended</option>
+              <option value="inactive">Deactivated</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </label>
         </div>
 
-        {view === 'Directory' && <DataTable columns={directoryColumns} rows={filtered.filter((r) => r.applicationStatus === 'Approved' || ['Active', 'Suspended', 'Deactivated'].includes(r.status))} tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} emptyTitle="No riders found" emptyDescription="Adjust your search or status filter." />}
-        {view === 'Operations' && <>
-          <div className="admin-roster-summary">
-            <div><strong>{activeRiders.filter((rider) => rider.isOnline).length}</strong><span>Online</span></div>
-            <div><strong>{activeRiders.filter((rider) => !rider.isOnline).length}</strong><span>Offline</span></div>
-            <div><strong>{activeRiders.filter((rider) => rider.onDelivery).length}</strong><span>On delivery</span></div>
-            <div><strong>{activeRiders.filter((rider) => rider.activeShift).length}</strong><span>Active shifts</span></div>
-            <div><strong>{unassignedOrders.length}</strong><span>Unassigned orders</span></div>
-          </div>
-          <section className="admin-map-panel" aria-label="Rider location map panel">
-            <div><h2>Authorized live locations</h2><p>Location visibility is limited to riders sharing location during an active shift.</p></div>
-            <div className="admin-map-grid">{activeRiders.map((rider) => <article key={rider.id} className={rider.isOnline ? 'is-online' : ''}><span aria-hidden="true">●</span><strong>{rider.name}</strong><small>{rider.isOnline ? rider.location : 'Offline · location not shown'}</small></article>)}</div>
-          </section>
-          <DataTable tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} columns={[
-            { key: 'name', label: 'Rider', render: (rider) => <strong>{rider.name}</strong> },
-            { key: 'status', label: 'Availability', render: (rider) => rider.isOnline ? (rider.onDelivery ? 'On delivery' : 'Online · available') : 'Offline' },
-            { key: 'shifts', label: 'Active shift', render: (rider) => rider.activeShift ? rider.shifts.join(', ') : 'No active shift' },
-            { key: 'orders', label: 'Unassigned orders / offers', render: (rider) => `${unassignedOrders.length} / ${rider.offers ?? 0}` },
-            { key: 'incidents', label: 'Failed / reassigned', render: (rider) => `${rider.failedDeliveries ?? 0} / ${rider.reassignments ?? 0}` },
-            { key: 'cod', label: 'COD', render: (rider) => <>{rider.codStatus}<br />{formatPeso(rider.cashOnHand)}</> },
-          ]} rows={filtered} emptyTitle="No rider operations" emptyDescription="No rider records match this filter." />
-        </>}
+        {loading ? (
+          <p className="admin-muted" role="status">Loading riders...</p>
+        ) : (
+          <>
+            {view === 'Directory' && (
+              <DataTable
+                columns={directoryColumns}
+                rows={riders}
+                defaultOrder={[[0, 'asc']]}
+                emptyTitle="No riders found"
+                emptyDescription="Adjust your search or status filter."
+              />
+            )}
+            {view === 'Operations' && <>
+              <div className="admin-roster-summary">
+                <div><strong>0</strong><span>Online</span></div>
+                <div><strong>{activeRiders.length}</strong><span>Active riders</span></div>
+                <div><strong>0</strong><span>On delivery</span></div>
+                <div><strong>{unassignedOrders.length}</strong><span>Unassigned orders</span></div>
+              </div>
+              <section className="admin-map-panel" aria-label="Rider location map panel">
+                <div><h2>Authorized live locations</h2><p>Location visibility is limited to riders sharing location during an active shift.</p></div>
+                <div className="admin-map-grid">{activeRiders.map((rider) => <article key={rider.id}><span aria-hidden="true">●</span><strong>{rider.name}</strong><small>{rider.zone} · Offline</small></article>)}</div>
+              </section>
+              <DataTable defaultOrder={[[0, 'asc']]} columns={[
+                { key: 'name', label: 'Rider', render: (rider) => <strong>{rider.name}</strong> },
+                { key: 'status', label: 'Account status', render: (rider) => <StatusBadge status={rider.status} /> },
+                { key: 'shifts', label: 'Preferred shifts', render: (rider) => rider.shifts.length > 0 ? rider.shifts.join(', ') : '—' },
+                { key: 'zone', label: 'Base city', render: (rider) => rider.zone },
+                { key: 'cod', label: 'COD', render: () => formatPeso(0) },
+              ]} rows={riders} emptyTitle="No rider operations" emptyDescription="No rider records match this filter." />
+            </>}
+            {meta.total > 0 && (
+              <div className="admin-filter-bar" style={{ justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                <span className="admin-muted">
+                  Page {meta.current_page} of {meta.last_page} · {meta.total} total rider{meta.total === 1 ? '' : 's'}
+                </span>
+                <div className="admin-action-row">
+                  <button
+                    className="admin-action-button"
+                    type="button"
+                    disabled={meta.current_page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    className="admin-action-button"
+                    type="button"
+                    disabled={meta.current_page >= meta.last_page}
+                    onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       <DetailDrawer open={Boolean(selected)} title={selected?.name || 'Rider details'} onClose={() => setSelected(null)}>
         {selected && <>
           <p className="admin-muted">@{selected.username} · {selected.email}</p>
-          <Tabs items={['Profile', 'Operations', 'History']} value={detailTab === 'Application' ? 'Profile' : detailTab} onChange={setDetailTab} label="Rider detail sections" />
-          {detailTab === 'Application' && <div className="admin-drawer-content">
-            <ul className="admin-detail-list"><li><strong>Application</strong>{selected.applicationStatus}</li><li><strong>Verification</strong><StatusBadge status={selected.verificationStatus} /></li><li><strong>Vehicle</strong>{selected.vehicle}</li><li><strong>License number</strong>{selected.licenseNumber}</li><li><strong>Assigned zone</strong>{selected.zone}</li></ul>
-            <DocumentViewer documents={[selected.idDocument, selected.vehicleDocument].filter(Boolean)} subject={selected.name} status={selected.verificationStatus} />
-            {canApprove && selected.applicationStatus !== 'Approved' && <button className="admin-action-button" type="button" onClick={() => askAction(selected, 'Approve application')}>Approve and activate</button>}
-            {canReject && selected.applicationStatus !== 'Rejected' && <button className="admin-action-button admin-action-button--danger" type="button" onClick={() => askAction(selected, 'Reject application')}>Reject application</button>}
-            {canEdit && <div className="admin-record-panel"><label className="admin-filter-control">Request additional documents<textarea rows="3" value={requestMessage} onChange={(event) => setRequestMessage(event.target.value)} placeholder="Specify required document(s)" /></label><button className="admin-action-button" type="button" disabled={!requestMessage.trim()} onClick={() => askAction(selected, 'Request documents')}>Request documents</button></div>}
-          </div>}
+          <Tabs items={['Profile', 'History']} value={detailTab === 'Operations' || detailTab === 'Application' ? 'Profile' : detailTab} onChange={setDetailTab} label="Rider detail sections" />
           {detailTab === 'Profile' && <div className="admin-drawer-content">
-            <ul className="admin-detail-list"><li><strong>Contact</strong>{selected.phone}</li><li><strong>Vehicle</strong>{selected.vehicle}</li><li><strong>Registered</strong>{formatDate(selected.joinedDate || '2026-08-20')}</li><li><strong>Completed deliveries</strong>{selected.totalTrips}</li><li><strong>Account status</strong><StatusBadge status={selected.status} /></li><li><strong>Shifts</strong>{(selected.shifts || []).join(', ')}</li></ul>
-            {canEdit && <div className="admin-action-row"><label className="admin-filter-control">Assign delivery zone<select aria-label="Assign rider delivery zone" value={zoneDraft || selected.zone} onChange={(event) => setZoneDraft(event.target.value)}>{ZONES.map((zone) => <option key={zone}>{zone}</option>)}</select></label><Button variant="outline" onClick={saveZone}>Save zone assignment</Button></div>}
-            <div className="admin-action-row">{selected.status === 'Active' && canDeactivate && <button className="admin-action-button admin-action-button--danger" type="button" onClick={() => askAction(selected, 'Suspend')}>Suspend</button>}{selected.status !== 'Active' && canActivate && <button className="admin-action-button" type="button" onClick={() => askAction(selected, selected.status === 'Suspended' ? 'Reactivate' : 'Activate')}>Activate / Reactivate</button>}{canDeactivate && selected.status !== 'Deactivated' && <button className="admin-action-button" type="button" onClick={() => askAction(selected, 'Deactivate')}>Deactivate</button>}</div>
+            <ul className="admin-detail-list">
+              <li><strong>Contact</strong>{selected.phone}</li>
+              <li><strong>Vehicle</strong>{selected.vehicle}</li>
+              <li><strong>Plate number</strong>{selected.plateNumber}</li>
+              <li><strong>Base city / Zone</strong>{selected.zone}</li>
+              <li><strong>Preferred shifts</strong>{selected.shifts.length > 0 ? selected.shifts.join(', ') : '—'}</li>
+              <li><strong>Available days</strong>{selected.availableDays.length > 0 ? selected.availableDays.join(', ') : '—'}</li>
+              <li><strong>Emergency contact</strong>{selected.emergencyContactName} ({selected.emergencyContactPhone})</li>
+              <li><strong>Registered</strong>{formatDate(selected.joinedDate)}</li>
+              <li><strong>Account status</strong><StatusBadge status={selected.status} /></li>
+            </ul>
+            <div className="admin-action-row">
+              {selected.status === 'Active' && canDeactivate && <button className="admin-action-button admin-action-button--danger" type="button" onClick={() => askAction(selected, 'Suspend')}>Suspend</button>}
+              {selected.status !== 'Active' && canActivate && <button className="admin-action-button" type="button" onClick={() => askAction(selected, selected.status === 'Suspended' ? 'Reactivate' : 'Activate')}>Activate / Reactivate</button>}
+              {canDeactivate && selected.status !== 'Deactivated' && <button className="admin-action-button" type="button" onClick={() => askAction(selected, 'Deactivate')}>Deactivate</button>}
+            </div>
           </div>}
-          {detailTab === 'Operations' && <div className="admin-drawer-content"><ul className="admin-detail-list"><li><strong>Availability</strong>{selected.isOnline ? (selected.onDelivery ? 'On delivery' : 'Online') : 'Offline'}</li><li><strong>Active shift</strong>{selected.activeShift ? 'Yes' : 'No'} · {(selected.shifts || []).join(', ')}</li><li><strong>Location</strong>{selected.isOnline ? selected.location : 'Not available while offline'}</li><li><strong>Offers</strong>{selected.offers ?? 0}</li><li><strong>Failed deliveries</strong>{selected.failedDeliveries ?? 0}</li><li><strong>Reassignments</strong>{selected.reassignments ?? 0}</li><li><strong>COD status</strong>{selected.codStatus} · {formatPeso(selected.cashOnHand)}</li></ul></div>}
           {detailTab === 'History' && <Timeline items={history} />}
         </>}
       </DetailDrawer>
@@ -204,7 +324,7 @@ export default function AdminRidersPage() {
         open={Boolean(pendingAction)}
         title={`${pendingAction?.action || 'Confirm'}?`}
         description="Record the action and reason in rider history."
-        confirmLabel={pendingAction?.action || 'Confirm'}
+        confirmLabel={savingAction ? 'Saving...' : (pendingAction?.action || 'Confirm')}
         requireReauthentication
         requireReason
         onClose={() => setPendingAction(null)}

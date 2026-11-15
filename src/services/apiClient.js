@@ -116,8 +116,10 @@ async function executeFetch(endpoint, options, hasRetriedCsrf = false) {
     ...headers,
   };
 
+  const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+
   if (data !== null && data !== undefined && upperMethod !== 'GET' && upperMethod !== 'HEAD') {
-    if (!requestHeaders['Content-Type']) {
+    if (!isFormData && !requestHeaders['Content-Type']) {
       requestHeaders['Content-Type'] = 'application/json';
     }
   }
@@ -140,7 +142,7 @@ async function executeFetch(endpoint, options, hasRetriedCsrf = false) {
   };
 
   if (data !== null && data !== undefined && upperMethod !== 'GET' && upperMethod !== 'HEAD') {
-    config.body = typeof data === 'string' ? data : JSON.stringify(data);
+    config.body = isFormData ? data : (typeof data === 'string' ? data : JSON.stringify(data));
   }
 
   let response;

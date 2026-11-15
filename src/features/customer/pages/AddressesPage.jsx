@@ -116,11 +116,13 @@ export default function AddressesPage() {
           <div className="salo-address-list">
             {addresses.map((address) => {
               const fullAddressText = [
+                address.houseNumber,
                 address.street,
                 address.barangay && `Brgy. ${address.barangay}`,
                 address.city,
                 address.province,
                 address.postalCode,
+                'Philippines',
               ].filter(Boolean).join(', ');
 
               return (
@@ -140,6 +142,16 @@ export default function AddressesPage() {
                       {address.isDefault && (
                         <Badge variant="success" size="sm">
                           Default Address
+                        </Badge>
+                      )}
+                      {address.isServiceAreaSupported === false && (
+                        <Badge variant="warning" size="sm">
+                          Outside Service Area
+                        </Badge>
+                      )}
+                      {address.isServiceAreaSupported === true && (
+                        <Badge variant="info" size="sm">
+                          Service Area Supported
                         </Badge>
                       )}
                     </div>

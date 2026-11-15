@@ -4,6 +4,7 @@ import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
 import useAddresses from '../../../hooks/useAddresses';
 import customerService from '../../../services/customerService';
+import locationApiService from '../../../services/locationApiService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import AddressFormModal from '../components/AddressFormModal';
@@ -69,6 +70,29 @@ export default function CheckoutPage() {
         if (!restaurant.isOpen) {
           throw new Error(`${restaurant.name} is currently closed. Your cart has been kept.`);
         }
+        if (group.fulfillment === 'delivery' && group.deliveryAddress) {
+          if (group.deliveryAddress.isServiceAreaSupported === false) {
+            throw new Error(
+              group.deliveryAddress.serviceAreaMessage ||
+              `Selected delivery address (${group.deliveryAddress.city}) is outside SALO's active service area.`,
+            );
+          }
+          try {
+            const areaCheck = await locationApiService.validateServiceArea({
+              province: group.deliveryAddress.province || 'Metro Manila',
+              city: group.deliveryAddress.city || '',
+              barangay: group.deliveryAddress.barangay || null,
+            });
+            if (areaCheck && areaCheck.supported === false) {
+              throw new Error(areaCheck.reason || 'Selected delivery address is outside SALO service area.');
+            }
+          } catch (err) {
+            if (err?.message && /outside|service area|does not deliver/i.test(err.message)) {
+              throw err;
+            }
+            // If backend service area table is not seeded in demo mode, continue with client check
+          }
+        }
       }
 
       // Build sub-orders structure compliant with SALO Business Rules Part II
@@ -76,9 +100,22 @@ export default function CheckoutPage() {
         id: `SUB-${Date.now().toString().slice(-4)}-${String.fromCharCode(65 + idx)}`,
         restaurantId: group.restaurantId,
         restaurantName: group.restaurantName,
+        deliveryAddressId: group.fulfillment === 'delivery' ? (group.deliveryAddress?.id || null) : null,
         deliveryAddress: group.fulfillment === 'delivery'
-          ? (group.deliveryAddress?.street || 'Default Delivery Address')
+          ? [
+              group.deliveryAddress?.houseNumber,
+              group.deliveryAddress?.street,
+              group.deliveryAddress?.barangay && `Brgy. ${group.deliveryAddress.barangay}`,
+              group.deliveryAddress?.city,
+              group.deliveryAddress?.province,
+            ].filter(Boolean).join(', ') || 'Default Delivery Address'
           : 'Pickup at Restaurant Counter',
+        deliveryCoordinates: group.fulfillment === 'delivery' && group.deliveryAddress
+          ? {
+              lat: group.deliveryAddress.lat ?? group.deliveryAddress.latitude ?? null,
+              lng: group.deliveryAddress.lng ?? group.deliveryAddress.longitude ?? null,
+            }
+          : null,
         fulfillment: group.fulfillment,
         pickupInformation: group.fulfillment === 'pickup'
           ? 'Pickup at the selected restaurant counter.'

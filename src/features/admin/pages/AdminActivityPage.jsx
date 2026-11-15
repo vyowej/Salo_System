@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AdminLayout from '../../../layouts/AdminLayout';
+import adminApiService from '../../../services/adminApiService';
 import { DataTable, DetailDrawer, FilterBar, PageHeader, StateView, StatusBadge } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
-import { getAdminWorkspaceRecords } from '../mocks';
-import { appendAdminAuditLog } from '../utils/auditLog';
 import { formatDateTime } from '../utils/format';
 
 function recordSummary(record) {
@@ -18,9 +17,9 @@ function valueSummary(value) {
 }
 
 export default function AdminActivityPage() {
-  const { currentAdmin, permissions } = useAdminSession();
+  const { permissions } = useAdminSession();
   const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Activity Logs', placeholder: 'Search logs by actor, action, record, or reference', searchableFields: ['who', 'role', 'action', 'record', 'reference'] });
-  const [records, setRecords] = useState(getAdminWorkspaceRecords('activity'));
+  const [records, setRecords] = useState([]);
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
   const [action, setAction] = useState('');
@@ -28,6 +27,35 @@ export default function AdminActivityPage() {
   const [to, setTo] = useState('');
   const [selected, setSelected] = useState(null);
   const canExport = permissions.activity?.includes('export');
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await adminApiService.getAuditLogs({ per_page: 50 });
+        if (!active) return;
+        const mapped = (res.items || []).map((log) => ({
+          id: log.log_id,
+          who: [log.first_name, log.last_name].filter(Boolean).join(' ') || log.actor_email || 'System',
+          role: log.actor_email ? 'User' : 'System',
+          action: log.action,
+          record: { type: log.entity_type, id: log.entity_id },
+          time: log.created_at,
+          createdAt: log.created_at,
+          previousValue: log.old_values,
+          newValue: log.new_values,
+          reason: log.reason,
+          reference: `${log.entity_type}#${log.entity_id}`,
+        }));
+        setRecords(mapped);
+      } catch {
+        // leave empty on error
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     const term = (globalQuery || search).trim().toLowerCase();
@@ -62,17 +90,6 @@ export default function AdminActivityPage() {
     link.download = 'salo-admin-activity.csv';
     link.click();
     URL.revokeObjectURL(url);
-    appendAdminAuditLog({
-      who: currentAdmin.name,
-      role: currentAdmin.role,
-      action: 'Exported activity log',
-      record: { type: 'Activity Log', id: 'filtered-results' },
-      previousValue: null,
-      newValue: `${rows.length} records exported`,
-      reason: 'Authorized activity-log export',
-      reference: 'salo-admin-activity.csv',
-    });
-    setRecords(getAdminWorkspaceRecords('activity'));
   }
 
   const columns = [

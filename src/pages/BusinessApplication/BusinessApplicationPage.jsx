@@ -19,11 +19,11 @@ import {
   WIZARD_STEPS,
 } from './constants/applicationDefaults';
 import { getRequiredDocuments } from './constants/documentRequirements';
-import { adminService } from '../../services/adminService';
+import applicationService from '../../services/applicationService';
+import { resolveUploadableFile, mapAccountTypeToEnum } from '../../services/formDataHelper';
 import './BusinessApplicationPage.css';
 
 const SESSION_DRAFT_KEY = 'salo_partner_app_draft';
-const STORAGE_PARTNER_APPS_KEY = 'salo_partner_applications';
 
 export default function BusinessApplicationPage() {
   const navigate = useNavigate();
@@ -267,94 +267,162 @@ export default function BusinessApplicationPage() {
   };
 
   // Final Application Submission (Mock)
-  const handleSubmitApplication = () => {
+  const handleSubmitApplication = async () => {
     setSubmitting(true);
+    setValidationErrors((prev) => ({ ...prev, submit: undefined }));
 
-    setTimeout(() => {
-      const today = new Date();
-      const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-      const generatedRef = `SALO-APP-${dateStr}-${randomSuffix}`;
-      const submissionIso = today.toISOString();
-
-      const newApplication = {
-        id: generatedRef,
-        referenceNumber: generatedRef,
-        name: formData.businessInfo.restaurantName,
-        restaurantName: formData.businessInfo.restaurantName,
-        businessType: formData.businessInfo.businessType,
-        ownershipStructure: formData.businessInfo.ownershipStructure,
-        cuisine: formData.businessInfo.cuisineType,
-        ownerName: `${formData.representative.firstName} ${formData.representative.lastName}`,
-        ownerEmail: formData.representative.email || formData.emailVerification.verifiedEmail,
-        phone: formData.businessInfo.businessPhone,
-        address: `${formData.address.street}, Brgy. ${formData.address.barangay}, ${formData.address.city}`,
-        zone: formData.address.city,
-        status: 'Submitted',
-        applicationStatus: 'Submitted',
-        verificationStatus: 'Pending',
-        operatingStatus: 'Pending Activation',
-        submittedAt: submissionIso,
-        joinedDate: submissionIso.split('T')[0],
-        documents: Object.keys(formData.documents).map((docId) => ({
-          id: docId,
-          name: formData.documents[docId]?.name || docId,
-          type: formData.documents[docId]?.type,
-          size: formData.documents[docId]?.size,
-          uploadedAt: formData.documents[docId]?.uploadedAt || submissionIso,
-          verificationStatus: 'Pending Review',
-        })),
-        requestedDocuments: [],
-        applicationHistory: [
-          {
-            id: `hist-${Date.now()}`,
-            title: 'Application Submitted',
-            description: `Application received for ${formData.businessInfo.restaurantName} (${formData.businessInfo.ownershipStructure}). Initial mandatory documents queued for compliance review.`,
-            time: submissionIso,
-          },
-        ],
+    try {
+      const fd = new FormData();
+      const mapBusinessType = (val) => {
+        const map = {
+          Restaurant: 'restaurant',
+          'Café': 'cafe',
+          Cafe: 'cafe',
+          Bakery: 'bakery',
+          'Fast Food': 'fast_food',
+          'Food Stall': 'food_stall',
+          'Food Kiosk': 'food_kiosk',
+          'Cloud Kitchen': 'cloud_kitchen',
+        };
+        return map[val] || 'other';
       };
 
-      // Push to adminService so Admin sees it in AdminRestaurantsPage!
-      try {
-        const currentRests = adminService.getRestaurants();
-        adminService.saveRestaurants?.([newApplication, ...currentRests]) ||
-          adminService.updateRestaurantStatus(newApplication.id, 'Submitted', newApplication);
-      } catch (e) {
-        console.warn('Could not sync to adminService', e);
-      }
-
-      // Save to localStorage for customer partner application tracking
-      try {
-        const stored = localStorage.getItem(STORAGE_PARTNER_APPS_KEY);
-        const existing = stored ? JSON.parse(stored) : {};
-        existing.restaurant = {
-          id: generatedRef,
-          name: newApplication.restaurantName,
-          status: 'Submitted',
-          applicationStatus: 'Submitted',
-          submittedAt: newApplication.joinedDate,
-          referenceNumber: generatedRef,
-          businessInfo: formData.businessInfo,
-          representative: formData.representative,
-          documents: formData.documents,
-          requestedDocuments: [],
+      const mapOwnership = (val) => {
+        const map = {
+          'Sole Proprietorship': 'sole_proprietorship',
+          Partnership: 'partnership',
+          Corporation: 'corporation',
+          Cooperative: 'cooperative',
         };
-        localStorage.setItem(STORAGE_PARTNER_APPS_KEY, JSON.stringify(existing));
-      } catch (e) {
-        console.warn('Could not save partner application to storage', e);
+        return map[val] || 'other';
+      };
+
+      const mapPosition = (val) => {
+        const map = {
+          'Business Owner': 'business_owner',
+          'Co-owner': 'co_owner',
+          'Authorized Representative': 'authorized_representative',
+          Manager: 'manager',
+        };
+        return map[val] || 'business_owner';
+      };
+
+      const verifiedEmail =
+        formData.emailVerification?.verifiedEmail ||
+        formData.emailVerification?.email ||
+        formData.representative?.email ||
+        user?.email ||
+        '';
+
+      fd.append('restaurant_name', formData.businessInfo.restaurantName || '');
+      if (formData.businessInfo.registeredName) {
+        fd.append('registered_name', formData.businessInfo.registeredName);
+      }
+      fd.append('business_type', mapBusinessType(formData.businessInfo.businessType));
+      fd.append('ownership_structure', mapOwnership(formData.businessInfo.ownershipStructure));
+      if (formData.businessInfo.description) {
+        fd.append('description', formData.businessInfo.description);
+      }
+      fd.append('business_phone', formData.businessInfo.businessPhone || formData.representative.phone || '');
+      fd.append('business_email', formData.businessInfo.businessEmail || verifiedEmail);
+
+      if (formData.businessInfo.cuisineType) {
+        fd.append('categories[]', formData.businessInfo.cuisineType);
       }
 
-      setSubmittedData({
-        referenceNumber: generatedRef,
-        submissionDate: submissionIso,
-        restaurantName: newApplication.restaurantName,
-        applicantEmail: newApplication.ownerEmail,
+      fd.append('applicant_position', mapPosition(formData.representative.position));
+      fd.append('legal_first_name', formData.representative.firstName || user?.first_name || '');
+      if (formData.representative.middleName) {
+        fd.append('legal_middle_name', formData.representative.middleName);
+      }
+      fd.append('legal_last_name', formData.representative.lastName || user?.last_name || '');
+      if (formData.representative.suffix) {
+        fd.append('legal_suffix', formData.representative.suffix);
+      }
+      fd.append('date_of_birth', formData.representative.dateOfBirth || '');
+      fd.append('contact_phone', formData.representative.phone || '');
+      fd.append('contact_email', verifiedEmail);
+
+      fd.append('province', formData.address.province || 'Metro Manila');
+      fd.append('city', formData.address.city || 'Quezon City');
+      fd.append('barangay', formData.address.barangay || 'South Triangle');
+      if (formData.address.street) fd.append('street', formData.address.street);
+      if (formData.address.postalCode) fd.append('postal_code', formData.address.postalCode);
+      if (formData.address.additionalDetails) fd.append('landmark', formData.address.additionalDetails);
+      if (formData.address.coordinates?.lat != null) fd.append('latitude', String(formData.address.coordinates.lat));
+      if (formData.address.coordinates?.lng != null) fd.append('longitude', String(formData.address.coordinates.lng));
+
+      const services = formData.configuration?.services || {};
+      fd.append('offers_delivery', services.delivery !== false ? '1' : '0');
+      fd.append('offers_pickup', services.pickup !== false ? '1' : '0');
+      fd.append('offers_dine_in', services.dineIn !== false ? '1' : '0');
+      fd.append('accepts_reservations', services.tableReservations ? '1' : '0');
+
+      const dayIndexMap = {
+        sunday: 0,
+        monday: 1,
+        tuesday: 2,
+        wednesday: 3,
+        thursday: 4,
+        friday: 5,
+        saturday: 6,
+      };
+      const opHours = formData.configuration?.operatingHours || {};
+      Object.entries(opHours).forEach(([dayKey, cfg], idx) => {
+        if (dayIndexMap[dayKey] === undefined) return;
+        fd.append(`operating_hours[${idx}][day_of_week]`, String(dayIndexMap[dayKey]));
+        fd.append(`operating_hours[${idx}][opening_time]`, `${cfg.openTime || '09:00'}:00`);
+        fd.append(`operating_hours[${idx}][closing_time]`, `${cfg.closeTime || '21:00'}:00`);
+        fd.append(`operating_hours[${idx}][is_closed]`, cfg.isOpen === false ? '1' : '0');
       });
 
-      setSubmitting(false);
+      fd.append('payout_provider', formData.payout.bankName || 'BPI');
+      fd.append('payout_account_type', mapAccountTypeToEnum(formData.payout.accountType));
+      fd.append('payout_account_holder_name', formData.payout.accountHolder || '');
+      fd.append('payout_account_number', formData.payout.accountNumber || '');
+      fd.append('terms_accepted', '1');
+      fd.append('terms_version', 'v1.0');
+
+      const logoFile = resolveUploadableFile(formData.configuration?.logo, 'logo.png');
+      if (logoFile) fd.append('logo_image', logoFile);
+
+      const coverFile = resolveUploadableFile(formData.configuration?.coverPhoto, 'cover.jpg');
+      if (coverFile) fd.append('cover_image', coverFile);
+
+      Object.entries(formData.documents || {}).forEach(([docId, entry]) => {
+        const file = resolveUploadableFile(entry, `${docId}.pdf`);
+        if (file) {
+          fd.append(`documents[${docId}]`, file);
+        }
+      });
+
+      if (formData.payout?.proofDocument) {
+        const proofFile = resolveUploadableFile(formData.payout.proofDocument, 'bank_proof.pdf');
+        if (proofFile) {
+          fd.append('documents[bank_proof]', proofFile);
+        }
+      }
+
+      const created = await applicationService.submitRestaurantApplication(fd);
+
+      sessionStorage.removeItem(SESSION_DRAFT_KEY);
+
+      setSubmittedData({
+        referenceNumber: created?.reference_number,
+        submissionDate: created?.submitted_at || new Date().toISOString(),
+        restaurantName: created?.restaurant_name || formData.businessInfo.restaurantName,
+        applicantEmail: created?.contact_email || verifiedEmail,
+      });
+
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 1200);
+    } catch (error) {
+      setValidationErrors((prev) => ({
+        ...prev,
+        submit: error?.message || 'Unable to submit application. Please review your details and try again.',
+      }));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleExitConfirm = () => {
@@ -495,6 +563,12 @@ export default function BusinessApplicationPage() {
                   submitting={submitting}
                   allRequiredValid={areAllRequiredStepsValid()}
                 />
+              )}
+
+              {validationErrors.submit && (
+                <div className="wizard-error-banner" role="alert" style={{ marginTop: 16, padding: '12px 16px', borderRadius: 10, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+                  {validationErrors.submit}
+                </div>
               )}
 
               {/* Wizard Bottom Navigation Buttons */}

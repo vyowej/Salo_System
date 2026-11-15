@@ -67,7 +67,14 @@
   top: var(--space-4);
   right: var(--space-4);
   z-index: 2;
+  border-radius: var(--radius-full);
   box-shadow: var(--shadow-sm);
+}
+
+.partner-card-status-pill .badge-default {
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
 }
 
 .partner-card-body {
@@ -127,6 +134,13 @@
   margin-top: auto;
   padding-top: var(--space-4);
   border-top: 1px solid var(--border-secondary);
+}
+
+.partner-card-actions-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
 }
 
 .partner-status-box {

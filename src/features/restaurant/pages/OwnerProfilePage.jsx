@@ -6,8 +6,11 @@ import restaurantService from '../../../services/restaurantService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import ImageUploader, { ImageGalleryUploader } from '../../../components/common/ImageUploader';
-import { Input, Select, Textarea } from '../../../components/forms';
+import { Input, Textarea } from '../../../components/forms';
 import { ErrorState, LoadingSpinner } from '../../../components/feedback';
+import { LocationPicker } from '../../../components/location';
+import locationApiService from '../../../services/locationApiService';
+import RestaurantCoverageSection from '../components/RestaurantCoverageSection';
 import RestaurantImage from '../../customer/components/RestaurantImage';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import OperatingHoursEditor from './OperatingHoursEditor';
@@ -287,23 +290,6 @@ export default function OwnerProfilePage() {
     }
   }
 
-  function updateLocation(field, value) {
-    updateProfile((previous) => ({
-      ...previous,
-      location: { ...previous.location, [field]: value },
-    }));
-  }
-
-  function updateCoverage(field, value) {
-    const nextValue = ['cities', 'barangays'].includes(field)
-      ? value.split(/[,\n]/).map((entry) => entry.trim()).filter(Boolean)
-      : value;
-    updateProfile((previous) => ({
-      ...previous,
-      deliveryCoverage: { ...previous.deliveryCoverage, [field]: nextValue },
-    }));
-  }
-
   function handlePhotoChange(field, value, restaurantId, currentProfile, savedProfile) {
     const nextProfile = { ...currentProfile, [field]: value };
     if (activeRestaurantId.current !== restaurantId) {
@@ -529,51 +515,86 @@ export default function OwnerProfilePage() {
                 <div className="owner-profile-section-heading">
                   <div>
                     <h2>Location and delivery coverage</h2>
-                    <p>Restaurant address and delivery coverage are separate public/business settings.</p>
+                    <p>
+                      Pin your restaurant&apos;s physical kitchen location and configure delivery coverage strictly within Admin-approved service areas.
+                    </p>
                   </div>
                 </div>
-                <div className="owner-profile-fields">
-                  <Input id="location-country" label="Country" value={formData.location.country} onChange={(event) => updateLocation('country', event.target.value)} disabled={saving} />
-                  <Input id="location-region" label="Region" value={formData.location.region} onChange={(event) => updateLocation('region', event.target.value)} disabled={saving} />
-                  <Input id="location-province" label="Province" value={formData.location.province} onChange={(event) => updateLocation('province', event.target.value)} disabled={saving} />
-                  <Input id="location-city" label="City or municipality" value={formData.location.city} onChange={(event) => updateLocation('city', event.target.value)} error={fieldErrors.city} required disabled={saving} />
-                  <Input id="location-barangay" label="Barangay" value={formData.location.barangay} onChange={(event) => updateLocation('barangay', event.target.value)} disabled={saving} />
-                  <Input id="location-building" label="Building or house number" value={formData.location.buildingNumber} onChange={(event) => updateLocation('buildingNumber', event.target.value)} disabled={saving} />
-                  <Input id="location-street" label="Street address" value={formData.location.streetAddress} onChange={(event) => updateLocation('streetAddress', event.target.value)} error={fieldErrors.streetAddress} required disabled={saving} />
-                  <Input id="location-landmark" label="Landmark" value={formData.location.landmark} onChange={(event) => updateLocation('landmark', event.target.value)} disabled={saving} />
-                  <Input id="location-postal" label="Postal code" value={formData.location.postalCode} onChange={(event) => updateLocation('postalCode', event.target.value)} disabled={saving} />
-                </div>
-                <div className="owner-profile-fields">
-                  <Input id="location-latitude" label="Map pin latitude" type="number" step="any" value={formData.location.latitude} onChange={(event) => updateLocation('latitude', event.target.value)} error={fieldErrors.coordinates} helper="No map provider is configured; enter coordinates manually if known." disabled={saving} />
-                  <Input id="location-longitude" label="Map pin longitude" type="number" step="any" value={formData.location.longitude} onChange={(event) => updateLocation('longitude', event.target.value)} error={fieldErrors.coordinates} disabled={saving} />
-                </div>
-                <Select
-                  id="coverage-method"
-                  label="Delivery coverage method"
-                  value={formData.deliveryCoverage.method}
-                  onChange={(event) => updateCoverage('method', event.target.value)}
-                  helper="Coverage is saved for display only; demo mode does not validate customer addresses against it."
-                  disabled={saving}
-                >
-                  <option value="">Not configured</option>
-                  <option value="cities">Selected cities or municipalities</option>
-                  <option value="barangays">Selected barangays</option>
-                  <option value="zones">Delivery zones</option>
-                  <option value="radius">Delivery radius</option>
-                  <option value="other">Other supported area</option>
-                </Select>
-                {formData.deliveryCoverage.method === 'cities' && (
-                  <Textarea id="coverage-cities" label="Cities or municipalities served" rows={2} value={formData.deliveryCoverage.cities.join(', ')} onChange={(event) => updateCoverage('cities', event.target.value)} disabled={saving} />
-                )}
-                {formData.deliveryCoverage.method === 'barangays' && (
-                  <Textarea id="coverage-barangays" label="Barangays served" rows={2} value={formData.deliveryCoverage.barangays.join(', ')} onChange={(event) => updateCoverage('barangays', event.target.value)} disabled={saving} />
-                )}
-                {(formData.deliveryCoverage.method === 'zones' || formData.deliveryCoverage.method === 'other') && (
-                  <Textarea id="coverage-zones" label="Coverage area details" rows={2} value={formData.deliveryCoverage.zones} onChange={(event) => updateCoverage('zones', event.target.value)} disabled={saving} />
-                )}
-                {formData.deliveryCoverage.method === 'radius' && (
-                  <Input id="coverage-radius" label="Delivery radius (km)" type="number" min="0" step="any" value={formData.deliveryCoverage.radiusKm} onChange={(event) => updateCoverage('radiusKm', event.target.value)} error={fieldErrors.radiusKm} disabled={saving} />
-                )}
+
+                <LocationPicker
+                  value={{
+                    province: formData.location.province,
+                    city: formData.location.city,
+                    barangay: formData.location.barangay,
+                    street: formData.location.streetAddress,
+                    houseNumber: formData.location.buildingNumber,
+                    postalCode: formData.location.postalCode,
+                    notes: formData.location.landmark,
+                    lat: formData.location.latitude === '' ? null : Number(formData.location.latitude),
+                    lng: formData.location.longitude === '' ? null : Number(formData.location.longitude),
+                  }}
+                  onChange={(nextLoc) => {
+                    updateProfile((previous) => ({
+                      ...previous,
+                      location: {
+                        ...previous.location,
+                        country: 'Philippines',
+                        province: nextLoc.province ?? previous.location.province,
+                        city: nextLoc.city ?? previous.location.city,
+                        barangay: nextLoc.barangay ?? previous.location.barangay,
+                        streetAddress: nextLoc.street ?? previous.location.streetAddress,
+                        buildingNumber: nextLoc.houseNumber ?? previous.location.buildingNumber,
+                        postalCode: nextLoc.postalCode ?? previous.location.postalCode,
+                        landmark: nextLoc.notes ?? nextLoc.landmark ?? previous.location.landmark,
+                        latitude: nextLoc.lat ?? previous.location.latitude,
+                        longitude: nextLoc.lng ?? previous.location.longitude,
+                      },
+                    }));
+                  }}
+                  errors={{
+                    city: fieldErrors.city,
+                    street: fieldErrors.streetAddress,
+                    coordinates: fieldErrors.coordinates,
+                  }}
+                  mapHeight={260}
+                  confirmLabel="Restaurant Physical Location"
+                />
+
+                <RestaurantCoverageSection
+                  restaurantLocation={formData.location}
+                  selectedAreas={
+                    Array.isArray(formData.deliveryCoverage.areas)
+                      ? formData.deliveryCoverage.areas
+                      : (formData.deliveryCoverage.cities || []).map((c) => ({
+                          province: formData.location.province || 'Metro Manila',
+                          city: c,
+                          barangay: null,
+                        }))
+                  }
+                  onChangeAreas={(areas) => {
+                    updateProfile((previous) => ({
+                      ...previous,
+                      deliveryCoverage: {
+                        ...previous.deliveryCoverage,
+                        method: areas.some((a) => a.barangay) ? 'barangays' : 'cities',
+                        areas,
+                        cities: [...new Set(areas.map((a) => a.city).filter(Boolean))],
+                        barangays: areas.map((a) => a.barangay).filter(Boolean),
+                      },
+                    }));
+                  }}
+                  onSaveCoverage={async (areas) => {
+                    const numericId = Number(selectedRestaurantId);
+                    if (Number.isFinite(numericId) && numericId > 0) {
+                      await locationApiService.updateRestaurantCoverage({
+                        restaurant_id: numericId,
+                        areas,
+                      });
+                    }
+                  }}
+                  saving={saving}
+                />
+
                 <fieldset className="owner-profile-services" disabled={saving}>
                   <legend>Services offered</legend>
                   <label>

@@ -1,0 +1,1 @@
+\DB::table("users")-, ["first_name" =, "last_name" =, "password_hash" =, "role" =, "account_status" =, "email_verified_at" =; echo \DB::connection()-; 

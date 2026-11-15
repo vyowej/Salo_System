@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Button from '../../../components/common/Button';
+import { LocationPicker } from '../../../components/location';
+import locationApiService from '../../../services/locationApiService';
 import './AddressFormModal.css';
 
 const PHILIPPINE_MOBILE_REGEX = /^(\+639|09)\d{9}$/;
@@ -23,6 +25,7 @@ export default function AddressFormModal({
     recipientName: '',
     mobileNumber: '',
     street: '',
+    houseNumber: '',
     barangay: '',
     city: '',
     province: '',
@@ -31,12 +34,12 @@ export default function AddressFormModal({
     isDefault: false,
     lat: null,
     lng: null,
+    gpsAccuracy: null,
   });
 
   const [errors, setErrors] = useState({});
   const [duplicateWarning, setDuplicateWarning] = useState(false);
-  const [locationStatus, setLocationStatus] = useState(null); // { type: 'success' | 'error', message: string }
-  const [isLocating, setIsLocating] = useState(false);
+  const [serviceAreaStatus, setServiceAreaStatus] = useState(null);
 
   // Initialize or reset form when modal opens
   useEffect(() => {
@@ -50,14 +53,16 @@ export default function AddressFormModal({
         recipientName: initialData.recipientName || '',
         mobileNumber: initialData.mobileNumber || initialData.phone || '',
         street: initialData.street || '',
+        houseNumber: initialData.houseNumber || initialData.house_number || '',
         barangay: initialData.barangay || '',
         city: initialData.city || '',
         province: initialData.province || '',
         postalCode: initialData.postalCode || '',
         notes: initialData.notes || '',
         isDefault: Boolean(initialData.isDefault),
-        lat: initialData.lat ?? null,
-        lng: initialData.lng ?? null,
+        lat: initialData.lat ?? initialData.latitude ?? null,
+        lng: initialData.lng ?? initialData.longitude ?? null,
+        gpsAccuracy: initialData.gpsAccuracy ?? initialData.gps_accuracy ?? null,
       });
     } else {
       setFormData({
@@ -66,6 +71,7 @@ export default function AddressFormModal({
         recipientName: '',
         mobileNumber: '',
         street: '',
+        houseNumber: '',
         barangay: '',
         city: '',
         province: '',
@@ -74,12 +80,13 @@ export default function AddressFormModal({
         isDefault: existingAddresses.length === 0,
         lat: null,
         lng: null,
+        gpsAccuracy: null,
       });
     }
 
     setErrors({});
     setDuplicateWarning(false);
-    setLocationStatus(null);
+    setServiceAreaStatus(null);
 
     // Focus first focusable element after modal opens
     setTimeout(() => {
@@ -169,49 +176,60 @@ export default function AddressFormModal({
     }
   };
 
-  const handleUseLocation = () => {
-    if (!navigator.geolocation) {
-      setLocationStatus({
-        type: 'error',
-        message: 'Geolocation is not supported on this device or browser.',
-      });
-      return;
+  // Check SALO platform service area status when province + city are filled
+  useEffect(() => {
+    if (!isOpen || !formData.province?.trim() || !formData.city?.trim()) {
+      setServiceAreaStatus(null);
+      return undefined;
     }
 
-    setIsLocating(true);
-    setLocationStatus(null);
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setIsLocating(false);
-        const { latitude, longitude } = position.coords;
-        setFormData((prev) => ({
-          ...prev,
-          lat: latitude,
-          lng: longitude,
-        }));
-        setLocationStatus({
-          type: 'success',
-          message: `Coordinates captured (${latitude.toFixed(4)}, ${longitude.toFixed(4)}).`,
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await locationApiService.validateServiceArea({
+          province: formData.province.trim(),
+          city: formData.city.trim(),
+          barangay: formData.barangay?.trim() || null,
         });
-      },
-      (error) => {
-        setIsLocating(false);
-        let message = 'Unable to retrieve location coordinates.';
-        if (error.code === error.PERMISSION_DENIED) {
-          message = 'Location access was denied. You can continue by entering your address manually.';
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          message = 'Location information is currently unavailable.';
-        } else if (error.code === error.TIMEOUT) {
-          message = 'Location request timed out. Please try again or fill fields manually.';
+        if (!cancelled && res) {
+          setServiceAreaStatus({
+            supported: Boolean(res.supported),
+            reason: res.reason,
+          });
         }
-        setLocationStatus({
-          type: 'error',
-          message,
-        });
-      },
-      { timeout: 10000, enableHighAccuracy: true }
-    );
+      } catch {
+        if (!cancelled) setServiceAreaStatus(null);
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [isOpen, formData.province, formData.city, formData.barangay]);
+
+  const handleLocationPickerChange = (nextLoc) => {
+    setFormData((prev) => ({
+      ...prev,
+      province: nextLoc.province ?? prev.province,
+      city: nextLoc.city ?? prev.city,
+      barangay: nextLoc.barangay ?? prev.barangay,
+      street: nextLoc.street ?? prev.street,
+      houseNumber: nextLoc.houseNumber ?? prev.houseNumber,
+      postalCode: nextLoc.postalCode ?? prev.postalCode,
+      notes: nextLoc.notes ?? prev.notes,
+      lat: nextLoc.lat ?? prev.lat,
+      lng: nextLoc.lng ?? prev.lng,
+      gpsAccuracy: nextLoc.gpsAccuracy ?? prev.gpsAccuracy,
+    }));
+    setErrors((prev) => {
+      const updated = { ...prev };
+      delete updated.province;
+      delete updated.city;
+      delete updated.barangay;
+      delete updated.street;
+      return updated;
+    });
   };
 
   const validate = () => {
@@ -280,6 +298,7 @@ export default function AddressFormModal({
       mobileNumber: formData.mobileNumber.trim(),
       phone: formData.mobileNumber.trim(),
       street: formData.street.trim(),
+      houseNumber: formData.houseNumber.trim(),
       barangay: formData.barangay.trim(),
       city: formData.city.trim(),
       province: formData.province.trim(),
@@ -288,6 +307,9 @@ export default function AddressFormModal({
       isDefault: Boolean(formData.isDefault),
       lat: formData.lat,
       lng: formData.lng,
+      gpsAccuracy: formData.gpsAccuracy,
+      isServiceAreaSupported: serviceAreaStatus ? serviceAreaStatus.supported : undefined,
+      serviceAreaMessage: serviceAreaStatus ? serviceAreaStatus.reason : undefined,
     };
 
     onSave(payload);
@@ -437,159 +459,15 @@ export default function AddressFormModal({
             </div>
           </div>
 
-          {/* Street, Unit, House # */}
-          <div className="salo-form-group">
-            <label htmlFor="addr-street" className="salo-form-label">
-              Street Name / Building / House / Unit <span className="required-indicator">*</span>
-            </label>
-            <input
-              id="addr-street"
-              type="text"
-              className={`salo-form-input ${errors.street ? 'is-invalid' : ''}`}
-              placeholder="e.g. Unit 12B, Emerald Court, San Antonio / Lot 14 Block 2"
-              value={formData.street}
-              onChange={(e) => handleFieldChange('street', e.target.value)}
-              aria-invalid={Boolean(errors.street)}
-              aria-describedby={errors.street ? 'street-error' : undefined}
-              required
-            />
-            {errors.street && (
-              <span id="street-error" className="salo-form-error" role="alert">
-                {errors.street}
-              </span>
-            )}
-          </div>
-
-          {/* Barangay & City */}
-          <div className="salo-form-grid-2">
-            <div className="salo-form-group">
-              <label htmlFor="addr-barangay" className="salo-form-label">
-                Barangay <span className="required-indicator">*</span>
-              </label>
-              <input
-                id="addr-barangay"
-                type="text"
-                className={`salo-form-input ${errors.barangay ? 'is-invalid' : ''}`}
-                placeholder="e.g. Tetuan / San Antonio"
-                value={formData.barangay}
-                onChange={(e) => handleFieldChange('barangay', e.target.value)}
-                aria-invalid={Boolean(errors.barangay)}
-                aria-describedby={errors.barangay ? 'barangay-error' : undefined}
-                required
-              />
-              {errors.barangay && (
-                <span id="barangay-error" className="salo-form-error" role="alert">
-                  {errors.barangay}
-                </span>
-              )}
-            </div>
-
-            <div className="salo-form-group">
-              <label htmlFor="addr-city" className="salo-form-label">
-                City / Municipality <span className="required-indicator">*</span>
-              </label>
-              <input
-                id="addr-city"
-                type="text"
-                className={`salo-form-input ${errors.city ? 'is-invalid' : ''}`}
-                placeholder="e.g. Zamboanga City / Pasig City"
-                value={formData.city}
-                onChange={(e) => handleFieldChange('city', e.target.value)}
-                aria-invalid={Boolean(errors.city)}
-                aria-describedby={errors.city ? 'city-error' : undefined}
-                required
-              />
-              {errors.city && (
-                <span id="city-error" className="salo-form-error" role="alert">
-                  {errors.city}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Province & Postal Code */}
-          <div className="salo-form-grid-2">
-            <div className="salo-form-group">
-              <label htmlFor="addr-province" className="salo-form-label">
-                Province <span className="required-indicator">*</span>
-              </label>
-              <input
-                id="addr-province"
-                type="text"
-                className={`salo-form-input ${errors.province ? 'is-invalid' : ''}`}
-                placeholder="e.g. Zamboanga del Sur / Metro Manila"
-                value={formData.province}
-                onChange={(e) => handleFieldChange('province', e.target.value)}
-                aria-invalid={Boolean(errors.province)}
-                aria-describedby={errors.province ? 'province-error' : undefined}
-                required
-              />
-              {errors.province && (
-                <span id="province-error" className="salo-form-error" role="alert">
-                  {errors.province}
-                </span>
-              )}
-            </div>
-
-            <div className="salo-form-group">
-              <label htmlFor="addr-postal" className="salo-form-label">
-                Postal Code <span style={{ color: 'var(--text-muted)' }}>(Optional)</span>
-              </label>
-              <input
-                id="addr-postal"
-                type="text"
-                className="salo-form-input"
-                placeholder="e.g. 7000 / 1600"
-                value={formData.postalCode}
-                onChange={(e) => handleFieldChange('postalCode', e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Geolocation Button */}
-          <div className="salo-form-group">
-            <button
-              type="button"
-              className="salo-location-btn"
-              onClick={handleUseLocation}
-              disabled={isLocating}
-            >
-              <span>📍</span>
-              <span>{isLocating ? 'Detecting coordinates...' : 'Use my current location (GPS coordinates)'}</span>
-            </button>
-            {locationStatus && (
-              <span className={`salo-location-feedback ${locationStatus.type}`} role="status">
-                {locationStatus.message}
-              </span>
-            )}
-          </div>
-
-          {/* Delivery Notes / Landmark */}
-          <div className="salo-form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label htmlFor="addr-notes" className="salo-form-label">
-                Landmark or Rider Instructions <span style={{ color: 'var(--text-muted)' }}>(Optional)</span>
-              </label>
-              <span style={{ fontSize: 11, color: formData.notes.length > 200 ? 'var(--salo-error)' : 'var(--text-muted)' }}>
-                {formData.notes.length}/200
-              </span>
-            </div>
-            <textarea
-              id="addr-notes"
-              className={`salo-form-textarea ${errors.notes ? 'is-invalid' : ''}`}
-              placeholder="e.g. Gate with blue iron bars, ring the doorbell twice, near San Roque church"
-              maxLength={200}
-              value={formData.notes}
-              onChange={(e) => handleFieldChange('notes', e.target.value)}
-              aria-invalid={Boolean(errors.notes)}
-              aria-describedby={errors.notes ? 'notes-error' : undefined}
-            />
-            {errors.notes && (
-              <span id="notes-error" className="salo-form-error" role="alert">
-                {errors.notes}
-              </span>
-            )}
-          </div>
+          {/* Interactive Map, GPS, Searchable Philippine Address Fields & Confirmation */}
+          <LocationPicker
+            value={formData}
+            onChange={handleLocationPickerChange}
+            errors={errors}
+            mapHeight={240}
+            serviceAreaStatus={serviceAreaStatus}
+            confirmLabel="Delivery Location Confirmation"
+          />
 
           {/* Set as Default Checkbox */}
           <label className="salo-checkbox-row">

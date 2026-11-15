@@ -26,10 +26,9 @@ import {
   loadRiderDraft,
   clearRiderDraft,
 } from './services/riderDraftStorage';
-import adminService from '../../services/adminService';
+import applicationService from '../../services/applicationService';
+import { resolveUploadableFile, mapAccountTypeToEnum } from '../../services/formDataHelper';
 import './RiderApplicationPage.css';
-
-const STORAGE_RIDER_APPS_KEY = 'salo_rider_applications';
 
 export default function RiderApplicationPage() {
   const navigate = useNavigate();
@@ -558,95 +557,206 @@ export default function RiderApplicationPage() {
     }
   };
 
-  // Final Application Submission (Mock)
-  const handleSubmitApplication = () => {
+  const handleSubmitApplication = async () => {
     if (!validateStep(10)) {
       window.scrollTo({ top: 100, behavior: 'smooth' });
       return;
     }
 
     setSubmitting(true);
+    setValidationErrors((prev) => ({ ...prev, submit: undefined }));
 
-    setTimeout(() => {
-      const today = new Date();
-      const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-      const generatedRef = `SALO-RIDER-${dateStr}-${randomSuffix}`;
-      const submissionIso = today.toISOString();
+    try {
+      const fd = new FormData();
+      const mapGovIdType = (label) => {
+        const lower = String(label || '').toLowerCase();
+        if (lower.includes('philid') || lower.includes('national id')) return 'philid';
+        if (lower.includes('driver')) return 'drivers_license';
+        if (lower.includes('passport')) return 'passport';
+        if (lower.includes('umid')) return 'umid';
+        if (lower.includes('sss')) return 'sss';
+        if (lower.includes('postal')) return 'postal_id';
+        if (lower.includes('prc')) return 'prc';
+        if (lower.includes('voter') || lower.includes('comelec')) return 'voters_comelec';
+        return 'other';
+      };
 
-      const fullName = `${formData.personal.firstName} ${formData.personal.lastName}`.trim();
+      const mapGender = (val) => {
+        const lower = String(val || '').toLowerCase();
+        if (lower === 'male') return 'male';
+        if (lower === 'female') return 'female';
+        if (lower.includes('non')) return 'non_binary_other';
+        return 'prefer_not_to_say';
+      };
+
+      const mapOwnership = (val) => {
+        const lower = String(val || '').toLowerCase();
+        if (lower.includes('family')) return 'family_owned';
+        if (lower.includes('borrow')) return 'borrowed';
+        if (lower.includes('rent') || lower.includes('leas')) return 'rented_leased';
+        if (lower.includes('company')) return 'company_owned';
+        return 'personally_owned';
+      };
+
+      const mapBikeType = (val) => {
+        const lower = String(val || '').toLowerCase();
+        if (lower.includes('road')) return 'road';
+        if (lower.includes('mountain') || lower.includes('mtb')) return 'mountain';
+        if (lower.includes('city') || lower.includes('commuter')) return 'city_commuter';
+        if (lower.includes('fold')) return 'folding';
+        if (lower.includes('gravel')) return 'gravel';
+        if (lower.includes('cargo')) return 'cargo';
+        return 'other';
+      };
+
+      const mapRelationship = (val) => {
+        const lower = String(val || '').toLowerCase();
+        if (lower.includes('parent')) return 'parent';
+        if (lower.includes('spouse') || lower.includes('partner')) return 'spouse_partner';
+        if (lower.includes('sibling')) return 'sibling';
+        if (lower.includes('child')) return 'child';
+        if (lower.includes('relative')) return 'relative';
+        if (lower.includes('friend')) return 'friend';
+        if (lower.includes('colleague')) return 'colleague';
+        return 'other';
+      };
+
       const verifiedEmail =
         formData.emailVerification.verifiedEmail ||
         formData.emailVerification.email ||
-        formData.personal.email;
+        formData.personal.email ||
+        user?.email ||
+        '';
 
-      const newRiderSubmission = {
-        id: `rider-${Date.now()}`,
-        referenceNumber: generatedRef,
-        name: fullName,
-        username: (formData.personal.firstName || 'rider').toLowerCase() + randomSuffix,
-        email: verifiedEmail,
-        companyName: formData.emailVerification.companyName || '',
-        phone: formData.personal.phone,
-        status: 'Pending Verification',
-        applicationStatus: 'Pending Review',
-        verificationStatus: 'Pending',
-        vehicle: `${formData.deliveryMethod.replace('_', ' ').toUpperCase()} · ${formData.vehicleInfo.motoBrand || formData.vehicleInfo.bikeBrand || formData.vehicleInfo.ebikeBrand || 'Standard'}`,
-        licenseNumber: formData.identity.idNumber || 'N/A',
-        zone: formData.emergency.preferredCity || 'Quezon City',
-        rating: 5.0,
-        completedDeliveries: 0,
-        earningsTotal: 0,
-        submittedAt: submissionIso,
-        deliveryMethod: formData.deliveryMethod,
-        emailVerification: formData.emailVerification,
-        personal: {
-          ...formData.personal,
-          email: verifiedEmail,
-        },
-        payout: {
-          accountHolder: formData.payout.accountHolder,
-          provider: formData.payout.provider,
-          accountNumber: formData.payout.accountNumber,
-        },
-      };
+      fd.append('legal_first_name', formData.personal.firstName || '');
+      if (formData.personal.middleName) fd.append('legal_middle_name', formData.personal.middleName);
+      fd.append('legal_last_name', formData.personal.lastName || '');
+      if (formData.personal.suffix) fd.append('legal_suffix', formData.personal.suffix);
+      fd.append('date_of_birth', formData.personal.dateOfBirth || '');
+      fd.append('gender', mapGender(formData.personal.gender));
+      fd.append('contact_phone', formData.personal.phone || '');
+      fd.append('contact_email', verifiedEmail);
+      if (formData.emailVerification.companyName) fd.append('company_name', formData.emailVerification.companyName);
 
-      // 1. Sync to Admin riders list (so AdminRidersPage sees the new applicant)
-      try {
-        const currentRiders = adminService.getRiders();
-        localStorage.setItem(
-          'salo_admin_riders',
-          JSON.stringify([newRiderSubmission, ...currentRiders])
-        );
-      } catch (e) {
-        console.warn('Could not sync rider to admin storage', e);
+      fd.append('province', formData.personal.address?.province || 'Metro Manila');
+      fd.append('city', formData.personal.address?.city || 'Quezon City');
+      fd.append('barangay', formData.personal.address?.barangay || 'South Triangle');
+      if (formData.personal.address?.street) fd.append('street', formData.personal.address.street);
+      if (formData.personal.address?.postalCode) fd.append('postal_code', formData.personal.address.postalCode);
+
+      fd.append('gov_id_type', mapGovIdType(formData.identity.idType));
+      fd.append('gov_id_number', formData.identity.idNumber || '');
+      fd.append('gov_id_is_permanent', formData.identity.isPermanent ? '1' : '0');
+      if (!formData.identity.isPermanent && formData.identity.expiryDate) {
+        fd.append('gov_id_expires_on', formData.identity.expiryDate);
       }
 
-      // 2. Save to local storage for customer rider application status tracking
-      try {
-        const stored = localStorage.getItem(STORAGE_RIDER_APPS_KEY);
-        const existing = stored ? JSON.parse(stored) : [];
-        const nextList = [newRiderSubmission, ...existing];
-        localStorage.setItem(STORAGE_RIDER_APPS_KEY, JSON.stringify(nextList));
-      } catch (e) {
-        console.warn('Could not save rider application to customer storage', e);
+      const method = formData.deliveryMethod || 'motorcycle';
+      fd.append('vehicle_type', method);
+
+      if (method === 'motorcycle') {
+        if (formData.vehicleInfo.motoBrand) fd.append('vehicle_brand', formData.vehicleInfo.motoBrand);
+        if (formData.vehicleInfo.motoModel) fd.append('vehicle_model', formData.vehicleInfo.motoModel);
+        if (formData.vehicleInfo.motoColor) fd.append('vehicle_color', formData.vehicleInfo.motoColor);
+        if (formData.vehicleInfo.motoYear) fd.append('vehicle_year', String(formData.vehicleInfo.motoYear));
+        if (formData.vehicleInfo.plateNumber) fd.append('plate_number', formData.vehicleInfo.plateNumber);
+        if (formData.vehicleInfo.mvFileNumber) fd.append('mv_file_number', formData.vehicleInfo.mvFileNumber);
+        fd.append('vehicle_ownership', mapOwnership(formData.vehicleInfo.ownership));
+        if (formData.vehicleInfo.ownerName) fd.append('vehicle_owner_name', formData.vehicleInfo.ownerName);
+        if (formData.vehicleInfo.ownerRelationship) fd.append('vehicle_owner_relationship', formData.vehicleInfo.ownerRelationship);
+      } else if (method === 'bicycle') {
+        fd.append('bicycle_type', mapBikeType(formData.vehicleInfo.bikeType));
+        if (formData.vehicleInfo.bikeBrand) fd.append('vehicle_brand', formData.vehicleInfo.bikeBrand);
+        if (formData.vehicleInfo.bikeModel) fd.append('vehicle_model', formData.vehicleInfo.bikeModel);
+        if (formData.vehicleInfo.bikeColor) fd.append('vehicle_color', formData.vehicleInfo.bikeColor);
+      } else if (method === 'e_bike') {
+        if (formData.vehicleInfo.ebikeBrand) fd.append('vehicle_brand', formData.vehicleInfo.ebikeBrand);
+        if (formData.vehicleInfo.ebikeModel) fd.append('vehicle_model', formData.vehicleInfo.ebikeModel);
+        if (formData.vehicleInfo.ebikeColor) fd.append('vehicle_color', formData.vehicleInfo.ebikeColor);
+        if (formData.vehicleInfo.ebikeWattage) fd.append('motor_wattage', formData.vehicleInfo.ebikeWattage);
+      } else if (method === 'e_scooter') {
+        if (formData.vehicleInfo.escooterBrand) fd.append('vehicle_brand', formData.vehicleInfo.escooterBrand);
+        if (formData.vehicleInfo.escooterModel) fd.append('vehicle_model', formData.vehicleInfo.escooterModel);
+        if (formData.vehicleInfo.escooterColor) fd.append('vehicle_color', formData.vehicleInfo.escooterColor);
       }
 
-      // Clear draft upon successful submission
+      fd.append('emergency_contact_name', formData.emergency.contactName || '');
+      fd.append('emergency_contact_relationship', mapRelationship(formData.emergency.relationship));
+      fd.append('emergency_contact_phone', formData.emergency.phone || '');
+      if (formData.emergency.altPhone) fd.append('emergency_contact_alt_phone', formData.emergency.altPhone);
+      fd.append('base_city', formData.emergency.preferredCity || formData.personal.address?.city || 'Quezon City');
+      fd.append('base_province', formData.personal.address?.province || 'Metro Manila');
+      if (formData.emergency.preferredBarangayHubs) fd.append('preferred_hubs', formData.emergency.preferredBarangayHubs);
+      (formData.emergency.preferredShifts || []).forEach((s) => fd.append('preferred_shifts[]', s));
+      (formData.emergency.availableDays || []).forEach((d) => fd.append('available_days[]', d));
+
+      fd.append('payout_provider', formData.payout.provider || 'GCash');
+      fd.append('payout_account_type', mapAccountTypeToEnum(formData.payout.accountType));
+      fd.append('payout_account_holder_name', formData.payout.accountHolder || '');
+      fd.append('payout_account_number', formData.payout.accountNumber || '');
+      fd.append('terms_accepted', '1');
+      fd.append('terms_version', 'v1.0');
+
+      const frontIdFile = resolveUploadableFile(formData.identity.frontPhoto, 'government_id_front.jpg');
+      if (frontIdFile) fd.append('documents[government_id_front]', frontIdFile);
+
+      const backIdFile = resolveUploadableFile(formData.identity.backPhoto, 'government_id_back.jpg');
+      if (backIdFile) fd.append('documents[government_id_back]', backIdFile);
+
+      const selfieFile = resolveUploadableFile(formData.identity.selfiePhoto, 'selfie.jpg');
+      if (selfieFile) fd.append('documents[selfie]', selfieFile);
+
+      const vehiclePhotoFile = resolveUploadableFile(formData.vehicleInfo?.vehiclePhoto, `${method}_photo.jpg`);
+      if (vehiclePhotoFile) {
+        const photoCodeMap = {
+          motorcycle: 'motorcycle_photo',
+          bicycle: 'bicycle_photo',
+          e_bike: 'ebike_photo',
+          e_scooter: 'escooter_photo',
+        };
+        if (photoCodeMap[method]) {
+          fd.append(`documents[${photoCodeMap[method]}]`, vehiclePhotoFile);
+        }
+      }
+
+      Object.entries(formData.vehicleDocuments || {}).forEach(([docId, entry]) => {
+        const file = resolveUploadableFile(entry, `${docId}.pdf`);
+        if (file) fd.append(`documents[${docId}]`, file);
+      });
+
+      Object.entries(formData.clearanceDocuments || {}).forEach(([docId, entry]) => {
+        const file = resolveUploadableFile(entry, `${docId}.pdf`);
+        if (file) fd.append(`documents[${docId}]`, file);
+      });
+
+      if (formData.payout?.proofDocument) {
+        const proofFile = resolveUploadableFile(formData.payout.proofDocument, 'bank_proof.pdf');
+        if (proofFile) fd.append('documents[bank_proof]', proofFile);
+      }
+
+      const created = await applicationService.submitRiderApplication(fd);
+
       clearRiderDraft();
       setIsDirty(false);
 
+      const fullName = `${formData.personal.firstName} ${formData.personal.lastName}`.trim();
       setSubmittedData({
-        referenceNumber: generatedRef,
-        submissionDate: submissionIso,
+        referenceNumber: created?.reference_number,
+        submissionDate: created?.submitted_at || new Date().toISOString(),
         applicantName: fullName,
-        applicantEmail: verifiedEmail,
+        applicantEmail: created?.contact_email || verifiedEmail,
         deliveryMethod: formData.deliveryMethod,
       });
 
-      setSubmitting(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 1200);
+    } catch (error) {
+      setValidationErrors((prev) => ({
+        ...prev,
+        submit: error?.message || 'Unable to submit rider application. Please review your details and try again.',
+      }));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // Exit button logic: exit immediately if clean, prompt 3-option modal if dirty
@@ -824,6 +934,12 @@ export default function RiderApplicationPage() {
                   allRequiredValid={areAllRequiredStepsValid()}
                   errors={validationErrors}
                 />
+              )}
+
+              {validationErrors.submit && (
+                <div className="wizard-error-banner" role="alert" style={{ marginTop: 16, padding: '12px 16px', borderRadius: 10, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+                  {validationErrors.submit}
+                </div>
               )}
 
               {/* Wizard Footer Navigation (Steps 1–9) */}

@@ -5,5 +5,5 @@ export function buildNavigationUrl(address) {
     return '#';
   }
 
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  return `https://www.openstreetmap.org/search?query=${encodeURIComponent(query)}`;
 }

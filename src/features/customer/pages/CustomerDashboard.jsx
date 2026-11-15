@@ -1,22 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import customerService from '../../../services/customerService';
+import publicRestaurantService from '../../../services/publicRestaurantService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
+import { StateView } from '../../../components/feedback';
 import RestaurantImage from '../components/RestaurantImage';
 import ActiveStatusStrip from '../components/ActiveStatusStrip';
 import './CustomerDashboard.css';
-
-const CATEGORIES = [
-  { label: 'All', icon: '🍽️' },
-  { label: 'Filipino & Silog', icon: '🍲' },
-  { label: 'Grill & BBQ', icon: '🔥' },
-  { label: 'Burgers & Wings', icon: '🍔' },
-  { label: 'Pizza & Pasta', icon: '🍕' },
-  { label: 'Asian & Noodles', icon: '🍜' },
-  { label: 'Café & Bakery', icon: '🥐' },
-];
 
 const FALLBACK_COVERS = [
   '/images/landing/hero-food.png',
@@ -51,27 +43,74 @@ export default function CustomerDashboard() {
   const listingsRef = useRef(null);
 
   const [restaurants, setRestaurants] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [pagination, setPagination] = useState({ current_page: 1, per_page: 12, total: 0, last_page: 1 });
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState('name');
+  const [fulfillmentFilter, setFulfillmentFilter] = useState({
+    delivery: false,
+    pickup: false,
+    dineIn: false,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [favoriteIds, setFavoriteIds] = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => new URLSearchParams(location.search).get('q') || '');
   const [activeOrders, setActiveOrders] = useState([]);
   const [upcomingReservations, setUpcomingReservations] = useState([]);
 
-  useEffect(() => {
-    async function loadData() {
-      const rests = await customerService.getRestaurants();
-      setRestaurants(rests);
-      setFavoriteIds(customerService.getFavoriteRestaurants());
+  const loadCategories = useCallback(async () => {
+    try {
+      const cats = await publicRestaurantService.getCategories();
+      setCategories(cats);
+    } catch {
+      // Categories strip gracefully falls back to "All" if categories endpoint fails
+    }
+  }, []);
 
+  const loadRestaurants = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await publicRestaurantService.getRestaurants({
+        page,
+        per_page: 12,
+        search,
+        category: activeCategory,
+        offers_delivery: fulfillmentFilter.delivery,
+        offers_pickup: fulfillmentFilter.pickup,
+        offers_dine_in: fulfillmentFilter.dineIn,
+        sort,
+      });
+      setRestaurants(result.restaurants);
+      setPagination(result.pagination);
+    } catch (err) {
+      setError(err?.message || 'Unable to load restaurants right now.');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search, activeCategory, fulfillmentFilter, sort]);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
+
+  useEffect(() => {
+    loadRestaurants();
+  }, [loadRestaurants]);
+
+  useEffect(() => {
+    function loadMockActivity() {
+      setFavoriteIds(customerService.getFavoriteRestaurants());
       const ords = customerService.getOrders();
       setActiveOrders(ords.filter((o) => !['Completed', 'Cancelled', 'Rejected'].includes(o.overallStatus)));
-
       const resvs = customerService.getReservations();
       setUpcomingReservations(resvs.filter((r) => r.status === 'Confirmed'));
     }
-    loadData();
-    window.addEventListener('salo:demoStoreUpdated', loadData);
-    return () => window.removeEventListener('salo:demoStoreUpdated', loadData);
+    loadMockActivity();
+    window.addEventListener('salo:demoStoreUpdated', loadMockActivity);
+    return () => window.removeEventListener('salo:demoStoreUpdated', loadMockActivity);
   }, []);
 
   useEffect(() => {
@@ -83,15 +122,10 @@ export default function CustomerDashboard() {
   useEffect(() => {
     const nextQuery = new URLSearchParams(location.search).get('q') || '';
     setSearch(nextQuery);
+    setPage(1);
   }, [location.search]);
 
-  const filteredRestaurants = restaurants.filter((r) => {
-    const matchesSearch =
-      r.name.toLowerCase().includes(search.toLowerCase()) ||
-      r.cuisine.toLowerCase().includes(search.toLowerCase());
-    const matchesCat = activeCategory === 'All' || r.cuisine.includes(activeCategory.split(' ')[0]);
-    return matchesSearch && matchesCat;
-  });
+  const filteredRestaurants = restaurants;
 
   const handleToggleFavorite = (restaurantId, event) => {
     if (event) event.stopPropagation();
@@ -188,17 +222,19 @@ export default function CustomerDashboard() {
       {/* ── Categories Strip ─────────────────────────────── */}
       <section className="customer-categories-section" aria-label="Filter by food category" ref={listingsRef}>
         <div className="customer-categories-bar">
-          {CATEGORIES.map(({ label, icon }) => {
+          {['All', ...categories.map((cat) => cat.name)].map((label) => {
             const isActive = activeCategory === label;
             return (
               <button
                 key={label}
                 type="button"
                 className={`category-chip${isActive ? ' active' : ''}`}
-                onClick={() => setActiveCategory(label)}
+                onClick={() => {
+                  setActiveCategory(label);
+                  setPage(1);
+                }}
                 aria-pressed={isActive}
               >
-                <span className="category-chip__icon" aria-hidden="true">{icon}</span>
                 <span>{label}</span>
               </button>
             );
@@ -221,27 +257,33 @@ export default function CustomerDashboard() {
                 fallbackSrc={getRestaurantFallbackCover(spotlightRestaurant, 0)}
                 className="customer-spotlight-card__image"
               />
-              <span className="customer-spotlight-card__ribbon">Chef&apos;s Spotlight</span>
-              <span className="customer-spotlight-card__rating">
-                ★ {spotlightRestaurant.rating} ({spotlightRestaurant.reviewCount} reviews)
-              </span>
+              <span className="customer-spotlight-card__ribbon">Kitchen Spotlight</span>
+              {spotlightRestaurant.rating != null && spotlightRestaurant.reviewCount != null && (
+                <span className="customer-spotlight-card__rating">
+                  ★ {spotlightRestaurant.rating} ({spotlightRestaurant.reviewCount} reviews)
+                </span>
+              )}
             </div>
             <div className="customer-spotlight-card__body">
               <div className="customer-spotlight-card__top">
-                <span className="customer-spotlight-card__eyebrow">Featured Heritage Kitchen</span>
+                <span className="customer-spotlight-card__eyebrow">Approved Partner Kitchen</span>
                 <Badge variant={spotlightRestaurant.isOpen ? 'success' : 'default'} size="sm" dot>
-                  {spotlightRestaurant.isOpen ? 'Open for Orders & Reservations' : 'Currently Closed'}
+                  {spotlightRestaurant.availability?.temporarily_unavailable
+                    ? 'Temporarily Unavailable'
+                    : spotlightRestaurant.isOpen
+                      ? (spotlightRestaurant.availability?.not_accepting_orders ? 'Open · Not Accepting Orders' : 'Open Now')
+                      : 'Currently Closed'}
                 </Badge>
               </div>
               <h2 className="customer-spotlight-card__title">{spotlightRestaurant.name}</h2>
               <p className="customer-spotlight-card__cuisine">{spotlightRestaurant.cuisine}</p>
               <p className="customer-spotlight-card__bio">
-                {spotlightRestaurant.description || spotlightRestaurant.bio || 'Celebrated neighborhood kitchen serving handcrafted dishes made fresh daily.'}
+                {spotlightRestaurant.description || 'Local partner kitchen on SALO.'}
               </p>
               <div className="customer-spotlight-card__meta">
-                {spotlightRestaurant.deliveryTime && <span>⏱ {spotlightRestaurant.deliveryTime}</span>}
-                {spotlightRestaurant.deliveryFee != null && <span>🛵 ₱{spotlightRestaurant.deliveryFee} delivery</span>}
-                {spotlightRestaurant.minOrder != null && <span>🛍 Min. ₱{spotlightRestaurant.minOrder}</span>}
+                {spotlightRestaurant.offers?.delivery && <span>Delivery</span>}
+                {spotlightRestaurant.offers?.pickup && <span>Pickup</span>}
+                {spotlightRestaurant.offers?.dine_in && <span>Dine-in</span>}
                 {spotlightRestaurant.address && <span>📍 {spotlightRestaurant.address}</span>}
               </div>
               <div className="customer-spotlight-card__actions">
@@ -277,133 +319,221 @@ export default function CustomerDashboard() {
           <div>
             <span className="customer-listings-eyebrow">Gutom ka na ba?</span>
             <h2 className="section-title" style={{ margin: 0 }}>
-              Explore Restaurants ({filteredRestaurants.length})
+              Explore Restaurants ({pagination.total})
             </h2>
           </div>
-          <span className="customer-listings-subtitle">
-            Order delivery or book a table in advance
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {[
+              { key: 'delivery', label: 'Delivery' },
+              { key: 'pickup', label: 'Pickup' },
+              { key: 'dineIn', label: 'Dine-in' },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                className={`category-chip${fulfillmentFilter[key] ? ' active' : ''}`}
+                onClick={() => {
+                  setFulfillmentFilter((prev) => ({ ...prev, [key]: !prev[key] }));
+                  setPage(1);
+                }}
+                aria-pressed={fulfillmentFilter[key]}
+              >
+                {label}
+              </button>
+            ))}
+            <select
+              aria-label="Sort restaurants"
+              value={sort}
+              onChange={(e) => {
+                setSort(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                padding: '6px 10px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-primary)',
+                background: 'var(--surface-primary)',
+                color: 'var(--text-primary)',
+                fontSize: 'var(--font-size-xs)',
+              }}
+            >
+              <option value="name">Sort: Name (A–Z)</option>
+              <option value="newest">Sort: Newest</option>
+            </select>
+          </div>
         </div>
 
-        {filteredRestaurants.length === 0 ? (
+        {loading ? (
+          <StateView state="loading" title="restaurants" />
+        ) : error ? (
+          <StateView
+            state="error"
+            title="restaurants"
+            errorDescription={error}
+            onRetry={loadRestaurants}
+          />
+        ) : filteredRestaurants.length === 0 ? (
           <div className="customer-empty-filter">
             <div className="customer-empty-filter__icon" aria-hidden="true">🍽️</div>
-            <h3>No kitchens match your current filter</h3>
+            <h3>
+              {search || activeCategory !== 'All' || fulfillmentFilter.delivery || fulfillmentFilter.pickup || fulfillmentFilter.dineIn
+                ? 'No kitchens match your current filter'
+                : 'No restaurants available yet'}
+            </h3>
             <p>
-              We couldn&apos;t find any restaurants matching{' '}
-              {search ? `"${search}"` : activeCategory}. Try clearing your filters to explore all kitchens.
+              {search || activeCategory !== 'All' || fulfillmentFilter.delivery || fulfillmentFilter.pickup || fulfillmentFilter.dineIn
+                ? `We couldn't find any restaurants matching ${search ? `"${search}"` : 'your selected filters'}.`
+                : 'Approved partner kitchens will appear here once they go live.'}
             </p>
-            <Button variant="primary" size="sm" onClick={() => { setSearch(''); setActiveCategory('All'); }}>
-              Clear Search Filters
-            </Button>
+            {(search || activeCategory !== 'All' || fulfillmentFilter.delivery || fulfillmentFilter.pickup || fulfillmentFilter.dineIn) && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setSearch('');
+                  setActiveCategory('All');
+                  setFulfillmentFilter({ delivery: false, pickup: false, dineIn: false });
+                  setPage(1);
+                  if (location.search) navigate('/customer');
+                }}
+              >
+                Clear Search Filters
+              </Button>
+            )}
           </div>
         ) : (
-          <div className="customer-restaurant-grid">
-            {filteredRestaurants.map((rest, index) => {
-              const isFav = favoriteIds.includes(rest.id);
-              const activePromo = Array.isArray(rest.promotions)
-                ? rest.promotions.find((p) => p.status === 'active')
-                : null;
+          <>
+            <div className="customer-restaurant-grid">
+              {filteredRestaurants.map((rest, index) => {
+                const isFav = favoriteIds.includes(rest.id);
 
-              return (
-                <article
-                  key={rest.id}
-                  onClick={() => navigate(`/customer/restaurants/${rest.id}`)}
-                  className="customer-restaurant-card"
-                >
-                  {/* Visual Cover */}
-                  <div className="customer-restaurant-card__cover">
-                    <RestaurantImage
-                      image={rest.coverPhoto}
-                      alt={`${rest.name} cover photo`}
-                      fallback={rest.coverImage || getInitials(rest.name)}
-                      fallbackSrc={getRestaurantFallbackCover(rest, index)}
-                      className="customer-restaurant-card__image"
-                    />
-                    <div className="customer-restaurant-card__scrim" aria-hidden="true" />
-                    <button
-                      type="button"
-                      onClick={(event) => handleToggleFavorite(rest.id, event)}
-                      aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
-                      className={`customer-restaurant-card__favorite${isFav ? ' is-favorite' : ''}`}
-                    >
-                      {isFav ? '♥' : '♡'}
-                    </button>
-                    <span className="customer-restaurant-card__rating">
-                      <span className="customer-restaurant-card__star" aria-hidden="true">★</span>
-                      {rest.rating} <span className="customer-restaurant-card__reviews">({rest.reviewCount})</span>
-                    </span>
-                    {activePromo && (
-                      <span className="customer-restaurant-card__promo">
-                        {activePromo.code || 'Promo Available'}
-                      </span>
-                    )}
-                    <div className="customer-restaurant-card__logo">
-                      {rest.logoImage ? (
-                        <RestaurantImage
-                          image={rest.logoImage}
-                          alt={`${rest.name} logo`}
-                          fallback={getInitials(rest.name)}
-                        />
-                      ) : (
-                        <span>{getInitials(rest.name)}</span>
+                return (
+                  <article
+                    key={rest.id}
+                    onClick={() => navigate(`/customer/restaurants/${rest.id}`)}
+                    className="customer-restaurant-card"
+                  >
+                    {/* Visual Cover */}
+                    <div className="customer-restaurant-card__cover">
+                      <RestaurantImage
+                        image={rest.coverPhoto}
+                        alt={`${rest.name} cover photo`}
+                        fallback={getInitials(rest.name)}
+                        fallbackSrc={getRestaurantFallbackCover(rest, index)}
+                        className="customer-restaurant-card__image"
+                      />
+                      <div className="customer-restaurant-card__scrim" aria-hidden="true" />
+                      <button
+                        type="button"
+                        onClick={(event) => handleToggleFavorite(rest.id, event)}
+                        aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                        className={`customer-restaurant-card__favorite${isFav ? ' is-favorite' : ''}`}
+                      >
+                        {isFav ? '♥' : '♡'}
+                      </button>
+                      {rest.rating != null && rest.reviewCount != null && (
+                        <span className="customer-restaurant-card__rating">
+                          <span className="customer-restaurant-card__star" aria-hidden="true">★</span>
+                          {rest.rating} <span className="customer-restaurant-card__reviews">({rest.reviewCount})</span>
+                        </span>
                       )}
+                      <div className="customer-restaurant-card__logo">
+                        {rest.logoImage ? (
+                          <RestaurantImage
+                            image={rest.logoImage}
+                            alt={`${rest.name} logo`}
+                            fallback={getInitials(rest.name)}
+                          />
+                        ) : (
+                          <span>{getInitials(rest.name)}</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Details */}
-                  <div className="customer-restaurant-card__details">
-                    <div className="customer-restaurant-card__title-row">
-                      <h3>{rest.name}</h3>
-                      <Badge variant={rest.isOpen ? 'success' : 'default'} size="sm" dot>
-                        {rest.isOpen ? 'Open Now' : 'Closed'}
-                      </Badge>
-                    </div>
+                    {/* Details */}
+                    <div className="customer-restaurant-card__details">
+                      <div className="customer-restaurant-card__title-row">
+                        <h3>{rest.name}</h3>
+                        <Badge variant={rest.isOpen ? 'success' : 'default'} size="sm" dot>
+                          {rest.availability?.temporarily_unavailable
+                            ? 'Unavailable'
+                            : rest.isOpen
+                              ? 'Open Now'
+                              : 'Closed'}
+                        </Badge>
+                      </div>
 
-                    <p className="customer-restaurant-card__cuisine">
-                      {rest.cuisine}
-                    </p>
-
-                    {(rest.description || rest.bio) && (
-                      <p className="customer-restaurant-card__desc">
-                        {rest.description || rest.bio}
+                      <p className="customer-restaurant-card__cuisine">
+                        {rest.cuisine}
                       </p>
-                    )}
 
-                    <div className="customer-restaurant-card__metadata">
-                      {rest.deliveryTime && <span>⏱ {rest.deliveryTime}</span>}
-                      {rest.deliveryFee != null && <span>🛵 ₱{rest.deliveryFee}</span>}
-                      {rest.minOrder != null && <span>Min ₱{rest.minOrder}</span>}
-                    </div>
+                      {rest.description && (
+                        <p className="customer-restaurant-card__desc">
+                          {rest.description}
+                        </p>
+                      )}
 
-                    {/* Dual Action Strip */}
-                    <div className="customer-restaurant-card__actions">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/customer/restaurants/${rest.id}`);
-                        }}
-                      >
-                        Order Food
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/customer/restaurants/${rest.id}?tab=reserve`);
-                        }}
-                      >
-                        Book a Table
-                      </Button>
+                      <div className="customer-restaurant-card__metadata">
+                        {rest.address && <span>📍 {rest.address}</span>}
+                        {rest.offers?.delivery && <span>Delivery</span>}
+                        {rest.offers?.pickup && <span>Pickup</span>}
+                        {rest.offers?.dine_in && <span>Dine-in</span>}
+                        {rest.availability?.not_accepting_orders && <span>Not accepting orders</span>}
+                      </div>
+
+                      {/* Dual Action Strip */}
+                      <div className="customer-restaurant-card__actions">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/customer/restaurants/${rest.id}`);
+                          }}
+                        >
+                          Order Food
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/customer/restaurants/${rest.id}?tab=reserve`);
+                          }}
+                        >
+                          Book a Table
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            {pagination.last_page > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '24px' }}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.current_page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                  Page {pagination.current_page} of {pagination.last_page}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.current_page >= pagination.last_page}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </section>
     </CustomerLayout>

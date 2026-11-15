@@ -1,59 +1,53 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import BrandMark from '../../components/common/BrandMark';
 import Button from '../../components/common/Button';
 import ApplicationStatus from './components/ApplicationStatus';
+import applicationService, { mapBackendApplicationStatus } from '../../services/applicationService';
 import './BusinessApplicationStatusPage.css';
 
-const STORAGE_KEY = 'salo_partner_applications';
-
 export default function BusinessApplicationStatusPage() {
-  const [applicationData] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.restaurant) {
-          return {
-            id: parsed.restaurant.id || parsed.restaurant.referenceNumber,
-            referenceNumber: parsed.restaurant.referenceNumber || parsed.restaurant.id || 'SALO-APP-20261109-8421',
-            name: parsed.restaurant.name || 'Barrio Fiesta Bistro',
-            status: parsed.restaurant.status || 'Pending Review',
-            submittedAt: parsed.restaurant.submittedAt || new Date().toISOString(),
-            requestedDocuments: parsed.restaurant.requestedDocuments || [],
-          };
+  const [applicationData, setApplicationData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const app = await applicationService.getCurrentRestaurantApplication();
+        if (!active) return;
+        if (app) {
+          setApplicationData({
+            id: app.restaurant_application_id,
+            referenceNumber: app.reference_number,
+            name: app.restaurant_name,
+            status: mapBackendApplicationStatus(app.application_status),
+            submittedAt: app.submitted_at,
+            reviewerNote: app.reviewer_note,
+            requestedDocuments: (app.document_requests || []).map((req) => ({
+              id: req.request_id,
+              name: req.document_name,
+              reason: req.reason,
+              instructions: req.instructions,
+              dueDate: req.due_date,
+              status: req.request_status,
+            })),
+            documents: app.documents || [],
+          });
+        } else {
+          setApplicationData(null);
         }
+      } catch (err) {
+        if (active) setError(err?.message || 'Unable to load restaurant application status.');
+      } finally {
+        if (active) setLoading(false);
       }
-    } catch {
-      // fallback
-    }
-    return {
-      id: 'SALO-APP-20261109-8421',
-      referenceNumber: 'SALO-APP-20261109-8421',
-      name: 'Barrio Fiesta Bistro',
-      status: 'Pending Review',
-      submittedAt: new Date().toISOString(),
-      requestedDocuments: [],
+    })();
+    return () => {
+      active = false;
     };
-  });
-
-  const [currentStatus, setCurrentStatus] = useState(applicationData?.status || 'Pending Review');
-
-  const handleStatusChange = (newStatus) => {
-    setCurrentStatus(newStatus);
-    // Update local storage so status stays synchronized
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      const parsed = stored ? JSON.parse(stored) : {};
-      parsed.restaurant = {
-        ...parsed.restaurant,
-        status: newStatus,
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-    } catch {
-      // ignore
-    }
-  };
+  }, []);
 
   return (
     <div className="biz-status-page">
@@ -76,11 +70,23 @@ export default function BusinessApplicationStatusPage() {
 
       <main className="biz-status-content">
         <div className="biz-status-inner">
-          <ApplicationStatus
-            initialStatus={currentStatus}
-            applicationData={applicationData}
-            onStatusChange={handleStatusChange}
-          />
+          {loading && <p>Loading application status...</p>}
+          {!loading && error && <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>}
+          {!loading && !error && !applicationData && (
+            <div style={{ textAlign: 'center', padding: '40px 16px' }}>
+              <h2>No Restaurant Application Found</h2>
+              <p>You have not submitted a restaurant partner application yet.</p>
+              <Button as={Link} to="/become-a-partner" variant="primary" size="md">
+                Start Restaurant Application
+              </Button>
+            </div>
+          )}
+          {!loading && !error && applicationData && (
+            <ApplicationStatus
+              initialStatus={applicationData.status}
+              applicationData={applicationData}
+            />
+          )}
         </div>
       </main>
     </div>

@@ -4,65 +4,55 @@ import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useAuth } from '../../../hooks/useAuth';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import { adminService } from '../../../services/adminService';
+import applicationService, { mapBackendApplicationStatus } from '../../../services/applicationService';
 import './PartnerApplicationPage.css';
-
-const STORAGE_KEY = 'salo_partner_applications';
 
 export default function PartnerApplicationPage() {
   const { user } = useAuth();
 
-  // Restaurant application preview remains separate from the rider UI flow.
-  const [applications, setApplications] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? { restaurant: JSON.parse(stored).restaurant || null } : { restaurant: null };
-    } catch {
-      return { restaurant: null };
-    }
-  });
-
-  const [riderApp] = useState(() => {
-    try {
-      const stored = localStorage.getItem('salo_rider_applications');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return Array.isArray(parsed) ? parsed[0] : parsed;
-      }
-    } catch {
-      return null;
-    }
-    return null;
-  });
-
+  const [applications, setApplications] = useState({ restaurant: null });
+  const [riderApp, setRiderApp] = useState(null);
   const [notification, setNotification] = useState(null);
 
-  // Synchronize live status with adminService
   useEffect(() => {
-    if (!user?.email) return;
+    if (!user?.id && !user?.user_id) return;
+    let active = true;
 
-    // Check if user's restaurant application exists in adminService
-    const adminRestaurants = adminService.getRestaurants();
-    const existingRest = adminRestaurants.find((r) => r.ownerEmail?.toLowerCase() === user.email.toLowerCase());
+    (async () => {
+      try {
+        const data = await applicationService.getAccountApplications();
+        if (!active || !data) return;
 
-    setApplications((prev) => {
-      const next = { ...prev };
-      if (existingRest) {
-        let status = 'Pending Review';
-        if (existingRest.status === 'Active') status = 'Approved';
-        if (existingRest.status === 'Suspended') status = 'Rejected';
-        next.restaurant = {
-          ...next.restaurant,
-          name: existingRest.name,
-          status,
-          id: existingRest.id,
-          submittedAt: existingRest.joinedDate || '',
-        };
+        if (data.restaurant_application) {
+          setApplications({
+            restaurant: {
+              status: mapBackendApplicationStatus(data.restaurant_application.application_status),
+              submittedAt: data.restaurant_application.submitted_at,
+              reviewerNote: data.restaurant_application.reviewer_note,
+            },
+          });
+        } else {
+          setApplications({ restaurant: null });
+        }
+
+        if (data.rider_application) {
+          setRiderApp({
+            applicationStatus: mapBackendApplicationStatus(data.rider_application.application_status),
+            submittedAt: data.rider_application.submitted_at,
+            reviewerNote: data.rider_application.reviewer_note,
+          });
+        } else {
+          setRiderApp(null);
+        }
+      } catch {
+        // Leave empty state if request fails
       }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, [user]);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, user?.user_id]);
 
   // Submit Rider Partner Application
   const getStatusBadge = (status) => {
@@ -72,9 +62,9 @@ export default function PartnerApplicationPage() {
       case 'Pending Review':
         return <Badge variant="warning" size="md">Pending Review</Badge>;
       case 'Rejected':
-        return <Badge variant="danger" size="md">Rejected</Badge>;
+        return <Badge variant="error" size="md">Rejected</Badge>;
       default:
-        return <Badge variant="neutral" size="md">Not Applied</Badge>;
+        return <Badge variant="default" size="md">Not Applied</Badge>;
     }
   };
 
@@ -162,15 +152,20 @@ export default function PartnerApplicationPage() {
                     </div>
                   </div>
                 ) : (
-                  <Button
-                    as={Link}
-                    to="/become-a-partner"
-                    variant="primary"
-                    size="lg"
-                    fullWidth
-                  >
-                    Apply as a Restaurant Partner
-                  </Button>
+                  <div className="partner-card-actions-stack">
+                    <Button
+                      as={Link}
+                      to="/become-a-partner"
+                      variant="primary"
+                      size="lg"
+                      fullWidth
+                    >
+                      Apply as a Restaurant Partner
+                    </Button>
+                    <Button as={Link} to="/business-application/status" variant="outline" size="md" fullWidth>
+                      View Application Status
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
@@ -185,7 +180,7 @@ export default function PartnerApplicationPage() {
                 className="partner-card-img"
               />
               <div className="partner-card-status-pill">
-                {riderApp ? getStatusBadge(riderApp.applicationStatus || 'Pending Review') : <Badge variant="neutral" size="md">Not Applied</Badge>}
+                {getStatusBadge(riderApp ? (riderApp.applicationStatus || 'Pending Review') : null)}
               </div>
             </div>
 
@@ -232,7 +227,7 @@ export default function PartnerApplicationPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="rider-partner-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                  <div className="partner-card-actions-stack">
                     <Button as={Link} to="/become-a-rider" variant="primary" size="lg" fullWidth>
                       Apply as a Rider Partner
                     </Button>

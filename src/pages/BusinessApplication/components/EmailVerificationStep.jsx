@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import { Input } from '../../../components/forms';
+import otpService from '../../../services/otpService';
 
 const COUNTDOWN_INITIAL_SECONDS = 60;
 
@@ -118,7 +119,7 @@ export default function EmailVerificationStep({
     setStatusMessage(null);
   };
 
-  const handleSendOtp = (e) => {
+  const handleSendOtp = async (e) => {
     e?.preventDefault();
 
     const trimmed = (emailInput || '').trim();
@@ -133,11 +134,15 @@ export default function EmailVerificationStep({
     setSendingOtp(true);
     setStatusMessage(null);
 
-    setTimeout(() => {
-      setSendingOtp(false);
+    try {
+      const result = await otpService.sendOtp({
+        email: trimmed,
+        purpose: 'restaurant_application',
+      });
+
       setOtpSent(true);
       setIsEditingEmail(false);
-      setSecondsRemaining(COUNTDOWN_INITIAL_SECONDS);
+      setSecondsRemaining(result?.cooldown_seconds || COUNTDOWN_INITIAL_SECONDS);
       setCanResend(false);
       setOtpDigits(['', '', '', '', '', '']);
 
@@ -153,9 +158,16 @@ export default function EmailVerificationStep({
 
       setStatusMessage({
         type: 'info',
-        text: `Verification code sent to ${trimmed}. Enter the code below or use prototype code 123456.`,
+        text: `Verification code sent to ${trimmed}. Please check your email inbox.`,
       });
-    }, 500);
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        text: error?.message || 'Failed to send verification code. Please try again.',
+      });
+    } finally {
+      setSendingOtp(false);
+    }
   };
 
   const handleDigitChange = (index, value) => {
@@ -192,7 +204,7 @@ export default function EmailVerificationStep({
     }
   };
 
-  const handleVerifyOtp = (e) => {
+  const handleVerifyOtp = async (e) => {
     e?.preventDefault();
 
     const fullCode = otpDigits.join('');
@@ -204,30 +216,19 @@ export default function EmailVerificationStep({
       return;
     }
 
+    const targetEmail = (emailInput || data.email || '').trim();
     setVerifying(true);
     setStatusMessage(null);
 
-    setTimeout(() => {
-      setVerifying(false);
+    try {
+      const result = await otpService.verifyOtp({
+        email: targetEmail,
+        purpose: 'restaurant_application',
+        code: fullCode,
+      });
 
-      if (fullCode === '000000') {
-        setStatusMessage({
-          type: 'error',
-          text: 'Invalid verification code. Please check and try again.',
-        });
-        return;
-      }
-
-      if (fullCode === '999999') {
-        setStatusMessage({
-          type: 'error',
-          text: 'Verification code has expired. Please click Resend Code.',
-        });
-        return;
-      }
-
-      const verifiedEmail = (emailInput || data.email || '').trim();
-      const verifiedAt = new Date().toISOString();
+      const verifiedEmail = result?.email || targetEmail;
+      const verifiedAt = result?.verified_at || new Date().toISOString();
 
       onChange?.({
         ...data,
@@ -243,19 +244,19 @@ export default function EmailVerificationStep({
         type: 'success',
         text: 'Email verified successfully! You can now proceed to Business Information.',
       });
-    }, 600);
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        text: error?.message || 'Verification failed. Please check your code and try again.',
+      });
+    } finally {
+      setVerifying(false);
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (!canResend) return;
-
-    setSecondsRemaining(COUNTDOWN_INITIAL_SECONDS);
-    setCanResend(false);
-    setOtpDigits(['', '', '', '', '', '']);
-    setStatusMessage({
-      type: 'info',
-      text: `A new 6-digit verification code was sent to ${emailInput}. Enter code 123456 to verify.`,
-    });
+    await handleSendOtp();
     inputRefs.current[0]?.focus();
   };
 

@@ -1,6 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '../../../layouts/AdminLayout';
 import Button from '../../../components/common/Button';
+import { PhilippineAddressFields, SharedMap } from '../../../components/location';
+import locationApiService from '../../../services/locationApiService';
+import { geocodeAddress } from '../../../services/geocodingService';
 import {
   ConfirmDialog,
   DataTable,
@@ -11,244 +14,487 @@ import {
 } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
-import { getAdminMock } from '../mocks';
 import './AdminPages.css';
 
-const INITIAL_AREAS = getAdminMock('serviceAreas').data.map((area) => ({
-  ...area,
-  neighborhoods: [...area.neighborhoods],
-  zones: area.zones.map((zone) => ({ ...zone, riderIds: [...zone.riderIds], restaurantIds: [...zone.restaurantIds] })),
-}));
-const RESTAURANTS = getAdminMock('restaurants').data;
-const RIDERS = getAdminMock('riders').data;
+function formatAreaName(area) {
+  if (area.barangay) return `Brgy. ${area.barangay}, ${area.city}`;
+  if (area.city) return `${area.city} (City-wide)`;
+  return `${area.province} (Province-wide)`;
+}
 
 export default function AdminServiceAreasPage() {
   const { permissions } = useAdminSession();
-  const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Service Areas', placeholder: 'Search service areas by name, city, or zone', searchableFields: ['name', 'city', 'zoneNames', 'status'] });
-  const [areas, setAreas] = useState(INITIAL_AREAS);
-  const [view, setView] = useState('Areas and zones');
-  const [selectedAreaId, setSelectedAreaId] = useState(INITIAL_AREAS[0]?.id || '');
-  const [selectedZoneName, setSelectedZoneName] = useState(INITIAL_AREAS[0]?.zones[0]?.name || '');
+  const { query: globalQuery } = useAdminPageSearch({
+    scopeLabel: 'Service Areas',
+    placeholder: 'Search service areas by province, city, barangay, or status',
+    searchableFields: ['province', 'city', 'barangay', 'areaLabel', 'status'],
+  });
+
+  const [areas, setAreas] = useState([]);
+  const [overview, setOverview] = useState({ restaurants: [], active_deliveries: [] });
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('Service areas & map');
+  const [selectedAreaId, setSelectedAreaId] = useState(null);
+
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', city: '', neighborhoods: '', zones: '' });
-  const [assignments, setAssignments] = useState(null);
-  const [pendingArea, setPendingArea] = useState(null);
+  const [addressForm, setAddressForm] = useState({
+    country: 'Philippines',
+    province: '',
+    city: '',
+    barangay: '',
+  });
+  const [centerCoords, setCenterCoords] = useState({ lat: 14.5995, lng: 120.9842 });
+  const [notes, setNotes] = useState('');
+  const [pendingAreaStatus, setPendingAreaStatus] = useState(null);
   const [pendingAreaSave, setPendingAreaSave] = useState(null);
-  const [pendingAssignments, setPendingAssignments] = useState(null);
   const [notice, setNotice] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
   const canEdit = Boolean(permissions.serviceAreas?.some((action) => ['create', 'edit'].includes(action)));
   const canActivate = permissions.serviceAreas?.includes('activate');
   const canDeactivate = permissions.serviceAreas?.includes('deactivate');
-  const selectedArea = areas.find((area) => area.id === selectedAreaId);
-  const selectedZone = selectedArea?.zones.find((zone) => zone.name === selectedZoneName);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const [saList, ov] = await Promise.all([
+        locationApiService.getAdminServiceAreas(),
+        locationApiService.getAdminLocationsOverview().catch(() => ({ restaurants: [], active_deliveries: [] })),
+      ]);
+      const list = Array.isArray(saList) ? saList : [];
+      setAreas(list);
+      setOverview({
+        restaurants: ov?.restaurants || [],
+        active_deliveries: ov?.active_deliveries || [],
+      });
+      if (list.length > 0 && !selectedAreaId) {
+        setSelectedAreaId(list[0].id);
+      }
+    } catch (err) {
+      setErrorMsg(err?.message || 'Unable to load service areas from backend.');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedAreaId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const areaRows = useMemo(() => {
     const term = globalQuery.trim().toLowerCase();
-    return areas.map((area) => ({
-    ...area,
-    zoneNames: area.zones.map((zone) => zone.name).join(', '),
-    riderCount: new Set(area.zones.flatMap((zone) => zone.riderIds)).size,
-    restaurantCount: new Set(area.zones.flatMap((zone) => zone.restaurantIds)).size,
-    })).filter((area) => !term || [area.name, area.city, area.zoneNames, area.status].some((v) => String(v || '').toLowerCase().includes(term)));
+    return areas
+      .map((area) => ({
+        ...area,
+        areaLabel: formatAreaName(area),
+      }))
+      .filter(
+        (area) =>
+          !term ||
+          [area.province, area.city, area.barangay, area.areaLabel, area.status]
+            .some((v) => String(v || '').toLowerCase().includes(term)),
+      );
   }, [areas, globalQuery]);
+
+  const selectedArea = useMemo(
+    () => areas.find((a) => a.id === selectedAreaId) || areaRows[0] || null,
+    [areas, areaRows, selectedAreaId],
+  );
+
+  const mapMarkers = useMemo(
+    () =>
+      areaRows
+        .filter((a) => Number.isFinite(Number(a.center_latitude)) && Number.isFinite(Number(a.center_longitude)))
+        .map((a) => ({
+          id: `sa-${a.id}`,
+          lat: Number(a.center_latitude),
+          lng: Number(a.center_longitude),
+          title: formatAreaName(a),
+          subtitle: `${a.status} · ${a.area_level} level · ${a.restaurant_count || 0} restaurant(s)`,
+          type: a.is_active ? 'activeArea' : 'inactiveArea',
+          onClick: () => setSelectedAreaId(a.id),
+        })),
+    [areaRows],
+  );
+
+  const mapCircles = useMemo(
+    () =>
+      areaRows
+        .filter((a) => Number.isFinite(Number(a.center_latitude)) && Number.isFinite(Number(a.center_longitude)))
+        .map((a) => ({
+          id: `sa-circle-${a.id}`,
+          lat: Number(a.center_latitude),
+          lng: Number(a.center_longitude),
+          radiusMeters: a.area_level === 'barangay' ? 1100 : a.area_level === 'city' ? 4000 : 12000,
+          active: Boolean(a.is_active),
+          onClick: () => setSelectedAreaId(a.id),
+        })),
+    [areaRows],
+  );
 
   function openCreate() {
     setEditing(null);
-    setForm({ name: '', city: '', neighborhoods: '', zones: '' });
+    setAddressForm({ country: 'Philippines', province: '', city: '', barangay: '' });
+    setCenterCoords({ lat: 14.5995, lng: 120.9842 });
+    setNotes('');
     setFormOpen(true);
   }
 
   function openEdit(area) {
     setEditing(area);
-    setForm({
-      name: area.name,
-      city: area.city,
-      neighborhoods: area.neighborhoods.join(', '),
-      zones: area.zones.map((zone) => zone.name).join(', '),
+    setAddressForm({
+      country: 'Philippines',
+      province: area.province || '',
+      city: area.city || '',
+      barangay: area.barangay || '',
     });
+    setCenterCoords({
+      lat: area.center_latitude ?? 14.5995,
+      lng: area.center_longitude ?? 120.9842,
+    });
+    setNotes(area.notes || '');
     setFormOpen(true);
+  }
+
+  async function handleGeocodeAreaCenter() {
+    const query = [addressForm.barangay, addressForm.city, addressForm.province, 'Philippines']
+      .filter(Boolean)
+      .join(', ');
+    if (!query) return;
+    try {
+      const res = await geocodeAddress(query);
+      if (res) {
+        setCenterCoords({ lat: Number(res.lat.toFixed(6)), lng: Number(res.lng.toFixed(6)) });
+      }
+    } catch {
+      // Ignore geocode failure; admin can click the map directly
+    }
   }
 
   function saveArea(event) {
     event.preventDefault();
-    const neighborhoods = form.neighborhoods.split(',').map((item) => item.trim()).filter(Boolean);
-    const zoneNames = form.zones.split(',').map((item) => item.trim()).filter(Boolean);
-    if (!form.name.trim() || !form.city.trim() || !zoneNames.length) {
-      setNotice('Enter an area name, city, and at least one delivery zone.');
+    setErrorMsg('');
+    if (!addressForm.province.trim()) {
+      setErrorMsg('Province is required.');
       return;
     }
-    setPendingAreaSave({ editing, name: form.name.trim(), city: form.city.trim(), neighborhoods, zoneNames });
-  }
-
-  function confirmAreaSave({ reason }) {
-    const { editing: areaToEdit, name, city, neighborhoods, zoneNames } = pendingAreaSave;
-    if (areaToEdit) {
-      const currentZones = new Map(areaToEdit.zones.map((zone) => [zone.name, zone]));
-      const updated = { ...areaToEdit, name, city, neighborhoods, zones: zoneNames.map((zoneName) => currentZones.get(zoneName) || { name: zoneName, riderIds: [], restaurantIds: [] }), updateReason: reason };
-      setAreas((previous) => previous.map((area) => area.id === areaToEdit.id ? updated : area));
-      setSelectedAreaId(areaToEdit.id);
-      setSelectedZoneName(zoneNames[0] || '');
-      setNotice(`${updated.name} was updated.`);
-    } else {
-      const area = { id: `area-${Date.now()}`, name, city, neighborhoods, zones: zoneNames.map((zoneName) => ({ name: zoneName, riderIds: [], restaurantIds: [] })), status: 'Active', updateReason: reason };
-      setAreas((previous) => [...previous, area]);
-      setSelectedAreaId(area.id);
-      setSelectedZoneName(area.zones[0]?.name || '');
-      setNotice(`${area.name} was created.`);
+    if (addressForm.barangay.trim() && !addressForm.city.trim()) {
+      setErrorMsg('City / Municipality is required when specifying a barangay.');
+      return;
     }
-    setPendingAreaSave(null);
-    setFormOpen(false);
-  }
 
-  function requestAreaStatus(area, status) {
-    setPendingArea({ area, status });
-  }
-
-  function confirmAreaStatus({ reason }) {
-    const { area, status } = pendingArea;
-    setAreas((previous) => previous.map((item) => item.id === area.id ? { ...item, status, statusReason: reason } : item));
-    setPendingArea(null);
-    setNotice(`${area.name} is now ${status.toLowerCase()}.`);
-  }
-
-  function saveAssignments() {
-    if (!selectedArea || !selectedZone) return;
-    setPendingAssignments({
-      areaId: selectedArea.id,
-      areaName: selectedArea.name,
-      zoneName: selectedZone.name,
-      riderIds: assignments ?? selectedZone.riderIds,
+    setPendingAreaSave({
+      editing,
+      province: addressForm.province.trim(),
+      city: addressForm.city.trim() || null,
+      barangay: addressForm.barangay.trim() || null,
+      center_latitude: centerCoords?.lat ?? null,
+      center_longitude: centerCoords?.lng ?? null,
+      notes: notes.trim() || null,
     });
   }
 
-  function confirmAssignments({ reason }) {
-    const { areaId, areaName, zoneName, riderIds } = pendingAssignments;
-    setAreas((previous) => previous.map((area) => area.id === areaId ? {
-      ...area,
-      zones: area.zones.map((zone) => zone.name === zoneName ? { ...zone, riderIds, assignmentReason: reason } : zone),
-    } : area));
-    setNotice(`Rider assignments saved for ${zoneName} in ${areaName}.`);
-    setPendingAssignments(null);
+  async function confirmAreaSave({ reason }) {
+    if (!pendingAreaSave) return;
+    try {
+      if (pendingAreaSave.editing) {
+        const updated = await locationApiService.updateAdminServiceArea(pendingAreaSave.editing.id, {
+          center_latitude: pendingAreaSave.center_latitude,
+          center_longitude: pendingAreaSave.center_longitude,
+          notes: pendingAreaSave.notes,
+          reason: reason || 'Updated service area details',
+        });
+        setAreas((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+        setNotice(`${formatAreaName(updated)} was updated.`);
+      } else {
+        const created = await locationApiService.createAdminServiceArea({
+          province: pendingAreaSave.province,
+          city: pendingAreaSave.city,
+          barangay: pendingAreaSave.barangay,
+          center_latitude: pendingAreaSave.center_latitude,
+          center_longitude: pendingAreaSave.center_longitude,
+          notes: pendingAreaSave.notes,
+          is_active: true,
+          reason: reason || 'Activated new SALO service area',
+        });
+        setAreas((prev) => [...prev, created]);
+        setSelectedAreaId(created.id);
+        setNotice(`${formatAreaName(created)} was added and activated.`);
+      }
+      setFormOpen(false);
+    } catch (err) {
+      setErrorMsg(err?.message || 'Unable to save service area.');
+    } finally {
+      setPendingAreaSave(null);
+    }
   }
 
-  function toggleRider(riderId) {
-    setAssignments((current) => {
-      const currentAssignments = current ?? selectedZone?.riderIds ?? [];
-      return currentAssignments.includes(riderId)
-        ? currentAssignments.filter((id) => id !== riderId)
-        : [...currentAssignments, riderId];
-    });
+  async function confirmAreaStatus({ reason }) {
+    if (!pendingAreaStatus) return;
+    const { area, nextActive } = pendingAreaStatus;
+    try {
+      const updated = await locationApiService.updateAdminServiceArea(area.id, {
+        is_active: nextActive,
+        reason: reason || (nextActive ? 'Activated service area' : 'Deactivated service area'),
+      });
+      setAreas((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      setNotice(`${formatAreaName(updated)} is now ${updated.status.toLowerCase()}.`);
+    } catch (err) {
+      setErrorMsg(err?.message || 'Unable to update service area status.');
+    } finally {
+      setPendingAreaStatus(null);
+    }
   }
 
-  const coverageRows = RESTAURANTS.map((restaurant) => ({
-    ...restaurant,
-    physicalLocation: `${restaurant.address} (${restaurant.zone})`,
-    deliveryCoverage: (restaurant.serviceCoverage || []).join(', ') || 'Not declared',
-    coverageStatus: (restaurant.serviceCoverage || []).some((location) => areas.some((area) => area.status === 'Active' && (area.city === location || area.name === location))) ? 'Supported' : 'Review required',
-  }));
-  const availabilityRows = areas.flatMap((area) => area.zones.map((zone) => {
-    const assigned = RIDERS.filter((rider) => zone.riderIds.includes(rider.id));
-    return {
-      id: `${area.id}-${zone.name}`,
-      area: area.name,
-      zone: zone.name,
-      assigned: assigned.length,
-      online: assigned.filter((rider) => rider.isOnline).length,
-      available: assigned.filter((rider) => rider.isOnline && !rider.onDelivery).length,
-      status: area.status,
-    };
-  }));
+  const columns = [
+    { key: 'province', label: 'Province', sortable: true },
+    { key: 'city', label: 'City / Municipality', sortable: true, render: (row) => row.city || 'All Cities (Province-wide)' },
+    { key: 'barangay', label: 'Barangay', sortable: true, render: (row) => row.barangay || (row.city ? 'All Barangays (City-wide)' : '—') },
+    { key: 'area_level', label: 'Level', sortable: true },
+    { key: 'restaurant_count', label: 'Restaurants', align: 'right', sortable: true },
+    { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (row) => (
+        <div className="admin-inline-actions">
+          <Button variant="ghost" size="sm" onClick={() => setSelectedAreaId(row.id)}>
+            Inspect
+          </Button>
+          {canEdit && (
+            <Button variant="outline" size="sm" onClick={() => openEdit(row)}>
+              Edit
+            </Button>
+          )}
+          {row.is_active && canDeactivate && (
+            <Button
+              variant="danger-outline"
+              size="sm"
+              onClick={() => setPendingAreaStatus({ area: row, nextActive: false })}
+            >
+              Deactivate
+            </Button>
+          )}
+          {!row.is_active && canActivate && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setPendingAreaStatus({ area: row, nextActive: true })}
+            >
+              Activate
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   return (
     <AdminLayout>
-      <section className="admin-shell-page">
-        <PageHeader title="Service Areas and Delivery Zones" description="Manage supported cities, neighborhoods, delivery zones, restaurant coverage, and rider assignments." actions={canEdit ? <Button variant="primary" onClick={openCreate}>Create service area</Button> : null} />
-        {notice && <p className="admin-inline-notice" role="status">{notice}</p>}
-        <div className="admin-shell-note"><strong>Coverage policy:</strong> Delivery is blocked outside active service coverage. Pickup and reservation availability are evaluated separately from delivery coverage.</div>
-        <Tabs items={['Areas and zones', 'Restaurant coverage', 'Rider availability']} value={view} onChange={setView} label="Service area views" />
-        {view === 'Areas and zones' && <>
-          <DataTable tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} columns={[
-            { key: 'name', label: 'Area / city', render: (area) => <><strong>{area.name}</strong><br /><span className="admin-muted">{area.city}</span></> },
-            { key: 'neighborhoods', label: 'Neighborhoods', render: (area) => area.neighborhoods.join(', ') || 'None listed' },
-            { key: 'zoneNames', label: 'Delivery zones' },
-            { key: 'restaurantCount', label: 'Restaurants in zones' },
-            { key: 'riderCount', label: 'Assigned riders' },
-            { key: 'status', label: 'Status', render: (area) => <StatusBadge status={area.status} /> },
-            { key: 'actions', label: 'Actions', render: (area) => <div className="admin-action-row">{canEdit && <button className="admin-action-button" type="button" onClick={() => openEdit(area)}>Edit</button>}{area.status === 'Active' && canDeactivate && <button className="admin-action-button admin-action-button--danger" type="button" onClick={() => requestAreaStatus(area, 'Deactivated')}>Deactivate</button>}{area.status !== 'Active' && canActivate && <button className="admin-action-button" type="button" onClick={() => requestAreaStatus(area, 'Active')}>Activate</button>}</div> },
-          ]} rows={areaRows} emptyTitle="No service areas" emptyDescription="Create a service area to define supported cities and delivery zones." />
-          {areas.length > 0 && <section className="admin-record-panel">
-            <h2>Assign riders to zones</h2>
-            <div className="admin-filter-bar">
-              <label className="admin-filter-control">Service area<select aria-label="Select service area" value={selectedAreaId} onChange={(event) => { setSelectedAreaId(event.target.value); const area = areas.find((item) => item.id === event.target.value); setSelectedZoneName(area?.zones[0]?.name || ''); setAssignments(null); }} >{areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select></label>
-              <label className="admin-filter-control">Delivery zone<select aria-label="Select delivery zone" value={selectedZoneName} onChange={(event) => { setSelectedZoneName(event.target.value); setAssignments(null); }}>{selectedArea?.zones.map((zone) => <option key={zone.name}>{zone.name}</option>)}</select></label>
+      <div className="admin-page">
+        <PageHeader
+          eyebrow="Platform Operations"
+          title="Service Area Management"
+          description="Define where SALO officially operates across the Philippines (Province → City/Municipality → Barangay). Restaurant delivery coverage is strictly restricted to active platform service areas."
+          actions={
+            canEdit && (
+              <Button variant="primary" size="md" onClick={openCreate}>
+                + Add Service Area
+              </Button>
+            )
+          }
+        />
+
+        {notice && (
+          <div className="salo-loc-status-banner is-success" role="status">
+            {notice}
+          </div>
+        )}
+        {errorMsg && (
+          <div className="salo-loc-status-banner is-error" role="alert">
+            {errorMsg}
+          </div>
+        )}
+
+        <Tabs
+          tabs={['Service areas & map', 'Operational monitoring']}
+          activeTab={view}
+          onChange={setView}
+        />
+
+        {view === 'Service areas & map' ? (
+          <>
+            <div className="admin-card" style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <strong>SALO Operational Coverage Map</strong>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                    Green = Active service area · Gray = Inactive service area. Barangay-level areas do not mark entire cities as covered.
+                  </div>
+                </div>
+                {selectedArea && (
+                  <div style={{ fontSize: '0.8125rem' }}>
+                    <strong>Inspecting:</strong> {formatAreaName(selectedArea)} ({selectedArea.status})
+                  </div>
+                )}
+              </div>
+
+              <SharedMap
+                center={
+                  selectedArea && Number.isFinite(Number(selectedArea.center_latitude))
+                    ? { lat: Number(selectedArea.center_latitude), lng: Number(selectedArea.center_longitude) }
+                    : { lat: 12.8797, lng: 121.774 }
+                }
+                zoom={selectedArea && Number.isFinite(Number(selectedArea.center_latitude)) ? 13 : 6}
+                height={320}
+                markers={mapMarkers}
+                circles={mapCircles}
+                interactive
+                showCoordsChip={false}
+                ariaLabel="Admin service area coverage map"
+              />
             </div>
-            {selectedZone ? <div className="admin-rider-assignment-list">{RIDERS.filter((rider) => rider.status === 'Active').map((rider) => <label key={rider.id}><input type="checkbox" checked={(assignments ?? selectedZone.riderIds ?? []).includes(rider.id)} onChange={() => toggleRider(rider.id)} disabled={!canEdit} /><span><strong>{rider.name}</strong><small>{rider.isOnline ? 'Online' : 'Offline'} · {rider.zone}</small></span></label>)}</div> : <p>Select a zone to manage assignments.</p>}
-            {canEdit && selectedZone && <Button variant="outline" onClick={saveAssignments}>Save rider assignments</Button>}
-          </section>}
-        </>}
-        {view === 'Restaurant coverage' && <><p className="admin-muted">Physical restaurant location is shown separately from its declared delivery coverage.</p><DataTable tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} columns={[
-          { key: 'name', label: 'Restaurant', render: (restaurant) => <strong>{restaurant.name}</strong> },
-          { key: 'physicalLocation', label: 'Physical location' },
-          { key: 'deliveryCoverage', label: 'Declared delivery coverage' },
-          { key: 'coverageStatus', label: 'Area review', render: (restaurant) => <StatusBadge status={restaurant.coverageStatus} /> },
-        ]} rows={coverageRows} emptyTitle="No restaurant coverage records" emptyDescription="There are no restaurant records available for coverage review." /></>}
-        {view === 'Rider availability' && <DataTable tableSearch={globalQuery} defaultOrder={[[0, 'asc']]} columns={[
-          { key: 'area', label: 'Service area' },
-          { key: 'zone', label: 'Delivery zone' },
-          { key: 'assigned', label: 'Assigned riders' },
-          { key: 'online', label: 'Online' },
-          { key: 'available', label: 'Available now' },
-          { key: 'status', label: 'Area status', render: (row) => <StatusBadge status={row.status} /> },
-        ]} rows={availabilityRows} emptyTitle="No rider zones" emptyDescription="Create an area and zones to review rider coverage." />}
-      </section>
 
-      <Modal open={formOpen} onClose={() => setFormOpen(false)} size="md" title={editing ? 'Edit service area' : 'Create service area'} footer={<><Button variant="ghost" type="button" onClick={() => setFormOpen(false)}>Cancel</Button><Button variant="primary" type="submit" form="service-area-form">{editing ? 'Review changes' : 'Review new area'}</Button></>}>
-        <form id="service-area-form" className="admin-modal-form" onSubmit={saveArea}>
+            <DataTable
+              columns={columns}
+              rows={areaRows}
+              loading={loading}
+              emptyTitle="No service areas configured"
+              emptyDescription="Add a Philippine province, city/municipality, or barangay to activate SALO ordering."
+            />
+          </>
+        ) : (
+          <div style={{ display: 'grid', gap: '16px' }}>
+            <div className="admin-card">
+              <h3 style={{ marginTop: 0 }}>Active Restaurants ({overview.restaurants.length})</h3>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                Registered restaurant physical locations across the platform.
+              </p>
+              <DataTable
+                columns={[
+                  { key: 'restaurant_name', label: 'Restaurant', sortable: true },
+                  { key: 'address', label: 'Physical Address' },
+                  { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status} /> },
+                ]}
+                rows={overview.restaurants}
+                loading={loading}
+              />
+            </div>
 
+            <div className="admin-card">
+              <h3 style={{ marginTop: 0 }}>Active Deliveries & Live Rider Locations ({overview.active_deliveries.length})</h3>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                Live rider GPS is shown only for riders with an active delivery assignment.
+              </p>
+              <DataTable
+                columns={[
+                  { key: 'order_reference', label: 'Order Ref', sortable: true },
+                  { key: 'restaurant_name', label: 'Pickup' },
+                  { key: 'delivery_address', label: 'Drop-off' },
+                  { key: 'rider_name', label: 'Rider', render: (r) => r.rider_name || 'Unassigned' },
+                  {
+                    key: 'rider_location',
+                    label: 'Latest GPS',
+                    render: (r) =>
+                      r.rider_location
+                        ? `${r.rider_location.latitude.toFixed(5)}, ${r.rider_location.longitude.toFixed(5)}`
+                        : 'Waiting for GPS',
+                  },
+                  { key: 'delivery_status', label: 'Status', render: (r) => <StatusBadge status={r.delivery_status} /> },
+                ]}
+                rows={overview.active_deliveries}
+                loading={loading}
+              />
+            </div>
+          </div>
+        )}
 
-          <label className="admin-filter-control">Area name<input required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
-          <label className="admin-filter-control">City<input required value={form.city} onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))} /></label>
-          <label className="admin-filter-control">Neighborhoods (comma-separated)<input value={form.neighborhoods} onChange={(event) => setForm((current) => ({ ...current, neighborhoods: event.target.value }))} /></label>
-          <label className="admin-filter-control">Delivery zones (comma-separated)<input required value={form.zones} onChange={(event) => setForm((current) => ({ ...current, zones: event.target.value }))} /></label>
-          <p>Pickup and reservation availability do not automatically follow delivery coverage.</p>
-          <p className="admin-shell-note">Pickup and reservation availability do not automatically follow delivery coverage.</p>
+        {/* Create / Edit Service Area Modal */}
+        <Modal
+          open={formOpen}
+          onClose={() => setFormOpen(false)}
+          title={editing ? `Edit Service Area: ${formatAreaName(editing)}` : 'Add Platform Service Area'}
+          size="lg"
+        >
+          <form onSubmit={saveArea} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <PhilippineAddressFields
+              value={addressForm}
+              onChange={(next) => {
+                if (!editing) setAddressForm(next);
+              }}
+              showStreetAndDetails={false}
+              requireBarangay={false}
+              requireCity={false}
+              disabled={Boolean(editing)}
+            />
 
-        </form>
-      </Modal>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                Click on the map to set the area center marker (optional):
+              </span>
+              <Button type="button" variant="outline" size="sm" onClick={handleGeocodeAreaCenter}>
+                Locate on Map
+              </Button>
+            </div>
 
+            <SharedMap
+              center={centerCoords}
+              zoom={13}
+              height={220}
+              pin={{ lat: centerCoords.lat, lng: centerCoords.lng, draggable: true, title: 'Service Area Center' }}
+              onPinChange={({ lat, lng }) => setCenterCoords({ lat, lng })}
+              ariaLabel="Service area center pin map"
+            />
 
+            <div>
+              <label className="salo-ph-label" htmlFor="sa-notes">Administrative Notes (Optional)</label>
+              <input
+                id="sa-notes"
+                type="text"
+                className="salo-ph-input"
+                value={notes}
+                placeholder="e.g. Launch phase 1 coverage, weekday hours"
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
 
-      <ConfirmDialog
-        open={Boolean(pendingAreaSave)}
-        title={pendingAreaSave?.editing ? 'Confirm service-area changes' : 'Confirm new service area'}
-        description="Area or zone changes affect future delivery coverage. They do not change pickup or reservation eligibility."
-        confirmLabel={pendingAreaSave?.editing ? 'Save changes' : 'Create area'}
-        requireReauthentication
-        requireReason
-        onClose={() => setPendingAreaSave(null)}
-        onConfirm={confirmAreaSave}
-      />
-      <ConfirmDialog
-        open={Boolean(pendingAssignments)}
-        title={`Confirm rider assignments for ${pendingAssignments?.zoneName || 'zone'}`}
-        description="Zone assignments are recorded for coverage planning."
-        confirmLabel="Save assignments"
-        requireReauthentication
-        requireReason
-        onClose={() => setPendingAssignments(null)}
-        onConfirm={confirmAssignments}
-      />
-      <ConfirmDialog
-        open={Boolean(pendingArea)}
-        title={`${pendingArea?.status === 'Active' ? 'Activate' : 'Deactivate'} ${pendingArea?.area.name || 'area'}?`}
-        description="Changing coverage affects future delivery eligibility. Pickup and reservations are evaluated separately; historical orders are unchanged."
-        confirmLabel={pendingArea?.status === 'Active' ? 'Activate area' : 'Deactivate area'}
-        requireReauthentication
-        requireReason
-        onClose={() => setPendingArea(null)}
-        onConfirm={confirmAreaStatus}
-      />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary">
+                {editing ? 'Save Changes' : 'Add Service Area'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+
+        <ConfirmDialog
+          open={Boolean(pendingAreaSave)}
+          title={pendingAreaSave?.editing ? 'Confirm Service Area Update' : 'Confirm New Service Area'}
+          description="This administrative change will be recorded in SALO audit logs."
+          confirmLabel="Confirm & Save"
+          requireReason
+          onCancel={() => setPendingAreaSave(null)}
+          onConfirm={confirmAreaSave}
+        />
+
+        <ConfirmDialog
+          open={Boolean(pendingAreaStatus)}
+          title={pendingAreaStatus?.nextActive ? 'Activate Service Area' : 'Deactivate Service Area'}
+          description={
+            pendingAreaStatus?.nextActive
+              ? `Activate ${pendingAreaStatus ? formatAreaName(pendingAreaStatus.area) : ''} for SALO ordering and restaurant delivery coverage?`
+              : `Deactivate ${pendingAreaStatus ? formatAreaName(pendingAreaStatus.area) : ''}? Customers will no longer be able to place new delivery orders here.`
+          }
+          confirmLabel={pendingAreaStatus?.nextActive ? 'Activate' : 'Deactivate'}
+          requireReason
+          onCancel={() => setPendingAreaStatus(null)}
+          onConfirm={confirmAreaStatus}
+        />
+      </div>
     </AdminLayout>
   );
 }

@@ -161,7 +161,7 @@ function ActiveDelivery({ state, setState }) {
               <div className="rider-inline rider-status-wrap">{data.statuses.map((status) => <RiderStatusBadge key={status} status={status} tone={status === data.activeStatus ? 'success' : 'neutral'} />)}</div>
               <div className="rider-grid rider-top-gap"><div><strong>{data.restaurant}</strong><p>{data.pickup}</p></div><div><strong>{data.customer}</strong><p>{data.dropoff}</p></div></div>
               <div className="rider-note">{data.instructions}</div>
-              <div className="rider-inline rider-top-gap"><a className="rider-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.dropoff)}`} target="_blank" rel="noreferrer">{'Open in Maps'}</a><Button variant="secondary" size="sm">{'Call customer'}</Button><Button variant="ghost" size="sm" onClick={() => setTab('Report a problem')}>{'Cannot reach customer'}</Button></div>
+              <div className="rider-inline rider-top-gap"><a className="rider-link" href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(data.dropoff)}`} target="_blank" rel="noreferrer">{'Open in Maps'}</a><Button variant="secondary" size="sm">{'Call customer'}</Button><Button variant="ghost" size="sm" onClick={() => setTab('Report a problem')}>{'Cannot reach customer'}</Button></div>
               <div className="rider-note rider-top-gap">{'Illustrative screen only. No live navigation preview is provided.'}</div>
             </RiderCard>
           </>}

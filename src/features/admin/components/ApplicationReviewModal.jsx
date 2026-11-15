@@ -7,101 +7,105 @@ import {
   Timeline,
   showAdminToast,
 } from './index';
-import { applyApplicationDecision, saveApplicationDraft } from '../mocks';
-import { appendAdminAuditLog } from '../utils/auditLog';
+import adminApiService from '../../../services/adminApiService';
+import { mapBackendApplicationStatus } from '../../../services/applicationService';
 import { formatDate, formatDateTime } from '../utils/format';
+
+const API_ORIGIN = (
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  'http://localhost:8000/api'
+).replace(/\/api\/?$/, '');
 
 export default function ApplicationReviewModal({
   open,
   kind,
   application,
   canApprove,
-  currentAdmin,
   onClose,
   onUpdated,
 }) {
+  const [detail, setDetail] = useState(application);
   const [leftTab, setLeftTab] = useState('Overview');
-  const [documents, setDocuments] = useState([]);
-  const [internalNotes, setInternalNotes] = useState('');
-  const [previewKey, setPreviewKey] = useState('');
+  const [previewId, setPreviewId] = useState(null);
   const [pendingDecision, setPendingDecision] = useState(null);
-  const [isDirty, setIsDirty] = useState(false);
+  const [pendingFlagDoc, setPendingFlagDoc] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!application) return;
+    setDetail(application);
     setLeftTab('Overview');
-    setDocuments(application.documentsList || []);
-    setInternalNotes(application.internalNotes || '');
-    setPreviewKey(application.documentsList?.[0]?.key || '');
+    setPreviewId(application?.documents?.[0]?.document_id || null);
     setPendingDecision(null);
-    setIsDirty(false);
+    setPendingFlagDoc(null);
   }, [application]);
 
-  if (!application) return null;
+  if (!detail) return null;
 
-  const missingDocs = documents.filter((doc) => doc.status !== 'Verified');
-  const allVerified = documents.length > 0 && missingDocs.length === 0;
-  const activePreview = documents.find((doc) => doc.key === previewKey) || documents[0];
+  const appId = kind === 'restaurant' ? detail.restaurant_application_id : detail.rider_application_id;
+  const displayName = kind === 'restaurant'
+    ? detail.restaurant_name
+    : `${detail.legal_first_name || ''} ${detail.legal_last_name || ''}`.trim();
+  const displayStatus = mapBackendApplicationStatus(detail.application_status) || detail.application_status;
+  const documents = detail.documents || [];
+  const verifiedCount = documents.filter((doc) => doc.document_status === 'verified').length;
+  const missingDocsCount = documents.length - verifiedCount;
+  const allVerified = documents.length > 0 && missingDocsCount === 0;
+  const activePreview = documents.find((doc) => doc.document_id === previewId) || documents[0];
 
-  function updateDoc(docKey, patch) {
-    setDocuments((prev) => {
-      const next = prev.map((doc) => (doc.key === docKey ? { ...doc, ...patch } : doc));
-      saveApplicationDraft(kind, application.id, { documents: next, internalNotes });
-      return next;
-    });
-    setIsDirty(true);
+  async function handleDocumentReview(doc, status, reviewNote = '') {
+    if (!canApprove || busy) return;
+    setBusy(true);
+    try {
+      const updated = await adminApiService.reviewDocument(kind, appId, doc.document_id, {
+        status,
+        reviewNote,
+      });
+      setDetail(updated);
+      showAdminToast(`Document marked as ${status}.`, status === 'verified' ? 'success' : 'warning');
+      onUpdated?.(updated);
+    } catch (err) {
+      showAdminToast(err?.message || 'Unable to update document status.', 'danger');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleNotesChange(value) {
-    setInternalNotes(value);
-    saveApplicationDraft(kind, application.id, { documents, internalNotes: value });
-    setIsDirty(true);
-  }
-
-  function executeDecision({ reason }) {
-    if (!pendingDecision || !canApprove) return;
-    const updated = applyApplicationDecision(kind, application.id, {
-      decision: pendingDecision.type,
-      documents,
-      internalNotes,
-      reason,
-      actor: currentAdmin?.name,
-    });
-    if (updated) {
-      appendAdminAuditLog({
-        actor: currentAdmin?.name,
-        actorRole: currentAdmin?.role,
-        action:
-          pendingDecision.type === 'approve'
-            ? `Approved ${kind} application`
-            : pendingDecision.type === 'revision'
-              ? `Requested revision for ${kind} application`
-              : `Rejected ${kind} application`,
-        targetType: kind === 'restaurant' ? 'Restaurant application' : 'Rider application',
-        targetId: updated.applicationId,
-        previousValue: application.reviewStatus,
-        newValue: updated.reviewStatus,
-        reason,
+  async function executeDecision({ reason }) {
+    if (!pendingDecision || !canApprove || busy) return;
+    setBusy(true);
+    try {
+      const decisionMap = {
+        approve: 'approve',
+        reject: 'reject',
+        revision: 'needs_correction',
+      };
+      const updated = await adminApiService.decideApplication(kind, appId, {
+        decision: decisionMap[pendingDecision.type],
+        note: reason,
       });
       showAdminToast(
         pendingDecision.type === 'approve'
-          ? `${updated.name} approved and added to ${kind === 'restaurant' ? 'Restaurants' : 'Riders'}.`
+          ? `${displayName} approved and activated.`
           : pendingDecision.type === 'revision'
-            ? `Revision request sent for ${updated.name}.`
-            : `${updated.name} application rejected.`,
+            ? `Revision request sent for ${displayName}.`
+            : `${displayName} application rejected.`,
         pendingDecision.type === 'approve' ? 'success' : 'warning',
       );
       onUpdated?.(updated);
+      setPendingDecision(null);
+      onClose?.();
+    } catch (err) {
+      showAdminToast(err?.message || 'Unable to save application decision.', 'danger');
+    } finally {
+      setBusy(false);
     }
-    setPendingDecision(null);
-    setIsDirty(false);
-    onClose?.();
   }
 
-  const timelineItems = (application.history || []).map((entry) => ({
+  const timelineItems = (detail.history || []).map((entry) => ({
     title: entry.action,
-    time: formatDateTime(entry.time),
-    description: `${entry.actor}: ${entry.detail}`,
+    time: formatDateTime(entry.created_at),
+    description: entry.reason ? `${entry.actor}: ${entry.reason}` : entry.actor,
   }));
 
   return (
@@ -110,25 +114,25 @@ export default function ApplicationReviewModal({
         open={open}
         onClose={onClose}
         size="wide"
-        isDirty={isDirty}
-        title={application.name}
-        subtitle={`${application.applicationId} · Submitted ${formatDate(application.joinedDate)}`}
-        headerExtra={<StatusBadge status={application.reviewStatus} />}
+        title={displayName}
+        subtitle={`${detail.reference_number} · Submitted ${formatDate(detail.submitted_at)}`}
+        headerExtra={<StatusBadge status={displayStatus} />}
         footer={(
           <>
-            <button type="button" className="admin-action-button" onClick={onClose}>
-              Cancel
+            <button type="button" className="admin-action-button" onClick={onClose} disabled={busy}>
+              Close
             </button>
             {canApprove && (
               <>
                 <button
                   type="button"
                   className="admin-action-button"
+                  disabled={busy}
                   onClick={() =>
                     setPendingDecision({
                       type: 'revision',
                       title: 'Request application revision',
-                      message: `Send a revision message to ${application.name}. The applicant will be asked to update their submission.`,
+                      message: `Send a correction message to ${displayName}.`,
                       confirmLabel: 'Request Revision',
                       reasonLabel: 'Message to applicant',
                       danger: false,
@@ -140,11 +144,12 @@ export default function ApplicationReviewModal({
                 <button
                   type="button"
                   className="admin-action-button admin-action-button--danger"
+                  disabled={busy}
                   onClick={() =>
                     setPendingDecision({
                       type: 'reject',
                       title: 'Reject application',
-                      message: `Reject ${application.name} (${application.applicationId}). This records an audit entry.`,
+                      message: `Reject ${displayName} (${detail.reference_number}). This records an audit entry.`,
                       confirmLabel: 'Reject',
                       reasonLabel: 'Rejection reason',
                       danger: true,
@@ -156,15 +161,15 @@ export default function ApplicationReviewModal({
                 <button
                   type="button"
                   className="admin-action-button"
-                  disabled={!allVerified}
-                  title={!allVerified ? `Verify all ${missingDocs.length} remaining document(s) before approving.` : undefined}
+                  disabled={!allVerified || busy}
+                  title={!allVerified ? `Verify all ${missingDocsCount} remaining document(s) before approving.` : undefined}
                   onClick={() =>
                     setPendingDecision({
                       type: 'approve',
                       title: `Approve ${kind === 'restaurant' ? 'restaurant' : 'rider'} application`,
-                      message: `Approve ${application.name}? This activates the ${kind} account in ${kind === 'restaurant' ? 'Restaurants' : 'Riders'}.`,
+                      message: `Approve ${displayName}? This activates the ${kind} account.`,
                       confirmLabel: 'Approve',
-                      reasonLabel: 'Approval note',
+                      reasonLabel: 'Approval note (optional)',
                       danger: false,
                     })
                   }
@@ -189,25 +194,36 @@ export default function ApplicationReviewModal({
               <div className="admin-record-panel">
                 {kind === 'restaurant' ? (
                   <ul className="admin-detail-list">
-                    <li><strong>Restaurant</strong><span>{application.name}</span></li>
-                    <li><strong>Cuisine / type</strong><span>{application.cuisine}</span></li>
-                    <li><strong>Owner</strong><span>{application.ownerName}</span></li>
-                    <li><strong>Email</strong><span>{application.ownerEmail}</span></li>
-                    <li><strong>Phone</strong><span>{application.phone}</span></li>
-                    <li><strong>Address</strong><span>{application.address}</span></li>
-                    <li><strong>City / zone</strong><span>{application.zone}</span></li>
-                    <li><strong>Operating hours</strong><span>{application.operatingHours}</span></li>
+                    <li><strong>Restaurant</strong><span>{detail.restaurant_name}</span></li>
+                    <li><strong>Business type</strong><span>{detail.business_type}</span></li>
+                    <li><strong>Ownership</strong><span>{detail.ownership_structure}</span></li>
+                    <li><strong>Representative</strong><span>{`${detail.legal_first_name} ${detail.legal_last_name}`}</span></li>
+                    <li><strong>Email</strong><span>{detail.contact_email}</span></li>
+                    <li><strong>Phone</strong><span>{detail.contact_phone}</span></li>
+                    <li><strong>Address</strong><span>{[detail.address?.street, detail.address?.barangay, detail.address?.city, detail.address?.province].filter(Boolean).join(', ')}</span></li>
+                    {detail.logo_image && (
+                      <li>
+                        <strong>Logo</strong>
+                        <img src={`${API_ORIGIN}${detail.logo_image}`} alt="Restaurant logo" style={{ maxHeight: 48, borderRadius: 6 }} />
+                      </li>
+                    )}
+                    {detail.cover_image && (
+                      <li>
+                        <strong>Cover photo</strong>
+                        <img src={`${API_ORIGIN}${detail.cover_image}`} alt="Restaurant cover" style={{ maxHeight: 64, borderRadius: 6 }} />
+                      </li>
+                    )}
                   </ul>
                 ) : (
                   <ul className="admin-detail-list">
-                    <li><strong>Applicant</strong><span>{application.name}</span></li>
-                    <li><strong>Email</strong><span>{application.email}</span></li>
-                    <li><strong>Phone</strong><span>{application.phone}</span></li>
-                    <li><strong>City / zone</strong><span>{application.zone}</span></li>
-                    <li><strong>Preferred zones</strong><span>{(application.preferredZones || []).join(', ')}</span></li>
-                    <li><strong>Vehicle</strong><span>{application.vehicle}</span></li>
-                    <li><strong>License number</strong><span>{application.licenseNumber}</span></li>
-                    <li><strong>Emergency contact</strong><span>{application.emergencyContact}</span></li>
+                    <li><strong>Applicant</strong><span>{displayName}</span></li>
+                    <li><strong>Email</strong><span>{detail.contact_email}</span></li>
+                    <li><strong>Phone</strong><span>{detail.contact_phone}</span></li>
+                    <li><strong>Base city</strong><span>{detail.base_city}</span></li>
+                    <li><strong>Address</strong><span>{[detail.address?.street, detail.address?.barangay, detail.address?.city, detail.address?.province].filter(Boolean).join(', ')}</span></li>
+                    <li><strong>Vehicle</strong><span>{[detail.vehicle_type, detail.vehicle_brand, detail.vehicle_model, detail.plate_number].filter(Boolean).join(' · ')}</span></li>
+                    <li><strong>Gov ID type</strong><span>{detail.gov_id_type}</span></li>
+                    <li><strong>Emergency contact</strong><span>{`${detail.emergency_contact_name} (${detail.emergency_contact_phone})`}</span></li>
                   </ul>
                 )}
               </div>
@@ -216,29 +232,37 @@ export default function ApplicationReviewModal({
             {leftTab === 'Documents' && (
               <div className="admin-review-col">
                 {documents.map((doc) => (
-                  <div key={doc.key} className="admin-review-doc-card">
+                  <div key={doc.document_id} className="admin-review-doc-card">
                     <div className="admin-review-check-row">
-                      <strong>{doc.label}</strong>
+                      <strong>{doc.document_code}</strong>
                       <div className="admin-action-row">
-                        <StatusBadge status={doc.status} />
+                        <StatusBadge status={doc.document_status === 'verified' ? 'Verified' : doc.document_status === 'rejected' ? 'Rejected' : 'Pending'} />
                         <button
                           type="button"
                           className="admin-text-button"
-                          onClick={() => setPreviewKey(doc.key)}
+                          onClick={() => setPreviewId(doc.document_id)}
                         >
                           Preview
                         </button>
                       </div>
                     </div>
-                    {doc.reason && <small className="admin-muted">Note: {doc.reason}</small>}
+                    {doc.review_note && <small className="admin-muted">Note: {doc.review_note}</small>}
                   </div>
                 ))}
                 {activePreview && (
                   <div className="admin-review-doc-preview" role="region" aria-label="Document preview">
-                    <strong>Preview · {activePreview.label}</strong>
-                    <span>File: {activePreview.fileName}</span>
-                    <span>Applicant: {application.name} ({application.applicationId})</span>
-                    <span>Verification state: {activePreview.status}</span>
+                    <strong>Preview · {activePreview.document_code}</strong>
+                    <span>File: {activePreview.original_filename}</span>
+                    <div style={{ marginTop: 8 }}>
+                      <a
+                        href={`${API_ORIGIN}${activePreview.file_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="admin-text-button"
+                      >
+                        Open uploaded document in new tab ↗
+                      </a>
+                    </div>
                   </div>
                 )}
               </div>
@@ -255,85 +279,41 @@ export default function ApplicationReviewModal({
             <div className="admin-record-panel">
               <div className="admin-section-heading">
                 <h2>Verification checklist</h2>
-                <span>{documents.length - missingDocs.length}/{documents.length} verified</span>
+                <span>{verifiedCount}/{documents.length} verified</span>
               </div>
 
               <div className="admin-review-checklist">
                 {documents.map((doc) => (
-                  <div key={doc.key} className="admin-review-check-item">
+                  <div key={doc.document_id} className="admin-review-check-item">
                     <div className="admin-review-check-row">
                       <label>
                         <input
                           type="checkbox"
-                          checked={doc.status === 'Verified'}
-                          disabled={!canApprove}
-                          onChange={(event) =>
-                            updateDoc(doc.key, {
-                              status: event.target.checked ? 'Verified' : 'Pending',
-                              checked: event.target.checked,
-                              reason: event.target.checked ? '' : doc.reason,
-                            })
-                          }
+                          checked={doc.document_status === 'verified'}
+                          disabled={!canApprove || busy}
+                          onChange={(event) => {
+                            if (event.target.checked) {
+                              handleDocumentReview(doc, 'verified');
+                            }
+                          }}
                         />
-                        <span>{doc.label}</span>
+                        <span>{doc.document_code} ({doc.original_filename})</span>
                       </label>
                       {canApprove && (
-                        <div className="admin-action-row">
-                          <button
-                            type="button"
-                            className="admin-text-button"
-                            onClick={() => updateDoc(doc.key, { status: 'Verified', checked: true, reason: '' })}
-                          >
-                            Verify
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-text-button"
-                            onClick={() => updateDoc(doc.key, { status: 'Rejected', checked: false })}
-                          >
-                            Flag
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          className="admin-text-button"
+                          disabled={busy}
+                          onClick={() => setPendingFlagDoc(doc)}
+                        >
+                          Reject Doc
+                        </button>
                       )}
                     </div>
-                    {doc.status === 'Rejected' && (
-                      <div className="admin-modal-field">
-                        <label htmlFor={`doc-reason-${doc.key}`}>Rejection note</label>
-                        <input
-                          id={`doc-reason-${doc.key}`}
-                          value={doc.reason || ''}
-                          disabled={!canApprove}
-                          placeholder="Explain why this document was flagged..."
-                          onChange={(event) => updateDoc(doc.key, { reason: event.target.value })}
-                        />
-                      </div>
-                    )}
+                    {doc.review_note && <small className="admin-muted">Note: {doc.review_note}</small>}
                   </div>
                 ))}
               </div>
-
-              <div className="admin-modal-field">
-                <label htmlFor="app-internal-notes">Internal reviewer notes</label>
-                <textarea
-                  id="app-internal-notes"
-                  value={internalNotes}
-                  disabled={!canApprove}
-                  placeholder="Optional internal notes for audit and team handoff..."
-                  onChange={(event) => handleNotesChange(event.target.value)}
-                />
-              </div>
-
-              {!allVerified && (
-                <div className="admin-review-warning" role="status">
-                  Approve is disabled until all required documents are verified ({missingDocs.map((d) => d.label).join(', ')}).
-                </div>
-              )}
-
-              {!canApprove && (
-                <p className="admin-shell-note">
-                  Your role has read-only access to this application. Decision buttons are hidden.
-                </p>
-              )}
             </div>
           </div>
         </div>
@@ -345,10 +325,26 @@ export default function ApplicationReviewModal({
         message={pendingDecision?.message}
         confirmLabel={pendingDecision?.confirmLabel}
         danger={pendingDecision?.danger}
-        requireReason
+        requireReason={pendingDecision?.type === 'reject' || pendingDecision?.type === 'revision'}
         reasonLabel={pendingDecision?.reasonLabel}
-        onClose={() => setPendingDecision(null)}
+        onCancel={() => setPendingDecision(null)}
         onConfirm={executeDecision}
+      />
+
+      <ConfirmModal
+        open={Boolean(pendingFlagDoc)}
+        title={`Reject document: ${pendingFlagDoc?.document_code || ''}`}
+        message="Enter the reason this document needs correction or replacement."
+        confirmLabel="Reject Document"
+        danger
+        requireReason
+        reasonLabel="Rejection reason"
+        onCancel={() => setPendingFlagDoc(null)}
+        onConfirm={({ reason }) => {
+          const target = pendingFlagDoc;
+          setPendingFlagDoc(null);
+          if (target) handleDocumentReview(target, 'rejected', reason);
+        }}
       />
     </>
   );
