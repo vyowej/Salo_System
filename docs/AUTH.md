@@ -138,7 +138,15 @@ Returns the fresh user profile and all derived roles (`customer`, `admin`, `owne
 If an already-authenticated user's `account_status` changes to `suspended`, `inactive`, or `pending`, `EnsureAccountIsActive` immediately logs them out, invalidates the session, and returns `403`.
 
 ### 3.6 `POST /api/auth/password/forgot`
-Rate-limited by `email|IP`. Generates a single-use random token, stores only its bcrypt hash in `password_reset_tokens.token_hash` with a UTC `expires_at` (60 minutes), and invalidates prior unused tokens for that user. Never returns the token in the API response and returns the same `200 OK` message whether or not the email exists.
+Rate-limited by `email|IP` (5 attempts per 60 seconds).
+- For an existing **active** account:
+  1. Generates a single-use 64-character token and stores only its bcrypt hash in `password_reset_tokens.token_hash` with a UTC `expires_at` (60 minutes), invalidating any prior unused tokens for that user.
+  2. Sends a plain-text email (`App\Features\Auth\Mail\PasswordResetMail`) using Laravel's built-in `Mail` and `.env` SMTP settings containing the reset link:
+     `{FRONTEND_URL}/reset-password?token=<plain_token>&email=<encoded_email>`
+     (where `FRONTEND_URL` is read via `config('app.frontend_url')`, defaulting to `http://localhost:5173`).
+  3. If SMTP delivery fails, logs a generic error (`user_id` only; no token, link, or SMTP credentials) and still returns the identical `200 OK` response.
+- Never returns the reset token in the API response, and returns the exact same `200 OK` JSON payload whether or not the email exists.
+- **Timing note:** Because `QUEUE_CONNECTION=sync` sends SMTP mail synchronously, a request for an existing active email can take slightly longer than a request for an unknown email. Recommended mitigation when moving beyond local sync mode: dispatch the mailable after the HTTP response is sent (`defer()` / `terminating()` callback) or via an approved background queue worker.
 
 **Request Body:**
 ```json

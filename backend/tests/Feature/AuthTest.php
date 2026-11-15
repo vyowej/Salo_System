@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Features\Auth\Mail\PasswordResetMail;
 use App\Features\Auth\Services\PasswordResetService;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Tests\TestCase;
 
@@ -481,6 +483,8 @@ class AuthTest extends TestCase
 
     public function test_password_reset_token_hashed_single_use_and_expiry_rules(): void
     {
+        Mail::fake();
+
         $user = User::create([
             'username' => 'reset_user',
             'first_name' => 'Rosa',
@@ -491,41 +495,66 @@ class AuthTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        // Forgot-password endpoint never returns token and prevents enumeration
-        $forgotExisting = $this->postJson('/api/auth/password/forgot', ['email' => 'rosa@example.com']);
+        // 1. Unknown email: nothing sent, generic 200 response
         $forgotUnknown = $this->postJson('/api/auth/password/forgot', ['email' => 'unknown@example.com']);
-
-        $forgotExisting->assertStatus(200)->assertJsonPath('data', null);
         $forgotUnknown->assertStatus(200)->assertJsonPath('data', null);
+        Mail::assertNothingSent();
 
+        // 2. Existing active user: email sent, identical generic 200 response, no token in API response
+        $forgotExisting = $this->postJson('/api/auth/password/forgot', ['email' => 'rosa@example.com']);
+        $forgotExisting->assertStatus(200)->assertJsonPath('data', null);
+        $this->assertSame($forgotUnknown->json(), $forgotExisting->json());
+
+        $extractedPlainToken = null;
+        Mail::assertSent(PasswordResetMail::class, function (PasswordResetMail $mail) use ($user, &$extractedPlainToken): bool {
+            if (! $mail->hasTo($user->email)) {
+                return false;
+            }
+
+            $parsedQuery = [];
+            parse_str((string) parse_url($mail->resetUrl, PHP_URL_QUERY), $parsedQuery);
+            $extractedPlainToken = $parsedQuery['token'] ?? null;
+
+            $renderedText = $mail->render();
+
+            return is_string($extractedPlainToken)
+                && strlen($extractedPlainToken) === 64
+                && ($parsedQuery['email'] ?? null) === $user->email
+                && str_starts_with($mail->resetUrl, 'http://localhost:5173/reset-password?')
+                && str_contains($renderedText, $mail->resetUrl)
+                && str_contains($renderedText, '60 minutes');
+        });
+
+        $this->assertNotNull($extractedPlainToken);
+
+        // Token in DB is hashed and matches the plain token extracted from the email link
         $storedToken = DB::table('password_reset_tokens')->where('user_id', $user->user_id)->first();
         $this->assertNotNull($storedToken);
+        $this->assertNotSame($extractedPlainToken, $storedToken->token_hash);
         $this->assertStringStartsWith('$2y$', $storedToken->token_hash);
+        $this->assertTrue(Hash::check($extractedPlainToken, $storedToken->token_hash));
 
-        // Create a known token via service to test confirm, single-use, and expiry
-        $service = app(PasswordResetService::class);
-        $plainToken = $service->createTokenForUser($user);
-
-        // Valid reset succeeds
+        // 3. Valid reset using the token from the email link succeeds
         $this->postJson('/api/auth/password/reset', [
             'email' => 'rosa@example.com',
-            'token' => $plainToken,
+            'token' => $extractedPlainToken,
             'password' => 'NewPassword456!',
             'password_confirmation' => 'NewPassword456!',
         ])->assertStatus(200);
 
         $this->assertTrue(Hash::check('NewPassword456!', $user->fresh()->password_hash));
 
-        // Reusing the same token fails (single-use)
+        // 4. Reusing the same token fails (single-use)
         $this->postJson('/api/auth/password/reset', [
             'email' => 'rosa@example.com',
-            'token' => $plainToken,
+            'token' => $extractedPlainToken,
             'password' => 'AnotherPass789!',
             'password_confirmation' => 'AnotherPass789!',
         ])->assertStatus(400)
             ->assertJsonPath('message', 'Invalid or expired password reset token.');
 
-        // Expired token fails
+        // 5. Expired token fails
+        $service = app(PasswordResetService::class);
         $expiredToken = $service->createTokenForUser($user);
         DB::table('password_reset_tokens')
             ->where('user_id', $user->user_id)

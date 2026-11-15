@@ -2,12 +2,15 @@
 
 namespace App\Features\Auth\Services;
 
+use App\Features\Auth\Mail\PasswordResetMail;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -21,7 +24,7 @@ class PasswordResetService
     private const TOKEN_EXPIRY_MINUTES = 60;
 
     /**
-     * Handle a password reset request without account enumeration or sending unapproved emails.
+     * Handle a password reset request without account enumeration or leaking mail errors.
      */
     public function requestReset(string $email, Request $request): void
     {
@@ -40,12 +43,24 @@ class PasswordResetService
             return;
         }
 
-        $this->createTokenForUser($user);
+        $plainToken = $this->createTokenForUser($user, self::TOKEN_EXPIRY_MINUTES);
+
+        try {
+            Mail::to($user->email)->send(new PasswordResetMail(
+                user: $user,
+                plainToken: $plainToken,
+                expiryMinutes: self::TOKEN_EXPIRY_MINUTES,
+            ));
+        } catch (\Throwable) {
+            Log::error('Password reset email delivery failed.', [
+                'user_id' => (int) $user->user_id,
+            ]);
+        }
     }
 
     /**
      * Create a hashed single-use token in password_reset_tokens (UTC expires_at).
-     * Never exposed in API responses; returned only for internal delivery/testing once a provider is approved.
+     * Never exposed in API responses.
      */
     public function createTokenForUser(User $user, int $ttlMinutes = self::TOKEN_EXPIRY_MINUTES): string
     {
@@ -53,7 +68,6 @@ class PasswordResetService
         $nowUtc = Carbon::now('UTC');
 
         DB::transaction(function () use ($user, $plainToken, $nowUtc, $ttlMinutes): void {
-            // Invalidate any prior unused tokens for this user
             DB::table('password_reset_tokens')
                 ->where('user_id', $user->user_id)
                 ->whereNull('used_at')
