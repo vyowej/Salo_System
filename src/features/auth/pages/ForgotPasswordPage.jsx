@@ -66,11 +66,6 @@ export default function ForgotPasswordPage() {
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            <Link to="/reset-password?demo=true" style={{ textDecoration: 'none' }}>
-              <Button variant="outline" fullWidth size="md">
-                Simulate Reset Link (Dev)
-              </Button>
-            </Link>
             <Link to="/login" style={{ textDecoration: 'none' }}>
               <Button variant="ghost" fullWidth size="md">
                 Return to Sign In

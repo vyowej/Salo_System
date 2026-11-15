@@ -8,6 +8,8 @@ export default function ProfileMenu({
   profileEmail,
   profileInitials = '?',
   profileAvatar,
+  roleLabel,
+  roleTone = 'orange',
   theme,
   menuItems = [],
   placement = 'topbar',
@@ -35,7 +37,6 @@ export default function ProfileMenu({
         ? Math.min(triggerRect.left + triggerRect.width + 12, window.innerWidth - menuWidth - margin)
         : Math.min(Math.max(margin, triggerRect.right - menuWidth), window.innerWidth - menuWidth - margin);
       const shouldOpenUpward = triggerRect.bottom + menuHeight + 12 > window.innerHeight - margin;
-      // Sidebar menus open beside the trigger, bottom-aligned with it.
       const top = placement === 'sidebar'
         ? triggerRect.bottom - menuHeight
         : shouldOpenUpward
@@ -57,7 +58,10 @@ export default function ProfileMenu({
       }
     };
     const closeOnEscape = (event) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
 
     window.addEventListener('resize', updatePosition);
@@ -123,6 +127,11 @@ export default function ProfileMenu({
             <div className="profile-menu-popover-copy">
               <span className="profile-menu-name">{profileName}</span>
               <span className="profile-menu-email">{profileEmail}</span>
+              {roleLabel && (
+                <span className={`profile-menu-role-badge tone-${roleTone}`}>
+                  {roleLabel}
+                </span>
+              )}
             </div>
           </div>
 

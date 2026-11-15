@@ -1,5 +1,6 @@
 <?php
 
+use App\Features\Account\Controllers\AccountController;
 use App\Features\Auth\Controllers\AuthController;
 use App\Support\ApiResponse;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,12 @@ Route::prefix('auth')->group(function (): void {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
     });
+});
+
+Route::prefix('account')->middleware('auth')->group(function (): void {
+    Route::patch('/profile', [AccountController::class, 'updateProfile']);
+    Route::put('/password', [AccountController::class, 'updatePassword']);
+    Route::get('/applications', [AccountController::class, 'applications']);
 });
 
 if (app()->environment('testing')) {

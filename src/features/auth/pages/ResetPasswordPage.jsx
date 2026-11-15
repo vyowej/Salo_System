@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthLayout from '../../../layouts/AuthLayout';
 import { Input } from '../../../components/forms';
@@ -8,18 +8,26 @@ import authService from '../../../services/authService';
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const token = searchParams.get('token') || 'demo_token';
+  const [token] = useState(() => searchParams.get('token') || '');
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     email: searchParams.get('email') || '',
     password: '',
     passwordConfirmation: '',
-  });
+  }));
 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(() =>
+    searchParams.get('token') ? null : 'This password reset link is missing a valid token. Please request a new reset link.',
+  );
+
+  useEffect(() => {
+    if (window.location.search) {
+      window.history.replaceState({}, '', '/reset-password');
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -31,6 +39,10 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError(null);
 
+    if (!token) {
+      setError('This password reset link is missing a valid token. Please request a new reset link.');
+      return;
+    }
     if (!formData.email.trim()) {
       setError('Please provide your account email.');
       return;

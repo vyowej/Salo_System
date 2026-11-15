@@ -578,6 +578,14 @@
   .admin-search-box__scope {
     display: none;
   }
+
+  .admin-notif-popover {
+    position: fixed;
+    top: calc(var(--topbar-height, 64px) + 4px);
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
 }
 
 @media (max-width: 479px) {

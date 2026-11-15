@@ -1,5 +1,18 @@
 # React + Vite
 
+## How to Run SALO Locally
+
+1. Start **Apache** and **MySQL** through XAMPP (MySQL is required for database-dependent features).
+2. Open a terminal in the React project directory (the repository root).
+3. Execute:
+   ```bash
+   npm run dev:all
+   ```
+4. Open the application at `http://localhost:5173` (not `127.0.0.1`).
+   - Note: The Laravel backend API runs separately on port `8000` (`http://localhost:8000`).
+
+---
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

@@ -1,6 +1,8 @@
+import { SettingsGearIcon } from '../../config/navigationConfig';
+
 /**
- * Shared owner navigation configuration (max 9 items, ordered).
- * Restaurant Profile, Activity Log, and Settings live in the avatar dropdown.
+ * Shared owner navigation configuration.
+ * Settings is pinned at the bottom of the sidebar across all roles.
  */
 
 const iconProps = {
@@ -116,5 +118,12 @@ export const OWNER_NAV_CONFIG = [
         <path d="M4 19V5M4 19h16M8 15v-4M13 15V8M18 15v-6" />
       </svg>
     ),
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    href: '/owner/settings',
+    pinnedBottom: true,
+    icon: <SettingsGearIcon />,
   },
 ];

@@ -1,0 +1,680 @@
+/* ============================================================
+   SALO — Unified Settings Shell & Primitives
+   Baseline: Restaurant Settings aesthetic, calm neutral cards
+   ============================================================ */
+
+.salo-settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+  min-width: 0;
+}
+
+.salo-settings-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.salo-settings-page-eyebrow {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.salo-settings-page-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-size: clamp(24px, 3vw, 30px);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+}
+
+.salo-settings-page-subtitle {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.salo-settings-notice {
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--salo-green, #6B8F5B) 40%, var(--border-primary));
+  border-radius: var(--radius-md);
+  background: var(--salo-green-light, #EEF4EB);
+  color: var(--salo-green-hover, #567648);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.salo-settings-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+/* ── Desktop Sub-Navigation ───────────────────────────────── */
+.salo-settings-nav {
+  position: sticky;
+  top: calc(var(--topbar-height, 64px) + var(--space-4));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+}
+
+.salo-settings-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.salo-settings-nav-group-label {
+  margin: 0 0 4px;
+  padding: 0 var(--space-2);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.salo-settings-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.salo-settings-nav-item:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.salo-settings-nav-item.is-selected {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: var(--font-weight-semibold);
+}
+
+.salo-settings-nav-item:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* ── Mobile Section List & Back Button ────────────────────── */
+.salo-settings-mobile-list {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.salo-settings-mobile-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.salo-settings-mobile-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 60px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.salo-settings-mobile-card:hover {
+  background: var(--surface-secondary);
+  border-color: var(--accent);
+}
+
+.salo-settings-mobile-card:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.salo-settings-mobile-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.salo-settings-mobile-card-copy strong {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.salo-settings-mobile-card-copy small {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.salo-settings-mobile-back {
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  width: fit-content;
+}
+
+.salo-settings-mobile-back:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* ── Content Area ─────────────────────────────────────────── */
+.salo-settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: 860px;
+}
+
+.salo-settings-section-head {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-secondary);
+}
+
+.salo-settings-section-eyebrow {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.salo-settings-section-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.salo-settings-section-desc {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+/* ── Cards & Form Controls ────────────────────────────────── */
+.salo-settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.salo-settings-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.salo-settings-card-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-md, 16px);
+  font-weight: var(--font-weight-semibold);
+}
+
+.salo-settings-card-desc {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+}
+
+.salo-settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.salo-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.salo-settings-field-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.salo-settings-field input,
+.salo-settings-field select,
+.salo-settings-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--input-border, var(--border-primary));
+  border-radius: var(--radius-md);
+  background: var(--input-bg, var(--surface-primary));
+  color: var(--input-text, var(--text-primary));
+  font: inherit;
+  font-size: var(--font-size-sm);
+}
+
+.salo-settings-field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.salo-settings-field input:focus-visible,
+.salo-settings-field select:focus-visible,
+.salo-settings-field textarea:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.salo-settings-field-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+}
+
+.salo-settings-field-error {
+  margin: 0;
+  color: var(--salo-error, #B84040);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ── Toggles ──────────────────────────────────────────────── */
+.salo-settings-toggle-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.salo-settings-toggle-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: 56px;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-secondary);
+  cursor: pointer;
+}
+
+.salo-settings-toggle-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.salo-settings-toggle-row:first-child {
+  padding-top: 0;
+}
+
+.salo-settings-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.salo-settings-toggle-copy strong {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.salo-settings-toggle-copy small {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+}
+
+.salo-settings-toggle-control {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 26px;
+}
+
+.salo-settings-toggle-control input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.salo-settings-toggle-track {
+  display: block;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--border-primary);
+  transition: background var(--transition-fast);
+}
+
+.salo-settings-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast);
+}
+
+.salo-settings-toggle-control input:checked + .salo-settings-toggle-track {
+  background: var(--salo-green, #6B8F5B);
+}
+
+.salo-settings-toggle-control input:checked + .salo-settings-toggle-track::after {
+  transform: translateX(18px);
+}
+
+.salo-settings-toggle-control input:focus-visible + .salo-settings-toggle-track {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* ── Account Summary & Partner Cards ──────────────────────── */
+.salo-account-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.salo-account-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.salo-account-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--font-size-md, 16px);
+  font-weight: var(--font-weight-bold);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.salo-account-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.salo-account-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.salo-account-name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.salo-account-name-row strong {
+  color: var(--text-primary);
+  font-size: var(--font-size-md, 16px);
+}
+
+.salo-account-email {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.salo-partner-promo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.salo-partner-promo-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-secondary);
+}
+
+.salo-partner-promo-card h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-size: var(--font-size-md, 16px);
+}
+
+.salo-partner-promo-card p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+}
+
+.salo-partner-promo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.salo-partner-status-link {
+  color: var(--accent);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.salo-partner-status-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Danger Zone ──────────────────────────────────────────── */
+.salo-settings-danger-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--salo-error, #B84040) 40%, var(--border-primary));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--salo-error, #B84040) 4%, var(--surface-primary));
+}
+
+.salo-settings-danger-eyebrow {
+  margin: 0 0 4px;
+  color: var(--salo-error, #B84040);
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.salo-settings-danger-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-md, 16px);
+  font-weight: var(--font-weight-semibold);
+}
+
+.salo-settings-danger-desc {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+  max-width: 560px;
+}
+
+/* ── Sticky Save Bar (appears ONLY when dirty) ────────────── */
+.salo-settings-save-bar {
+  position: sticky;
+  bottom: var(--space-3);
+  z-index: var(--z-sticky, 20);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border-primary));
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.salo-settings-save-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.salo-settings-save-copy strong {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.salo-settings-save-copy small {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.salo-settings-save-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ── Mobile Breakpoint (<= 767px) ─────────────────────────── */
+@media (max-width: 767px) {
+  .salo-settings-layout {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  .salo-settings-nav {
+    display: none;
+  }
+
+  .salo-settings-layout.is-mobile-list .salo-settings-mobile-list {
+    display: flex;
+  }
+
+  .salo-settings-layout.is-mobile-list .salo-settings-content {
+    display: none;
+  }
+
+  .salo-settings-layout.is-mobile-detail .salo-settings-mobile-list {
+    display: none;
+  }
+
+  .salo-settings-layout.is-mobile-detail .salo-settings-mobile-back {
+    display: inline-flex;
+  }
+
+  .salo-settings-card,
+  .salo-settings-danger-card {
+    padding: var(--space-4);
+  }
+
+  .salo-settings-form-grid,
+  .salo-partner-promo-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .salo-settings-save-bar {
+    flex-direction: column;
+    align-items: stretch;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  .salo-settings-save-actions {
+    width: 100%;
+  }
+
+  .salo-settings-save-actions > button {
+    flex: 1;
+    min-height: 44px;
+  }
+}

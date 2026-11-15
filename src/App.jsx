@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import ProtectedRoute from './routes/ProtectedRoute';
 import RequireAccess from './routes/RequireAccess';
 import { RestaurantAccessProvider } from './features/restaurant/access/RestaurantAccessContext.jsx';
 import { AdminSessionProvider } from './features/admin/contexts/AdminSessionContext.jsx';
@@ -26,6 +27,7 @@ const NotificationsPage = lazy(() => import('./features/customer/pages/Notificat
 const ReservationsPage = lazy(() => import('./features/customer/pages/ReservationsPage'));
 const AddressesPage = lazy(() => import('./features/customer/pages/AddressesPage'));
 const ProfilePage = lazy(() => import('./features/customer/pages/ProfilePage'));
+const CustomerSettingsPage = lazy(() => import('./features/customer/pages/CustomerSettingsPage'));
 const PartnerApplicationPage = lazy(() => import('./features/customer/pages/PartnerApplicationPage'));
 const InvitationsInboxPage = lazy(() => import('./features/customer/pages/InvitationsInboxPage'));
 const BusinessApplicationPage = lazy(() => import('./pages/BusinessApplication/BusinessApplicationPage'));
@@ -170,8 +172,12 @@ function AppShell() {
         description: 'Manage your home, office, and delivery locations for faster ordering.',
       },
       '/customer/profile': {
-        title: 'Profile & Settings | SALO Customer',
+        title: 'My Profile | SALO Customer',
         description: 'Update your account details, preferences, and delivery profile.',
+      },
+      '/customer/settings': {
+        title: 'Settings | SALO Customer',
+        description: 'Manage your account, notifications, security, addresses, and privacy settings.',
       },
       '/customer/invitations': {
         title: 'Invitations | SALO Customer',
@@ -351,27 +357,30 @@ function AppShell() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* ── Customer Module (Phase 3) ── */}
-          <Route path="/customer" element={<CustomerDashboard />} />
-          <Route path="/customer/restaurants" element={<CustomerDashboard />} />
-          <Route path="/customer/restaurants/:id" element={<RestaurantDetailPage />} />
-          <Route path="/customer/cart" element={<CartPage />} />
-          <Route path="/customer/checkout" element={<CheckoutPage />} />
-          <Route path="/customer/orders" element={<OrdersPage />} />
-          <Route path="/customer/orders/:id" element={<OrderDetailPage />} />
-          <Route path="/customer/favorites" element={<FavoritesPage />} />
-          <Route path="/customer/notifications" element={<NotificationsPage />} />
-          <Route path="/customer/reservations" element={<ReservationsPage />} />
-          <Route path="/customer/addresses" element={<AddressesPage />} />
-          <Route path="/customer/profile" element={<ProfilePage />} />
-          <Route path="/customer/invitations" element={<InvitationsInboxPage />} />
-          <Route path="/customer/partner" element={<PartnerApplicationPage />} />
-          <Route path="/partner" element={<PartnerApplicationPage />} />
-          <Route path="/become-a-partner" element={<BusinessApplicationPage />} />
-          <Route path="/business-application" element={<Navigate to="/become-a-partner" replace />} />
-          <Route path="/business-application/status" element={<BusinessApplicationStatusPage />} />
-          <Route path="/become-a-rider" element={<RiderApplicationPage />} />
-          <Route path="/rider-application" element={<Navigate to="/become-a-rider" replace />} />
-          <Route path="/rider-application/status" element={<RiderPartnerStatusPage />} />
+          <Route element={<ProtectedRoute><Outlet /></ProtectedRoute>}>
+            <Route path="/customer" element={<CustomerDashboard />} />
+            <Route path="/customer/restaurants" element={<CustomerDashboard />} />
+            <Route path="/customer/restaurants/:id" element={<RestaurantDetailPage />} />
+            <Route path="/customer/cart" element={<CartPage />} />
+            <Route path="/customer/checkout" element={<CheckoutPage />} />
+            <Route path="/customer/orders" element={<OrdersPage />} />
+            <Route path="/customer/orders/:id" element={<OrderDetailPage />} />
+            <Route path="/customer/favorites" element={<FavoritesPage />} />
+            <Route path="/customer/notifications" element={<NotificationsPage />} />
+            <Route path="/customer/reservations" element={<ReservationsPage />} />
+            <Route path="/customer/addresses" element={<AddressesPage />} />
+            <Route path="/customer/profile" element={<ProfilePage />} />
+            <Route path="/customer/settings" element={<CustomerSettingsPage />} />
+            <Route path="/customer/invitations" element={<InvitationsInboxPage />} />
+            <Route path="/customer/partner" element={<PartnerApplicationPage />} />
+            <Route path="/partner" element={<PartnerApplicationPage />} />
+            <Route path="/become-a-partner" element={<BusinessApplicationPage />} />
+            <Route path="/business-application" element={<Navigate to="/become-a-partner" replace />} />
+            <Route path="/business-application/status" element={<BusinessApplicationStatusPage />} />
+            <Route path="/become-a-rider" element={<RiderApplicationPage />} />
+            <Route path="/rider-application" element={<Navigate to="/become-a-rider" replace />} />
+            <Route path="/rider-application/status" element={<RiderPartnerStatusPage />} />
+          </Route>
 
           {/* ── Owner Module: every destination checks restaurant membership and permissions ── */}
           <Route path="/owner" element={<RestaurantAccessProvider><Outlet /></RestaurantAccessProvider>}>
@@ -392,7 +401,7 @@ function AppShell() {
           </Route>
 
           {/* ── Rider Module (Phase 5) ── */}
-          <Route path="/rider" element={<RiderLayout><Outlet /></RiderLayout>}>
+          <Route path="/rider" element={<ProtectedRoute allowedRoles={['rider']}><RiderLayout><Outlet /></RiderLayout></ProtectedRoute>}>
             <Route index element={<RiderDashboardPage />} />
             <Route path="jobs" element={<RiderDeliveriesPage />} />
             <Route path="deliveries" element={<RiderDeliveriesPage />} />

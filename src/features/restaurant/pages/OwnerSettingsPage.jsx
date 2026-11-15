@@ -1,49 +1,447 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import OwnerLayout from '../../../layouts/OwnerLayout';
+import { useAuth } from '../../../hooks/useAuth';
 import Button from '../../../components/common/Button';
-import { DesignPreviewBanner, PreviewPageHeader, PreviewStatePanel } from './team/r7Preview';
-import { BUSINESS_SUMMARY, SETTINGS_DEFAULTS, SETTINGS_TABS } from './team/settingsSamples';
-import './team/r7Settings.css';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import UnifiedSettingsShell from '../../../components/settings/UnifiedSettingsShell';
+import {
+  SettingsAccountSection,
+  SettingsCard,
+  SettingsField,
+  SettingsPasswordCard,
+  SettingsPreferencesSection,
+  SettingsToggleRow,
+} from '../../../components/settings/SettingsPrimitives';
+import { getSettingsSectionsForRole } from '../../../config/settingsConfig';
+import { DesignPreviewBanner } from './team/r7Preview';
+import { BUSINESS_SUMMARY, SETTINGS_DEFAULTS } from './team/settingsSamples';
 
-function ToggleRow({ label, description, checked, onChange }) {
-  return <label className="r7-setting-toggle"><span><strong>{label}</strong>{description && <small>{description}</small>}</span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><i aria-hidden="true" /></label>;
-}
-
-function SettingField({ label, children }) {
-  return <label className="r7-setting-field"><span>{label}</span>{children}</label>;
-}
+const PREVIEW_STATE_MAP = {
+  'Sample data': 'ready',
+  Loading: 'loading',
+  Empty: 'empty',
+  Error: 'error',
+};
 
 export default function OwnerSettingsPage() {
+  const { user } = useAuth();
+  const sections = getSettingsSectionsForRole('restaurant');
+
   const [previewState, setPreviewState] = useState('Sample data');
-  const [tab, setTab] = useState('Business');
+  const [activeSection, setActiveSection] = useState('account');
   const [settings, setSettings] = useState(SETTINGS_DEFAULTS);
+  const [email, setEmail] = useState(user?.email || 'owner@salo.local');
   const [dirty, setDirty] = useState(false);
-  const [toast, setToast] = useState('');
-  const update = (key, value) => { setSettings((current) => ({ ...current, [key]: value })); setDirty(true); };
-  const updateNotification = (key, value) => { setSettings((current) => ({ ...current, notifications: { ...current.notifications, [key]: value } })); setDirty(true); };
-  const discard = () => { setSettings(SETTINGS_DEFAULTS); setDirty(false); };
-  const save = () => { setDirty(false); setToast('Design preview only — these settings were not saved.'); window.setTimeout(() => setToast(''), 2600); };
+  const [notice, setNotice] = useState('');
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
 
-  return <OwnerLayout>
-    <DesignPreviewBanner state={previewState} onStateChange={setPreviewState} />
-    <PreviewPageHeader eyebrow="Restaurant preferences" title="Settings" detail="Review how restaurant preferences could be organized." />
-    <PreviewStatePanel state={previewState} name="settings" onRetry={() => setPreviewState('Sample data')} />
-    {previewState === 'Sample data' && <>
-      <div className="r7-tabs r7-settings-tabs" role="tablist" aria-label="Settings category">{SETTINGS_TABS.map((item) => <button type="button" role="tab" aria-selected={tab === item} className={tab === item ? 'is-selected' : ''} key={item} onClick={() => setTab(item)}>{item}</button>)}</div>
-      <main className="r7-settings-panel">
-        {tab === 'Business' && <section className="r7-settings-section"><div className="r7-settings-section-head"><div><p className="r7-eyebrow">BUSINESS AVAILABILITY</p><h2>{BUSINESS_SUMMARY.name}</h2><p>{BUSINESS_SUMMARY.address}</p></div><span className="r7-settings-avatar">SK</span></div><div className="r7-business-details"><span><small>Contact</small><strong>{BUSINESS_SUMMARY.phone}</strong></span><span><small>Delivery coverage</small><strong>{BUSINESS_SUMMARY.coverage}</strong></span></div><div className="r7-settings-toggles"><ToggleRow label="Accepting delivery orders" checked={settings.delivery} onChange={(value) => update('delivery', value)} /><ToggleRow label="Accepting pickup orders" checked={settings.pickup} onChange={(value) => update('pickup', value)} /><ToggleRow label="Accepting dine-in guests" checked={settings.dineIn} onChange={(value) => update('dineIn', value)} /></div><div className="r7-settings-links"><Link to="/owner/profile">Edit business profile, hours and delivery coverage →</Link><p>Business hours and service areas are managed in Business Profile rather than duplicated here.</p></div></section>}
+  const profileName = user?.name || BUSINESS_SUMMARY.name;
+  const profileEmail = user?.email || 'owner@salo.local';
+  const initials = profileName.slice(0, 2).toUpperCase();
 
-        {tab === 'Orders' && <section className="r7-settings-section"><p className="r7-eyebrow">ORDER PREFERENCES</p><h2>Fulfillment and preparation</h2><div className="r7-settings-toggles"><ToggleRow label="Delivery" description="Customers may place delivery orders." checked={settings.delivery} onChange={(value) => update('delivery', value)} /><ToggleRow label="Pickup" description="Customers may collect their orders." checked={settings.pickup} onChange={(value) => update('pickup', value)} /><ToggleRow label="Dine-in" description="Customers may order for dine-in." checked={settings.dineIn} onChange={(value) => update('dineIn', value)} /><ToggleRow label="Scheduled ordering" description="Allow customers to select an eligible future order time." checked={settings.scheduledOrders} onChange={(value) => update('scheduledOrders', value)} /><ToggleRow label="Priority ordering" description="Visual preference only; no priority business policy is implied." checked={settings.priorityOrders} onChange={(value) => update('priorityOrders', value)} /></div><div className="r7-form-grid"><SettingField label="Preparation time estimate"><select value={settings.preparationTime} onChange={(event) => update('preparationTime', event.target.value)}><option>15 minutes</option><option>30 minutes</option><option>45 minutes</option><option>60 minutes</option></select></SettingField><SettingField label="Inventory deduction mode"><select value={settings.deductionMode} onChange={(event) => update('deductionMode', event.target.value)}><option value="manual">Manual</option><option value="on_completion">On order completion</option></select></SettingField></div><p className="r7-settings-helper">Inventory deduction options are shown for preview only. Actual policy remains undecided and is not changed here.</p></section>}
+  const update = (key, value) => {
+    setSettings((current) => ({ ...current, [key]: value }));
+    setDirty(true);
+    setNotice('');
+  };
 
-        {tab === 'Reservations' && <section className="r7-settings-section"><p className="r7-eyebrow">RESERVATION PREFERENCES</p><h2>Availability and booking details</h2><ToggleRow label="Accepting reservations" checked={settings.acceptingReservations} onChange={(value) => update('acceptingReservations', value)} /><div className="r7-form-grid"><SettingField label="Schedule"><select value={settings.reservationSchedule} onChange={(event) => update('reservationSchedule', event.target.value)}><option>Use business operating hours</option><option>Custom reservation hours</option></select></SettingField><SettingField label="Time slots"><select value={settings.reservationTimeSlots} onChange={(event) => update('reservationTimeSlots', event.target.value)}><option>Every 15 minutes</option><option>Every 30 minutes</option><option>Every 60 minutes</option></select></SettingField><SettingField label="Reservation duration"><select value={settings.reservationDuration} onChange={(event) => update('reservationDuration', event.target.value)}><option value="60">60 minutes</option><option value="90">90 minutes</option><option value="120">120 minutes</option></select></SettingField><SettingField label="Reservation fee (₱)"><input type="number" min="0" value={settings.reservationFee} onChange={(event) => update('reservationFee', event.target.value)} /></SettingField><SettingField label="Payment option"><select value={settings.paymentMethod} onChange={(event) => update('paymentMethod', event.target.value)}><option>Online payment</option><option>Pay at restaurant</option><option>No fee</option></select></SettingField><SettingField label="Table assignment preference"><select value={settings.tablePreference} onChange={(event) => update('tablePreference', event.target.value)}><option>Auto-suggest available table</option><option>Staff assigns table</option><option>Customer requests an area</option></select></SettingField></div><SettingField label="Guest instructions"><textarea rows="4" value={settings.instructions} onChange={(event) => update('instructions', event.target.value)} /></SettingField><p className="r7-settings-helper">Schedule details are sample controls. Business operating hours are edited from Business Profile.</p></section>}
+  const updateNotification = (key, value) => {
+    setSettings((current) => ({
+      ...current,
+      notifications: { ...current.notifications, [key]: value },
+    }));
+    setDirty(true);
+    setNotice('');
+  };
 
-        {tab === 'Notifications' && <section className="r7-settings-section"><p className="r7-eyebrow">NOTIFICATION PREFERENCES</p><h2>Keep the team informed</h2><p className="r7-settings-intro">Choose which event types would generate a restaurant notification.</p><div className="r7-settings-toggles">{Object.entries(settings.notifications).map(([label, checked]) => <ToggleRow key={label} label={label} description={`Preview notification preference for ${label.toLowerCase()}.`} checked={checked} onChange={(value) => updateNotification(label, value)} />)}</div></section>}
+  const discard = () => {
+    setSettings(SETTINGS_DEFAULTS);
+    setEmail(user?.email || 'owner@salo.local');
+    setDirty(false);
+    setNotice('');
+  };
 
-        {tab === 'Payments' && <section className="r7-settings-section"><p className="r7-eyebrow">PAYOUT SUMMARY</p><h2>Payment details</h2><p className="r7-settings-intro">Sensitive payout details are never entered in this preview.</p><article className="r7-payout-summary"><span className="r7-payout-icon" aria-hidden="true">₱</span><span><strong>{SETTINGS_DEFAULTS.paymentMethod}</strong><small>Account ending •••• 4821 · Sample masked placeholder</small></span><span className="r7-connected-label">Connected</span></article><div className="r7-protected-note"><strong>Protected payment interface</strong><p>Payout methods and credentials are managed through a protected interface. No card or bank information is requested on this page.</p><button type="button" className="r7-secondary-button" onClick={() => setToast('Design preview only — protected payment management is not connected.')}>Manage payment method</button></div><p className="r7-settings-helper">This masked account ending is fictional sample text, not a real account number.</p></section>}
-      </main>
-      <div className={`r7-save-bar ${dirty ? 'is-dirty' : ''}`} role="status"><span>{dirty ? 'Unsaved preview changes' : 'No unsaved changes'} <small>Changes are local to this page and are never persisted.</small></span><div><Button variant="outline" onClick={discard} disabled={!dirty}>Discard</Button><Button onClick={save} disabled={!dirty}>Save preview</Button></div></div>
-    </>}
-    {toast && <div className="r7-toast" role="status">{toast}</div>}
-  </OwnerLayout>;
+  const save = () => {
+    setDirty(false);
+    setNotice('Design preview only — these settings were not saved.');
+  };
+
+  const renderSection = (sectionId) => {
+    switch (sectionId) {
+      case 'account':
+        return (
+          <SettingsAccountSection
+            role="restaurant"
+            user={user}
+            profileName={profileName}
+            profileEmail={profileEmail}
+            profileInitials={initials}
+            profileAvatar={user?.avatar}
+            emailValue={email}
+            onEmailChange={(value) => {
+              setEmail(value);
+              setDirty(true);
+              setNotice('');
+            }}
+            onNavigateToSecurity={() => setActiveSection('security')}
+            dangerZone={{
+              title: 'Deactivate restaurant workspace',
+              description: 'Temporarily take this restaurant offline and disable new orders and reservations.',
+              actionLabel: 'Deactivate workspace',
+              onAction: () => setDeactivateOpen(true),
+            }}
+          />
+        );
+
+      case 'business':
+        return (
+          <SettingsCard
+            title={BUSINESS_SUMMARY.name}
+            description={BUSINESS_SUMMARY.address}
+            actions={<span className="salo-account-avatar" style={{ borderRadius: 'var(--radius-md)' }}>SK</span>}
+          >
+            <div className="salo-settings-form-grid">
+              <div style={{ padding: '12px', border: '1px solid var(--border-secondary)', borderRadius: 'var(--radius-md)' }}>
+                <small style={{ display: 'block', color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)' }}>Contact</small>
+                <strong style={{ fontSize: 'var(--font-size-sm)' }}>{BUSINESS_SUMMARY.phone}</strong>
+              </div>
+              <div style={{ padding: '12px', border: '1px solid var(--border-secondary)', borderRadius: 'var(--radius-md)' }}>
+                <small style={{ display: 'block', color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)' }}>Delivery coverage</small>
+                <strong style={{ fontSize: 'var(--font-size-sm)' }}>{BUSINESS_SUMMARY.coverage}</strong>
+              </div>
+            </div>
+
+            <div className="salo-settings-toggle-list">
+              <SettingsToggleRow
+                id="owner-delivery"
+                label="Accepting delivery orders"
+                checked={settings.delivery}
+                onChange={(value) => update('delivery', value)}
+              />
+              <SettingsToggleRow
+                id="owner-pickup"
+                label="Accepting pickup orders"
+                checked={settings.pickup}
+                onChange={(value) => update('pickup', value)}
+              />
+              <SettingsToggleRow
+                id="owner-dinein"
+                label="Accepting dine-in guests"
+                checked={settings.dineIn}
+                onChange={(value) => update('dineIn', value)}
+              />
+            </div>
+
+            <div>
+              <Link to="/owner/profile" className="salo-partner-status-link">
+                Edit business profile, hours and delivery coverage →
+              </Link>
+              <p className="salo-settings-field-hint">
+                Business hours and service areas are managed in Business Profile rather than duplicated here.
+              </p>
+            </div>
+          </SettingsCard>
+        );
+
+      case 'orders':
+        return (
+          <SettingsCard title="Fulfillment and preparation" description="Configure order types and preparation defaults.">
+            <div className="salo-settings-toggle-list">
+              <SettingsToggleRow
+                id="owner-orders-delivery"
+                label="Delivery"
+                description="Customers may place delivery orders."
+                checked={settings.delivery}
+                onChange={(value) => update('delivery', value)}
+              />
+              <SettingsToggleRow
+                id="owner-orders-pickup"
+                label="Pickup"
+                description="Customers may collect their orders."
+                checked={settings.pickup}
+                onChange={(value) => update('pickup', value)}
+              />
+              <SettingsToggleRow
+                id="owner-orders-dinein"
+                label="Dine-in"
+                description="Customers may order for dine-in."
+                checked={settings.dineIn}
+                onChange={(value) => update('dineIn', value)}
+              />
+              <SettingsToggleRow
+                id="owner-orders-scheduled"
+                label="Scheduled ordering"
+                description="Allow customers to select an eligible future order time."
+                checked={settings.scheduledOrders}
+                onChange={(value) => update('scheduledOrders', value)}
+              />
+              <SettingsToggleRow
+                id="owner-orders-priority"
+                label="Priority ordering"
+                description="Visual preference only; no priority business policy is implied."
+                checked={settings.priorityOrders}
+                onChange={(value) => update('priorityOrders', value)}
+              />
+            </div>
+
+            <div className="salo-settings-form-grid">
+              <SettingsField id="owner-prep-time" label="Preparation time estimate">
+                <select
+                  id="owner-prep-time"
+                  value={settings.preparationTime}
+                  onChange={(event) => update('preparationTime', event.target.value)}
+                >
+                  <option>15 minutes</option>
+                  <option>30 minutes</option>
+                  <option>45 minutes</option>
+                  <option>60 minutes</option>
+                </select>
+              </SettingsField>
+
+              <SettingsField id="owner-deduction-mode" label="Inventory deduction mode">
+                <select
+                  id="owner-deduction-mode"
+                  value={settings.deductionMode}
+                  onChange={(event) => update('deductionMode', event.target.value)}
+                >
+                  <option value="manual">Manual</option>
+                  <option value="on_completion">On order completion</option>
+                </select>
+              </SettingsField>
+            </div>
+            <p className="salo-settings-field-hint">
+              Inventory deduction options are shown for preview only. Actual policy remains undecided and is not changed here.
+            </p>
+          </SettingsCard>
+        );
+
+      case 'reservations':
+        return (
+          <SettingsCard title="Availability and booking details" description="Configure table reservation defaults.">
+            <SettingsToggleRow
+              id="owner-accept-reservations"
+              label="Accepting reservations"
+              checked={settings.acceptingReservations}
+              onChange={(value) => update('acceptingReservations', value)}
+            />
+
+            <div className="salo-settings-form-grid">
+              <SettingsField id="owner-res-schedule" label="Schedule">
+                <select
+                  id="owner-res-schedule"
+                  value={settings.reservationSchedule}
+                  onChange={(event) => update('reservationSchedule', event.target.value)}
+                >
+                  <option>Use business operating hours</option>
+                  <option>Custom reservation hours</option>
+                </select>
+              </SettingsField>
+
+              <SettingsField id="owner-res-slots" label="Time slots">
+                <select
+                  id="owner-res-slots"
+                  value={settings.reservationTimeSlots}
+                  onChange={(event) => update('reservationTimeSlots', event.target.value)}
+                >
+                  <option>Every 15 minutes</option>
+                  <option>Every 30 minutes</option>
+                  <option>Every 60 minutes</option>
+                </select>
+              </SettingsField>
+
+              <SettingsField id="owner-res-duration" label="Reservation duration">
+                <select
+                  id="owner-res-duration"
+                  value={settings.reservationDuration}
+                  onChange={(event) => update('reservationDuration', event.target.value)}
+                >
+                  <option value="60">60 minutes</option>
+                  <option value="90">90 minutes</option>
+                  <option value="120">120 minutes</option>
+                </select>
+              </SettingsField>
+
+              <SettingsField id="owner-res-fee" label="Reservation fee (₱)">
+                <input
+                  id="owner-res-fee"
+                  type="number"
+                  min="0"
+                  value={settings.reservationFee}
+                  onChange={(event) => update('reservationFee', event.target.value)}
+                />
+              </SettingsField>
+
+              <SettingsField id="owner-res-payment" label="Payment option">
+                <select
+                  id="owner-res-payment"
+                  value={settings.paymentMethod}
+                  onChange={(event) => update('paymentMethod', event.target.value)}
+                >
+                  <option>Online payment</option>
+                  <option>Pay at restaurant</option>
+                  <option>No fee</option>
+                </select>
+              </SettingsField>
+
+              <SettingsField id="owner-res-table" label="Table assignment preference">
+                <select
+                  id="owner-res-table"
+                  value={settings.tablePreference}
+                  onChange={(event) => update('tablePreference', event.target.value)}
+                >
+                  <option>Auto-suggest available table</option>
+                  <option>Staff assigns table</option>
+                  <option>Customer requests an area</option>
+                </select>
+              </SettingsField>
+            </div>
+
+            <SettingsField
+              id="owner-res-instructions"
+              label="Guest instructions"
+              hint="Schedule details are sample controls. Business operating hours are edited from Business Profile."
+            >
+              <textarea
+                id="owner-res-instructions"
+                rows="4"
+                value={settings.instructions}
+                onChange={(event) => update('instructions', event.target.value)}
+              />
+            </SettingsField>
+          </SettingsCard>
+        );
+
+      case 'payments':
+        return (
+          <SettingsCard title="Payment details" description="Sensitive payout details are never entered in this preview.">
+            <article
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '14px',
+                border: '1px solid var(--border-primary)',
+                borderRadius: 'var(--radius-lg)',
+                background: 'var(--surface-secondary)',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  display: 'grid',
+                  placeItems: 'center',
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  background: 'var(--accent-subtle)',
+                  color: 'var(--accent)',
+                  fontWeight: 800,
+                  flexShrink: 0,
+                }}
+              >
+                ₱
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <strong style={{ display: 'block', fontSize: 'var(--font-size-sm)' }}>
+                  {SETTINGS_DEFAULTS.paymentMethod}
+                </strong>
+                <small style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)' }}>
+                  Account ending •••• 4821 · Sample masked placeholder
+                </small>
+              </div>
+              <span style={{ color: 'var(--salo-green, #6B8F5B)', fontSize: 'var(--font-size-xs)', fontWeight: 700 }}>
+                Connected
+              </span>
+            </article>
+
+            <div
+              style={{
+                padding: '14px',
+                border: '1px solid color-mix(in srgb, var(--salo-gold, #F4C542) 40%, var(--border-primary))',
+                borderRadius: 'var(--radius-lg)',
+                background: 'var(--salo-gold-light, #FEF7DF)',
+              }}
+            >
+              <strong style={{ display: 'block', fontSize: 'var(--font-size-sm)', color: 'var(--salo-brown, #5B3A29)' }}>
+                Protected payment interface
+              </strong>
+              <p style={{ margin: '6px 0 12px', fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                Payout methods and credentials are managed through a protected interface. No card or bank information is requested on this page.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setNotice('Design preview only — protected payment management is not connected.')}
+              >
+                Manage payment method
+              </Button>
+            </div>
+          </SettingsCard>
+        );
+
+      case 'notifications':
+        return (
+          <SettingsCard title="Keep the team informed" description="Choose which event types generate a restaurant notification.">
+            <div className="salo-settings-toggle-list">
+              {Object.entries(settings.notifications).map(([label, checked]) => (
+                <SettingsToggleRow
+                  key={label}
+                  id={`owner-notif-${label.toLowerCase().replace(/\s+/g, '-')}`}
+                  label={label}
+                  description={`Preview notification preference for ${label.toLowerCase()}.`}
+                  checked={checked}
+                  onChange={(value) => updateNotification(label, value)}
+                />
+              ))}
+            </div>
+          </SettingsCard>
+        );
+
+      case 'security':
+        return <SettingsPasswordCard role="owner" />;
+
+      case 'preferences':
+        return <SettingsPreferencesSection />;
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <OwnerLayout>
+      <DesignPreviewBanner state={previewState} onStateChange={setPreviewState} />
+      <UnifiedSettingsShell
+        eyebrow="Restaurant preferences"
+        title="Settings"
+        subtitle="Manage your restaurant workspace, orders, reservations, notifications, and account."
+        sections={sections}
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
+        state={PREVIEW_STATE_MAP[previewState] || 'ready'}
+        onRetry={() => setPreviewState('Sample data')}
+        dirty={dirty}
+        onSave={save}
+        onDiscard={discard}
+        saveLabel="Save preview"
+        notice={notice}
+        renderSection={renderSection}
+      />
+
+      <ConfirmDialog
+        open={deactivateOpen}
+        title="Deactivate restaurant workspace?"
+        message="This design preview confirms how workspace deactivation would be guarded before disabling orders."
+        confirmLabel="Confirm preview"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          setDeactivateOpen(false);
+          setNotice('Design preview only — workspace was not deactivated.');
+        }}
+        onCancel={() => setDeactivateOpen(false)}
+      />
+    </OwnerLayout>
+  );
 }

@@ -7,22 +7,18 @@ import { useRestaurantAccess } from '../features/restaurant/access/useRestaurant
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import ProfileMenu from '../components/navigation/ProfileMenu';
+import SwitchAccountModal from '../components/navigation/SwitchAccountModal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import Modal from '../components/common/Modal';
 import {
   OWNER_NAV_CONFIG,
   OWNER_SIDEBAR_COLLAPSED_KEY,
 } from '../components/navigation/ownerNavConfig';
+import { buildProfileMenuItems, ROLE_META } from '../config/navigationConfig';
 import restaurantService from '../services/restaurantService';
 import { getLocalDateKey, normalizeOperatingHours } from '../services/demo/operatingHours';
 import '../components/navigation/NavigationShell.css';
 import './OwnerLayout.css';
-
-const mkIcon = (path) => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d={path} />
-  </svg>
-);
 
 function getInitials(name) {
   return (name || 'Owner').split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
@@ -37,6 +33,7 @@ export default function OwnerLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [pendingReservationsCount, setPendingReservationsCount] = useState(0);
 
@@ -164,48 +161,13 @@ export default function OwnerLayout({ children }) {
     }
   };
 
-  const profileMenuItems = [
-    ...(access.canAccessNavigationItem('profile')
-      ? [{
-          id: 'profile',
-          type: 'link',
-          label: 'Restaurant Profile',
-          href: '/owner/profile',
-          icon: mkIcon('M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 3a4 4 0 100 8 4 4 0 000-8z'),
-        }]
-      : []),
-    ...(access.canAccessNavigationItem('activity')
-      ? [{
-          id: 'activity',
-          type: 'link',
-          label: 'Activity Log',
-          href: '/owner/activity',
-          icon: mkIcon('M3 12h4l3-8 4 16 3-8h4'),
-        }]
-      : []),
-    ...(access.canAccessNavigationItem('settings')
-      ? [{
-          id: 'settings',
-          type: 'link',
-          label: 'Settings',
-          href: '/owner/settings',
-          icon: mkIcon('M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z'),
-        }]
-      : []),
-    {
-      id: 'support',
-      label: 'Support',
-      icon: mkIcon('M12 22a10 10 0 100-20 10 10 0 000 20z M9.5 9a2.5 2.5 0 014.8.8c0 1.7-2.3 2.2-2.3 3.7 M12 17h.01'),
-      onClick: () => setSupportOpen(true),
-    },
-    {
-      id: 'logout',
-      label: 'Log out',
-      icon: mkIcon('M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9'),
-      onClick: requestLogout,
-      danger: true,
-    },
-  ];
+  const profileMenuItems = buildProfileMenuItems({
+    profileHref: access.canAccessNavigationItem('profile') ? ROLE_META.restaurant.profileHref : ROLE_META.restaurant.settingsHref,
+    settingsHref: ROLE_META.restaurant.settingsHref,
+    canViewSettings: access.canAccessNavigationItem('settings'),
+    onSwitchAccount: () => setSwitchAccountOpen(true),
+    onLogout: requestLogout,
+  });
 
   const hasMultipleRestaurants = access.restaurants.length > 1;
   const restaurantControl = selectedRestaurant ? (
@@ -269,8 +231,9 @@ export default function OwnerLayout({ children }) {
           showNotifications
           notificationCount={totalPendingAlerts}
           notificationsHref={bellTarget}
+          roleLabel={ROLE_META.restaurant.label}
+          roleTone={ROLE_META.restaurant.tone}
           showThemeToggle
-          showUserInfo={false}
           headingExtras={restaurantControl}
           profileButton={(
             <ProfileMenu
@@ -278,6 +241,8 @@ export default function OwnerLayout({ children }) {
               profileEmail={profileEmail}
               profileInitials={initials}
               profileAvatar={user?.avatar}
+              roleLabel={ROLE_META.restaurant.label}
+              roleTone={ROLE_META.restaurant.tone}
               menuItems={profileMenuItems}
             />
           )}
@@ -332,6 +297,12 @@ export default function OwnerLayout({ children }) {
           </p>
         </div>
       </Modal>
+
+      <SwitchAccountModal
+        open={switchAccountOpen}
+        onClose={() => setSwitchAccountOpen(false)}
+        currentRole="restaurant"
+      />
 
       <ConfirmDialog {...logoutDialogProps} />
     </div>

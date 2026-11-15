@@ -1,14 +1,15 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner } from '../components/feedback';
+import { getDefaultWorkspace, getWorkspaceHomePath } from '../services/authService';
 
 /**
  * ProtectedRoute
  * Guards routes requiring authentication and optional role restrictions.
- * Redirects unauthenticated users to /login with state.from
+ * Redirects unauthenticated users to /login with state.from.
  */
 export default function ProtectedRoute({ children, allowedRoles = [] }) {
-  const { isAuthenticated, role, loading } = useAuth();
+  const { isAuthenticated, role, roles, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -23,9 +24,9 @@ export default function ProtectedRoute({ children, allowedRoles = [] }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
-    // Role not authorized — redirect to their respective home or landing
-    return <Navigate to="/" replace />;
+  const userRoles = Array.isArray(roles) && roles.length > 0 ? roles : [role].filter(Boolean);
+  if (allowedRoles.length > 0 && !allowedRoles.some((allowed) => userRoles.includes(allowed))) {
+    return <Navigate to={getWorkspaceHomePath(getDefaultWorkspace(userRoles))} replace />;
   }
 
   return children;

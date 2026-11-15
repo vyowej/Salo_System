@@ -4,6 +4,7 @@ import AuthLayout from '../../../layouts/AuthLayout';
 import { Input } from '../../../components/forms';
 import Button from '../../../components/common/Button';
 import { useAuth } from '../../../hooks/useAuth';
+import { getDefaultWorkspace, getWorkspaceHomePath } from '../../../services/authService';
 import './LoginPage.css';
 
 export default function LoginPage({ embedded = false, onSwitch }) {
@@ -14,22 +15,17 @@ export default function LoginPage({ embedded = false, onSwitch }) {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    rememberMe: false,
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedDemo, setSelectedDemo] = useState('');
 
   const getDestination = (resUser) => {
     if (location.state?.from?.pathname) {
       const { pathname, search = '', hash = '' } = location.state.from;
       return `${pathname}${search}${hash}`;
     }
-    if (resUser?.role === 'customer') return '/customer';
-    if (resUser?.role === 'owner') return '/owner';
-    if (resUser?.role === 'rider') return '/rider';
-    if (resUser?.role === 'admin') return '/admin';
-    return '/';
+    const workspace = resUser?.role || getDefaultWorkspace(resUser?.roles);
+    return getWorkspaceHomePath(workspace);
   };
 
   const handleChange = (e) => {
@@ -46,7 +42,7 @@ export default function LoginPage({ embedded = false, onSwitch }) {
     setError(null);
 
     if (!formData.email.trim()) {
-      setError('Please enter your email or username.');
+      setError('Please enter your email address.');
       return;
     }
     if (!formData.password) {
@@ -55,24 +51,14 @@ export default function LoginPage({ embedded = false, onSwitch }) {
     }
 
     try {
-      const result = await login(formData);
+      const result = await login({
+        email: formData.email.trim(),
+        password: formData.password,
+      });
       navigate(getDestination(result?.user), { replace: true });
     } catch (err) {
       setError(err?.message || 'Invalid email or password. Please try again.');
     }
-  };
-
-  const handleQuickLogin = (event) => {
-    const email = event.target.value;
-    setSelectedDemo(email);
-    if (!email) return;
-
-    setFormData({
-      email,
-      password: 'password123',
-      rememberMe: true,
-    });
-    setError(null);
   };
 
   const content = (
@@ -97,13 +83,13 @@ export default function LoginPage({ embedded = false, onSwitch }) {
         <Input
           id="login-email"
           name="email"
-          type="text"
-          label="Email or Username"
+          type="email"
+          label="Email Address"
           placeholder="e.g. maria@salo.ph"
           value={formData.email}
           onChange={handleChange}
           required
-          autoComplete="username"
+          autoComplete="email"
           autoFocus
         />
 
@@ -148,17 +134,7 @@ export default function LoginPage({ embedded = false, onSwitch }) {
           />
         </div>
 
-        <div className="auth-row-between">
-          <label className="checkbox-group" style={{ fontSize: 'var(--font-size-xs)' }}>
-            <input
-              type="checkbox"
-              name="rememberMe"
-              checked={formData.rememberMe}
-              onChange={handleChange}
-            />
-            <span style={{ color: 'var(--text-secondary)' }}>Remember this device</span>
-          </label>
-
+        <div className="auth-row-between" style={{ justifyContent: 'flex-end' }}>
           <Link to="/forgot-password" className="auth-link">
             Forgot password?
           </Link>
@@ -175,20 +151,6 @@ export default function LoginPage({ embedded = false, onSwitch }) {
           Sign In
         </Button>
       </form>
-
-      <div className="demo-account-picker">
-        <label htmlFor="demo-account">Demo account</label>
-        <select id="demo-account" value={selectedDemo} onChange={handleQuickLogin}>
-          <option value="">Choose an account to fill sign-in fields</option>
-          <option value="customer@salo.ph">Customer — customer@salo.ph</option>
-          <option value="owner@salo.ph">Restaurant Owner — owner@salo.ph</option>
-          <option value="staff@salo.ph">Restaurant Staff — staff@salo.ph</option>
-          <option value="reservation.staff@salo.ph">Reservation Handler — reservation.staff@salo.ph</option>
-          <option value="inventory.staff@salo.ph">Inventory Manager — inventory.staff@salo.ph</option>
-          <option value="rider@salo.ph">Rider — rider@salo.ph</option>
-          <option value="admin@salo.ph">Admin — admin@salo.ph</option>
-        </select>
-      </div>
 
       <div className="auth-footer-prompt">
         Don&apos;t have an account?{' '}

@@ -4,12 +4,13 @@ import { StateView } from '../components';
 import AccessDeniedPage from '../pages/AccessDeniedPage';
 
 export default function AdminRouteGuard() {
-  const { isAuthenticated, role, loading } = useAuth();
+  const { isAuthenticated, role, roles, loading } = useAuth();
   const location = useLocation();
 
   if (loading) return <StateView state="loading" title="your admin session" />;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (role !== 'admin') return <AccessDeniedPage title="Administrator access required" returnTo="/" />;
+  const isAdmin = role === 'admin' || (Array.isArray(roles) && roles.includes('admin'));
+  if (!isAdmin) return <AccessDeniedPage title="Administrator access required" returnTo="/" />;
 
   return <Outlet />;
 }

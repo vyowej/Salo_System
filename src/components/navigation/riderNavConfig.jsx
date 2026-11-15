@@ -1,6 +1,8 @@
+import { SettingsGearIcon } from '../../config/navigationConfig';
+
 /**
- * Shared rider navigation configuration (max 7 items).
- * Profile, Settings, Safety, and Notifications live in the topbar.
+ * Shared rider navigation configuration.
+ * Settings is pinned at the bottom of the sidebar across all roles.
  */
 
 const iconProps = {
@@ -97,5 +99,12 @@ export const RIDER_NAV_CONFIG = [
         <circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" />
       </svg>
     ),
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    path: '/rider/settings',
+    pinnedBottom: true,
+    icon: <SettingsGearIcon />,
   },
 ];

@@ -1,89 +1,32 @@
 import { Link, useLocation } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
 import BrandMark from '../common/BrandMark';
+import { resolveTopbarTitle } from '../../config/navigationConfig';
 import './TopBar.css';
 
-const PAGE_TITLES = {
-  '/customer': 'Explore & Feed',
-  '/customer/restaurants': 'All Restaurants',
-  '/customer/cart': 'Multi-Cart',
-  '/customer/checkout': 'Checkout',
-  '/customer/orders': 'My Orders',
-  '/customer/favorites': 'Favorites',
-  '/customer/notifications': 'Notifications',
-  '/customer/reservations': 'Table Bookings',
-  '/customer/invitations': 'Invitations',
-  '/customer/addresses': 'Saved Addresses',
-  '/customer/partner': 'Become a Partner',
-  '/customer/profile': 'Profile Settings',
-  '/owner': 'Overview',
-  '/owner/profile': 'Business Profile',
-  '/owner/menu': 'Menu Management',
-  '/owner/orders': 'Orders',
-  '/owner/reservations': 'Reservations',
-  '/owner/tables': 'Tables',
-  '/owner/inventory': 'Inventory',
-  '/owner/promotions': 'Promotions',
-  '/owner/team': 'Team and Staff',
-  '/owner/reports': 'Reports and Statistics',
-  '/owner/earnings': 'Reports and Statistics',
-  '/owner/activity': 'Activity Logs',
-  '/owner/settings': 'Settings',
-  '/rider': 'Dashboard',
-  '/rider/deliveries': 'Deliveries',
-  '/rider/deliveries/active': 'Active Delivery',
-  '/rider/active': 'Active Delivery',
-  '/rider/jobs': 'Deliveries',
-  '/rider/map': 'Map / Tracking',
-  '/rider/schedule': 'Schedule',
-  '/rider/earnings': 'Earnings',
-  '/rider/history': 'Delivery History',
-  '/rider/notifications': 'Notifications',
-  '/rider/support': 'Support',
-  '/rider/profile': 'Rider Profile',
-  '/rider/settings': 'Settings',
-  '/rider/safety': 'Safety',
-  '/admin': 'Platform Overview',
-  '/admin/restaurants': 'Restaurants & Partners',
-  '/admin/riders': 'Courier Fleet',
-  '/admin/orders': 'Orders & Disputes',
-  '/admin/users': 'User Directory',
-  '/admin/settings': 'System Configuration',
-};
-
-function getPageTitle(pathname) {
-  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
-  if (pathname.startsWith('/customer/restaurants/')) return 'Restaurant Details';
-  if (pathname.startsWith('/customer/orders/')) return 'Order Details';
-  return '';
-}
-
 /**
- * SALO TopBar
+ * Unified SALO TopBar shared across Customer, Restaurant Owner, Rider, and Admin.
  */
 export default function TopBar({
   search,
   actions,
-  userName,
-  userRole,
-  userInitials = '?',
-  userAvatar,
+  notificationsSlot,
   showNotifications = true,
   notificationCount = 0,
   notificationsHref = '/customer/notifications',
   headingPrefix,
   headingExtras,
+  roleLabel,
+  roleTone = 'orange',
   onMenuToggle,
   mobileMenuOpen = false,
-  onAvatarClick,
   title,
   children,
   showThemeToggle = true,
-  showUserInfo = true,
   profileButton,
 }) {
   const { pathname } = useLocation();
-  const pageTitle = title || getPageTitle(pathname);
+  const pageTitle = title || resolveTopbarTitle(pathname);
 
   return (
     <header className="topbar">
@@ -92,7 +35,8 @@ export default function TopBar({
           <button
             className="topbar-hamburger"
             onClick={onMenuToggle}
-            aria-label="Toggle navigation"
+            aria-label={mobileMenuOpen ? 'Close navigation' : 'Toggle navigation'}
+            aria-expanded={mobileMenuOpen}
             type="button"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -111,6 +55,11 @@ export default function TopBar({
 
         {headingPrefix}
         <h1 className="topbar-title">{pageTitle}</h1>
+        {roleLabel && (
+          <span className={`topbar-role-chip tone-${roleTone}`}>
+            {roleLabel}
+          </span>
+        )}
         {headingExtras}
       </div>
 
@@ -120,7 +69,7 @@ export default function TopBar({
         {children}
         {actions}
 
-        {showNotifications && (
+        {notificationsSlot || (showNotifications && (
           <Link
             to={notificationsHref}
             className="topbar-btn"
@@ -138,35 +87,11 @@ export default function TopBar({
               </span>
             )}
           </Link>
-        )}
-
-        {profileButton && <div className="topbar-profile-slot">{profileButton}</div>}
+        ))}
 
         {showThemeToggle && <ThemeToggle />}
 
-        {showUserInfo && (userName || userInitials) && (
-          <button
-            className="topbar-user"
-            onClick={onAvatarClick}
-            aria-label={`${userName || 'User'}${userRole ? `, ${userRole}` : ''} profile`}
-            type="button"
-          >
-            <span className="topbar-avatar" aria-hidden="true">
-              {userAvatar
-                ? <img src={userAvatar} alt="" />
-                : userInitials}
-            </span>
-            {userName && (
-              <span className="topbar-user-details">
-                <span className="topbar-user-name">{userName}</span>
-                {userRole && <span className="topbar-user-role">{userRole}</span>}
-              </span>
-            )}
-            <svg className="topbar-user-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-        )}
+        {profileButton && <div className="topbar-profile-slot">{profileButton}</div>}
       </div>
     </header>
   );

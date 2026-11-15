@@ -59,8 +59,6 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
     e.preventDefault();
     setError(null);
 
-    const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim();
-
     // Validation
     if (!formData.firstName.trim()) {
       setError('Please provide your first name.');
@@ -93,18 +91,15 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
 
     try {
       await register({
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-        fullName,
-        name: fullName,
-        username: formData.username,
-        email: formData.email,
+        first_name: formData.firstName.trim(),
+        last_name: formData.lastName.trim(),
+        username: formData.username.trim(),
+        email: formData.email.trim(),
         password: formData.password,
-        role: 'customer', // Default regular SALO user account
+        password_confirmation: formData.passwordConfirmation,
       });
 
-      // Redirect to onboarding welcome
-      navigate('/', { replace: true, state: { newlyRegistered: true } });
+      navigate('/customer', { replace: true, state: { newlyRegistered: true } });
     } catch (err) {
       setError(err?.message || 'Registration failed. Please check your information and try again.');
     }

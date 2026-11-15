@@ -6,6 +6,7 @@ import { useLogout } from '../hooks/useLogout';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import ProfileMenu from '../components/navigation/ProfileMenu';
+import SwitchAccountModal from '../components/navigation/SwitchAccountModal';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import BackButton from '../components/common/BackButton';
@@ -14,18 +15,13 @@ import {
   CUSTOMER_NAV_CONFIG,
   CUSTOMER_SIDEBAR_COLLAPSED_KEY,
 } from '../components/navigation/customerNavConfig';
+import { buildProfileMenuItems, ROLE_META } from '../config/navigationConfig';
 import customerService from '../services/customerService';
 import { CUSTOMER_INVITATION_COUNT } from '../features/restaurant/pages/team/teamSamples';
 import '../components/navigation/NavigationShell.css';
 import './CustomerLayout.css';
 
 
-
-const mkIcon = (path) => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d={path} />
-  </svg>
-);
 
 function getInitials(name) {
   const trimmed = (name || '').trim();
@@ -59,6 +55,7 @@ export default function CustomerLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
 
   const [hasActiveOrder, setHasActiveOrder] = useState(false);
   const [hasReservationUpdate, setHasReservationUpdate] = useState(false);
@@ -166,43 +163,12 @@ export default function CustomerLayout({ children }) {
   const profileEmail = user?.email || user?.username || 'customer@salo.local';
   const profileInitials = getInitials(profileName);
 
-  const profileMenuItems = [
-    {
-      id: 'profile',
-      type: 'link',
-      label: 'Profile',
-      href: '/customer/profile',
-      icon: mkIcon('M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 3a4 4 0 100 8 4 4 0 000-8z'),
-    },
-    {
-      id: 'settings',
-      type: 'link',
-      label: 'Settings',
-      href: '/customer/profile',
-      icon: mkIcon('M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z'),
-    },
-    {
-      id: 'invitations',
-      type: 'link',
-      label: 'Invitations',
-      href: '/customer/invitations',
-      icon: mkIcon('M3 5h18v14H3z M3 7l9 6 9-6'),
-    },
-    {
-      id: 'partner',
-      type: 'link',
-      label: 'Become a Partner',
-      href: '/customer/partner',
-      icon: mkIcon('M3 21h18M7 17V7a2 2 0 012-2h6a2 2 0 012 2v10M9 11h6'),
-    },
-    {
-      id: 'logout',
-      label: 'Logout',
-      icon: mkIcon('M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9'),
-      onClick: requestLogout,
-      danger: true,
-    },
-  ];
+  const profileMenuItems = buildProfileMenuItems({
+    profileHref: ROLE_META.customer.profileHref,
+    settingsHref: ROLE_META.customer.settingsHref,
+    onSwitchAccount: () => setSwitchAccountOpen(true),
+    onLogout: requestLogout,
+  });
 
 
 
@@ -400,8 +366,9 @@ export default function CustomerLayout({ children }) {
           onMenuToggle={() => setMobileOpen((v) => !v)}
           showNotifications={false}
           headingPrefix={location.pathname.startsWith('/customer/restaurants/') ? <BackButton fallbackTo="/customer" /> : null}
+          roleLabel={ROLE_META.customer.label}
+          roleTone={ROLE_META.customer.tone}
           showThemeToggle
-          showUserInfo={false}
           search={topbarSearch}
           profileButton={(
             <ProfileMenu
@@ -409,6 +376,8 @@ export default function CustomerLayout({ children }) {
               profileEmail={profileEmail}
               profileInitials={profileInitials}
               profileAvatar={user?.avatar}
+              roleLabel={ROLE_META.customer.label}
+              roleTone={ROLE_META.customer.tone}
               menuItems={profileMenuItems}
             />
           )}
@@ -472,7 +441,7 @@ export default function CustomerLayout({ children }) {
               <span>Check table reservations</span>
               <span aria-hidden="true">→</span>
             </Link>
-            <Link to="/customer/profile" onClick={() => setSupportOpen(false)} className="customer-support-link">
+            <Link to="/customer/settings" onClick={() => setSupportOpen(false)} className="customer-support-link">
               <span>Account &amp; security settings</span>
               <span aria-hidden="true">→</span>
             </Link>
@@ -482,6 +451,12 @@ export default function CustomerLayout({ children }) {
           </p>
         </div>
       </Modal>
+
+      <SwitchAccountModal
+        open={switchAccountOpen}
+        onClose={() => setSwitchAccountOpen(false)}
+        currentRole="customer"
+      />
 
       <ConfirmDialog {...logoutDialogProps} />
     </div>

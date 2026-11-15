@@ -1,4 +1,5 @@
 import SideBar from '../../../components/navigation/SideBar';
+import { SettingsGearIcon } from '../../../config/navigationConfig';
 import {
   ADMIN_COLLAPSED_IMPORTANT_IDS,
   getAdminNavItems,
@@ -54,7 +55,10 @@ export default function AdminSidebar({
     return {
       ...item,
       end: item.href === '/admin',
-      icon: renderNavIcon(ICON_PATHS[item.id] || ICON_PATHS.dashboard),
+      pinnedBottom: item.id === 'settings',
+      icon: item.id === 'settings'
+        ? <SettingsGearIcon />
+        : renderNavIcon(ICON_PATHS[item.id] || ICON_PATHS.dashboard),
       badge,
     };
   });

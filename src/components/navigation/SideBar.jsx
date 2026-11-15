@@ -24,8 +24,10 @@ export default function SideBar({
 }) {
   const { pathname } = useLocation();
   const [tooltip, setTooltip] = useState(null);
-  const hasSections = items.some((item) => Boolean(item.section));
-  const sections = hasSections ? groupBySection(items) : [{ section: '', items }];
+  const mainItems = items.filter((item) => !item.pinnedBottom);
+  const pinnedItems = items.filter((item) => item.pinnedBottom);
+  const hasSections = mainItems.some((item) => Boolean(item.section));
+  const sections = hasSections ? groupBySection(mainItems) : [{ section: '', items: mainItems }];
 
   const handleItemClick = (item) => {
     setTooltip(null);
@@ -107,6 +109,23 @@ export default function SideBar({
 
         {/* ── Bottom utilities (pinned) ───────────────── */}
         <div className="sidebar-bottom">
+          {pinnedItems.length > 0 && (
+            <div className="sidebar-pinned-nav">
+              {pinnedItems.map((item) => (
+                <SideBarItem
+                  key={item.id}
+                  item={item}
+                  pathname={pathname}
+                  fallbackActive={item.id === activeId}
+                  collapsed={collapsed}
+                  onShowTooltip={showTooltip}
+                  onHideTooltip={hideTooltip}
+                  onClick={() => handleItemClick(item)}
+                />
+              ))}
+            </div>
+          )}
+
           {footer && (
             <div className={`sidebar-footer ${collapsed ? 'collapsed' : ''}`}>
               {footer}

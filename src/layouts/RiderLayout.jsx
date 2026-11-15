@@ -5,11 +5,13 @@ import { useSidebarCollapse } from '../hooks/useSidebarCollapse';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import ProfileMenu from '../components/navigation/ProfileMenu';
+import SwitchAccountModal from '../components/navigation/SwitchAccountModal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import {
   RIDER_NAV_CONFIG,
   RIDER_SIDEBAR_COLLAPSED_KEY,
 } from '../components/navigation/riderNavConfig';
+import { buildProfileMenuItems, ROLE_META } from '../config/navigationConfig';
 import { getRiderMock } from '../features/rider/mocks';
 import { MOBILE_PRIMARY_NAV_KEYS } from '../features/rider/constants/riderConstants';
 import ScenarioLink from '../features/rider/components/ScenarioLink';
@@ -41,6 +43,7 @@ export default function RiderLayout({ children }) {
   const isMapPage = location.pathname === '/rider/map';
   const [mobileOpen, setMobileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
 
   const scenario = useScenario();
   const profile = getRiderMock('riderProfile', scenario);
@@ -80,43 +83,12 @@ export default function RiderLayout({ children }) {
     };
   }, [isMapPage]);
 
-  const profileMenuItems = [
-    {
-      id: 'profile',
-      type: 'link',
-      label: 'Profile',
-      href: withScenario('/rider/profile', location.search),
-      icon: mkIcon('M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 3a4 4 0 100 8 4 4 0 000-8z'),
-    },
-    {
-      id: 'settings',
-      type: 'link',
-      label: 'Settings',
-      href: withScenario('/rider/settings', location.search),
-      icon: mkIcon('M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z'),
-    },
-    {
-      id: 'safety',
-      type: 'link',
-      label: 'Safety',
-      href: withScenario('/rider/safety', location.search),
-      icon: mkIcon('M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'),
-    },
-    {
-      id: 'support',
-      type: 'link',
-      label: 'Support',
-      href: withScenario('/rider/support', location.search),
-      icon: mkIcon('M12 22a10 10 0 100-20 10 10 0 000 20z M9.5 9a2.5 2.5 0 014.8.8c0 1.7-2.3 2.2-2.3 3.7 M12 17h.01'),
-    },
-    {
-      id: 'logout',
-      label: 'Log out',
-      icon: mkIcon('M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9'),
-      onClick: requestLogout,
-      danger: true,
-    },
-  ];
+  const profileMenuItems = buildProfileMenuItems({
+    profileHref: withScenario(ROLE_META.rider.profileHref, location.search),
+    settingsHref: withScenario(ROLE_META.rider.settingsHref, location.search),
+    onSwitchAccount: () => setSwitchAccountOpen(true),
+    onLogout: requestLogout,
+  });
 
   const primaryNavItems = items.filter((item) => MOBILE_PRIMARY_NAV_KEYS.includes(item.id));
   const moreNavItems = items.filter((item) => !MOBILE_PRIMARY_NAV_KEYS.includes(item.id));
@@ -143,8 +115,9 @@ export default function RiderLayout({ children }) {
           showNotifications
           notificationCount={unreadNotifications}
           notificationsHref={withScenario('/rider/notifications', location.search)}
+          roleLabel={ROLE_META.rider.label}
+          roleTone={ROLE_META.rider.tone}
           showThemeToggle
-          showUserInfo={false}
           headingExtras={(
             <ScenarioLink
               to="/rider#driver-mode"
@@ -162,6 +135,8 @@ export default function RiderLayout({ children }) {
               profileEmail={profile.email}
               profileInitials={profile.initials}
               profileAvatar={profile.photo}
+              roleLabel={ROLE_META.rider.label}
+              roleTone={ROLE_META.rider.tone}
               menuItems={profileMenuItems}
             />
           )}
@@ -209,6 +184,12 @@ export default function RiderLayout({ children }) {
           )}
         </nav>
       </div>
+      <SwitchAccountModal
+        open={switchAccountOpen}
+        onClose={() => setSwitchAccountOpen(false)}
+        currentRole="rider"
+      />
+
       <ConfirmDialog {...logoutDialogProps} />
     </div>
   );
