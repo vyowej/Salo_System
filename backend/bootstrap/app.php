@@ -1,10 +1,19 @@
 <?php
 
+use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\RequireRole;
 use App\Support\ApiResponse;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
+use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Session\TokenMismatchException;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -16,7 +25,19 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->redirectGuestsTo(fn () => null);
+
+        $middleware->api(prepend: [
+            EncryptCookies::class,
+            AddQueuedCookiesToResponse::class,
+            StartSession::class,
+            PreventRequestForgery::class,
+            EnsureAccountIsActive::class,
+        ]);
+
+        $middleware->alias([
+            'role' => RequireRole::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
@@ -36,8 +57,36 @@ return Application::configure(basePath: dirname(__DIR__))
                 );
             }
 
+            if ($e instanceof AuthenticationException) {
+                return ApiResponse::error(
+                    message: 'Unauthenticated.',
+                    status: 401,
+                );
+            }
+
+            if ($e instanceof TokenMismatchException) {
+                return ApiResponse::error(
+                    message: 'CSRF token mismatch.',
+                    status: 419,
+                );
+            }
+
+            if ($e instanceof ThrottleRequestsException) {
+                return ApiResponse::error(
+                    message: $e->getMessage() ?: 'Too many attempts. Please try again later.',
+                    status: 429,
+                );
+            }
+
             if ($e instanceof HttpExceptionInterface) {
                 $status = $e->getStatusCode();
+                if ($status === 419) {
+                    return ApiResponse::error(
+                        message: 'CSRF token mismatch.',
+                        status: 419,
+                    );
+                }
+
                 $message = $status >= 500
                     ? 'An unexpected server error occurred.'
                     : ($e->getMessage() ?: 'Request error.');
