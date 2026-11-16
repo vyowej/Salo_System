@@ -98,6 +98,10 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
     Route::get('/applications/current', [RestaurantApplicationController::class, 'current']);
     Route::post('/applications/{id}/documents', [RestaurantApplicationController::class, 'uploadDocument'])->whereNumber('id');
 
+    Route::middleware('role:owner')->group(function (): void {
+        Route::get('/setup-status', [RestaurantController::class, 'setupStatus']);
+    });
+
     Route::middleware('role:owner,staff')->group(function (): void {
         Route::get('/location', [RestaurantLocationController::class, 'show']);
         Route::patch('/location', [RestaurantLocationController::class, 'updateLocation']);
