@@ -56,4 +56,19 @@ class RestaurantController extends Controller
             message: 'Restaurant menu retrieved.',
         );
     }
+
+    public function setupStatus(Request $request): JsonResponse
+    {
+        $restaurantId = $request->query('restaurant_id');
+
+        return ApiResponse::success(
+            data: [
+                'setup_status' => $this->restaurantService->getOwnerSetupStatus(
+                    $request->user(),
+                    is_numeric($restaurantId) ? (int) $restaurantId : null,
+                ),
+            ],
+            message: 'Restaurant setup status retrieved.',
+        );
+    }
 }
