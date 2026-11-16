@@ -2,6 +2,7 @@
 
 namespace App\Features\Locations\Controllers;
 
+use App\Features\Account\Requests\UpdateProfileRequest;
 use App\Features\Locations\Services\CustomerAddressService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
@@ -24,10 +25,18 @@ class CustomerAddressController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        if ($request->exists('recipient_phone')) {
+            $rawPhone = $request->input('recipient_phone');
+            $normalizedPhone = is_string($rawPhone) && trim($rawPhone) !== ''
+                ? UpdateProfileRequest::normalizePhilippineMobile($rawPhone)
+                : null;
+            $request->merge(['recipient_phone' => $normalizedPhone]);
+        }
+
         $validated = $request->validate([
             'label' => ['required', 'string', 'max:50'],
             'recipient_name' => ['nullable', 'string', 'max:150'],
-            'recipient_phone' => ['nullable', 'string', 'max:30'],
+            'recipient_phone' => ['nullable', 'string', 'regex:/^09\d{9}$/'],
             'province' => ['required', 'string', 'max:100'],
             'city' => ['required', 'string', 'max:100'],
             'barangay' => ['required', 'string', 'max:100'],
@@ -40,6 +49,8 @@ class CustomerAddressController extends Controller
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'gps_accuracy' => ['nullable', 'numeric', 'min:0', 'max:100000'],
             'is_default' => ['sometimes', 'boolean'],
+        ], [
+            'recipient_phone.regex' => 'Pakilagay ang tamang numero ng cellphone (hal. 09171234567).',
         ]);
 
         $address = $this->customerAddresses->createForUser($request->user(), $validated);
@@ -53,10 +64,18 @@ class CustomerAddressController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
+        if ($request->exists('recipient_phone')) {
+            $rawPhone = $request->input('recipient_phone');
+            $normalizedPhone = is_string($rawPhone) && trim($rawPhone) !== ''
+                ? UpdateProfileRequest::normalizePhilippineMobile($rawPhone)
+                : null;
+            $request->merge(['recipient_phone' => $normalizedPhone]);
+        }
+
         $validated = $request->validate([
             'label' => ['sometimes', 'string', 'max:50'],
             'recipient_name' => ['nullable', 'string', 'max:150'],
-            'recipient_phone' => ['nullable', 'string', 'max:30'],
+            'recipient_phone' => ['nullable', 'string', 'regex:/^09\d{9}$/'],
             'province' => ['sometimes', 'string', 'max:100'],
             'city' => ['sometimes', 'string', 'max:100'],
             'barangay' => ['sometimes', 'string', 'max:100'],
@@ -69,6 +88,8 @@ class CustomerAddressController extends Controller
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'gps_accuracy' => ['nullable', 'numeric', 'min:0', 'max:100000'],
             'is_default' => ['sometimes', 'boolean'],
+        ], [
+            'recipient_phone.regex' => 'Pakilagay ang tamang numero ng cellphone (hal. 09171234567).',
         ]);
 
         $address = $this->customerAddresses->updateForUser($request->user(), $id, $validated);
