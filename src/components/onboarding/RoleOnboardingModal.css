@@ -1,0 +1,516 @@
+/* ==========================================================================
+   SALO — Role-Based Onboarding Modal Styles
+   Follows the Filipino Fiesta Design System:
+   - Pure white light surface (#FFFFFF) / dark charcoal (#1E1E20) in dark mode
+   - Brand colors: Fiesta Orange, Golden Yellow, Leaf Green, Earthy Brown
+   - Centered dialog on desktop; near full-width bottom sheet on mobile
+   - Subtle 150ms / 220ms transitions, clear focus-visible rings
+   ========================================================================== */
+
+.salo-onboarding-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(23, 23, 23, 0.56);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4, 16px);
+  animation: saloOnboardingFadeIn 150ms ease-out;
+}
+
+.salo-onboarding-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  max-height: min(88dvh, 760px);
+  background: var(--surface-primary, #FFFFFF);
+  color: var(--text-primary, #171717);
+  border: 1px solid var(--border-primary, #E5E7EB);
+  border-radius: var(--radius-xl, 16px);
+  box-shadow: var(--shadow-xl, 0 20px 40px rgba(0, 0, 0, 0.16));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: saloOnboardingSlideUp 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.salo-onboarding-dialog--wide {
+  max-width: 660px;
+}
+
+/* Topbar: Brand icon + Role pill + Progress + Close button */
+.salo-onboarding-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  padding: var(--space-4, 16px) var(--space-5, 20px) var(--space-3, 12px);
+  border-bottom: 1px solid var(--border-secondary, #F1F3F5);
+  background: var(--surface-primary, #FFFFFF);
+}
+
+.salo-onboarding-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+}
+
+.salo-onboarding-role-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--font-size-xs, 12px);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: var(--surface-secondary, #F8F9FA);
+  color: var(--text-secondary, #4B5563);
+  border: 1px solid var(--border-primary, #E5E7EB);
+}
+
+.salo-onboarding-role-pill--customer {
+  color: var(--card-brand-orange, #C85428);
+  border-color: var(--card-orange-border, rgba(200, 84, 40, 0.25));
+  background: var(--card-orange-bg, rgba(200, 84, 40, 0.06));
+}
+
+.salo-onboarding-role-pill--rider {
+  color: var(--card-brand-green, #2E7D32);
+  border-color: var(--card-green-border, rgba(104, 115, 60, 0.28));
+  background: var(--card-green-bg, rgba(104, 115, 60, 0.08));
+}
+
+.salo-onboarding-role-pill--business {
+  color: var(--card-brand-brown, #55301C);
+  border-color: var(--card-gold-border, rgba(223, 160, 62, 0.32));
+  background: var(--card-gold-bg, rgba(223, 160, 62, 0.1));
+}
+
+.salo-onboarding-topbar-right {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+}
+
+.salo-onboarding-step-count {
+  font-size: var(--font-size-xs, 12px);
+  font-weight: 600;
+  color: var(--text-muted, #6B7280);
+}
+
+.salo-onboarding-close {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary, #4B5563);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.salo-onboarding-close:hover {
+  background: var(--surface-secondary, #F8F9FA);
+  color: var(--text-primary, #171717);
+}
+
+.salo-onboarding-close:focus-visible {
+  outline: 2px solid var(--accent, #F36B2B);
+  outline-offset: 2px;
+}
+
+/* Progress segments */
+.salo-onboarding-progress {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+  padding: 0 var(--space-5, 20px) var(--space-3, 12px);
+  background: var(--surface-primary, #FFFFFF);
+}
+
+.salo-onboarding-progress-segment {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-tertiary, #E5E7EB);
+  transition: background-color 220ms ease;
+}
+
+.salo-onboarding-progress-segment.is-complete {
+  background: var(--salo-green, #2E7D32);
+}
+
+.salo-onboarding-progress-segment.is-active {
+  background: var(--accent, #F36B2B);
+}
+
+/* Scrollable Step Body */
+.salo-onboarding-body {
+  padding: var(--space-5, 20px) var(--space-6, 24px);
+  overflow-y: auto;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 16px);
+}
+
+.salo-onboarding-step-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.salo-onboarding-title {
+  margin: 0;
+  font-family: var(--font-display, inherit);
+  font-size: var(--font-size-2xl, 24px);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--text-primary, #171717);
+}
+
+.salo-onboarding-subtitle {
+  margin: 0;
+  font-size: var(--font-size-sm, 14px);
+  line-height: 1.6;
+  color: var(--text-secondary, #4B5563);
+}
+
+/* Highlights & Points List */
+.salo-onboarding-points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.salo-onboarding-point-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--surface-secondary, #F8F9FA);
+  border: 1px solid var(--border-primary, #E5E7EB);
+}
+
+.salo-onboarding-point-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface-primary, #FFFFFF);
+  border: 1px solid var(--border-primary, #E5E7EB);
+  color: var(--accent, #F36B2B);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.salo-onboarding-point-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.salo-onboarding-point-copy strong {
+  font-size: var(--font-size-sm, 14px);
+  font-weight: 600;
+  color: var(--text-primary, #171717);
+}
+
+.salo-onboarding-point-copy p {
+  margin: 0;
+  font-size: var(--font-size-xs, 12px);
+  line-height: 1.5;
+  color: var(--text-secondary, #4B5563);
+}
+
+/* Checklist Items (Rider & Business) */
+.salo-onboarding-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.salo-onboarding-checklist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--surface-secondary, #F8F9FA);
+  border: 1px solid var(--border-primary, #E5E7EB);
+}
+
+.salo-onboarding-checklist-item.is-done {
+  border-color: var(--card-green-border, rgba(46, 125, 50, 0.3));
+  background: var(--card-green-bg, rgba(46, 125, 50, 0.05));
+}
+
+.salo-onboarding-checklist-main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3, 12px);
+  min-width: 0;
+}
+
+.salo-onboarding-status-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  border: 1.5px solid var(--border-primary, #D1D5DB);
+  background: var(--surface-primary, #FFFFFF);
+  color: var(--text-muted, #6B7280);
+}
+
+.salo-onboarding-status-dot.is-done {
+  background: var(--salo-green, #2E7D32);
+  border-color: var(--salo-green, #2E7D32);
+  color: #FFFFFF;
+}
+
+.salo-onboarding-checklist-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.salo-onboarding-checklist-text strong {
+  font-size: var(--font-size-sm, 14px);
+  font-weight: 600;
+  color: var(--text-primary, #171717);
+}
+
+.salo-onboarding-checklist-text span {
+  font-size: var(--font-size-xs, 12px);
+  line-height: 1.45;
+  color: var(--text-secondary, #4B5563);
+}
+
+.salo-onboarding-checklist-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--font-size-xs, 12px);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  color: var(--accent, #F36B2B);
+  background: var(--surface-primary, #FFFFFF);
+  border: 1px solid var(--border-primary, #E5E7EB);
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.salo-onboarding-checklist-link:hover {
+  border-color: var(--accent, #F36B2B);
+  background: var(--surface-secondary, #F8F9FA);
+}
+
+.salo-onboarding-checklist-link:focus-visible {
+  outline: 2px solid var(--accent, #F36B2B);
+  outline-offset: 2px;
+}
+
+/* Phone field box */
+.salo-onboarding-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.salo-onboarding-label {
+  font-size: var(--font-size-sm, 14px);
+  font-weight: 600;
+  color: var(--text-primary, #171717);
+}
+
+.salo-onboarding-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-primary, #D1D5DB);
+  background: var(--surface-primary, #FFFFFF);
+  color: var(--text-primary, #171717);
+  font-size: var(--font-size-base, 16px);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.salo-onboarding-input:focus {
+  outline: none;
+  border-color: var(--accent, #F36B2B);
+  box-shadow: 0 0 0 3px rgba(243, 107, 43, 0.16);
+}
+
+.salo-onboarding-input.is-invalid {
+  border-color: var(--salo-error, #DC4545);
+}
+
+.salo-onboarding-hint {
+  margin: 0;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-muted, #6B7280);
+}
+
+.salo-onboarding-error {
+  margin: 0;
+  font-size: var(--font-size-xs, 12px);
+  font-weight: 600;
+  color: var(--salo-error, #DC4545);
+}
+
+/* Embedded Address Form Overrides inside Onboarding Step 3 */
+.salo-onboarding-address-wrap .salo-address-modal-body {
+  padding: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+/* Finish Card */
+.salo-onboarding-finish-badge {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  background: var(--card-green-bg, rgba(46, 125, 50, 0.12));
+  border: 1px solid var(--card-green-border, rgba(46, 125, 50, 0.3));
+  color: var(--salo-green, #2E7D32);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Skip Confirmation Banner / View */
+.salo-onboarding-skip-confirm {
+  padding: var(--space-4, 16px);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--surface-secondary, #F8F9FA);
+  border: 1px solid var(--border-primary, #E5E7EB);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+.salo-onboarding-skip-confirm-text {
+  margin: 0;
+  font-size: var(--font-size-base, 16px);
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-primary, #171717);
+}
+
+.salo-onboarding-skip-confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2, 8px);
+  flex-wrap: wrap;
+}
+
+/* Footer actions */
+.salo-onboarding-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  padding: var(--space-4, 16px) var(--space-6, 24px);
+  border-top: 1px solid var(--border-secondary, #F1F3F5);
+  background: var(--surface-primary, #FFFFFF);
+  flex-wrap: wrap;
+}
+
+.salo-onboarding-footer-left,
+.salo-onboarding-footer-right {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  flex-wrap: wrap;
+}
+
+.salo-onboarding-text-btn {
+  background: transparent;
+  border: none;
+  padding: 8px 10px;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--font-size-sm, 14px);
+  font-weight: 600;
+  color: var(--text-secondary, #4B5563);
+  cursor: pointer;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.salo-onboarding-text-btn:hover:not(:disabled) {
+  color: var(--text-primary, #171717);
+  background: var(--surface-secondary, #F8F9FA);
+}
+
+.salo-onboarding-text-btn:focus-visible {
+  outline: 2px solid var(--accent, #F36B2B);
+  outline-offset: 2px;
+}
+
+.salo-onboarding-text-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mobile bottom-sheet layout */
+@media (max-width: 640px) {
+  .salo-onboarding-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .salo-onboarding-dialog,
+  .salo-onboarding-dialog--wide {
+    max-width: 100%;
+    max-height: 92dvh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: none;
+  }
+
+  .salo-onboarding-body {
+    padding: var(--space-4, 16px) var(--space-4, 16px);
+  }
+
+  .salo-onboarding-footer {
+    padding: var(--space-3, 12px) var(--space-4, 16px);
+  }
+}
+
+@keyframes saloOnboardingFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes saloOnboardingSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
