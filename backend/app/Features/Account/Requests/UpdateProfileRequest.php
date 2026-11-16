@@ -30,12 +30,27 @@ class UpdateProfileRequest extends FormRequest
                 $value = null;
             }
 
+            if ($field === 'phone_number' && is_string($value) && $value !== '') {
+                $value = self::normalizePhilippineMobile($value);
+            }
+
             $normalized[$field] = $value;
         }
 
         if ($normalized !== []) {
             $this->merge($normalized);
         }
+    }
+
+    public static function normalizePhilippineMobile(string $raw): string
+    {
+        $cleaned = preg_replace('/[\s\-()]+/', '', trim($raw)) ?? '';
+
+        if (preg_match('/^\+63(9\d{9})$/', $cleaned, $matches) === 1) {
+            return '0'.$matches[1];
+        }
+
+        return $cleaned;
     }
 
     /**
@@ -58,8 +73,18 @@ class UpdateProfileRequest extends FormRequest
             'first_name' => ['sometimes', 'required', 'string', 'max:100'],
             'middle_initial' => ['sometimes', 'nullable', 'string', 'size:1'],
             'last_name' => ['sometimes', 'required', 'string', 'max:100'],
-            'phone_number' => ['sometimes', 'nullable', 'string', 'max:30', 'regex:/^[0-9+\-\s()]{7,30}$/'],
+            'phone_number' => ['sometimes', 'nullable', 'string', 'regex:/^09\d{9}$/'],
             'date_of_birth' => ['sometimes', 'nullable', 'date', 'before:today'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'phone_number.regex' => 'Pakilagay ang tamang numero ng cellphone (hal. 09171234567).',
         ];
     }
 }
