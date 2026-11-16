@@ -62,7 +62,7 @@ class AccountTest extends TestCase
             ->assertJsonPath('data.user.middle_initial', 'C')
             ->assertJsonPath('data.user.last_name', 'Reyes-Cruz')
             ->assertJsonPath('data.user.email', 'ana@example.com')
-            ->assertJsonPath('data.user.phone_number', '+63 917 123 4567')
+            ->assertJsonPath('data.user.phone_number', '09171234567')
             ->assertJsonPath('data.user.date_of_birth', '1998-05-14')
             ->assertJsonPath('data.user.roles', ['customer'])
             ->assertJsonMissingPath('data.user.password_hash');
@@ -73,7 +73,7 @@ class AccountTest extends TestCase
             'first_name' => 'Ana Maria',
             'middle_initial' => 'C',
             'last_name' => 'Reyes-Cruz',
-            'phone_number' => '+63 917 123 4567',
+            'phone_number' => '09171234567',
             'date_of_birth' => '1998-05-14',
         ]);
     }
