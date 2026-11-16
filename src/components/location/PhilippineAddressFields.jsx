@@ -53,7 +53,7 @@ export default function PhilippineAddressFields({
     <div className="salo-ph-fields">
       <div className="salo-ph-country-bar">
         <span>Country</span>
-        <strong>🇵🇭 Philippines (Default)</strong>
+        <strong>Philippines (Default)</strong>
       </div>
 
       <div className="salo-ph-grid">
