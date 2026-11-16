@@ -248,7 +248,7 @@ export function evaluateShouldShowOnboarding({
 }
 
 /**
- * Derives Rider Step 3 ("Bago ka mag-online") checklist items strictly from real backend data
+ * Derives Rider Step 3 ("Before you go online") checklist items strictly from real backend data
  * and browser location permission state. Missing backend fields are omitted rather than faked.
  */
 export function deriveRiderGoOnlineChecklist(

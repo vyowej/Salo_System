@@ -50,7 +50,7 @@ class CustomerAddressController extends Controller
             'gps_accuracy' => ['nullable', 'numeric', 'min:0', 'max:100000'],
             'is_default' => ['sometimes', 'boolean'],
         ], [
-            'recipient_phone.regex' => 'Pakilagay ang tamang numero ng cellphone (hal. 09171234567).',
+            'recipient_phone.regex' => 'Enter a valid mobile number, like 09171234567.',
         ]);
 
         $address = $this->customerAddresses->createForUser($request->user(), $validated);
@@ -89,7 +89,7 @@ class CustomerAddressController extends Controller
             'gps_accuracy' => ['nullable', 'numeric', 'min:0', 'max:100000'],
             'is_default' => ['sometimes', 'boolean'],
         ], [
-            'recipient_phone.regex' => 'Pakilagay ang tamang numero ng cellphone (hal. 09171234567).',
+            'recipient_phone.regex' => 'Enter a valid mobile number, like 09171234567.',
         ]);
 
         $address = $this->customerAddresses->updateForUser($request->user(), $id, $validated);

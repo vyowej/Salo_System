@@ -38,7 +38,7 @@ class OnboardingBackendTest extends TestCase
             $this->actingAs($customer, 'web')
                 ->patchJson('/api/account/profile', ['phone_number' => $invalidPhone])
                 ->assertStatus(422)
-                ->assertJsonPath('errors.phone_number.0', 'Pakilagay ang tamang numero ng cellphone (hal. 09171234567).');
+                ->assertJsonPath('errors.phone_number.0', 'Enter a valid mobile number, like 09171234567.');
         }
     }
 
@@ -71,7 +71,7 @@ class OnboardingBackendTest extends TestCase
                 'street' => '123 University Ave',
             ])
             ->assertStatus(422)
-            ->assertJsonPath('errors.recipient_phone.0', 'Pakilagay ang tamang numero ng cellphone (hal. 09171234567).');
+            ->assertJsonPath('errors.recipient_phone.0', 'Enter a valid mobile number, like 09171234567.');
 
         // First saved address automatically becomes default and normalizes +639 phone
         $createRes = $this->actingAs($customer1, 'web')

@@ -84,7 +84,7 @@ class UpdateProfileRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'phone_number.regex' => 'Pakilagay ang tamang numero ng cellphone (hal. 09171234567).',
+            'phone_number.regex' => 'Enter a valid mobile number, like 09171234567.',
         ];
     }
 }

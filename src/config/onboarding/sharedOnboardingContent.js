@@ -11,9 +11,9 @@ export const SHARED_ONBOARDING_CONTENT = {
   progressAriaLabel: 'Onboarding setup progress',
   skipConfirmation: {
     title: 'Skip setup for now?',
-    message: 'Sigurado ka bang lalaktawan muna ito? Pwede mo itong gawin anytime.',
-    confirmButton: 'Oo, laktawan',
-    cancelButton: 'Ituloy ang setup',
+    message: 'Are you sure you want to skip setup for now? You can complete this anytime.',
+    confirmButton: 'Yes, skip',
+    cancelButton: 'Continue setup',
   },
   statusLabels: {
     saving: 'Saving...',

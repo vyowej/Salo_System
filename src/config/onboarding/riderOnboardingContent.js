@@ -13,7 +13,7 @@ export const RIDER_ONBOARDING_CONTENT = {
       kind: 'welcome',
       titleTemplate: 'Welcome, {username}!',
       fallbackUsername: 'Rider',
-      body: 'Isa ka na sa mga rider ng SALO. Alamin muna natin kung paano magsimula.',
+      body: 'Welcome to the SALO rider fleet. Here is a quick overview of how to get started.',
       highlights: [
         {
           id: 'shift-dispatch',
@@ -28,13 +28,13 @@ export const RIDER_ONBOARDING_CONTENT = {
           description: 'Confirm restaurant pickup, customer drop-off, and proof of delivery step by step.',
         },
       ],
-      primaryButton: 'Simulan na natin!',
-      wholeSkipButton: 'Mamaya na lang',
+      primaryButton: 'Tara, mag-deliver tayo!',
+      wholeSkipButton: 'Maybe later',
     },
     {
       id: 'how-it-works',
       kind: 'points',
-      title: 'Paano ito gumagana',
+      title: 'How deliveries work',
       helper: 'Here is how delivery assignments work inside your Rider workspace:',
       points: [
         {
@@ -56,14 +56,14 @@ export const RIDER_ONBOARDING_CONTENT = {
           description: 'Progress each assignment through Accepted, Picked Up, and Delivered, and submit the required proof of delivery upon completion.',
         },
       ],
-      primaryButton: 'Susunod',
-      stepSkipButton: 'Laktawan muna',
-      backButton: 'Bumalik',
+      primaryButton: 'Next',
+      stepSkipButton: 'Skip this step',
+      backButton: 'Back',
     },
     {
       id: 'before-online',
       kind: 'rider-checklist',
-      title: 'Bago ka mag-online',
+      title: 'Before you go online',
       helper: 'Your account must meet these Go Online requirements before receiving delivery offers:',
       requirements: {
         applicationApproved: {
@@ -98,14 +98,14 @@ export const RIDER_ONBOARDING_CONTENT = {
           grantedButtonLabel: 'Location Enabled',
         },
       },
-      primaryButton: 'Susunod',
-      stepSkipButton: 'Laktawan muna',
-      backButton: 'Bumalik',
+      primaryButton: 'Next',
+      stepSkipButton: 'Skip this step',
+      backButton: 'Back',
     },
     {
       id: 'safety-cod',
       kind: 'points',
-      title: 'Ligtas at maayos na delivery',
+      title: 'Safety and cash-on-delivery',
       helper: 'Keep these safety and payment collection rules in mind on every trip:',
       points: [
         {
@@ -127,16 +127,16 @@ export const RIDER_ONBOARDING_CONTENT = {
           description: 'When an order is marked as already paid online, hand over the order and never request payment from the customer again.',
         },
       ],
-      primaryButton: 'Susunod',
-      backButton: 'Bumalik',
+      primaryButton: 'Next',
+      backButton: 'Back',
     },
     {
       id: 'finish',
       kind: 'finish',
-      title: 'Handa ka na!',
-      completedBody: 'Pwede mong balikan ang mga ito anytime sa Settings o Support.',
-      skippedBody: 'Pwede mong balikan ang mga ito anytime sa Settings o Support.',
-      primaryButton: 'Tara, mag-deliver tayo!',
+      title: 'You are ready to go!',
+      completedBody: 'You can review these guidelines anytime in Settings or Support.',
+      skippedBody: 'You can review these guidelines anytime in Settings or Support.',
+      primaryButton: 'Go to Rider Dashboard',
     },
   ],
 };

@@ -23,7 +23,7 @@ export const BUSINESS_ONBOARDING_CONTENT = {
       kind: 'welcome',
       titleTemplate: 'Welcome, {username}!',
       fallbackUsername: 'Partner',
-      body: 'Congrats at isa ka nang partner ng SALO! Ihanda na natin ang restaurant mo para makatanggap ng orders.',
+      body: 'Congratulations on becoming a SALO partner! Let us get your restaurant ready to receive orders.',
       highlights: [
         {
           id: 'storefront-control',
@@ -38,13 +38,13 @@ export const BUSINESS_ONBOARDING_CONTENT = {
           description: 'Manage incoming orders, table reservations, and customer availability toggles independently.',
         },
       ],
-      primaryButton: 'Simulan na natin!',
-      wholeSkipButton: 'Mamaya na lang',
+      primaryButton: 'Simulan na ang setup',
+      wholeSkipButton: 'Maybe later',
     },
     {
       id: 'setup-checklist',
       kind: 'business-checklist',
-      title: 'Ihanda ang restaurant mo',
+      title: 'Prepare your restaurant',
       helper: 'Each item below reflects your current restaurant configuration and links directly to its management page:',
       items: {
         businessProfile: {
@@ -83,14 +83,14 @@ export const BUSINESS_ONBOARDING_CONTENT = {
           ctaLabel: 'Review Toggles',
         },
       },
-      primaryButton: 'Susunod',
-      stepSkipButton: 'Laktawan muna',
-      backButton: 'Bumalik',
+      primaryButton: 'Next',
+      stepSkipButton: 'Skip this step',
+      backButton: 'Back',
     },
     {
       id: 'good-to-know',
       kind: 'points',
-      title: 'Mga dapat mong malaman',
+      title: 'Good to know',
       helper: 'Key guidelines for managing your restaurant on SALO:',
       points: [
         {
@@ -112,16 +112,16 @@ export const BUSINESS_ONBOARDING_CONTENT = {
           description: 'You can invite managers, order handlers, reservation handlers, or menu staff and assign role-specific permissions from the Team and Staff section.',
         },
       ],
-      primaryButton: 'Susunod',
-      backButton: 'Bumalik',
+      primaryButton: 'Next',
+      backButton: 'Back',
     },
     {
       id: 'finish',
       kind: 'finish',
-      title: 'Handa ka na!',
-      completedBody: 'Pwede mong ituloy ang setup anytime. Nasa Overview ang checklist mo.',
-      skippedBody: 'Pwede mong ituloy ang setup anytime. Nasa Overview ang checklist mo.',
-      primaryButton: 'Simulan na ang setup',
+      title: 'You are ready to open!',
+      completedBody: 'You can continue your setup anytime. Your checklist is available on the Overview page.',
+      skippedBody: 'You can continue your setup anytime. Your checklist is available on the Overview page.',
+      primaryButton: 'Continue to Setup',
     },
   ],
 };

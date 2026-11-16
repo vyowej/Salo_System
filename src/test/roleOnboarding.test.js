@@ -275,29 +275,35 @@ test('onboardingService: deriveBusinessSetupChecklist derives state and hides Ta
 test('onboarding content: verifies required role copy and skip confirmation strings', () => {
   assert.equal(
     SHARED_ONBOARDING_CONTENT.skipConfirmation.message,
-    'Sigurado ka bang lalaktawan muna ito? Pwede mo itong gawin anytime.',
+    'Are you sure you want to skip setup for now? You can complete this anytime.',
   );
-  assert.equal(SHARED_ONBOARDING_CONTENT.skipConfirmation.confirmButton, 'Oo, laktawan');
-  assert.equal(SHARED_ONBOARDING_CONTENT.skipConfirmation.cancelButton, 'Ituloy ang setup');
+  assert.equal(SHARED_ONBOARDING_CONTENT.skipConfirmation.confirmButton, 'Yes, skip');
+  assert.equal(SHARED_ONBOARDING_CONTENT.skipConfirmation.cancelButton, 'Continue setup');
 
   const customerSteps = ONBOARDING_CONTENT_BY_ROLE.customer.steps;
   assert.equal(interpolateCopy(customerSteps[0].titleTemplate, { username: 'cassidy' }), 'Welcome, cassidy!');
-  assert.equal(customerSteps[1].title, 'Ano ang numero mo?');
-  assert.equal(customerSteps[1].validationError, 'Pakilagay ang tamang numero ng cellphone (hal. 09171234567).');
-  assert.equal(customerSteps[2].title, 'Saan ka namin ihahatid?');
-  assert.equal(customerSteps[3].title, 'Tapos na! Handa ka nang mag-order.');
-  assert.equal(customerSteps[3].primaryButton, 'Kain na tayo!');
+  assert.equal(customerSteps[0].primaryButton, 'Simulan na natin!');
+  assert.equal(customerSteps[0].wholeSkipButton, 'Maybe later');
+  assert.equal(customerSteps[1].title, 'What is your mobile number?');
+  assert.equal(customerSteps[1].validationError, 'Enter a valid mobile number, like 09171234567.');
+  assert.equal(customerSteps[2].title, 'Where should we deliver?');
+  assert.equal(customerSteps[3].title, 'All set! You are ready to order.');
+  assert.equal(customerSteps[3].primaryButton, 'Start ordering');
 
   const riderSteps = ONBOARDING_CONTENT_BY_ROLE.rider.steps;
-  assert.equal(riderSteps[1].title, 'Paano ito gumagana');
-  assert.equal(riderSteps[2].title, 'Bago ka mag-online');
-  assert.equal(riderSteps[3].title, 'Ligtas at maayos na delivery');
-  assert.equal(riderSteps[4].primaryButton, 'Tara, mag-deliver tayo!');
+  assert.equal(riderSteps[0].primaryButton, 'Tara, mag-deliver tayo!');
+  assert.equal(riderSteps[0].wholeSkipButton, 'Maybe later');
+  assert.equal(riderSteps[1].title, 'How deliveries work');
+  assert.equal(riderSteps[2].title, 'Before you go online');
+  assert.equal(riderSteps[3].title, 'Safety and cash-on-delivery');
+  assert.equal(riderSteps[4].primaryButton, 'Go to Rider Dashboard');
 
   const businessSteps = ONBOARDING_CONTENT_BY_ROLE.business.steps;
-  assert.equal(businessSteps[1].title, 'Ihanda ang restaurant mo');
-  assert.equal(businessSteps[2].title, 'Mga dapat mong malaman');
-  assert.equal(businessSteps[3].primaryButton, 'Simulan na ang setup');
+  assert.equal(businessSteps[0].primaryButton, 'Simulan na ang setup');
+  assert.equal(businessSteps[0].wholeSkipButton, 'Maybe later');
+  assert.equal(businessSteps[1].title, 'Prepare your restaurant');
+  assert.equal(businessSteps[2].title, 'Good to know');
+  assert.equal(businessSteps[3].primaryButton, 'Continue to Setup');
 });
 
 test('RoleOnboardingModal & SetupChecklistCard render accessible dialog markup and checklist states', async () => {
@@ -338,7 +344,7 @@ test('RoleOnboardingModal & SetupChecklistCard render accessible dialog markup a
     assert.match(customerHtml, /role="progressbar"/);
     assert.match(customerHtml, /Welcome, juan_delacruz!/);
     assert.match(customerHtml, /Simulan na natin!/);
-    assert.match(customerHtml, /Mamaya na lang/);
+    assert.match(customerHtml, /Maybe later/);
     assert.match(customerHtml, /\/brand\/salo-icon\.png/);
 
     // 2. Rider modal renders with rider welcome copy
@@ -356,7 +362,8 @@ test('RoleOnboardingModal & SetupChecklistCard render accessible dialog markup a
       ),
     );
     assert.match(riderHtml, /Welcome, marco_rider!/);
-    assert.match(riderHtml, /Isa ka na sa mga rider ng SALO/);
+    assert.match(riderHtml, /Welcome to the SALO rider fleet/);
+    assert.match(riderHtml, /Tara, mag-deliver tayo!/);
 
     // 3. Business modal renders with partner welcome copy
     const businessHtml = renderToStaticMarkup(
@@ -373,7 +380,8 @@ test('RoleOnboardingModal & SetupChecklistCard render accessible dialog markup a
       ),
     );
     assert.match(businessHtml, /Welcome, kusina_owner!/);
-    assert.match(businessHtml, /Congrats at isa ka nang partner ng SALO!/);
+    assert.match(businessHtml, /Congratulations on becoming a SALO partner!/);
+    assert.match(businessHtml, /Simulan na ang setup/);
 
     // 4. Closed modal renders nothing
     const closedHtml = renderToStaticMarkup(
