@@ -2,6 +2,7 @@
 
 namespace App\Features\Restaurants\Services;
 
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -376,6 +377,127 @@ class RestaurantService
         return [
             'restaurant_id' => $restaurantId,
             'categories' => $formattedCategories,
+        ];
+    }
+
+    /**
+     * Return derived setup checklist status for an approved restaurant owner's restaurant.
+     *
+     * @return array<string, mixed>
+     */
+    public function getOwnerSetupStatus(User $user, ?int $restaurantId = null): array
+    {
+        $query = DB::table('restaurants as r')
+            ->join('restaurant_owners as ro', 'ro.restaurant_id', '=', 'r.restaurant_id')
+            ->where('ro.user_id', $user->user_id)
+            ->select('r.*');
+
+        if ($restaurantId !== null) {
+            $query->where('r.restaurant_id', $restaurantId);
+        } else {
+            $query->whereIn('r.restaurant_status', ['approved', 'active'])
+                ->orderBy('r.restaurant_id');
+        }
+
+        $restaurant = $query->first();
+
+        if (! $restaurant) {
+            abort(403, 'You are not authorized to access this restaurant setup status.');
+        }
+
+        if (! in_array($restaurant->restaurant_status, ['approved', 'active'], true)) {
+            abort(403, 'Restaurant is not approved yet.');
+        }
+
+        $address = DB::table('addresses as a')
+            ->join('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
+            ->join('cities as c', 'c.city_id', '=', 'b.city_id')
+            ->join('provinces as p', 'p.province_id', '=', 'c.province_id')
+            ->where('a.address_id', $restaurant->address_id)
+            ->select([
+                'a.street',
+                'b.barangay_name',
+                'c.city_name',
+                'p.province_name',
+            ])
+            ->first();
+
+        $hasLogo = ! empty($restaurant->logo_image);
+        $hasCover = ! empty($restaurant->cover_image);
+        $hasInfo = ! empty($restaurant->restaurant_name)
+            && ! empty($restaurant->description)
+            && ! empty($restaurant->contact_phone)
+            && ! empty($restaurant->business_email);
+        $hasAddress = $address !== null
+            && ! empty($address->street)
+            && ! empty($address->barangay_name)
+            && ! empty($address->city_name)
+            && ! empty($address->province_name);
+
+        $businessProfileComplete = $hasLogo && $hasCover && $hasInfo && $hasAddress;
+
+        $openPeriodsCount = (int) DB::table('operating_hours')
+            ->where('restaurant_id', $restaurant->restaurant_id)
+            ->where('is_closed', 0)
+            ->count();
+        $operatingHoursComplete = $openPeriodsCount > 0;
+
+        $menuCategoriesCount = (int) DB::table('menu_categories')
+            ->where('restaurant_id', $restaurant->restaurant_id)
+            ->where('is_active', 1)
+            ->count();
+        $menuItemsCount = (int) DB::table('menu_items')
+            ->where('restaurant_id', $restaurant->restaurant_id)
+            ->where('availability_status', '!=', 'hidden')
+            ->count();
+        $menuComplete = $menuCategoriesCount >= 1 && $menuItemsCount >= 1;
+
+        $offersDineIn = (bool) $restaurant->offers_dine_in;
+        $acceptsReservations = (bool) $restaurant->accepts_reservations;
+        $tablesApplicable = $offersDineIn || $acceptsReservations;
+
+        $tablesCount = (int) DB::table('restaurant_tables')
+            ->where('restaurant_id', $restaurant->restaurant_id)
+            ->where('is_active', 1)
+            ->count();
+        $tablesComplete = ! $tablesApplicable || $tablesCount >= 1;
+
+        $acceptingOrders = (bool) $restaurant->accepting_orders;
+        $acceptingReservations = $acceptsReservations ? (bool) $restaurant->accepting_reservations : null;
+        $availabilityTogglesComplete = $acceptingOrders && (! $acceptsReservations || (bool) $restaurant->accepting_reservations);
+
+        return [
+            'restaurant_id' => (int) $restaurant->restaurant_id,
+            'restaurant_name' => $restaurant->restaurant_name,
+            'restaurant_status' => $restaurant->restaurant_status,
+            'business_profile' => [
+                'has_logo' => $hasLogo,
+                'has_cover' => $hasCover,
+                'has_info' => $hasInfo,
+                'has_address' => $hasAddress,
+                'complete' => $businessProfileComplete,
+            ],
+            'operating_hours' => [
+                'open_periods_count' => $openPeriodsCount,
+                'complete' => $operatingHoursComplete,
+            ],
+            'menu' => [
+                'categories_count' => $menuCategoriesCount,
+                'items_count' => $menuItemsCount,
+                'complete' => $menuComplete,
+            ],
+            'tables' => [
+                'applicable' => $tablesApplicable,
+                'offers_dine_in' => $offersDineIn,
+                'accepts_reservations' => $acceptsReservations,
+                'tables_count' => $tablesCount,
+                'complete' => $tablesComplete,
+            ],
+            'availability_toggles' => [
+                'accepting_orders' => $acceptingOrders,
+                'accepting_reservations' => $acceptingReservations,
+                'complete' => $availabilityTogglesComplete,
+            ],
         ];
     }
 
