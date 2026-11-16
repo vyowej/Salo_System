@@ -95,6 +95,20 @@ Returns public details, address, public `contact_phone`, `operating_hours`, `off
 
 Returns active `menu_categories` in `sort_order`, each with its non-hidden `menu_items`, `availability` (`"Available"` | `"Sold Out"` | `"Temporarily Unavailable"`), and `add_on_groups` with `options` (`is_required`, `minimum_selections`, `maximum_selections`). Returns `404` if the restaurant is not found or not active.
 
+### `GET /api/restaurant/setup-status` (Authenticated Owner Only)
+
+Returns the derived onboarding and setup checklist status for an approved/active restaurant owned by the authenticated user. Protected by `auth` and `role:owner` middleware and strictly scoped via `restaurant_owners`.
+
+- **Query parameters:** `restaurant_id` (int, optional — defaults to the owner's first approved/active restaurant; returns `404` if the restaurant does not belong to the authenticated owner or is not approved/active).
+- **Derived status fields:**
+  - `business_profile`: `{ complete: boolean, has_logo, has_cover, has_info, has_address }`
+  - `operating_hours`: `{ complete: boolean, open_periods_count }`
+  - `menu`: `{ complete: boolean, active_categories_count, active_items_count }`
+  - `tables`: `{ applicable: boolean, complete: boolean, active_tables_count }` (`applicable` is `true` only when `offers_dine_in` or `accepts_reservations` is enabled)
+  - `availability_toggles`: `{ complete: boolean, accepting_orders, accepting_reservations, accepts_reservations }`
+  - `all_complete`: `boolean`
+
+
 ---
 
 ## Schema Inventory (Existing `database/salo_db.sql` — No New Migrations Added)
