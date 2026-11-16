@@ -2,24 +2,66 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Button from '../../../components/common/Button';
 import { LocationPicker } from '../../../components/location';
 import locationApiService from '../../../services/locationApiService';
+import { isValidPhilippineMobile, normalizePhilippineMobile } from '../../../services/onboardingService';
 import './AddressFormModal.css';
 
-const PHILIPPINE_MOBILE_REGEX = /^(\+639|09)\d{9}$/;
 const LABEL_OPTIONS = ['Home', 'Work', 'School', 'Other'];
 
-export default function AddressFormModal({
-  isOpen,
-  onClose,
-  onSave,
-  initialData = null,
-  existingAddresses = [],
-  triggerRef = null,
-}) {
-  const isEditing = Boolean(initialData && initialData.id);
-  const modalRef = useRef(null);
-  const firstInputRef = useRef(null);
+function renderLabelIcon(label) {
+  switch (label) {
+    case 'Home':
+      return (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z" />
+        </svg>
+      );
+    case 'Work':
+      return (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="2" y="7" width="20" height="14" rx="2" />
+          <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+        </svg>
+      );
+    case 'School':
+      return (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M22 10L12 5 2 10l10 5 10-5z" />
+          <path d="M6 12.5V17c0 1.7 2.7 3 6 3s6-1.3 6-3v-4.5" />
+        </svg>
+      );
+    default:
+      return (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
+      );
+  }
+}
 
-  const [formData, setFormData] = useState({
+function buildInitialAddressState(initialData, existingAddresses = []) {
+  if (initialData) {
+    const hasCustomLabel = Boolean(initialData.label && !LABEL_OPTIONS.slice(0, 3).includes(initialData.label));
+    return {
+      label: hasCustomLabel ? 'Other' : initialData.label || 'Home',
+      customLabel: hasCustomLabel ? initialData.label : initialData.customLabel || '',
+      recipientName: initialData.recipientName || initialData.recipient_name || '',
+      mobileNumber: initialData.mobileNumber || initialData.phone || initialData.recipient_phone || '',
+      street: initialData.street || '',
+      houseNumber: initialData.houseNumber || initialData.house_number || '',
+      barangay: initialData.barangay || '',
+      city: initialData.city || '',
+      province: initialData.province || '',
+      postalCode: initialData.postalCode || initialData.postal_code || '',
+      notes: initialData.notes || initialData.landmark || '',
+      isDefault: initialData.isDefault !== undefined ? Boolean(initialData.isDefault) : existingAddresses.length === 0,
+      lat: initialData.lat ?? initialData.latitude ?? null,
+      lng: initialData.lng ?? initialData.longitude ?? null,
+      gpsAccuracy: initialData.gpsAccuracy ?? initialData.gps_accuracy ?? null,
+    };
+  }
+
+  return {
     label: 'Home',
     customLabel: '',
     recipientName: '',
@@ -31,121 +73,48 @@ export default function AddressFormModal({
     province: '',
     postalCode: '',
     notes: '',
-    isDefault: false,
+    isDefault: existingAddresses.length === 0,
     lat: null,
     lng: null,
     gpsAccuracy: null,
-  });
+  };
+}
 
+/**
+ * Reusable Customer Address Form
+ * Shared between the Addresses Page (via AddressFormModal) and Customer Onboarding Step 3.
+ */
+export function CustomerAddressForm({
+  formId = 'salo-address-form',
+  initialData = null,
+  existingAddresses = [],
+  onSave,
+  firstInputRef: externalFirstInputRef = null,
+  mapHeight = 240,
+  hideDefaultToggle = false,
+  externalError = '',
+  className = '',
+}) {
+  const isEditing = Boolean(initialData && initialData.id);
+  const internalFirstInputRef = useRef(null);
+  const firstInputRef = externalFirstInputRef || internalFirstInputRef;
+
+  const [formData, setFormData] = useState(() => buildInitialAddressState(initialData, existingAddresses));
   const [errors, setErrors] = useState({});
   const [duplicateWarning, setDuplicateWarning] = useState(false);
   const [serviceAreaStatus, setServiceAreaStatus] = useState(null);
 
-  // Initialize or reset form when modal opens
   useEffect(() => {
-    if (!isOpen) return;
-
-    if (initialData) {
-      const isCustom = !LABEL_OPTIONS.slice(0, 3).includes(initialData.label);
-      setFormData({
-        label: isCustom ? 'Other' : initialData.label || 'Home',
-        customLabel: isCustom ? initialData.label : initialData.customLabel || '',
-        recipientName: initialData.recipientName || '',
-        mobileNumber: initialData.mobileNumber || initialData.phone || '',
-        street: initialData.street || '',
-        houseNumber: initialData.houseNumber || initialData.house_number || '',
-        barangay: initialData.barangay || '',
-        city: initialData.city || '',
-        province: initialData.province || '',
-        postalCode: initialData.postalCode || '',
-        notes: initialData.notes || '',
-        isDefault: Boolean(initialData.isDefault),
-        lat: initialData.lat ?? initialData.latitude ?? null,
-        lng: initialData.lng ?? initialData.longitude ?? null,
-        gpsAccuracy: initialData.gpsAccuracy ?? initialData.gps_accuracy ?? null,
-      });
-    } else {
-      setFormData({
-        label: 'Home',
-        customLabel: '',
-        recipientName: '',
-        mobileNumber: '',
-        street: '',
-        houseNumber: '',
-        barangay: '',
-        city: '',
-        province: '',
-        postalCode: '',
-        notes: '',
-        isDefault: existingAddresses.length === 0,
-        lat: null,
-        lng: null,
-        gpsAccuracy: null,
-      });
-    }
-
+    setFormData(buildInitialAddressState(initialData, existingAddresses));
     setErrors({});
     setDuplicateWarning(false);
     setServiceAreaStatus(null);
-
-    // Focus first focusable element after modal opens
-    setTimeout(() => {
-      if (firstInputRef.current) {
-        firstInputRef.current.focus();
-      }
-    }, 50);
-  }, [isOpen, initialData, existingAddresses.length]);
-
-  const handleClose = useCallback(() => {
-    onClose();
-    if (triggerRef && triggerRef.current) {
-      triggerRef.current.focus();
-    }
-  }, [onClose, triggerRef]);
-
-  // Focus trap & Escape key listener
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        handleClose();
-        return;
-      }
-
-      if (e.key === 'Tab' && modalRef.current) {
-        const focusableElements = modalRef.current.querySelectorAll(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
-        const firstElement = focusableElements[0];
-        const lastElement = focusableElements[focusableElements.length - 1];
-
-        if (e.shiftKey) {
-          if (document.activeElement === firstElement) {
-            e.preventDefault();
-            lastElement.focus();
-          }
-        } else {
-          if (document.activeElement === lastElement) {
-            e.preventDefault();
-            firstElement.focus();
-          }
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, handleClose]);
+  }, [initialData, existingAddresses]);
 
   const handleFieldChange = (field, value) => {
     const nextFormData = { ...formData, [field]: value };
     setFormData(nextFormData);
 
-    // Clear field-specific error if corrected
     if (errors[field]) {
       setErrors((prev) => {
         const updated = { ...prev };
@@ -154,7 +123,6 @@ export default function AddressFormModal({
       });
     }
 
-    // Check duplicate warning if street, barangay, or city changes
     if (['street', 'barangay', 'city'].includes(field)) {
       const s = (nextFormData.street || '').trim().toLowerCase();
       const b = (nextFormData.barangay || '').trim().toLowerCase();
@@ -176,9 +144,8 @@ export default function AddressFormModal({
     }
   };
 
-  // Check SALO platform service area status when province + city are filled
   useEffect(() => {
-    if (!isOpen || !formData.province?.trim() || !formData.city?.trim()) {
+    if (!formData.province?.trim() || !formData.city?.trim()) {
       setServiceAreaStatus(null);
       return undefined;
     }
@@ -206,7 +173,7 @@ export default function AddressFormModal({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [isOpen, formData.province, formData.city, formData.barangay]);
+  }, [formData.province, formData.city, formData.barangay]);
 
   const handleLocationPickerChange = (nextLoc) => {
     setFormData((prev) => ({
@@ -242,7 +209,7 @@ export default function AddressFormModal({
     const cleanMobile = formData.mobileNumber.replace(/\s+/g, '');
     if (!cleanMobile) {
       nextErrors.mobileNumber = 'Mobile number is required.';
-    } else if (!PHILIPPINE_MOBILE_REGEX.test(cleanMobile)) {
+    } else if (!isValidPhilippineMobile(cleanMobile)) {
       nextErrors.mobileNumber = 'Please enter a valid Philippine mobile number (e.g. 09171234567 or +639171234567).';
     }
 
@@ -278,7 +245,6 @@ export default function AddressFormModal({
     e.preventDefault();
     if (!validate()) return;
 
-    // Check soft limit for new addresses
     if (!isEditing && existingAddresses.length >= 10) {
       setErrors({
         general: 'Address limit reached (maximum 10 saved addresses). Please edit or delete an existing address.',
@@ -290,13 +256,15 @@ export default function AddressFormModal({
       ? formData.customLabel.trim()
       : formData.label;
 
+    const normalizedMobile = normalizePhilippineMobile(formData.mobileNumber);
+
     const payload = {
       ...(initialData || {}),
       label: effectiveLabel,
       customLabel: formData.label === 'Other' ? formData.customLabel.trim() : '',
       recipientName: formData.recipientName.trim(),
-      mobileNumber: formData.mobileNumber.trim(),
-      phone: formData.mobileNumber.trim(),
+      mobileNumber: normalizedMobile,
+      phone: normalizedMobile,
       street: formData.street.trim(),
       houseNumber: formData.houseNumber.trim(),
       barangay: formData.barangay.trim(),
@@ -304,7 +272,7 @@ export default function AddressFormModal({
       province: formData.province.trim(),
       postalCode: formData.postalCode.trim(),
       notes: formData.notes.slice(0, 200).trim(),
-      isDefault: Boolean(formData.isDefault),
+      isDefault: existingAddresses.length === 0 ? true : Boolean(formData.isDefault),
       lat: formData.lat,
       lng: formData.lng,
       gpsAccuracy: formData.gpsAccuracy,
@@ -312,9 +280,209 @@ export default function AddressFormModal({
       serviceAreaMessage: serviceAreaStatus ? serviceAreaStatus.reason : undefined,
     };
 
-    onSave(payload);
-    handleClose();
+    onSave?.(payload);
   };
+
+  const bannerError = externalError || errors.general;
+
+  return (
+    <form id={formId} onSubmit={handleSubmit} className={`salo-address-modal-body ${className}`.trim()} noValidate>
+      {bannerError && (
+        <div className="salo-address-warning" role="alert">
+          {bannerError}
+        </div>
+      )}
+
+      {duplicateWarning && (
+        <div className="salo-address-warning" role="status">
+          An address with this street, barangay, and city already exists. You can still save it if this is intended.
+        </div>
+      )}
+
+      {/* Label selector */}
+      <div className="salo-form-group">
+        <span className="salo-form-label" id={`${formId}-label-group`}>
+          Address Label <span className="required-indicator">*</span>
+        </span>
+        <div className="salo-address-label-group" role="radiogroup" aria-labelledby={`${formId}-label-group`}>
+          {LABEL_OPTIONS.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              role="radio"
+              aria-checked={formData.label === opt}
+              className={`salo-address-label-pill ${formData.label === opt ? 'active' : ''}`}
+              onClick={() => handleFieldChange('label', opt)}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {renderLabelIcon(opt)}
+                <span>{opt}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Custom Label input if 'Other' selected */}
+      {formData.label === 'Other' && (
+        <div className="salo-form-group">
+          <label htmlFor={`${formId}-custom-label`} className="salo-form-label">
+            Custom Label Name <span className="required-indicator">*</span>
+          </label>
+          <input
+            id={`${formId}-custom-label`}
+            type="text"
+            className={`salo-form-input ${errors.customLabel ? 'is-invalid' : ''}`}
+            placeholder="e.g. Grandma's House, Studio, Beach Condo"
+            value={formData.customLabel}
+            onChange={(e) => handleFieldChange('customLabel', e.target.value)}
+            aria-invalid={Boolean(errors.customLabel)}
+            aria-describedby={errors.customLabel ? `${formId}-custom-label-error` : undefined}
+            required
+          />
+          {errors.customLabel && (
+            <span id={`${formId}-custom-label-error`} className="salo-form-error" role="alert">
+              {errors.customLabel}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Recipient & Contact Number */}
+      <div className="salo-form-grid-2">
+        <div className="salo-form-group">
+          <label htmlFor={`${formId}-recipient`} className="salo-form-label">
+            Recipient Name <span className="required-indicator">*</span>
+          </label>
+          <input
+            id={`${formId}-recipient`}
+            ref={firstInputRef}
+            type="text"
+            className={`salo-form-input ${errors.recipientName ? 'is-invalid' : ''}`}
+            placeholder="e.g. Juan Dela Cruz"
+            value={formData.recipientName}
+            onChange={(e) => handleFieldChange('recipientName', e.target.value)}
+            aria-invalid={Boolean(errors.recipientName)}
+            aria-describedby={errors.recipientName ? `${formId}-recipient-error` : undefined}
+            required
+          />
+          {errors.recipientName && (
+            <span id={`${formId}-recipient-error`} className="salo-form-error" role="alert">
+              {errors.recipientName}
+            </span>
+          )}
+        </div>
+
+        <div className="salo-form-group">
+          <label htmlFor={`${formId}-mobile`} className="salo-form-label">
+            Mobile Number <span className="required-indicator">*</span>
+          </label>
+          <input
+            id={`${formId}-mobile`}
+            type="tel"
+            className={`salo-form-input ${errors.mobileNumber ? 'is-invalid' : ''}`}
+            placeholder="09XXXXXXXXX or +639XXXXXXXXX"
+            value={formData.mobileNumber}
+            onChange={(e) => handleFieldChange('mobileNumber', e.target.value)}
+            aria-invalid={Boolean(errors.mobileNumber)}
+            aria-describedby={errors.mobileNumber ? `${formId}-mobile-error` : undefined}
+            required
+          />
+          {errors.mobileNumber && (
+            <span id={`${formId}-mobile-error`} className="salo-form-error" role="alert">
+              {errors.mobileNumber}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Interactive Map, GPS, Searchable Philippine Address Fields & Confirmation */}
+      <LocationPicker
+        value={formData}
+        onChange={handleLocationPickerChange}
+        errors={errors}
+        mapHeight={mapHeight}
+        serviceAreaStatus={serviceAreaStatus}
+        confirmLabel="Delivery Location Confirmation"
+      />
+
+      {/* Set as Default Checkbox */}
+      {!hideDefaultToggle && (
+        <label className="salo-checkbox-row">
+          <input
+            type="checkbox"
+            className="salo-checkbox-input"
+            checked={formData.isDefault}
+            onChange={(e) => handleFieldChange('isDefault', e.target.checked)}
+          />
+          <span className="salo-checkbox-label">Set as default delivery address</span>
+        </label>
+      )}
+    </form>
+  );
+}
+
+export default function AddressFormModal({
+  isOpen,
+  onClose,
+  onSave,
+  initialData = null,
+  existingAddresses = [],
+  triggerRef = null,
+}) {
+  const isEditing = Boolean(initialData && initialData.id);
+  const modalRef = useRef(null);
+  const firstInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const timer = setTimeout(() => {
+      firstInputRef.current?.focus();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
+
+  const handleClose = useCallback(() => {
+    onClose();
+    if (triggerRef && triggerRef.current) {
+      triggerRef.current.focus();
+    }
+  }, [onClose, triggerRef]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleClose();
+        return;
+      }
+
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusableElements = modalRef.current.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else if (document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, handleClose]);
 
   if (!isOpen) return null;
 
@@ -332,7 +500,6 @@ export default function AddressFormModal({
         ref={modalRef}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="salo-address-modal-header">
           <h2 id="address-modal-title" className="salo-address-modal-title">
             {isEditing ? 'Edit Delivery Address' : 'Add New Delivery Address'}
@@ -343,145 +510,24 @@ export default function AddressFormModal({
             onClick={handleClose}
             aria-label="Close address form modal"
           >
-            ✕
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
 
-        {/* Scrollable Form Body */}
-        <form id="salo-address-form" onSubmit={handleSubmit} className="salo-address-modal-body">
-          {errors.general && (
-            <div className="salo-address-warning" role="alert">
-              {errors.general}
-            </div>
-          )}
+        <CustomerAddressForm
+          formId="salo-address-form"
+          initialData={initialData}
+          existingAddresses={existingAddresses}
+          firstInputRef={firstInputRef}
+          onSave={(payload) => {
+            onSave(payload);
+            handleClose();
+          }}
+        />
 
-          {duplicateWarning && (
-            <div className="salo-address-warning" role="status">
-              ⚠️ An address with this street, barangay, and city already exists. You can still save it if this is intended.
-            </div>
-          )}
-
-          {/* Label selector */}
-          <div className="salo-form-group">
-            <span className="salo-form-label" id="label-group-label">
-              Address Label <span className="required-indicator">*</span>
-            </span>
-            <div className="salo-address-label-group" role="radiogroup" aria-labelledby="label-group-label">
-              {LABEL_OPTIONS.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  role="radio"
-                  aria-checked={formData.label === opt}
-                  className={`salo-address-label-pill ${formData.label === opt ? 'active' : ''}`}
-                  onClick={() => handleFieldChange('label', opt)}
-                >
-                  {opt === 'Home' && '🏠 '}
-                  {opt === 'Work' && '💼 '}
-                  {opt === 'School' && '🎓 '}
-                  {opt === 'Other' && '📍 '}
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Custom Label input if 'Other' selected */}
-          {formData.label === 'Other' && (
-            <div className="salo-form-group">
-              <label htmlFor="addr-custom-label" className="salo-form-label">
-                Custom Label Name <span className="required-indicator">*</span>
-              </label>
-              <input
-                id="addr-custom-label"
-                type="text"
-                className={`salo-form-input ${errors.customLabel ? 'is-invalid' : ''}`}
-                placeholder="e.g. Grandma's House, Studio, Beach Condo"
-                value={formData.customLabel}
-                onChange={(e) => handleFieldChange('customLabel', e.target.value)}
-                aria-invalid={Boolean(errors.customLabel)}
-                aria-describedby={errors.customLabel ? 'custom-label-error' : undefined}
-                required
-              />
-              {errors.customLabel && (
-                <span id="custom-label-error" className="salo-form-error" role="alert">
-                  {errors.customLabel}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Recipient & Contact Number */}
-          <div className="salo-form-grid-2">
-            <div className="salo-form-group">
-              <label htmlFor="addr-recipient" className="salo-form-label">
-                Recipient Name <span className="required-indicator">*</span>
-              </label>
-              <input
-                id="addr-recipient"
-                ref={firstInputRef}
-                type="text"
-                className={`salo-form-input ${errors.recipientName ? 'is-invalid' : ''}`}
-                placeholder="e.g. Cassandra Villafuerte"
-                value={formData.recipientName}
-                onChange={(e) => handleFieldChange('recipientName', e.target.value)}
-                aria-invalid={Boolean(errors.recipientName)}
-                aria-describedby={errors.recipientName ? 'recipient-error' : undefined}
-                required
-              />
-              {errors.recipientName && (
-                <span id="recipient-error" className="salo-form-error" role="alert">
-                  {errors.recipientName}
-                </span>
-              )}
-            </div>
-
-            <div className="salo-form-group">
-              <label htmlFor="addr-mobile" className="salo-form-label">
-                Mobile Number <span className="required-indicator">*</span>
-              </label>
-              <input
-                id="addr-mobile"
-                type="tel"
-                className={`salo-form-input ${errors.mobileNumber ? 'is-invalid' : ''}`}
-                placeholder="09XXXXXXXXX or +639XXXXXXXXX"
-                value={formData.mobileNumber}
-                onChange={(e) => handleFieldChange('mobileNumber', e.target.value)}
-                aria-invalid={Boolean(errors.mobileNumber)}
-                aria-describedby={errors.mobileNumber ? 'mobile-error' : undefined}
-                required
-              />
-              {errors.mobileNumber && (
-                <span id="mobile-error" className="salo-form-error" role="alert">
-                  {errors.mobileNumber}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Interactive Map, GPS, Searchable Philippine Address Fields & Confirmation */}
-          <LocationPicker
-            value={formData}
-            onChange={handleLocationPickerChange}
-            errors={errors}
-            mapHeight={240}
-            serviceAreaStatus={serviceAreaStatus}
-            confirmLabel="Delivery Location Confirmation"
-          />
-
-          {/* Set as Default Checkbox */}
-          <label className="salo-checkbox-row">
-            <input
-              type="checkbox"
-              className="salo-checkbox-input"
-              checked={formData.isDefault}
-              onChange={(e) => handleFieldChange('isDefault', e.target.checked)}
-            />
-            <span className="salo-checkbox-label">Set as default delivery address</span>
-          </label>
-        </form>
-
-        {/* Modal Footer */}
         <div className="salo-address-modal-footer">
           <Button
             type="button"
@@ -504,5 +550,3 @@ export default function AddressFormModal({
     </div>
   );
 }
-
-
