@@ -8,6 +8,8 @@ import Badge from '../../../components/common/Badge';
 import { StateView } from '../../../components/feedback';
 import RestaurantImage from '../components/RestaurantImage';
 import ActiveStatusStrip from '../components/ActiveStatusStrip';
+import RoleOnboardingModal from '../../../components/onboarding/RoleOnboardingModal';
+import { useRoleOnboarding } from '../../../hooks/useRoleOnboarding';
 import './CustomerDashboard.css';
 
 const FALLBACK_COVERS = [
@@ -41,6 +43,7 @@ export default function CustomerDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
   const listingsRef = useRef(null);
+  const customerOnboarding = useRoleOnboarding('customer');
 
   const [restaurants, setRestaurants] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -536,6 +539,16 @@ export default function CustomerDashboard() {
           </>
         )}
       </section>
+
+      <RoleOnboardingModal
+        open={customerOnboarding.shouldShow}
+        role="customer"
+        user={customerOnboarding.user}
+        updateUser={customerOnboarding.updateUser}
+        customerAddresses={customerOnboarding.customerAddresses}
+        onComplete={customerOnboarding.completeOnboarding}
+        onSkip={customerOnboarding.skipOnboarding}
+      />
     </CustomerLayout>
   );
 }
