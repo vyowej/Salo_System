@@ -17,6 +17,8 @@ import { MOBILE_PRIMARY_NAV_KEYS } from '../features/rider/constants/riderConsta
 import ScenarioLink from '../features/rider/components/ScenarioLink';
 import { withScenario } from '../features/rider/utils/scenarioLinks';
 import useScenario from '../features/rider/hooks/useScenario';
+import RoleOnboardingModal from '../components/onboarding/RoleOnboardingModal';
+import { useRoleOnboarding } from '../hooks/useRoleOnboarding';
 import '../components/navigation/NavigationShell.css';
 import './RiderLayout.css';
 
@@ -39,6 +41,7 @@ function getStatusPill(profile, activeDelivery) {
 export default function RiderLayout({ children }) {
   const { requestLogout, logoutDialogProps } = useLogout();
   const [collapsed, toggleCollapsed] = useSidebarCollapse(RIDER_SIDEBAR_COLLAPSED_KEY, true);
+  const riderOnboarding = useRoleOnboarding('rider');
   const location = useLocation();
   const isMapPage = location.pathname === '/rider/map';
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -188,6 +191,15 @@ export default function RiderLayout({ children }) {
         open={switchAccountOpen}
         onClose={() => setSwitchAccountOpen(false)}
         currentRole="rider"
+      />
+
+      <RoleOnboardingModal
+        open={riderOnboarding.shouldShow}
+        role="rider"
+        user={riderOnboarding.user}
+        riderDashboardData={riderOnboarding.riderDashboardData}
+        onComplete={riderOnboarding.completeOnboarding}
+        onSkip={riderOnboarding.skipOnboarding}
       />
 
       <ConfirmDialog {...logoutDialogProps} />

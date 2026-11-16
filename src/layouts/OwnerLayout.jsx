@@ -17,6 +17,8 @@ import {
 import { buildProfileMenuItems, ROLE_META } from '../config/navigationConfig';
 import restaurantService from '../services/restaurantService';
 import { getLocalDateKey, normalizeOperatingHours } from '../services/demo/operatingHours';
+import RoleOnboardingModal from '../components/onboarding/RoleOnboardingModal';
+import { useRoleOnboarding } from '../hooks/useRoleOnboarding';
 import '../components/navigation/NavigationShell.css';
 import './OwnerLayout.css';
 
@@ -39,6 +41,10 @@ export default function OwnerLayout({ children }) {
 
   const selectedRestaurant = access.selectedRestaurant;
   const selectedRestaurantId = selectedRestaurant?.id;
+  const businessOnboarding = useRoleOnboarding('business', {
+    access,
+    selectedRestaurantId,
+  });
 
   useEffect(() => {
     const syncCounts = () => {
@@ -302,6 +308,15 @@ export default function OwnerLayout({ children }) {
         open={switchAccountOpen}
         onClose={() => setSwitchAccountOpen(false)}
         currentRole="restaurant"
+      />
+
+      <RoleOnboardingModal
+        open={businessOnboarding.shouldShow}
+        role="business"
+        user={businessOnboarding.user}
+        businessChecklist={businessOnboarding.businessChecklist}
+        onComplete={businessOnboarding.completeOnboarding}
+        onSkip={businessOnboarding.skipOnboarding}
       />
 
       <ConfirmDialog {...logoutDialogProps} />

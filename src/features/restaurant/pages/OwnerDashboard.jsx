@@ -6,6 +6,8 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import { ErrorState, LoadingSpinner } from '../../../components/feedback';
+import SetupChecklistCard from '../components/SetupChecklistCard';
+import { useRoleOnboarding } from '../../../hooks/useRoleOnboarding';
 import { DASHBOARD_ACTIVITY_SAMPLES } from './team/dashboardSamples';
 import './team/r7Dashboard.css';
 
@@ -71,6 +73,10 @@ function StatCard({ label, value, sub, tone, icon, iconState, trend, to }) {
 export default function OwnerDashboard() {
   const access = useRestaurantAccess();
   const { selectedRestaurantId } = access;
+  const businessOnboarding = useRoleOnboarding('business', {
+    access,
+    selectedRestaurantId,
+  });
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
@@ -158,6 +164,13 @@ export default function OwnerDashboard() {
 
   return (
     <OwnerLayout>
+      <SetupChecklistCard
+        userId={businessOnboarding.userId}
+        restaurantId={selectedRestaurantId}
+        isApprovedOwner={businessOnboarding.isApprovedOwner}
+        checklist={businessOnboarding.businessChecklist}
+      />
+
       {/* ── 4 Stat Cards ─────────────────────────────── */}
       <div className="owner-dashboard-stats-grid">
         <StatCard
