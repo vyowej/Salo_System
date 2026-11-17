@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useLogout } from '../hooks/useLogout';
 import { useSidebarCollapse } from '../hooks/useSidebarCollapse';
@@ -113,132 +113,132 @@ export default function RiderLayout({ children }) {
   const profileMenuItems = buildProfileMenuItems({
     profileHref: ROLE_META.rider.profileHref,
     settingsHref: ROLE_META.rider.settingsHref,
-    onSwitchWorkspace: () => setSwitchAccountOpen(true),
+    onSwitchAccount: () => setSwitchAccountOpen(true),
     onLogout: requestLogout,
   });
 
-  const primaryBottomItems = items.filter((item) => MOBILE_PRIMARY_NAV_KEYS.includes(item.id));
-  const overflowItems = items.filter((item) => !MOBILE_PRIMARY_NAV_KEYS.includes(item.id));
-  const activeNavItem = items.find((item) => item.id === current);
+  const primaryNavItems = items.filter((item) => MOBILE_PRIMARY_NAV_KEYS.includes(item.id));
+  const moreNavItems = items.filter((item) => !MOBILE_PRIMARY_NAV_KEYS.includes(item.id));
+  const unreadNotifications = Number(dashboard?.unread_notifications || 0);
 
   const displayName = user?.name || dashboard?.rider?.name || user?.username || 'Rider';
   const displayEmail = user?.email || dashboard?.rider?.email || '';
   const displayInitials = getInitials(displayName);
 
-  const topbarLeft = (
-    <div className="rider-topbar-title-group">
-      <div className="rider-topbar-breadcrumb">
-        <span>Rider</span>
-        <span aria-hidden="true">/</span>
-        <strong>{activeNavItem?.label || 'Dashboard'}</strong>
-      </div>
-    </div>
-  );
-
-  const topbarRight = (
-    <div className="rider-topbar-actions">
-      <span className={`rider-status-pill ${statusPill.tone}`}>
-        <span className="rider-status-dot" aria-hidden="true" />
-        {statusPill.label}
-      </span>
-
-      <ProfileMenu
-        name={displayName}
-        email={displayEmail}
-        initials={displayInitials}
-        roleLabel={ROLE_META.rider.label}
-        items={profileMenuItems}
-      />
-    </div>
-  );
-
   return (
-    <div className="salo-shell salo-shell--rider">
-      <SideBar
-        brandTitle="SALO"
-        brandSub="Rider Fleet"
-        brandHref="/rider"
-        navItems={items}
-        activeId={current}
-        collapsed={collapsed}
-        onToggleCollapse={toggleCollapsed}
-        mobileOpen={mobileOpen}
-        onCloseMobile={() => setMobileOpen(false)}
-      />
+    <div className={`rider-shell navigation-shell ${isMapPage ? 'rider-map-shell' : ''}`}>
+      <div className={`rider-sidebar navigation-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
+        <SideBar
+          items={items}
+          activeId={current}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapsed}
+          mobileOpen={mobileOpen}
+          onMobileClose={() => setMobileOpen(false)}
+          logoHref="/rider"
+          onLogout={requestLogout}
+        />
+      </div>
 
-      <div className="salo-shell__main">
+      <div className={`rider-main navigation-main ${collapsed ? 'sidebar-collapsed' : ''} ${isMapPage ? 'rider-map-main' : ''}`}>
         <TopBar
-          left={topbarLeft}
-          right={topbarRight}
-          showMobileMenuButton
-          mobileBrandHref="/rider"
-          onOpenMobileMenu={() => setMobileOpen(true)}
+          mobileMenuOpen={mobileOpen}
+          onMenuToggle={() => setMobileOpen((value) => !value)}
+          showNotifications
+          notificationCount={unreadNotifications}
+          notificationsHref="/rider/notifications"
+          roleLabel={ROLE_META.rider.label}
+          roleTone={ROLE_META.rider.tone}
+          showThemeToggle
+          headingExtras={(
+            <Link
+              to="/rider#driver-mode"
+              className={`rider-status-pill rider-status-pill--${statusPill.tone}`}
+              aria-label={`Driver status: ${statusPill.label}. Go to Driver Mode`}
+              title="Go to Driver Mode"
+            >
+              <span className="rider-status-pill-dot" aria-hidden="true" />
+              <span>{statusPill.label}</span>
+            </Link>
+          )}
+          profileButton={(
+            <ProfileMenu
+              profileName={displayName}
+              profileEmail={displayEmail}
+              profileInitials={displayInitials}
+              profileAvatar={user?.avatar}
+              roleLabel={ROLE_META.rider.label}
+              roleTone={ROLE_META.rider.tone}
+              menuItems={profileMenuItems}
+            />
+          )}
         />
 
-        <main className={`salo-shell__content ${isMapPage ? 'rider-main-map' : ''}`}>
+        <main className={`rider-content ${isMapPage ? 'rider-content-map' : ''}`}>
           {children}
         </main>
+
+        {!isMapPage && (
+          <nav className="rider-mobile-nav navigation-mobile-bottom-nav" aria-label="Rider mobile navigation">
+            {primaryNavItems.map((item) => (
+              <Link
+                key={item.id}
+                to={item.href}
+                className={`rider-mobile-nav-item navigation-mobile-nav-item ${current === item.id ? 'is-active active' : ''}`}
+                aria-current={current === item.id ? 'page' : undefined}
+                onClick={() => setMoreOpen(false)}
+              >
+                {item.icon}
+                <span>{item.id === 'map' ? 'Map' : item.label === 'Delivery History' ? 'History' : item.label}</span>
+              </Link>
+            ))}
+            {moreNavItems.length > 0 && (
+              <button
+                type="button"
+                className={`rider-mobile-nav-item navigation-mobile-nav-item ${moreOpen || moreNavItems.some((item) => item.id === current) ? 'is-active active' : ''}`}
+                aria-expanded={moreOpen}
+                aria-controls="rider-mobile-more-menu"
+                onClick={() => setMoreOpen((open) => !open)}
+              >
+                {mkIcon('M5 12h.01M12 12h.01M19 12h.01')}
+                <span>More</span>
+              </button>
+            )}
+            {moreOpen && (
+              <div className="rider-mobile-more-menu" id="rider-mobile-more-menu">
+                {moreNavItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    to={item.href}
+                    className={`rider-mobile-more-item ${current === item.id ? 'is-active' : ''}`}
+                    onClick={() => setMoreOpen(false)}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </nav>
+        )}
       </div>
-
-      {!isMapPage && (
-        <nav className="rider-bottom-nav" aria-label="Primary rider navigation">
-          {primaryBottomItems.map((item) => (
-            <a
-              key={item.id}
-              href={item.path}
-              className={`rider-bottom-link ${current === item.id ? 'active' : ''}`}
-            >
-              {item.icon}
-              <span>{item.shortLabel || item.label}</span>
-              {item.dot && <span className="rider-bottom-dot" aria-hidden="true" />}
-            </a>
-          ))}
-          {overflowItems.length > 0 && (
-            <button
-              type="button"
-              className={`rider-bottom-link ${moreOpen ? 'active' : ''}`}
-              onClick={() => setMoreOpen((v) => !v)}
-            >
-              {mkIcon('M4 12h16M4 6h16M4 18h16')}
-              <span>More</span>
-            </button>
-          )}
-        </nav>
-      )}
-
-      {moreOpen && (
-        <div className="rider-more-drawer" role="dialog" aria-label="More rider pages">
-          <div className="rider-more-backdrop" onClick={() => setMoreOpen(false)} />
-          <div className="rider-more-sheet">
-            <div className="rider-more-header">
-              <strong>More</strong>
-              <button type="button" onClick={() => setMoreOpen(false)} aria-label="Close menu">✕</button>
-            </div>
-            <div className="rider-more-links">
-              {overflowItems.map((item) => (
-                <a
-                  key={item.id}
-                  href={item.path}
-                  className={current === item.id ? 'active' : ''}
-                  onClick={() => setMoreOpen(false)}
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       <SwitchAccountModal
         open={switchAccountOpen}
         onClose={() => setSwitchAccountOpen(false)}
+        currentRole="rider"
+      />
+
+      <RoleOnboardingModal
+        open={riderOnboarding.shouldShow}
+        role="rider"
+        user={riderOnboarding.user}
+        riderDashboardData={riderOnboarding.riderDashboardData}
+        onComplete={riderOnboarding.completeOnboarding}
+        onSkip={riderOnboarding.skipOnboarding}
       />
 
       <ConfirmDialog {...logoutDialogProps} />
-
-      <RoleOnboardingModal {...riderOnboarding} />
     </div>
   );
 }
