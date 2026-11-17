@@ -115,8 +115,8 @@ class RiderApplicationWorkflowTest extends TestCase
                 'government_id_front' => UploadedFile::fake()->image('id_front.jpg'),
                 'selfie' => UploadedFile::fake()->image('selfie.jpg'),
                 'driver_license' => UploadedFile::fake()->image('license.jpg'),
-                'lto_or' => UploadedFile::fake()->create('or.pdf', 100, 'application/pdf'),
-                'lto_cr' => UploadedFile::fake()->create('cr.pdf', 100, 'application/pdf'),
+                'lto_or' => UploadedFile::fake()->createWithContent('or.pdf', "%PDF-1.4\n%SALO-TEST-PDF\n"),
+                'lto_cr' => UploadedFile::fake()->createWithContent('cr.pdf', "%PDF-1.4\n%SALO-TEST-PDF\n"),
             ],
         ], ['Accept' => 'application/json']);
 
@@ -139,21 +139,25 @@ class RiderApplicationWorkflowTest extends TestCase
         $this->actingAs($admin)->get("/api/applications/documents/{$docId}/file")->assertOk();
 
         $this->actingAs($admin)->postJson("/api/admin/applications/rider/{$appId}/decision", [
+            'decision' => 'under_review',
+        ])->assertOk()
+            ->assertJsonPath('data.application.application_status', 'under_review');
+
+        $this->actingAs($admin)->postJson("/api/admin/applications/rider/{$appId}/decision", [
             'decision' => 'approve',
             'note' => 'All documents verified.',
         ])->assertOk()
             ->assertJsonPath('data.application.application_status', 'approved')
-            ->assertJsonPath('data.application.rider_status', 'active');
+            ->assertJsonPath('data.application.rider_status', 'approved');
 
-        // 5. Applicant now has rider role and can toggle online/offline
+        // 5. Applicant has rider role on dashboard, but approval alone does NOT allow going online
         $this->actingAs($applicant)->getJson('/api/rider/dashboard')
             ->assertOk()
-            ->assertJsonPath('data.rider.rider_status', 'active');
+            ->assertJsonPath('data.rider.rider_status', 'approved');
 
         $this->actingAs($applicant)->patchJson('/api/rider/availability', [
             'status' => 'online',
-        ])->assertOk()
-            ->assertJsonPath('data.availability.is_online', true);
+        ])->assertStatus(422);
 
         $this->assertDatabaseHas('audit_logs', [
             'entity_type' => 'rider_applications',

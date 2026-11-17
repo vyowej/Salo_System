@@ -6,6 +6,7 @@ import { Card, CardBody } from '../../../components/common/Card';
 import {
   APPLICATION_STATUS_CONFIG,
 } from '../constants/applicationDefaults';
+import applicationService, { resolveBackendUrl } from '../../../services/applicationService';
 import './ApplicationStatus.css';
 
 const TIMELINE_STEPS = [
@@ -18,6 +19,7 @@ const TIMELINE_STEPS = [
 export default function ApplicationStatus({
   initialStatus = 'Pending Review',
   applicationData = null,
+  onApplicationUpdated = null,
 }) {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -25,6 +27,8 @@ export default function ApplicationStatus({
   const [checklist, setChecklist] = useState([]);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [uploadError, setUploadError] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState('');
+  const [submittingDoc, setSubmittingDoc] = useState(false);
 
   useEffect(() => {
     setCurrentStatus(initialStatus);
@@ -41,8 +45,9 @@ export default function ApplicationStatus({
     if (!file) return;
 
     setUploadError('');
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError('File size exceeds 10 MB limit.');
+    setUploadSuccess('');
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('File size exceeds 5 MB limit.');
       return;
     }
     const validMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
@@ -58,9 +63,28 @@ export default function ApplicationStatus({
   const pendingRequests = applicationData?.requestedDocuments || [];
   const activeRequest = pendingRequests[pendingRequests.length - 1] || null;
 
-  const handleSubmitRequestedDoc = () => {
-    if (!uploadedFile) return;
-    setUploadError('Document upload from the status page is not available yet.');
+  const handleSubmitRequestedDoc = async () => {
+    if (!uploadedFile || !applicationData?.id) return;
+    setUploadError('');
+    setUploadSuccess('');
+    setSubmittingDoc(true);
+    try {
+      const updatedApp = await applicationService.uploadRestaurantDocument(applicationData.id, {
+        documentCode: activeRequest ? 'requested_document' : 'other_registration',
+        requestId: activeRequest?.id || null,
+        file: uploadedFile,
+      });
+      setUploadedFile(null);
+      setUploadSuccess('Document uploaded successfully and submitted for review.');
+      if (updatedApp) {
+        onApplicationUpdated?.(updatedApp);
+      }
+    } catch (err) {
+      const fieldMsg = err?.errors?.file?.[0] || err?.errors?.document_code?.[0];
+      setUploadError(fieldMsg || err?.message || 'Failed to upload requested document.');
+    } finally {
+      setSubmittingDoc(false);
+    }
   };
 
   const statusMeta = APPLICATION_STATUS_CONFIG[currentStatus] || APPLICATION_STATUS_CONFIG['Pending Review'];
@@ -209,7 +233,7 @@ export default function ApplicationStatus({
                   <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 600, color: 'var(--salo-orange, #f36b2b)' }}>
                     Click to select file or drag & drop
                   </p>
-                  <small style={{ color: 'var(--text-muted)' }}>PDF, JPG, or PNG (Max 10 MB)</small>
+                  <small style={{ color: 'var(--text-muted)' }}>PDF, JPG, or PNG (Max 5 MB)</small>
                 </div>
               )}
 
@@ -218,16 +242,21 @@ export default function ApplicationStatus({
                   {uploadError}
                 </p>
               )}
+              {uploadSuccess && (
+                <p style={{ color: '#15803d', fontSize: '12px', margin: '8px 0 0' }} role="status">
+                  {uploadSuccess}
+                </p>
+              )}
             </div>
 
             <div className="correction-actions">
               <Button
                 variant="primary"
                 size="md"
-                disabled={!uploadedFile}
+                disabled={!uploadedFile || submittingDoc}
                 onClick={handleSubmitRequestedDoc}
               >
-                Submit Requested Documents
+                {submittingDoc ? 'Uploading...' : 'Submit Requested Documents'}
               </Button>
               <Button
                 as={Link}
@@ -389,6 +418,106 @@ export default function ApplicationStatus({
           </div>
         </CardBody>
       </Card>
+
+      {/* Uploaded Assets & Documents */}
+      {(applicationData?.logoImage || applicationData?.coverImage || (applicationData?.menuItems?.length > 0) || (applicationData?.documents?.length > 0)) && (
+        <Card className="status-timeline-card">
+          <CardBody>
+            <h3 className="timeline-title">Submitted Branding, Menu &amp; Documents</h3>
+
+            {(applicationData?.logoImage || applicationData?.coverImage) && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '16px' }}>
+                {applicationData.logoImage && (
+                  <div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>Restaurant Logo</div>
+                    <img
+                      src={resolveBackendUrl(applicationData.logoImage)}
+                      alt="Restaurant Logo"
+                      style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border-primary, #e5e7eb)' }}
+                    />
+                  </div>
+                )}
+                {applicationData.coverImage && (
+                  <div style={{ flex: '1 1 220px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>Cover Photo</div>
+                    <img
+                      src={resolveBackendUrl(applicationData.coverImage)}
+                      alt="Cover Photo"
+                      style={{ width: '100%', maxWidth: '320px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border-primary, #e5e7eb)' }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {applicationData?.menuItems?.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
+                  Initial Menu Items ({applicationData.menuItems.length})
+                </div>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {applicationData.menuItems.map((item) => (
+                    <div
+                      key={item.menu_item_id || item.name}
+                      style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', border: '1px solid var(--border-secondary, #e5e7eb)', borderRadius: '8px' }}
+                    >
+                      {item.photo_url && (
+                        <img
+                          src={resolveBackendUrl(item.photo_url)}
+                          alt={item.name}
+                          style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '6px' }}
+                        />
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600 }}>{item.name}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          {item.category} • ₱{Number(item.price || 0).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {applicationData?.documents?.length > 0 && (
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
+                  Submitted Documents ({applicationData.documents.length})
+                </div>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {applicationData.documents.map((doc) => (
+                    <div
+                      key={doc.document_id}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '8px 12px', border: '1px solid var(--border-secondary, #e5e7eb)', borderRadius: '8px' }}
+                    >
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600 }}>{doc.document_code}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{doc.original_filename}</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Badge variant={doc.document_status === 'verified' ? 'success' : doc.document_status === 'rejected' ? 'danger' : 'warning'} size="sm">
+                          {doc.document_status}
+                        </Badge>
+                        {doc.file_url && (
+                          <a
+                            href={resolveBackendUrl(doc.file_url)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: '12px', fontWeight: 600, color: 'var(--salo-orange, #f36b2b)' }}
+                          >
+                            View
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
 
       {/* Return Actions */}
       <div className="status-bottom-nav">

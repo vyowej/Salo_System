@@ -1,5 +1,19 @@
 import apiClient from './apiClient';
 
+const API_BASE_URL = (
+  import.meta.env?.VITE_API_URL ||
+  import.meta.env?.VITE_API_BASE_URL ||
+  'http://localhost:8000/api'
+).replace(/\/$/, '');
+
+const API_ORIGIN = API_BASE_URL.replace(/\/api$/, '');
+
+export function resolveBackendUrl(pathOrUrl) {
+  if (!pathOrUrl) return null;
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  return `${API_ORIGIN}/${String(pathOrUrl).replace(/^\/+/, '')}`;
+}
+
 const BACKEND_STATUS_LABELS = {
   submitted: 'Submitted',
   pending_review: 'Pending Review',

@@ -173,6 +173,27 @@ export const ownerService = {
     return [];
   },
 
+  getDashboardStats() {
+    return {
+      todayRevenue: 0,
+      ordersToday: 0,
+      pendingOrders: 0,
+      preparingOrders: 0,
+      completedToday: 0,
+      pendingReservations: 0,
+      avgOrderValue: 0,
+      totalMenuItems: 0,
+      unavailableItems: 0,
+    };
+  },
+
+  getEarningsOverview() {
+    return {
+      thisWeek: 0,
+      thisMonth: 0,
+    };
+  },
+
   getEarningsSummary() {
     return null;
   },

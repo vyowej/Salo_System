@@ -5,6 +5,10 @@ import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
 import { DAYS_OF_WEEK } from '../constants/applicationDefaults';
 
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+export const MAX_INITIAL_MENU_ITEMS = 8;
+
 const MENU_CATEGORIES = [
   'Main Dishes',
   'Appetizers & Starters',
@@ -34,12 +38,30 @@ export default function RestaurantConfigurationStep({
     price: '',
     available: true,
     photoUrl: null,
+    photoFile: null,
   });
+  const [imageErrors, setImageErrors] = useState({ logo: '', cover: '', menuPhoto: '' });
+
+  const validateImageFile = (file) => {
+    if (!ALLOWED_IMAGE_MIMES.includes(file.type)) {
+      return 'Unsupported image format. Please upload a JPG, PNG, or WEBP file.';
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      return 'Image size exceeds 5 MB limit. Please choose a smaller file.';
+    }
+    return '';
+  };
 
   // 1. Branding Handlers
   const handleLogoUpload = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      const err = validateImageFile(file);
+      if (err) {
+        setImageErrors((prev) => ({ ...prev, logo: err }));
+        return;
+      }
+      setImageErrors((prev) => ({ ...prev, logo: '' }));
       const preview = URL.createObjectURL(file);
       onChange?.({
         ...data,
@@ -50,6 +72,7 @@ export default function RestaurantConfigurationStep({
 
   const handleLogoRemove = () => {
     if (data.logo?.src) URL.revokeObjectURL(data.logo.src);
+    setImageErrors((prev) => ({ ...prev, logo: '' }));
     onChange?.({ ...data, logo: null });
     if (logoInputRef.current) logoInputRef.current.value = '';
   };
@@ -57,6 +80,12 @@ export default function RestaurantConfigurationStep({
   const handleCoverUpload = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      const err = validateImageFile(file);
+      if (err) {
+        setImageErrors((prev) => ({ ...prev, cover: err }));
+        return;
+      }
+      setImageErrors((prev) => ({ ...prev, cover: '' }));
       const preview = URL.createObjectURL(file);
       onChange?.({
         ...data,
@@ -67,6 +96,7 @@ export default function RestaurantConfigurationStep({
 
   const handleCoverRemove = () => {
     if (data.coverPhoto?.src) URL.revokeObjectURL(data.coverPhoto.src);
+    setImageErrors((prev) => ({ ...prev, cover: '' }));
     onChange?.({ ...data, coverPhoto: null });
     if (coverInputRef.current) coverInputRef.current.value = '';
   };
@@ -128,7 +158,15 @@ export default function RestaurantConfigurationStep({
 
   // 4. Menu Items Handlers
   const openAddMenuItemModal = () => {
+    if ((data.menuItems || []).length >= MAX_INITIAL_MENU_ITEMS) {
+      setImageErrors((prev) => ({
+        ...prev,
+        menuLimit: `You can add up to ${MAX_INITIAL_MENU_ITEMS} initial menu items during registration. More items can be added after approval.`,
+      }));
+      return;
+    }
     setEditingMenuItemId(null);
+    setImageErrors((prev) => ({ ...prev, menuPhoto: '', menuLimit: '' }));
     setMenuItemForm({
       name: '',
       description: '',
@@ -136,6 +174,7 @@ export default function RestaurantConfigurationStep({
       price: '',
       available: true,
       photoUrl: null,
+      photoFile: null,
     });
     setMenuModalOpen(true);
   };
@@ -151,10 +190,18 @@ export default function RestaurantConfigurationStep({
     if (!menuItemForm.name.trim() || !menuItemForm.price) return;
 
     let updatedList = [...(data.menuItems || [])];
-    if (editingMenuItemId) {
-      updatedList = updatedList.map((item) => (item.id === editingMenuItemId ? { ...menuItemForm } : item));
-    } else {
-      const newItem = {
+      if (editingMenuItemId) {
+        updatedList = updatedList.map((item) => (item.id === editingMenuItemId ? { ...menuItemForm } : item));
+      } else {
+        if (updatedList.length >= MAX_INITIAL_MENU_ITEMS) {
+          setImageErrors((prev) => ({
+            ...prev,
+            menuLimit: `You can add up to ${MAX_INITIAL_MENU_ITEMS} initial menu items during registration. More items can be added after approval.`,
+          }));
+          setMenuModalOpen(false);
+          return;
+        }
+        const newItem = {
         ...menuItemForm,
         id: `menu-item-${Date.now()}`,
         price: parseFloat(menuItemForm.price) || 0,
@@ -180,8 +227,14 @@ export default function RestaurantConfigurationStep({
   const handleMenuPhotoUpload = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      const err = validateImageFile(file);
+      if (err) {
+        setImageErrors((prev) => ({ ...prev, menuPhoto: err }));
+        return;
+      }
+      setImageErrors((prev) => ({ ...prev, menuPhoto: '' }));
       const preview = URL.createObjectURL(file);
-      setMenuItemForm((prev) => ({ ...prev, photoUrl: preview, photoName: file.name }));
+      setMenuItemForm((prev) => ({ ...prev, photoUrl: preview, photoName: file.name, photoFile: file }));
     }
   };
 
@@ -244,6 +297,9 @@ export default function RestaurantConfigurationStep({
               >
                 {data.logo?.src ? 'Replace Logo' : 'Select Logo'}
               </Button>
+              {(imageErrors.logo || errors.logo_image) && (
+                <ErrorMessage>{imageErrors.logo || errors.logo_image}</ErrorMessage>
+              )}
             </div>
 
             {/* Cover Banner Upload */}
@@ -285,6 +341,9 @@ export default function RestaurantConfigurationStep({
               >
                 {data.coverPhoto?.src ? 'Replace Banner' : 'Select Banner'}
               </Button>
+              {(imageErrors.cover || errors.cover_image) && (
+                <ErrorMessage>{imageErrors.cover || errors.cover_image}</ErrorMessage>
+              )}
             </div>
           </div>
         </section>
@@ -494,11 +553,15 @@ export default function RestaurantConfigurationStep({
               type="button"
               variant="outline"
               size="sm"
+              disabled={(data.menuItems || []).length >= MAX_INITIAL_MENU_ITEMS}
               onClick={openAddMenuItemModal}
             >
-              + Add Menu Item
+              + Add Menu Item ({(data.menuItems || []).length}/{MAX_INITIAL_MENU_ITEMS})
             </Button>
           </div>
+          {(imageErrors.menuLimit || errors.menu_items) && (
+            <ErrorMessage>{imageErrors.menuLimit || errors.menu_items}</ErrorMessage>
+          )}
 
           {(data.menuItems || []).length > 0 ? (
             <div className="menu-items-table">
@@ -628,7 +691,7 @@ export default function RestaurantConfigurationStep({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setMenuItemForm((prev) => ({ ...prev, photoUrl: null }))}
+                    onClick={() => setMenuItemForm((prev) => ({ ...prev, photoUrl: null, photoFile: null, photoName: null }))}
                   >
                     Remove Photo
                   </Button>
@@ -651,6 +714,7 @@ export default function RestaurantConfigurationStep({
               style={{ display: 'none' }}
               onChange={handleMenuPhotoUpload}
             />
+            {imageErrors.menuPhoto && <ErrorMessage>{imageErrors.menuPhoto}</ErrorMessage>}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>

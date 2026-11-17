@@ -104,8 +104,8 @@ class RestaurantApplicationWorkflowTest extends TestCase
             'logo_image' => UploadedFile::fake()->image('logo.png'),
             'cover_image' => UploadedFile::fake()->image('cover.jpg'),
             'documents' => [
-                'dti_certificate' => UploadedFile::fake()->create('dti.pdf', 120, 'application/pdf'),
-                'mayors_permit' => UploadedFile::fake()->create('permit.pdf', 120, 'application/pdf'),
+                'dti_certificate' => UploadedFile::fake()->createWithContent('dti.pdf', "%PDF-1.4\n%SALO-TEST-PDF\n"),
+                'mayors_permit' => UploadedFile::fake()->createWithContent('permit.pdf', "%PDF-1.4\n%SALO-TEST-PDF\n"),
             ],
         ], ['Accept' => 'application/json']);
 
@@ -116,7 +116,12 @@ class RestaurantApplicationWorkflowTest extends TestCase
         $appId = $submitResponse->json('data.application.restaurant_application_id');
         $docId = $submitResponse->json('data.application.documents.0.document_id');
 
-        // 3. Admin requests additional document & verifies existing document
+        // 3. Admin starts review, verifies existing document, and requests additional document
+        $this->actingAs($admin)->postJson("/api/admin/applications/restaurant/{$appId}/decision", [
+            'decision' => 'under_review',
+        ])->assertOk()
+            ->assertJsonPath('data.application.application_status', 'under_review');
+
         $this->actingAs($admin)->patchJson("/api/admin/applications/restaurant/{$appId}/documents/{$docId}", [
             'status' => 'verified',
         ])->assertOk();
@@ -132,12 +137,16 @@ class RestaurantApplicationWorkflowTest extends TestCase
         $this->actingAs($owner)->post("/api/restaurant/applications/{$appId}/documents", [
             'document_code' => 'requested_document',
             'request_id' => $requestId,
-            'file' => UploadedFile::fake()->create('bir.pdf', 100, 'application/pdf'),
+            'file' => UploadedFile::fake()->createWithContent('bir.pdf', "%PDF-1.4\n%SALO-TEST-PDF\n"),
         ], ['Accept' => 'application/json'])
             ->assertOk()
             ->assertJsonPath('data.application.application_status', 'resubmitted');
 
-        // 5. Admin approves application
+        // 5. Admin resumes review and approves application
+        $this->actingAs($admin)->postJson("/api/admin/applications/restaurant/{$appId}/decision", [
+            'decision' => 'under_review',
+        ])->assertOk();
+
         $this->actingAs($admin)->postJson("/api/admin/applications/restaurant/{$appId}/decision", [
             'decision' => 'approve',
             'note' => 'Welcome to SALO!',

@@ -10,6 +10,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Session\Middleware\StartSession;
@@ -68,6 +69,16 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::error(
                     message: 'CSRF token mismatch.',
                     status: 419,
+                );
+            }
+
+            if ($e instanceof PostTooLargeException) {
+                $maxKb = (int) config('salo.uploads.max_size_kb', 5120);
+                $maxMb = round($maxKb / 1024, 1);
+
+                return ApiResponse::error(
+                    message: "The uploaded files exceed the maximum allowed request size. Each file must be {$maxMb} MB or smaller.",
+                    status: 413,
                 );
             }
 

@@ -97,7 +97,7 @@ class AdminApplicationController extends Controller
         abort_unless(in_array($type, ['restaurant', 'rider'], true), 404, 'Invalid application type.');
 
         $validated = $request->validate([
-            'decision' => ['required', 'string', Rule::in(['under_review', 'needs_correction', 'approve', 'reject'])],
+            'decision' => ['required', 'string', Rule::in(['under_review', 'additional_documents_required', 'approve', 'reject'])],
             'note' => ['nullable', 'string', 'max:2000'],
         ]);
 

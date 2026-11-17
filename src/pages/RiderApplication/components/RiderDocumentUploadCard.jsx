@@ -7,7 +7,7 @@ import { RIDER_DOC_TYPES } from '../constants/riderDocumentMatrix';
 import { compressImageToDataUrl } from '../services/riderDraftStorage';
 import './RiderDocumentUploadCard.css';
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 const VALID_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
 
 function formatBytes(bytes) {
@@ -55,7 +55,7 @@ export default function RiderDocumentUploadCard({
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      setLocalError(`File size exceeds 10 MB limit (${formatBytes(file.size)}). Please choose a smaller file.`);
+      setLocalError(`File size exceeds 5 MB limit (${formatBytes(file.size)}). Please choose a smaller file.`);
       return;
     }
 
@@ -79,7 +79,7 @@ export default function RiderDocumentUploadCard({
         setUploadProgress(100);
 
         onUpload?.(id, {
-          file: file.type.startsWith('image/') ? null : file,
+          file,
           name: file.name,
           size: file.size,
           type: file.type,
@@ -313,7 +313,7 @@ export default function RiderDocumentUploadCard({
                     <span className="rider-dropzone-prompt">
                       Or <strong className="rider-link-text">upload file</strong> from device
                     </span>
-                    <span className="rider-dropzone-hint">{acceptedFormats} (Max 10 MB)</span>
+                    <span className="rider-dropzone-hint">{acceptedFormats} (Max 5 MB)</span>
                   </div>
                 </div>
               </div>
@@ -341,7 +341,7 @@ export default function RiderDocumentUploadCard({
                   <span className="rider-dropzone-prompt">
                     <strong className="rider-link-text">Click to upload</strong> or drag and drop
                   </span>
-                  <span className="rider-dropzone-hint">{acceptedFormats} (Max 10 MB)</span>
+                  <span className="rider-dropzone-hint">{acceptedFormats} (Max 5 MB)</span>
                 </div>
               </div>
             </div>

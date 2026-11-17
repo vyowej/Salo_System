@@ -59,7 +59,10 @@ class RiderApplicationService
 
         $this->validateDocumentCodes($documentFiles, $vehicleType);
 
-        $result = DB::transaction(function () use ($user, $validated, $documentFiles, $contactEmail, $verifiedAt, $vehicleType, $request): array {
+        $storedPrivatePaths = [];
+
+        try {
+            $result = DB::transaction(function () use ($user, $validated, $documentFiles, $contactEmail, $verifiedAt, $vehicleType, $request, &$storedPrivatePaths): array {
             $addressId = $this->addressService->createAddress([
                 'province' => $validated['province'],
                 'city' => $validated['city'],
@@ -149,6 +152,7 @@ class RiderApplicationService
                     directory: "applications/rider/{$applicationId}",
                     fieldName: "documents.{$code}",
                 );
+                $storedPrivatePaths[] = $stored['path'];
 
                 DB::table('application_documents')->insert([
                     'rider_application_id' => $applicationId,
@@ -195,6 +199,10 @@ class RiderApplicationService
 
             return $this->getApplicationById($applicationId);
         });
+        } catch (\Throwable $e) {
+            $this->fileStorageService->cleanupStoredPaths([], $storedPrivatePaths);
+            throw $e;
+        }
 
         $this->otpService->forgetVerified($contactEmail, 'rider_application', (int) $user->user_id);
 
@@ -243,7 +251,8 @@ class RiderApplicationService
             fieldName: 'file',
         );
 
-        DB::transaction(function () use ($user, $applicationId, $app, $documentCode, $stored, $requestId, $request): void {
+        try {
+            DB::transaction(function () use ($user, $applicationId, $app, $documentCode, $stored, $requestId, $request): void {
             $now = now();
 
             DB::table('application_documents')->insert([
@@ -287,6 +296,10 @@ class RiderApplicationService
                 request: $request,
             );
         });
+        } catch (\Throwable $e) {
+            $this->fileStorageService->cleanupStoredPaths([], [$stored['path']]);
+            throw $e;
+        }
 
         return $this->getApplicationById($applicationId);
     }

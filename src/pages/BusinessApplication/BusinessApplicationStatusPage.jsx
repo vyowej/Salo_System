@@ -25,6 +25,9 @@ export default function BusinessApplicationStatusPage() {
             status: mapBackendApplicationStatus(app.application_status),
             submittedAt: app.submitted_at,
             reviewerNote: app.reviewer_note,
+            logoImage: app.logo_image || null,
+            coverImage: app.cover_image || null,
+            menuItems: app.menu_items || [],
             requestedDocuments: (app.document_requests || []).map((req) => ({
               id: req.request_id,
               name: req.document_name,
@@ -85,6 +88,29 @@ export default function BusinessApplicationStatusPage() {
             <ApplicationStatus
               initialStatus={applicationData.status}
               applicationData={applicationData}
+              onApplicationUpdated={(updatedApp) => {
+                if (!updatedApp) return;
+                setApplicationData({
+                  id: updatedApp.restaurant_application_id,
+                  referenceNumber: updatedApp.reference_number,
+                  name: updatedApp.restaurant_name,
+                  status: mapBackendApplicationStatus(updatedApp.application_status),
+                  submittedAt: updatedApp.submitted_at,
+                  reviewerNote: updatedApp.reviewer_note,
+                  logoImage: updatedApp.logo_image || null,
+                  coverImage: updatedApp.cover_image || null,
+                  menuItems: updatedApp.menu_items || [],
+                  requestedDocuments: (updatedApp.document_requests || []).map((req) => ({
+                    id: req.request_id,
+                    name: req.document_name,
+                    reason: req.reason,
+                    instructions: req.instructions,
+                    dueDate: req.due_date,
+                    status: req.request_status,
+                  })),
+                  documents: updatedApp.documents || [],
+                });
+              }}
             />
           )}
         </div>

@@ -750,9 +750,23 @@ export default function RiderApplicationPage() {
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
+      const fieldErrors = {};
+      if (error?.errors && typeof error.errors === 'object') {
+        Object.entries(error.errors).forEach(([key, msgs]) => {
+          const firstMsg = Array.isArray(msgs) ? msgs[0] : String(msgs);
+          if (firstMsg) {
+            fieldErrors[key] = firstMsg;
+            if (key.startsWith('documents.')) {
+              fieldErrors[key.replace('documents.', '')] = firstMsg;
+            }
+          }
+        });
+      }
+      const firstFieldMsg = Object.values(fieldErrors)[0];
       setValidationErrors((prev) => ({
         ...prev,
-        submit: error?.message || 'Unable to submit rider application. Please review your details and try again.',
+        ...fieldErrors,
+        submit: firstFieldMsg || error?.message || 'Unable to submit rider application. Please review your details and try again.',
       }));
     } finally {
       setSubmitting(false);

@@ -92,6 +92,15 @@ class SubmitRestaurantApplicationRequest extends FormRequest
             'logo_image' => ['nullable', 'file', "mimes:{$imgMimes}", "max:{$maxKb}"],
             'cover_image' => ['nullable', 'file', "mimes:{$imgMimes}", "max:{$maxKb}"],
 
+            'menu_items' => ['nullable', 'array', 'max:8'],
+            'menu_items.*.name' => ['required_with:menu_items', 'string', 'max:200'],
+            'menu_items.*.description' => ['nullable', 'string', 'max:2000'],
+            'menu_items.*.category' => ['nullable', 'string', 'max:100'],
+            'menu_items.*.price' => ['required_with:menu_items', 'numeric', 'min:0', 'max:999999.99'],
+            'menu_items.*.available' => ['nullable', 'boolean'],
+            'menu_item_photos' => ['nullable', 'array', 'max:8'],
+            'menu_item_photos.*' => ['nullable', 'file', "mimes:{$imgMimes}", "max:{$maxKb}"],
+
             'documents' => ['required', 'array', 'min:1'],
             'documents.*' => ['file', "mimes:{$docMimes}", "max:{$maxKb}"],
         ];
@@ -105,6 +114,8 @@ class SubmitRestaurantApplicationRequest extends FormRequest
         return [
             'date_of_birth.before_or_equal' => 'Representative must be at least 18 years old.',
             'terms_accepted.accepted' => 'You must accept the Partner Agreement to submit.',
+            'menu_items.max' => 'You can add up to 8 initial menu items during application. More items can be added after approval.',
+            'menu_item_photos.max' => 'You can upload up to 8 initial menu item photos during application.',
         ];
     }
 }

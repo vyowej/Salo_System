@@ -6,16 +6,33 @@ use App\Features\Restaurants\Services\RestaurantApplicationService;
 use App\Features\Riders\Services\RiderApplicationService;
 use App\Models\User;
 use App\Support\AuditLogService;
+use App\Support\FileStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class AdminApplicationService
 {
+    /**
+     * Allowed admin-driven status transitions.
+     * 'additional_documents_required' transitions to 'resubmitted' only when the applicant uploads documents.
+     */
+    private const ALLOWED_TRANSITIONS = [
+        'submitted' => ['under_review'],
+        'pending_review' => ['under_review'],
+        'resubmitted' => ['under_review'],
+        'under_review' => ['additional_documents_required', 'approved', 'rejected'],
+        'additional_documents_required' => [],
+        'approved' => [],
+        'rejected' => [],
+    ];
+
     public function __construct(
         private readonly RestaurantApplicationService $restaurantApplicationService,
         private readonly RiderApplicationService $riderApplicationService,
         private readonly AuditLogService $auditLogService,
+        private readonly FileStorageService $fileStorageService,
     ) {}
 
     /**
@@ -172,8 +189,8 @@ class AdminApplicationService
                     'business_type' => $row->business_type,
                     'ownership_structure' => $row->ownership_structure,
                     'zone' => $row->zone,
-                    'logo_image' => $row->logo_image,
-                    'cover_image' => $row->cover_image,
+                    'logo_image' => $this->fileStorageService->publicUrl($row->logo_image),
+                    'cover_image' => $this->fileStorageService->publicUrl($row->cover_image),
                     'application_status' => $row->application_status,
                     'restaurant_status' => $row->restaurant_status,
                     'submitted_at' => $row->submitted_at,
@@ -256,6 +273,13 @@ class AdminApplicationService
         }
 
         $fkColumn = $type === 'rider' ? 'rider_application_id' : 'restaurant_application_id';
+        $table = $type === 'rider' ? 'rider_applications' : 'restaurant_applications';
+        $pk = $type === 'rider' ? 'rider_application_id' : 'restaurant_application_id';
+
+        $app = DB::table($table)->where($pk, $applicationId)->first();
+        abort_unless($app !== null, 404, 'Application not found.');
+        $this->assertNotSelfReview($app, $admin);
+
         $doc = DB::table('application_documents')
             ->where('document_id', $documentId)
             ->where($fkColumn, $applicationId)
@@ -263,26 +287,28 @@ class AdminApplicationService
 
         abort_unless($doc !== null, 404, 'Application document not found.');
 
-        $now = now();
-        DB::table('application_documents')
-            ->where('document_id', $documentId)
-            ->update([
-                'document_status' => $status,
-                'review_note' => $status === 'rejected' ? mb_substr(trim((string) $reviewNote), 0, 500) : null,
-                'reviewed_by' => $admin->user_id,
-                'reviewed_at' => $now->format('Y-m-d H:i:s'),
-            ]);
+        DB::transaction(function () use ($type, $applicationId, $documentId, $doc, $status, $reviewNote, $admin, $request): void {
+            $now = now();
+            DB::table('application_documents')
+                ->where('document_id', $documentId)
+                ->update([
+                    'document_status' => $status,
+                    'review_note' => $status === 'rejected' ? mb_substr(trim((string) $reviewNote), 0, 500) : null,
+                    'reviewed_by' => $admin->user_id,
+                    'reviewed_at' => $now->format('Y-m-d H:i:s'),
+                ]);
 
-        $this->auditLogService->record(
-            actorUserId: (int) $admin->user_id,
-            action: "application_document_{$status}",
-            entityType: $type === 'rider' ? 'rider_applications' : 'restaurant_applications',
-            entityId: $applicationId,
-            oldValues: ['document_id' => $documentId, 'document_status' => $doc->document_status],
-            newValues: ['document_id' => $documentId, 'document_status' => $status],
-            reason: $reviewNote,
-            request: $request,
-        );
+            $this->auditLogService->record(
+                actorUserId: (int) $admin->user_id,
+                action: "application_document_{$status}",
+                entityType: $type === 'rider' ? 'rider_applications' : 'restaurant_applications',
+                entityId: $applicationId,
+                oldValues: ['document_id' => $documentId, 'document_status' => $doc->document_status],
+                newValues: ['document_id' => $documentId, 'document_status' => $status],
+                reason: $reviewNote,
+                request: $request,
+            );
+        });
 
         return $this->getApplicationDetail($type, $applicationId);
     }
@@ -303,6 +329,8 @@ class AdminApplicationService
 
         $app = DB::table($table)->where($pk, $applicationId)->first();
         abort_unless($app !== null, 404, 'Application not found.');
+        $this->assertNotSelfReview($app, $admin);
+        $this->assertValidTransition((string) $app->application_status, 'additional_documents_required');
 
         DB::transaction(function () use ($type, $table, $pk, $applicationId, $app, $data, $admin, $request): void {
             $now = now();
@@ -355,7 +383,7 @@ class AdminApplicationService
     ): array {
         $statusMap = [
             'under_review' => 'under_review',
-            'needs_correction' => 'needs_correction',
+            'additional_documents_required' => 'additional_documents_required',
             'approve' => 'approved',
             'reject' => 'rejected',
         ];
@@ -363,9 +391,9 @@ class AdminApplicationService
         $nextStatus = $statusMap[$decision];
         $cleanNote = $note !== null ? trim($note) : null;
 
-        if (in_array($nextStatus, ['needs_correction', 'rejected'], true) && ($cleanNote === null || $cleanNote === '')) {
+        if (in_array($nextStatus, ['additional_documents_required', 'rejected'], true) && ($cleanNote === null || $cleanNote === '')) {
             throw ValidationException::withMessages([
-                'note' => ['A reviewer note / reason is required when requesting correction or rejecting an application.'],
+                'note' => ['A message / reason is required when requesting additional information or rejecting an application.'],
             ]);
         }
 
@@ -374,6 +402,8 @@ class AdminApplicationService
 
         $app = DB::table($table)->where($pk, $applicationId)->first();
         abort_unless($app !== null, 404, 'Application not found.');
+        $this->assertNotSelfReview($app, $admin);
+        $this->assertValidTransition((string) $app->application_status, $nextStatus);
 
         DB::transaction(function () use ($type, $table, $pk, $applicationId, $app, $nextStatus, $cleanNote, $admin, $request): void {
             $now = now();
@@ -394,6 +424,14 @@ class AdminApplicationService
                         'restaurant_status' => 'active',
                         'updated_at' => $now,
                     ]);
+
+                    DB::table('menu_items')
+                        ->where('restaurant_id', $app->restaurant_id)
+                        ->where('approval_status', 'pending')
+                        ->update([
+                            'approval_status' => 'approved',
+                            'updated_at' => $now,
+                        ]);
                 } elseif ($nextStatus === 'rejected') {
                     DB::table('restaurants')->where('restaurant_id', $app->restaurant_id)->update([
                         'restaurant_status' => 'rejected',
@@ -403,7 +441,7 @@ class AdminApplicationService
             } else {
                 if ($nextStatus === 'approved') {
                     DB::table('riders')->where('rider_id', $app->rider_id)->update([
-                        'rider_status' => 'active',
+                        'rider_status' => 'approved',
                         'approved_at' => $now,
                         'updated_at' => $now,
                     ]);
@@ -428,5 +466,22 @@ class AdminApplicationService
         });
 
         return $this->getApplicationDetail($type, $applicationId);
+    }
+
+    private function assertNotSelfReview(object $app, User $admin): void
+    {
+        if ((int) $app->applicant_user_id === (int) $admin->user_id) {
+            abort(403, 'Forbidden: administrators cannot review or decide their own application.');
+        }
+    }
+
+    private function assertValidTransition(string $currentStatus, string $nextStatus): void
+    {
+        $allowed = self::ALLOWED_TRANSITIONS[$currentStatus] ?? [];
+        if (! in_array($nextStatus, $allowed, true)) {
+            throw new ConflictHttpException(
+                "Invalid application status transition from '{$currentStatus}' to '{$nextStatus}'."
+            );
+        }
     }
 }

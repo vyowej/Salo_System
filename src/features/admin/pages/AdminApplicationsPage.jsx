@@ -16,7 +16,7 @@ const STATUS_CHIPS = [
   { label: 'Submitted', value: 'submitted' },
   { label: 'Pending Review', value: 'pending_review' },
   { label: 'Under Review', value: 'under_review' },
-  { label: 'Needs Correction', value: 'needs_correction' },
+  { label: 'Additional Info Required', value: 'additional_documents_required' },
   { label: 'Resubmitted', value: 'resubmitted' },
   { label: 'Approved', value: 'approved' },
   { label: 'Rejected', value: 'rejected' },
@@ -41,12 +41,15 @@ export default function AdminApplicationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateRange, setDateRange] = useState('all');
+  const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const [selectedApp, setSelectedApp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [restaurantApps, setRestaurantApps] = useState([]);
   const [riderApps, setRiderApps] = useState([]);
+  const [restaurantMeta, setRestaurantMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
+  const [riderMeta, setRiderMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
 
   const canViewRestaurants = hasAdminPermission(currentAdmin.role, 'restaurants', 'view')
     || hasAdminPermission(currentAdmin.role, 'applications', 'view');
@@ -84,17 +87,20 @@ export default function AdminApplicationsPage() {
           status: statusFilter,
           date_range: dateRange,
           search: globalQuery || undefined,
-          per_page: 50,
+          page,
+          per_page: 25,
         };
 
         const [restRes, riderRes] = await Promise.all([
-          canViewRestaurants ? adminApiService.getApplications({ ...params, type: 'restaurant' }) : Promise.resolve({ items: [] }),
-          canViewRiders ? adminApiService.getApplications({ ...params, type: 'rider' }) : Promise.resolve({ items: [] }),
+          canViewRestaurants ? adminApiService.getApplications({ ...params, type: 'restaurant' }) : Promise.resolve({ items: [], meta: {} }),
+          canViewRiders ? adminApiService.getApplications({ ...params, type: 'rider' }) : Promise.resolve({ items: [], meta: {} }),
         ]);
 
         if (!active) return;
         setRestaurantApps((restRes.items || []).map((item) => mapListItem(item, 'restaurant')));
         setRiderApps((riderRes.items || []).map((item) => mapListItem(item, 'rider')));
+        setRestaurantMeta(restRes.meta || { current_page: 1, last_page: 1, total: 0 });
+        setRiderMeta(riderRes.meta || { current_page: 1, last_page: 1, total: 0 });
       } catch (err) {
         if (active) setError(err?.message || 'Failed to load applications from server.');
       } finally {
@@ -105,7 +111,7 @@ export default function AdminApplicationsPage() {
     return () => {
       active = false;
     };
-  }, [statusFilter, dateRange, globalQuery, revision, canViewRestaurants, canViewRiders]);
+  }, [statusFilter, dateRange, globalQuery, page, revision, canViewRestaurants, canViewRiders]);
 
   async function openApplicationDetail(kind, item) {
     try {
@@ -128,6 +134,7 @@ export default function AdminApplicationsPage() {
   function switchType(type) {
     setSearchParams({ type }, { replace: true });
     setSelectedApp(null);
+    setPage(1);
   }
 
   const restaurantColumns = [
@@ -255,7 +262,10 @@ export default function AdminApplicationsPage() {
               type="button"
               className={`admin-status-chip ${statusFilter === chip.value ? 'is-active' : ''}`}
               aria-pressed={statusFilter === chip.value}
-              onClick={() => setStatusFilter(chip.value)}
+              onClick={() => {
+                setStatusFilter(chip.value);
+                setPage(1);
+              }}
             >
               {chip.label}
             </button>
@@ -293,6 +303,32 @@ export default function AdminApplicationsPage() {
             emptyTitle="No rider applications"
             emptyDescription="No rider applications match the current filter."
           />
+        )}
+
+        {((activeType === 'restaurant' ? restaurantMeta : riderMeta).last_page > 1) && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+            <span className="admin-muted">
+              Page {(activeType === 'restaurant' ? restaurantMeta : riderMeta).current_page} of {(activeType === 'restaurant' ? restaurantMeta : riderMeta).last_page}
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="admin-action-button"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="admin-action-button"
+                disabled={page >= ((activeType === 'restaurant' ? restaurantMeta : riderMeta).last_page || 1)}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          </div>
         )}
 
         <ApplicationReviewModal

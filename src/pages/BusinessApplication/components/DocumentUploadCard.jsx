@@ -5,7 +5,7 @@ import CameraCaptureModal from './CameraCaptureModal';
 import { compressImageToDataUrl } from '../constants/cameraConfig';
 import './DocumentUploadCard.css';
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 const VALID_MIME_TYPES = [
   'application/pdf',
   'image/jpeg',
@@ -58,7 +58,7 @@ export default function DocumentUploadCard({
 
     // Size validation
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      setLocalError(`File size exceeds 10 MB limit (${formatBytes(file.size)}). Please choose a smaller file.`);
+      setLocalError(`File size exceeds 5 MB limit (${formatBytes(file.size)}). Please choose a smaller file.`);
       return;
     }
 
@@ -81,7 +81,7 @@ export default function DocumentUploadCard({
         setUploadProgress(100);
 
         onUpload?.(id, {
-          file: file.type.startsWith('image/') ? null : file,
+          file,
           name: file.name,
           size: file.size,
           type: file.type,
@@ -323,7 +323,7 @@ export default function DocumentUploadCard({
                     <span className="doc-dropzone-prompt">
                       Or <strong className="doc-link-text">upload file</strong> from device
                     </span>
-                    <span className="doc-dropzone-hint">{acceptedFormats} (Max 10 MB)</span>
+                    <span className="doc-dropzone-hint">{acceptedFormats} (Max 5 MB)</span>
                   </div>
                 </div>
               </div>
@@ -351,7 +351,7 @@ export default function DocumentUploadCard({
                   <span className="doc-dropzone-prompt">
                     <strong className="doc-link-text">Click to upload</strong> or drag and drop
                   </span>
-                  <span className="doc-dropzone-hint">{acceptedFormats} (Max 10 MB)</span>
+                  <span className="doc-dropzone-hint">{acceptedFormats} (Max 5 MB)</span>
                 </div>
               </div>
             </div>

@@ -22,12 +22,18 @@ class RestaurantApplicationController extends Controller
             $documentFiles = [];
         }
 
+        $menuItemPhotos = $request->file('menu_item_photos', []);
+        if (! is_array($menuItemPhotos)) {
+            $menuItemPhotos = [];
+        }
+
         $application = $this->restaurantApplicationService->submit(
             user: $request->user(),
             validated: $request->validated(),
             documentFiles: $documentFiles,
             logoFile: $request->file('logo_image'),
             coverFile: $request->file('cover_image'),
+            menuItemPhotos: $menuItemPhotos,
             request: $request,
         );
 

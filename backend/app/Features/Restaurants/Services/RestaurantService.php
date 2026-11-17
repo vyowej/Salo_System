@@ -3,6 +3,7 @@
 namespace App\Features\Restaurants\Services;
 
 use App\Models\User;
+use App\Support\FileStorageService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ class RestaurantService
 
     public function __construct(
         private readonly AvailabilityService $availabilityService,
+        private readonly FileStorageService $fileStorageService,
     ) {}
 
     /**
@@ -163,8 +165,8 @@ class RestaurantService
                 'name' => $row->restaurant_name,
                 'business_type' => $row->business_type,
                 'description' => $row->description,
-                'logo_path' => $row->logo_image,
-                'cover_path' => $row->cover_image,
+                'logo_path' => $this->fileStorageService->publicUrl($row->logo_image),
+                'cover_path' => $this->fileStorageService->publicUrl($row->cover_image),
                 'categories' => $categories,
                 'short_address' => implode(', ', array_filter([$row->barangay_name, $row->city_name])),
                 'offers' => [
@@ -357,7 +359,7 @@ class RestaurantService
                         'name' => $item->item_name,
                         'description' => $item->description,
                         'price' => (float) $item->base_price,
-                        'photo_path' => $item->photo_image,
+                        'photo_path' => $this->fileStorageService->publicUrl($item->photo_image),
                         'availability' => self::AVAILABILITY_LABELS[$status] ?? 'Available',
                         'availability_status' => $status,
                         'add_on_groups' => $addOnGroupsByItem->get((int) $item->menu_item_id, []),

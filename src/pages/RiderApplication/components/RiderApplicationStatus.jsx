@@ -6,6 +6,7 @@ import { Card, CardBody } from '../../../components/common/Card';
 import {
   RIDER_STATUS_CONFIG,
 } from '../constants/riderApplicationDefaults';
+import { resolveBackendUrl } from '../../../services/applicationService';
 import './RiderApplicationStatus.css';
 
 const RIDER_TIMELINE_STEPS = [
@@ -241,6 +242,43 @@ export default function RiderApplicationStatus({
           </div>
         </CardBody>
       </Card>
+
+      {/* Submitted Documents */}
+      {applicationData?.documents?.length > 0 && (
+        <Card className="status-timeline-card">
+          <CardBody>
+            <h3 className="timeline-title">Submitted Documents ({applicationData.documents.length})</h3>
+            <div style={{ display: 'grid', gap: '8px' }}>
+              {applicationData.documents.map((doc) => (
+                <div
+                  key={doc.document_id}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '8px 12px', border: '1px solid var(--border-secondary, #e5e7eb)', borderRadius: '8px' }}
+                >
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 600 }}>{doc.document_code}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{doc.original_filename}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Badge variant={doc.document_status === 'verified' ? 'success' : doc.document_status === 'rejected' ? 'danger' : 'warning'} size="sm">
+                      {doc.document_status}
+                    </Badge>
+                    {doc.file_url && (
+                      <a
+                        href={resolveBackendUrl(doc.file_url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ fontSize: '12px', fontWeight: 600, color: 'var(--salo-orange, #f36b2b)' }}
+                      >
+                        View
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       {/* Bottom Navigation */}
       <div className="status-bottom-nav">

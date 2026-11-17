@@ -132,9 +132,9 @@ class RiderService
     {
         $rider = $this->requireRiderRecord($user);
 
-        if (! in_array($rider->rider_status, ['approved', 'active'], true)) {
+        if ($rider->rider_status !== 'active') {
             throw ValidationException::withMessages([
-                'status' => ['Only approved and active riders can change online availability.'],
+                'status' => ['Only active riders can change online availability. Complete onboarding activation first.'],
             ]);
         }
 

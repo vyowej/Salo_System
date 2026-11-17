@@ -105,6 +105,10 @@ export default function BusinessApplicationPage() {
           ...formData.configuration,
           logo: formData.configuration.logo ? { name: formData.configuration.logo.name } : null,
           coverPhoto: formData.configuration.coverPhoto ? { name: formData.configuration.coverPhoto.name } : null,
+          menuItems: (formData.configuration.menuItems || []).map((item) => ({
+            ...item,
+            photoFile: null,
+          })),
         },
       };
       sessionStorage.setItem(SESSION_DRAFT_KEY, JSON.stringify(serializableData));
@@ -396,6 +400,19 @@ export default function BusinessApplicationPage() {
       const coverFile = resolveUploadableFile(formData.configuration?.coverPhoto, 'cover.jpg');
       if (coverFile) fd.append('cover_image', coverFile);
 
+      const menuItems = formData.configuration?.menuItems || [];
+      menuItems.forEach((item, idx) => {
+        fd.append(`menu_items[${idx}][name]`, item.name || '');
+        if (item.description) fd.append(`menu_items[${idx}][description]`, item.description);
+        if (item.category) fd.append(`menu_items[${idx}][category]`, item.category);
+        fd.append(`menu_items[${idx}][price]`, String(item.price ?? 0));
+        fd.append(`menu_items[${idx}][available]`, item.available !== false ? '1' : '0');
+        const photoFile = resolveUploadableFile(item.photoFile || item.photoUrl, `menu_item_${idx}.jpg`);
+        if (photoFile) {
+          fd.append(`menu_item_photos[${idx}]`, photoFile);
+        }
+      });
+
       Object.entries(formData.documents || {}).forEach(([docId, entry]) => {
         const file = resolveUploadableFile(entry, `${docId}.pdf`);
         if (file) {
@@ -423,9 +440,23 @@ export default function BusinessApplicationPage() {
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
+      const fieldErrors = {};
+      if (error?.errors && typeof error.errors === 'object') {
+        Object.entries(error.errors).forEach(([key, msgs]) => {
+          const firstMsg = Array.isArray(msgs) ? msgs[0] : String(msgs);
+          if (firstMsg) {
+            fieldErrors[key] = firstMsg;
+            if (key.startsWith('documents.')) {
+              fieldErrors[key.replace('documents.', '')] = firstMsg;
+            }
+          }
+        });
+      }
+      const firstFieldMsg = Object.values(fieldErrors)[0];
       setValidationErrors((prev) => ({
         ...prev,
-        submit: error?.message || 'Unable to submit application. Please review your details and try again.',
+        ...fieldErrors,
+        submit: firstFieldMsg || error?.message || 'Unable to submit application. Please review your details and try again.',
       }));
     } finally {
       setSubmitting(false);

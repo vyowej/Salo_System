@@ -8,14 +8,8 @@ import {
   showAdminToast,
 } from './index';
 import adminApiService from '../../../services/adminApiService';
-import { mapBackendApplicationStatus } from '../../../services/applicationService';
+import { mapBackendApplicationStatus, resolveBackendUrl } from '../../../services/applicationService';
 import { formatDate, formatDateTime } from '../utils/format';
-
-const API_ORIGIN = (
-  import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_API_BASE_URL ||
-  'http://localhost:8000/api'
-).replace(/\/api\/?$/, '');
 
 export default function ApplicationReviewModal({
   open,
@@ -31,6 +25,7 @@ export default function ApplicationReviewModal({
   const [pendingDecision, setPendingDecision] = useState(null);
   const [pendingFlagDoc, setPendingFlagDoc] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
     setDetail(application);
@@ -38,6 +33,7 @@ export default function ApplicationReviewModal({
     setPreviewId(application?.documents?.[0]?.document_id || null);
     setPendingDecision(null);
     setPendingFlagDoc(null);
+    setActionError('');
   }, [application]);
 
   if (!detail) return null;
@@ -56,6 +52,7 @@ export default function ApplicationReviewModal({
   async function handleDocumentReview(doc, status, reviewNote = '') {
     if (!canApprove || busy) return;
     setBusy(true);
+    setActionError('');
     try {
       const updated = await adminApiService.reviewDocument(kind, appId, doc.document_id, {
         status,
@@ -65,7 +62,29 @@ export default function ApplicationReviewModal({
       showAdminToast(`Document marked as ${status}.`, status === 'verified' ? 'success' : 'warning');
       onUpdated?.(updated);
     } catch (err) {
-      showAdminToast(err?.message || 'Unable to update document status.', 'danger');
+      const msg = err?.errors?.review_note?.[0] || err?.message || 'Unable to update document status.';
+      setActionError(msg);
+      showAdminToast(msg, 'danger');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleStartReview() {
+    if (!canApprove || busy) return;
+    setBusy(true);
+    setActionError('');
+    try {
+      const updated = await adminApiService.decideApplication(kind, appId, {
+        decision: 'under_review',
+      });
+      setDetail(updated);
+      showAdminToast(`${displayName} moved to Under Review.`, 'success');
+      onUpdated?.(updated);
+    } catch (err) {
+      const msg = err?.message || 'Unable to start review.';
+      setActionError(msg);
+      showAdminToast(msg, 'danger');
     } finally {
       setBusy(false);
     }
@@ -74,21 +93,29 @@ export default function ApplicationReviewModal({
   async function executeDecision({ reason }) {
     if (!pendingDecision || !canApprove || busy) return;
     setBusy(true);
+    setActionError('');
     try {
-      const decisionMap = {
-        approve: 'approve',
-        reject: 'reject',
-        revision: 'needs_correction',
-      };
-      const updated = await adminApiService.decideApplication(kind, appId, {
-        decision: decisionMap[pendingDecision.type],
-        note: reason,
-      });
+      let updated;
+      if (pendingDecision.type === 'additional_info') {
+        updated = await adminApiService.requestDocument(kind, appId, {
+          documentName: 'Additional Supporting Document',
+          reason,
+        });
+      } else {
+        const decisionMap = {
+          approve: 'approve',
+          reject: 'reject',
+        };
+        updated = await adminApiService.decideApplication(kind, appId, {
+          decision: decisionMap[pendingDecision.type],
+          note: reason,
+        });
+      }
       showAdminToast(
         pendingDecision.type === 'approve'
-          ? `${displayName} approved and activated.`
-          : pendingDecision.type === 'revision'
-            ? `Revision request sent for ${displayName}.`
+          ? `${displayName} approved.`
+          : pendingDecision.type === 'additional_info'
+            ? `Additional information requested for ${displayName}.`
             : `${displayName} application rejected.`,
         pendingDecision.type === 'approve' ? 'success' : 'warning',
       );
@@ -96,7 +123,10 @@ export default function ApplicationReviewModal({
       setPendingDecision(null);
       onClose?.();
     } catch (err) {
-      showAdminToast(err?.message || 'Unable to save application decision.', 'danger');
+      const msg = err?.errors?.note?.[0] || err?.errors?.reason?.[0] || err?.message || 'Unable to save application decision.';
+      setActionError(msg);
+      setPendingDecision(null);
+      showAdminToast(msg, 'danger');
     } finally {
       setBusy(false);
     }
@@ -122,7 +152,17 @@ export default function ApplicationReviewModal({
             <button type="button" className="admin-action-button" onClick={onClose} disabled={busy}>
               Close
             </button>
-            {canApprove && (
+            {canApprove && ['submitted', 'pending_review', 'resubmitted'].includes(detail.application_status) && (
+              <button
+                type="button"
+                className="admin-action-button"
+                disabled={busy}
+                onClick={handleStartReview}
+              >
+                Start Review
+              </button>
+            )}
+            {canApprove && detail.application_status === 'under_review' && (
               <>
                 <button
                   type="button"
@@ -130,16 +170,17 @@ export default function ApplicationReviewModal({
                   disabled={busy}
                   onClick={() =>
                     setPendingDecision({
-                      type: 'revision',
-                      title: 'Request application revision',
-                      message: `Send a correction message to ${displayName}.`,
-                      confirmLabel: 'Request Revision',
-                      reasonLabel: 'Message to applicant',
+                      type: 'additional_info',
+                      title: 'Request additional information',
+                      message: `Ask ${displayName} to upload additional information or documents.`,
+                      confirmLabel: 'Send Request',
+                      reasonLabel: 'Required message / reason',
+                      requireReason: true,
                       danger: false,
                     })
                   }
                 >
-                  Request Revision
+                  Request Additional Info
                 </button>
                 <button
                   type="button"
@@ -152,6 +193,7 @@ export default function ApplicationReviewModal({
                       message: `Reject ${displayName} (${detail.reference_number}). This records an audit entry.`,
                       confirmLabel: 'Reject',
                       reasonLabel: 'Rejection reason',
+                      requireReason: true,
                       danger: true,
                     })
                   }
@@ -167,9 +209,12 @@ export default function ApplicationReviewModal({
                     setPendingDecision({
                       type: 'approve',
                       title: `Approve ${kind === 'restaurant' ? 'restaurant' : 'rider'} application`,
-                      message: `Approve ${displayName}? This activates the ${kind} account.`,
+                      message: kind === 'restaurant'
+                        ? `Approve ${displayName}? This publishes the restaurant and its initial menu items.`
+                        : `Approve ${displayName}? This marks the rider application approved.`,
                       confirmLabel: 'Approve',
                       reasonLabel: 'Approval note (optional)',
+                      requireReason: false,
                       danger: false,
                     })
                   }
@@ -181,6 +226,22 @@ export default function ApplicationReviewModal({
           </>
         )}
       >
+        {actionError && (
+          <div
+            role="alert"
+            style={{
+              marginBottom: 12,
+              padding: '10px 12px',
+              borderRadius: 8,
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#b91c1c',
+              fontSize: 13,
+            }}
+          >
+            {actionError}
+          </div>
+        )}
         <div className="admin-review-grid">
           <div className="admin-review-col">
             <Tabs
@@ -204,13 +265,32 @@ export default function ApplicationReviewModal({
                     {detail.logo_image && (
                       <li>
                         <strong>Logo</strong>
-                        <img src={`${API_ORIGIN}${detail.logo_image}`} alt="Restaurant logo" style={{ maxHeight: 48, borderRadius: 6 }} />
+                        <img src={resolveBackendUrl(detail.logo_image)} alt="Restaurant logo" style={{ maxHeight: 48, borderRadius: 6 }} />
                       </li>
                     )}
                     {detail.cover_image && (
                       <li>
                         <strong>Cover photo</strong>
-                        <img src={`${API_ORIGIN}${detail.cover_image}`} alt="Restaurant cover" style={{ maxHeight: 64, borderRadius: 6 }} />
+                        <img src={resolveBackendUrl(detail.cover_image)} alt="Restaurant cover" style={{ maxHeight: 64, borderRadius: 6 }} />
+                      </li>
+                    )}
+                    {detail.menu_items?.length > 0 && (
+                      <li>
+                        <strong>Initial menu ({detail.menu_items.length})</strong>
+                        <div style={{ display: 'grid', gap: 6, marginTop: 4 }}>
+                          {detail.menu_items.map((item) => (
+                            <div key={item.menu_item_id || item.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {item.photo_url && (
+                                <img
+                                  src={resolveBackendUrl(item.photo_url)}
+                                  alt={item.name}
+                                  style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4 }}
+                                />
+                              )}
+                              <span>{item.name} · {item.category} · ₱{Number(item.price || 0).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
                       </li>
                     )}
                   </ul>
@@ -255,7 +335,7 @@ export default function ApplicationReviewModal({
                     <span>File: {activePreview.original_filename}</span>
                     <div style={{ marginTop: 8 }}>
                       <a
-                        href={`${API_ORIGIN}${activePreview.file_url}`}
+                        href={resolveBackendUrl(activePreview.file_url)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="admin-text-button"
