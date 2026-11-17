@@ -8,7 +8,6 @@ import {
   toBusinessProfileForm,
   validateBusinessProfile,
 } from './businessProfileData.js';
-import { demoAdapter } from '../../../services/demo/demoAdapter.js';
 
 const profile = {
   name: 'SALO Kitchen',
@@ -106,25 +105,4 @@ test('staged and removed image references are calculated without deleting saved 
   assert.deepEqual(getStagedImageIds(current, saved), ['new-logo', 'new-gallery']);
   assert.deepEqual(getRemovedImageReferences(current, saved), [{ id: 'saved-logo' }]);
   assert.equal(formatBusinessAddress({ city: 'Quezon City', country: 'Philippines' }), 'Quezon City, Philippines');
-});
-
-test('demo profile updates are shared with public reads and log only profile fields', () => {
-  const restaurantId = 'dalisay-heritage';
-  const before = demoAdapter.getRestaurant(restaurantId);
-  demoAdapter.updateBusinessProfile({ name: before.name }, restaurantId);
-  assert.equal(demoAdapter.getActivityLog(restaurantId).length, 0);
-
-  const nextName = `${before.name} Profile Test`;
-  demoAdapter.updateBusinessProfile({ name: nextName, description: before.description }, restaurantId);
-
-  assert.equal(demoAdapter.getRestaurant(restaurantId).name, nextName);
-  assert.equal(demoAdapter.getRestaurants().find((restaurant) => restaurant.id === restaurantId).name, nextName);
-
-  const activity = demoAdapter.getActivityLog(restaurantId)[0];
-  assert.equal(activity.module, 'business-profile');
-  assert.equal(activity.action, 'updated');
-  assert.equal(activity.before.name, before.name);
-  assert.equal(activity.after.name, nextName);
-  assert.equal(activity.before.orders, undefined);
-  assert.equal(activity.after.earnings, undefined);
 });

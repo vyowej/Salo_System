@@ -104,16 +104,9 @@ export default function CustomerDashboard() {
   }, [loadRestaurants]);
 
   useEffect(() => {
-    function loadMockActivity() {
-      setFavoriteIds(customerService.getFavoriteRestaurants());
-      const ords = customerService.getOrders();
-      setActiveOrders(ords.filter((o) => !['Completed', 'Cancelled', 'Rejected'].includes(o.overallStatus)));
-      const resvs = customerService.getReservations();
-      setUpcomingReservations(resvs.filter((r) => r.status === 'Confirmed'));
-    }
-    loadMockActivity();
-    window.addEventListener('salo:demoStoreUpdated', loadMockActivity);
-    return () => window.removeEventListener('salo:demoStoreUpdated', loadMockActivity);
+    setFavoriteIds(customerService.getFavoriteRestaurants());
+    setActiveOrders(customerService.getOrders());
+    setUpcomingReservations(customerService.getReservations());
   }, []);
 
   useEffect(() => {
@@ -130,10 +123,8 @@ export default function CustomerDashboard() {
 
   const filteredRestaurants = restaurants;
 
-  const handleToggleFavorite = (restaurantId, event) => {
+  const handleToggleFavorite = (_restaurantId, event) => {
     if (event) event.stopPropagation();
-    const next = customerService.toggleFavoriteRestaurant(restaurantId);
-    setFavoriteIds(next);
   };
 
   const spotlightRestaurant =

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import cleanupLegacyDemoStorage from './utils/cleanupLegacyDemoStorage';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import ProtectedRoute from './routes/ProtectedRoute';
 import RequireAccess from './routes/RequireAccess';
@@ -476,6 +477,10 @@ function AppShell() {
 }
 
 export default function App() {
+  useEffect(() => {
+    cleanupLegacyDemoStorage();
+  }, []);
+
   return (
     <ErrorBoundary>
       <Suspense fallback={<PageLoader />}>

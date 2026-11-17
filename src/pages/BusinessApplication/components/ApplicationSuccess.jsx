@@ -86,17 +86,6 @@ export default function ApplicationSuccess({
           </ol>
         </div>
 
-        <div className="wizard-mock-notice">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
-          </svg>
-          <span>
-            <strong>Frontend Simulation:</strong> This application has been saved to your local browser session and synchronized with SALO demo admin services.
-          </span>
-        </div>
-
         {/* Action Buttons */}
         <div className="wizard-success-actions">
           <Button

@@ -410,7 +410,7 @@ export function RoleOnboardingModal({
     );
 
     try {
-      const created = await locationApiService.createCustomerAddress({
+      await locationApiService.createCustomerAddress({
         label: addressPayload.label || 'Home',
         recipient_name: addressPayload.recipientName || user?.name || user?.username || '',
         recipient_phone: normalizedRecipientPhone || null,
@@ -427,17 +427,7 @@ export function RoleOnboardingModal({
         is_default: true,
       });
 
-      try {
-        addressService.addAddress({
-          ...addressPayload,
-          id: created?.id ? `addr-${created.id}` : undefined,
-          mobileNumber: normalizedRecipientPhone || addressPayload.mobileNumber,
-          phone: normalizedRecipientPhone || addressPayload.phone,
-          isDefault: true,
-        });
-      } catch {
-        // Ignore if local mock address book is at capacity
-      }
+      await addressService.fetchAddresses();
 
       setAddressSaved(true);
       setStepIndex((idx) => Math.min(steps.length - 1, idx + 1));

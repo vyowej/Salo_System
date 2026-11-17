@@ -1,0 +1,115 @@
+.salo-linked-account-card {
+  background: var(--surface-secondary, #f8f9fa);
+  border: 1px solid var(--border-secondary, #e5e7eb);
+  border-radius: var(--radius-lg, 12px);
+  padding: var(--space-4, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+[data-theme="dark"] .salo-linked-account-card {
+  background: #252529;
+  border-color: #353539;
+}
+
+.salo-linked-account-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  flex-wrap: wrap;
+}
+
+.salo-linked-account-title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+}
+
+.salo-linked-account-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--salo-orange-light, #f9ede7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.salo-linked-account-title {
+  margin: 0;
+  font-size: var(--text-sm, 14px);
+  font-weight: 700;
+  color: var(--text-primary, #171717);
+}
+
+.salo-linked-account-subtitle {
+  margin: 2px 0 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary, #525252);
+}
+
+.salo-linked-account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3, 12px);
+  background: var(--surface-primary, #ffffff);
+  border: 1px solid var(--border-secondary, #f1f3f5);
+  border-radius: var(--radius-md, 10px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+}
+
+[data-theme="dark"] .salo-linked-account-grid {
+  background: #1c1c20;
+  border-color: #2e2e32;
+}
+
+.salo-linked-account-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.salo-linked-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #737373);
+}
+
+.salo-linked-field-value {
+  font-size: var(--text-sm, 14px);
+  font-weight: 600;
+  color: var(--text-primary, #171717);
+  word-break: break-word;
+}
+
+.salo-linked-account-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary, #525252);
+  flex-wrap: wrap;
+}
+
+.salo-linked-account-link {
+  color: var(--salo-orange, #f36b2b);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.salo-linked-account-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .salo-linked-account-grid {
+    grid-template-columns: 1fr;
+  }
+}

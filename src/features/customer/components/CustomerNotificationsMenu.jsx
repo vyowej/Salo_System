@@ -60,10 +60,8 @@ export default function CustomerNotificationsMenu() {
     const sync = () => setNotifications(customerService.getNotifications());
     sync();
     window.addEventListener('salo:notificationsUpdated', sync);
-    window.addEventListener('salo:demoStoreUpdated', sync);
     return () => {
       window.removeEventListener('salo:notificationsUpdated', sync);
-      window.removeEventListener('salo:demoStoreUpdated', sync);
     };
   }, []);
 
@@ -71,9 +69,6 @@ export default function CustomerNotificationsMenu() {
   const latestEight = notifications.slice(0, 8);
 
   const handleItemClick = (item) => {
-    if (!item.read) {
-      customerService.markNotificationRead(item.id);
-    }
     setOpen(false);
     navigate(getNotificationTarget(item));
   };

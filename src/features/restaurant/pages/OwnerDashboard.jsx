@@ -8,7 +8,6 @@ import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import { ErrorState, LoadingSpinner } from '../../../components/feedback';
 import SetupChecklistCard from '../components/SetupChecklistCard';
 import { useRoleOnboarding } from '../../../hooks/useRoleOnboarding';
-import { DASHBOARD_ACTIVITY_SAMPLES } from './team/dashboardSamples';
 import './team/r7Dashboard.css';
 
 function formatPeso(amount) {
@@ -140,8 +139,6 @@ export default function OwnerDashboard() {
 
   useEffect(() => {
     loadDashboard();
-    window.addEventListener('salo:demoStoreUpdated', loadDashboard);
-    return () => window.removeEventListener('salo:demoStoreUpdated', loadDashboard);
   }, [loadDashboard]);
 
   function handleOrderAction(orderId, newStatus) {
@@ -208,7 +205,7 @@ export default function OwnerDashboard() {
       </div>
 
       <section className="r7-dashboard-additions" aria-label="Additional restaurant summaries">
-        <div className="r7-dashboard-additions-heading"><div><p className="r7-eyebrow">QUICK HEALTH CHECK</p><h2 className="section-title">More at a glance</h2></div><span>Live demo summaries</span></div>
+        <div className="r7-dashboard-additions-heading"><div><p className="r7-eyebrow">QUICK HEALTH CHECK</p><h2 className="section-title">More at a glance</h2></div><span>Live summaries</span></div>
         <div className="r7-dashboard-summary-grid">
           <StatCard label="Today's Sales" value={formatPeso(stats.todayRevenue)} sub="Open sales reports" tone="gold" icon="₱" to="/owner/reports" />
           <StatCard label="This Week" value={formatPeso(summary?.weeklyRevenue ?? 0)} sub="Sales total · open reports" tone="gold" icon="↗" to="/owner/reports" />
@@ -410,8 +407,8 @@ export default function OwnerDashboard() {
       </section>
 
       <section className="r7-dashboard-activity" aria-labelledby="r7-dashboard-activity-title">
-        <div className="r7-dashboard-additions-heading"><div><p className="r7-eyebrow">SAMPLE PREVIEW</p><h2 id="r7-dashboard-activity-title" className="section-title">Recent Activities</h2></div><span>Not a live activity feed</span></div>
-        <div className="r7-dashboard-activity-list">{DASHBOARD_ACTIVITY_SAMPLES.map((item) => <article key={item.id}><span className="r7-dashboard-activity-icon" aria-hidden="true">✦</span><span><strong>{item.title}</strong><small>{item.detail} · {item.module}</small></span><time>{item.time}</time></article>)}</div>
+        <div className="r7-dashboard-additions-heading"><div><h2 id="r7-dashboard-activity-title" className="section-title">Recent Activities</h2></div><span>Activity feed pending backend</span></div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)', margin: 0 }}>No recent activity recorded yet.</p>
       </section>
 
       {/* ── Upcoming Reservations Strip ───────────────── */}

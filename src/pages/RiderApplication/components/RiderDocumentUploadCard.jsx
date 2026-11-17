@@ -165,9 +165,6 @@ export default function RiderDocumentUploadCard({
             ) : (
               <Badge variant="neutral" size="sm">Optional</Badge>
             )}
-            {isPhoto && (
-              <Badge variant="info" size="sm">Camera Supported</Badge>
-            )}
           </div>
           {description && <p className="rider-doc-desc">{description}</p>}
         </div>

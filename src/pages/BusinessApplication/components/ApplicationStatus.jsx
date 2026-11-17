@@ -5,9 +5,7 @@ import Badge from '../../../components/common/Badge';
 import { Card, CardBody } from '../../../components/common/Card';
 import {
   APPLICATION_STATUS_CONFIG,
-  MOCK_ADMIN_FEEDBACK_SAMPLES,
 } from '../constants/applicationDefaults';
-import adminService from '../../../services/adminService';
 import './ApplicationStatus.css';
 
 const TIMELINE_STEPS = [
@@ -20,25 +18,17 @@ const TIMELINE_STEPS = [
 export default function ApplicationStatus({
   initialStatus = 'Pending Review',
   applicationData = null,
-  onStatusChange,
 }) {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const [currentStatus, setCurrentStatus] = useState(initialStatus);
-  const [checklist, setChecklist] = useState(
-    MOCK_ADMIN_FEEDBACK_SAMPLES.Approved.activationChecklist
-  );
+  const [checklist, setChecklist] = useState([]);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
     setCurrentStatus(initialStatus);
   }, [initialStatus]);
-
-  const handleStatusSelect = (newStatus) => {
-    setCurrentStatus(newStatus);
-    onStatusChange?.(newStatus);
-  };
 
   const handleToggleChecklist = (id) => {
     setChecklist((prev) =>
@@ -66,35 +56,16 @@ export default function ApplicationStatus({
 
   // Find active admin request if any
   const pendingRequests = applicationData?.requestedDocuments || [];
-  const activeRequest = pendingRequests[pendingRequests.length - 1] || MOCK_ADMIN_FEEDBACK_SAMPLES['Additional Documents Required'];
+  const activeRequest = pendingRequests[pendingRequests.length - 1] || null;
 
   const handleSubmitRequestedDoc = () => {
     if (!uploadedFile) return;
-
-    const fileMeta = {
-      id: `req-doc-${Date.now()}`,
-      name: uploadedFile.name,
-      size: uploadedFile.size,
-      type: uploadedFile.type,
-      uploadedAt: new Date().toISOString(),
-    };
-
-    const restId = applicationData?.referenceNumber || applicationData?.id;
-    if (restId) {
-      try {
-        adminService.submitRequestedDocument(restId, activeRequest?.id, fileMeta);
-      } catch (e) {
-        console.warn('Could not sync requested doc to adminService', e);
-      }
-    }
-
-    setUploadedFile(null);
-    handleStatusSelect('Under Review');
+    setUploadError('Document upload from the status page is not available yet.');
   };
 
   const statusMeta = APPLICATION_STATUS_CONFIG[currentStatus] || APPLICATION_STATUS_CONFIG['Pending Review'];
-  const refNum = applicationData?.referenceNumber || 'SALO-APP-20261109-8421';
-  const restName = applicationData?.businessInfo?.restaurantName || applicationData?.name || 'Barrio Fiesta Bistro';
+  const refNum = applicationData?.referenceNumber || '—';
+  const restName = applicationData?.businessInfo?.restaurantName || applicationData?.name || 'Restaurant Application';
   const submittedDate = applicationData?.submittedAt
     ? new Date(applicationData.submittedAt).toLocaleDateString()
     : new Date().toLocaleDateString();
@@ -122,26 +93,6 @@ export default function ApplicationStatus({
 
   return (
     <div className="app-status-container">
-      {/* Simulation Pill Controls */}
-      <div className="status-simulation-panel">
-        <div className="simulation-header">
-          <span className="simulation-tag">Prototype Status Simulator</span>
-          <span className="simulation-subtext">Click any of the mock application states below to test:</span>
-        </div>
-        <div className="simulation-pills-row">
-          {Object.keys(APPLICATION_STATUS_CONFIG).map((statusKey) => (
-            <button
-              key={statusKey}
-              type="button"
-              className={`simulation-pill ${currentStatus === statusKey ? 'active' : ''}`}
-              onClick={() => handleStatusSelect(statusKey)}
-            >
-              {statusKey}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Main Status Header Card */}
       <Card className="status-hero-card">
         <CardBody>
@@ -297,16 +248,13 @@ export default function ApplicationStatus({
           <div className="correction-icon-wrap" aria-hidden="true">⚠️</div>
           <div className="correction-body">
             <h3 className="correction-title">Action Required: Correction Requested by Compliance</h3>
-            <div className="correction-meta-row">
-              <span>Reviewed by: <strong>{MOCK_ADMIN_FEEDBACK_SAMPLES['Needs Correction'].reviewedBy}</strong></span>
-              <span>•</span>
-              <span>Section: <strong>{MOCK_ADMIN_FEEDBACK_SAMPLES['Needs Correction'].flaggedSection}</strong></span>
-            </div>
-            <div className="correction-feedback-box">
-              <p className="correction-feedback-text">
-                "{MOCK_ADMIN_FEEDBACK_SAMPLES['Needs Correction'].feedback}"
-              </p>
-            </div>
+            {applicationData?.reviewerNote && (
+              <div className="correction-feedback-box">
+                <p className="correction-feedback-text">
+                  &ldquo;{applicationData.reviewerNote}&rdquo;
+                </p>
+              </div>
+            )}
             <div className="correction-actions">
               <Button
                 variant="primary"
@@ -335,9 +283,9 @@ export default function ApplicationStatus({
             <div className="approved-icon" aria-hidden="true">🎉</div>
             <div className="approved-copy">
               <h3 className="approved-title">Congratulations! Your Application is Approved!</h3>
-              <p className="approved-desc">
-                {MOCK_ADMIN_FEEDBACK_SAMPLES.Approved.note}
-              </p>
+              {applicationData?.reviewerNote && (
+                <p className="approved-desc">{applicationData.reviewerNote}</p>
+              )}
               <p className="approved-notice">
                 <em>Note:</em> Approval means your merchant agreement is active. Complete the 5 readiness items below before setting your store live for customer orders.
               </p>
@@ -382,12 +330,11 @@ export default function ApplicationStatus({
           <div className="rejected-icon" aria-hidden="true">✕</div>
           <div className="rejected-body">
             <h3 className="rejected-title">Application Status: Not Approved</h3>
-            <p className="rejected-reason">
-              <strong>Reason:</strong> {MOCK_ADMIN_FEEDBACK_SAMPLES.Rejected.reason}
-            </p>
-            <p className="rejected-details">
-              {MOCK_ADMIN_FEEDBACK_SAMPLES.Rejected.details}
-            </p>
+            {applicationData?.reviewerNote && (
+              <p className="rejected-reason">
+                <strong>Reason:</strong> {applicationData.reviewerNote}
+              </p>
+            )}
             <div className="rejected-actions">
               <Button
                 type="button"

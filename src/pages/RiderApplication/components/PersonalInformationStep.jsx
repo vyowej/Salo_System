@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Input, Select } from '../../../components/forms';
+import LinkedAccountBanner from '../../../components/application/LinkedAccountBanner';
 
 const GENDER_OPTIONS = [
   'Prefer not to say',
@@ -8,13 +9,26 @@ const GENDER_OPTIONS = [
   'Non-binary / Other',
 ];
 
+function splitAccountName(fullName) {
+  const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: '', lastName: '' };
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  };
+}
+
 export default function PersonalInformationStep({
   data,
   onChange,
   errors = {},
   currentUser = null,
+  verifiedEmail = '',
 }) {
   const [age, setAge] = useState(null);
+  const accountName = (currentUser?.name || '').trim();
+  const hasAccountName = Boolean(accountName);
 
   const handleChange = (field, value) => {
     onChange?.({
@@ -33,21 +47,28 @@ export default function PersonalInformationStep({
     });
   };
 
-  // Prefill personal info from authenticated customer profile if available and not yet set
+  // Auto-populate personal info from authenticated SALO account and keep verified email synced
   useEffect(() => {
-    if (currentUser && !data.firstName && !data.email) {
-      const nameParts = (currentUser.name || '').trim().split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+    const updates = {};
+    if (accountName) {
+      const { firstName, lastName } = splitAccountName(accountName);
+      if (firstName && data.firstName !== firstName) updates.firstName = firstName;
+      if (lastName && data.lastName !== lastName) updates.lastName = lastName;
+    }
+    const targetEmail = verifiedEmail || currentUser?.email || '';
+    if (targetEmail && data.email !== targetEmail) {
+      updates.email = targetEmail;
+    }
+    if (currentUser?.phone && !data.phone) {
+      updates.phone = currentUser.phone;
+    }
+    if (Object.keys(updates).length > 0) {
       onChange?.({
         ...data,
-        firstName: data.firstName || firstName,
-        lastName: data.lastName || lastName,
-        email: data.email || currentUser.email || '',
-        phone: data.phone || currentUser.phone || '',
+        ...updates,
       });
     }
-  }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accountName, verifiedEmail, currentUser?.phone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Calculate age for instant feedback inside effect to preserve render purity
   useEffect(() => {
@@ -84,6 +105,12 @@ export default function PersonalInformationStep({
       </div>
 
       <div className="rider-form-grid">
+        <LinkedAccountBanner
+          accountName={accountName}
+          verifiedEmail={verifiedEmail || data.email}
+          roleLabel="Applicant Name"
+        />
+
         <div className="grid-cols-2">
           <Input
             id="rider-first-name"
@@ -92,6 +119,8 @@ export default function PersonalInformationStep({
             value={data.firstName || ''}
             onChange={(e) => handleChange('firstName', e.target.value)}
             error={errors.firstName}
+            disabled={hasAccountName && Boolean(data.firstName)}
+            helper={hasAccountName ? 'Populated from your SALO account.' : undefined}
             required
           />
 
@@ -112,6 +141,8 @@ export default function PersonalInformationStep({
             value={data.lastName || ''}
             onChange={(e) => handleChange('lastName', e.target.value)}
             error={errors.lastName}
+            disabled={hasAccountName && Boolean(data.lastName)}
+            helper={hasAccountName ? 'Populated from your SALO account.' : undefined}
             required
           />
 
@@ -158,31 +189,17 @@ export default function PersonalInformationStep({
           </Select>
         </div>
 
-        <div className="grid-cols-2">
-          <Input
-            id="rider-email"
-            type="email"
-            label="Email Address"
-            placeholder="e.g. juandelacruz@example.com"
-            value={data.email || ''}
-            onChange={(e) => handleChange('email', e.target.value)}
-            error={errors.email}
-            required
-            helper={data.email ? 'Authenticated via Step 1 OTP ✓' : 'Contact email for courier dispatch.'}
-          />
-
-          <Input
-            id="rider-phone"
-            type="tel"
-            label="Philippine Mobile Number"
-            placeholder="e.g. 0917-123-4567"
-            value={data.phone || ''}
-            onChange={(e) => handleChange('phone', e.target.value)}
-            error={errors.phone}
-            required
-            helper="Primary number for delivery dispatch and customer calls."
-          />
-        </div>
+        <Input
+          id="rider-phone"
+          type="tel"
+          label="Philippine Mobile Number"
+          placeholder="e.g. 0917-123-4567"
+          value={data.phone || ''}
+          onChange={(e) => handleChange('phone', e.target.value)}
+          error={errors.phone}
+          required
+          helper="Primary number for delivery dispatch and customer calls."
+        />
 
         {/* Residential Address Section */}
         <div className="rider-subform-section">

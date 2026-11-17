@@ -53,10 +53,8 @@ export default function NotificationsPage() {
     };
     sync();
     window.addEventListener('salo:notificationsUpdated', sync);
-    window.addEventListener('salo:demoStoreUpdated', sync);
     return () => {
       window.removeEventListener('salo:notificationsUpdated', sync);
-      window.removeEventListener('salo:demoStoreUpdated', sync);
     };
   }, []);
 
@@ -77,9 +75,6 @@ export default function NotificationsPage() {
   }, [visible]);
 
   const handleCardClick = (notification) => {
-    if (!notification.read) {
-      customerService.markNotificationRead(notification.id);
-    }
     navigate(getNotificationTarget(notification));
   };
 
@@ -113,17 +108,9 @@ export default function NotificationsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={unreadCount === 0}
-                onClick={() => customerService.markAllNotificationsRead()}
+                disabled
               >
                 Mark all as read
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => customerService.clearNotifications()}
-              >
-                Clear all
               </Button>
             </div>
           )}
@@ -165,20 +152,6 @@ export default function NotificationsPage() {
 
                   <div className="customer-notifications-card-side">
                     <span className="customer-notifications-time">{notification.time}</span>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (notification.read) {
-                          customerService.markNotificationUnread(notification.id);
-                        } else {
-                          customerService.markNotificationRead(notification.id);
-                        }
-                      }}
-                    >
-                      {notification.read ? 'Mark as unread' : 'Mark as read'}
-                    </Button>
                   </div>
                 </article>
               ))}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
 import useAddresses from '../../../hooks/useAddresses';
@@ -17,8 +17,7 @@ const PAYMENT_METHODS = [
 ];
 
 export default function CheckoutPage() {
-  const navigate = useNavigate();
-  const { restaurantGroups, itemsSubtotal, totalDeliveryFees, grandTotal, clearCart, setRestaurantAddress } = useCart();
+  const { restaurantGroups, itemsSubtotal, totalDeliveryFees, grandTotal, setRestaurantAddress } = useCart();
   const { addresses, addAddress } = useAddresses();
 
   const [paymentMethod, setPaymentMethod] = useState('cod');
@@ -28,8 +27,8 @@ export default function CheckoutPage() {
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [targetRestaurantIdForNewAddress, setTargetRestaurantIdForNewAddress] = useState(null);
 
-  const handleModalSaveAddress = (newAddrPayload) => {
-    const saved = addAddress(newAddrPayload);
+  const handleModalSaveAddress = async (newAddrPayload) => {
+    const saved = await addAddress(newAddrPayload);
     if (targetRestaurantIdForNewAddress && saved) {
       setRestaurantAddress(targetRestaurantIdForNewAddress, saved);
     }
@@ -90,72 +89,11 @@ export default function CheckoutPage() {
             if (err?.message && /outside|service area|does not deliver/i.test(err.message)) {
               throw err;
             }
-            // If backend service area table is not seeded in demo mode, continue with client check
           }
         }
       }
 
-      // Build sub-orders structure compliant with SALO Business Rules Part II
-      const subOrders = restaurantGroups.map((group, idx) => ({
-        id: `SUB-${Date.now().toString().slice(-4)}-${String.fromCharCode(65 + idx)}`,
-        restaurantId: group.restaurantId,
-        restaurantName: group.restaurantName,
-        deliveryAddressId: group.fulfillment === 'delivery' ? (group.deliveryAddress?.id || null) : null,
-        deliveryAddress: group.fulfillment === 'delivery'
-          ? [
-              group.deliveryAddress?.houseNumber,
-              group.deliveryAddress?.street,
-              group.deliveryAddress?.barangay && `Brgy. ${group.deliveryAddress.barangay}`,
-              group.deliveryAddress?.city,
-              group.deliveryAddress?.province,
-            ].filter(Boolean).join(', ') || 'Default Delivery Address'
-          : 'Pickup at Restaurant Counter',
-        deliveryCoordinates: group.fulfillment === 'delivery' && group.deliveryAddress
-          ? {
-              lat: group.deliveryAddress.lat ?? group.deliveryAddress.latitude ?? null,
-              lng: group.deliveryAddress.lng ?? group.deliveryAddress.longitude ?? null,
-            }
-          : null,
-        fulfillment: group.fulfillment,
-        pickupInformation: group.fulfillment === 'pickup'
-          ? 'Pickup at the selected restaurant counter.'
-          : null,
-        deliveryFee: group.fulfillment === 'delivery' ? group.deliveryFee : 0,
-        deliveryInstructions: group.fulfillment === 'delivery' ? group.deliveryAddress?.notes || '' : '',
-        subtotal: group.subtotal,
-        status: 'Pending Confirmation',
-        items: group.items.map((i) => ({
-          menuItemId: i.id,
-          name: i.name,
-          qty: i.quantity,
-          price: i.unitTotal,
-          basePrice: i.price,
-          addOns: (i.selectedAddOns || []).map((a) => ({ name: a.name, price: Number(a.price || 0) })),
-          image: i.image,
-        })),
-        rider: {
-          name: 'Assigning rider upon preparation...',
-          vehicle: '-',
-          phone: '-',
-          eta: 'Pending kitchen acceptance',
-        },
-      }));
-
-      const createdOrder = customerService.createOrder({
-        totalAmount: grandTotal,
-        paymentMethod: PAYMENT_METHODS.find((p) => p.id === paymentMethod)?.name || 'Cash on Delivery',
-        paymentStatus: paymentMethod === 'cod' ? 'Pending COD Collection' : 'Paid Online (Verified)',
-        orderNotes: orderNotes.trim(),
-        priority: false,
-        subOrders,
-        overallStatus: 'Confirmed',
-      });
-
-      // Clear multi-cart upon successful placement
-      clearCart();
-
-      // Navigate to order tracking page
-      navigate(`/customer/orders/${createdOrder.id}`);
+      throw new Error('Order submission is not available yet. The checkout API endpoint is pending backend implementation.');
     } catch (err) {
       setError(err?.message || 'Failed to submit consolidated order. Please try again.');
     } finally {

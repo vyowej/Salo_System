@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { Input, Textarea, Select, FormGroup, Label, HelperText } from '../../../components/forms';
-import Badge from '../../../components/common/Badge';
 import {
   BUSINESS_TYPES,
   OWNERSHIP_STRUCTURES,
@@ -22,14 +21,13 @@ export default function BusinessInformationStep({
     });
   };
 
-  // Pre-fill business email from verified Step 1 email if not set
+  // Pre-fill business email from verified Step 1 email
   useEffect(() => {
-    if (verifiedEmail && !data.businessEmail) {
+    if (verifiedEmail && data.businessEmail !== verifiedEmail) {
       handleChange('businessEmail', verifiedEmail);
     }
   }, [verifiedEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isEmailVerified = verifiedEmail && data.businessEmail === verifiedEmail;
   const descLength = (data.description || '').length;
 
   return (
@@ -124,25 +122,6 @@ export default function BusinessInformationStep({
             error={errors.businessPhone}
             required
             helper="For official SALO operations and customer order support."
-          />
-        </div>
-
-        <div>
-          <Input
-            id="biz-email"
-            type="email"
-            label="Official Business Email Address"
-            placeholder="e.g. contact@barriofiesta.ph"
-            value={data.businessEmail || ''}
-            onChange={(e) => handleChange('businessEmail', e.target.value)}
-            error={errors.businessEmail}
-            required
-            rightIcon={isEmailVerified ? <Badge variant="success" size="sm">Verified ✓</Badge> : null}
-            helper={
-              isEmailVerified
-                ? 'Pre-filled and verified from Step 1.'
-                : 'Official communications and partner updates will be sent here.'
-            }
           />
         </div>
 

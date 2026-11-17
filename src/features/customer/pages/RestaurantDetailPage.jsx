@@ -242,13 +242,11 @@ export default function RestaurantDetailPage() {
           <div className="rdp-hero-scrim" aria-hidden="true" />
           <button
             type="button"
-            onClick={() => {
-              if (!restaurant) return;
-              const next = customerService.toggleFavoriteRestaurant(restaurant.id);
-              setIsFavorite(next.includes(restaurant.id));
-            }}
+            onClick={() => {}}
             className={`rdp-hero-favorite${isFavorite ? ' is-favorite' : ''}`}
             aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            disabled
+            title="Favorites are not available yet"
           >
             {isFavorite ? '♥' : '♡'}
           </button>

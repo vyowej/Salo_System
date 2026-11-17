@@ -1,5 +1,3 @@
-import demoAdapter from './demo/demoAdapter';
-
 const STORAGE_BASE_URL = (import.meta.env?.VITE_STORAGE_URL || '/storage').replace(/\/$/, '');
 
 export function sanitizeStorageFileName(fileName = 'image.webp') {
@@ -38,17 +36,34 @@ export function resolvePublicStorageUrl(value) {
   return `${STORAGE_BASE_URL}/${normalizedPath}`;
 }
 
-/**
- * Restaurant service boundary. Replace this adapter with authenticated API
- * implementations when the Laravel endpoints are available.
- */
+export async function getImageUrl(image) {
+  return resolvePublicStorageUrl(image);
+}
+
+export async function uploadImage() {
+  throw new Error('Image upload is not available yet. The backend media upload API is pending implementation.');
+}
+
+export async function removeImage() {
+  return undefined;
+}
+
+export function getOperatingHours() {
+  return null;
+}
+
+export function updateOperatingHours() {
+  throw new Error('Updating operating hours is not available yet. The backend API is pending implementation.');
+}
+
 export const restaurantService = {
-  get dataSource() {
-    return 'demo';
-  },
-  ...demoAdapter,
   buildRestaurantStoragePath,
   resolvePublicStorageUrl,
+  getImageUrl,
+  uploadImage,
+  removeImage,
+  getOperatingHours,
+  updateOperatingHours,
 };
 
 export default restaurantService;

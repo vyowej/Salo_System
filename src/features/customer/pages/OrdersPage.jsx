@@ -71,10 +71,7 @@ export default function OrdersPage() {
   const activeTab = TABS.some((t) => t.id === rawTab) ? rawTab : 'upcoming';
 
   useEffect(() => {
-    const refreshOrders = () => setOrders(customerService.getOrders());
-    refreshOrders();
-    window.addEventListener('salo:demoStoreUpdated', refreshOrders);
-    return () => window.removeEventListener('salo:demoStoreUpdated', refreshOrders);
+    setOrders(customerService.getOrders());
   }, []);
 
   const handleTabChange = (tabId) => {

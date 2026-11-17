@@ -13,28 +13,28 @@ import './ActiveStatusStrip.css';
  */
 export default function ActiveStatusStrip({ activeOrder, activeOrders = [], reservation }) {
   const upcomingCount = Array.isArray(activeOrders) ? activeOrders.length : activeOrder ? 1 : 0;
+  const hasOrder = upcomingCount > 0 || Boolean(activeOrder);
+
+  if (!hasOrder && !reservation) {
+    return null;
+  }
+
   const hasMultipleOrders = upcomingCount > 1;
-  const singleCard = !reservation;
+  const singleCard = !(hasOrder && reservation);
 
   const trackHref = hasMultipleOrders
     ? '/customer/orders?tab=upcoming'
-    : activeOrder
-      ? `/customer/orders/${activeOrder.id}`
-      : '/customer/orders/track';
+    : `/customer/orders/${activeOrder?.id}`;
 
   const orderTitle = hasMultipleOrders
     ? `${upcomingCount} active orders in progress`
-    : activeOrder
-      ? 'Your order is on the way!'
-      : 'Track My Order';
+    : 'Your order is on the way!';
 
   const orderSub = hasMultipleOrders
     ? 'Multiple orders placed · Click Track Order to view live map'
-    : activeOrder
-      ? `Order #${activeOrder.id} · ${activeOrder.subOrders?.length ?? 1} ${
-          (activeOrder.subOrders?.length ?? 1) === 1 ? 'restaurant' : 'restaurants'
-        }`
-      : 'No upcoming orders · Open live delivery map & order lookup';
+    : `Order #${activeOrder?.id} · ${activeOrder?.subOrders?.length ?? 1} ${
+        (activeOrder?.subOrders?.length ?? 1) === 1 ? 'restaurant' : 'restaurants'
+      }`;
 
   return (
     <div
@@ -42,25 +42,27 @@ export default function ActiveStatusStrip({ activeOrder, activeOrders = [], rese
       role="status"
       aria-label="Live activity tracker"
     >
-      {/* ── Track My Order card (Always accessible above the promo card) ── */}
-      <div className="status-card">
-        <span className="status-card__icon status-card__icon--order" aria-hidden="true">
-          {activeOrder ? '🛵' : '🗺️'}
-        </span>
+      {/* ── Track My Order card (shown only when user has an active order) ── */}
+      {hasOrder && (
+        <div className="status-card">
+          <span className="status-card__icon status-card__icon--order" aria-hidden="true">
+            🛵
+          </span>
 
-        <div className="status-card__body">
-          <span className="status-card__title">{orderTitle}</span>
-          <span className="status-card__sub">{orderSub}</span>
+          <div className="status-card__body">
+            <span className="status-card__title">{orderTitle}</span>
+            <span className="status-card__sub">{orderSub}</span>
+          </div>
+
+          <Link
+            to={trackHref}
+            className="status-card__link status-card__link--order"
+            aria-label="Track your order"
+          >
+            Track My Order&nbsp;→
+          </Link>
         </div>
-
-        <Link
-          to={trackHref}
-          className="status-card__link status-card__link--order"
-          aria-label="Track your order"
-        >
-          Track My Order&nbsp;→
-        </Link>
-      </div>
+      )}
 
       {/* ── Reservation card ── */}
       {reservation && (

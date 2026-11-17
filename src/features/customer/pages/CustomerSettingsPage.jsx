@@ -40,7 +40,7 @@ export default function CustomerSettingsPage() {
   const sections = getSettingsSectionsForRole('customer');
 
   const [activeSection, setActiveSection] = useState('account');
-  const [email, setEmail] = useState(user?.email || 'customer@salo.local');
+  const [email, setEmail] = useState(user?.email || '');
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const [security, setSecurity] = useState(INITIAL_SECURITY);
   const [privacy, setPrivacy] = useState(INITIAL_PRIVACY);
@@ -52,7 +52,7 @@ export default function CustomerSettingsPage() {
   const addAddressBtnRef = useRef(null);
 
   const profileName = user?.name || user?.username || 'Customer';
-  const profileEmail = user?.email || user?.username || 'customer@salo.local';
+  const profileEmail = user?.email || user?.username || '';
   const initials = profileName.slice(0, 2).toUpperCase();
 
   const handleSave = () => {

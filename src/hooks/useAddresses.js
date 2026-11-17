@@ -1,62 +1,66 @@
 import { useState, useEffect, useCallback } from 'react';
 import addressService, { ADDRESSES_CHANGED_EVENT } from '../services/addressService';
+import { useAuth } from './useAuth';
 
 /**
- * Shared hook for accessing and mutating customer delivery addresses.
- * Automatically synchronizes across all subscribed components and browser tabs.
+ * Shared hook for accessing and mutating customer delivery addresses
+ * backed by /api/customer/addresses.
  */
 export function useAddresses() {
+  const { user } = useAuth();
   const [addresses, setAddresses] = useState(() => addressService.getAddresses());
   const [defaultAddress, setDefaultAddressState] = useState(() => addressService.getDefaultAddress());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const syncState = useCallback(() => {
-    const list = addressService.getAddresses();
-    setAddresses(list);
+  const syncFromCache = useCallback(() => {
+    setAddresses(addressService.getAddresses());
     setDefaultAddressState(addressService.getDefaultAddress());
   }, []);
 
+  const refreshAddresses = useCallback(async () => {
+    if (!user) {
+      addressService.clearCache();
+      return [];
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await addressService.fetchAddresses();
+      return list;
+    } catch (err) {
+      setError(err?.message || 'Unable to load saved addresses.');
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    refreshAddresses();
+  }, [refreshAddresses]);
 
-    const handleCustomChange = () => syncState();
-    const handleStorageChange = (e) => {
-      if (!e.key || e.key === 'salo_customer_addresses' || e.key === 'salo_addresses') {
-        syncState();
-      }
-    };
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    window.addEventListener(ADDRESSES_CHANGED_EVENT, syncFromCache);
+    return () => window.removeEventListener(ADDRESSES_CHANGED_EVENT, syncFromCache);
+  }, [syncFromCache]);
 
-    window.addEventListener(ADDRESSES_CHANGED_EVENT, handleCustomChange);
-    window.addEventListener('storage', handleStorageChange);
+  const addAddress = useCallback(async (data) => {
+    return addressService.addAddress(data);
+  }, []);
 
-    return () => {
-      window.removeEventListener(ADDRESSES_CHANGED_EVENT, handleCustomChange);
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [syncState]);
+  const updateAddress = useCallback(async (id, data) => {
+    return addressService.updateAddress(id, data);
+  }, []);
 
-  const addAddress = useCallback((data) => {
-    const result = addressService.addAddress(data);
-    syncState();
-    return result;
-  }, [syncState]);
+  const deleteAddress = useCallback(async (id) => {
+    return addressService.deleteAddress(id);
+  }, []);
 
-  const updateAddress = useCallback((id, data) => {
-    const result = addressService.updateAddress(id, data);
-    syncState();
-    return result;
-  }, [syncState]);
-
-  const deleteAddress = useCallback((id) => {
-    const result = addressService.deleteAddress(id);
-    syncState();
-    return result;
-  }, [syncState]);
-
-  const setDefaultAddress = useCallback((id) => {
-    const result = addressService.setDefaultAddress(id);
-    syncState();
-    return result;
-  }, [syncState]);
+  const setDefaultAddress = useCallback(async (id) => {
+    return addressService.setDefaultAddress(id);
+  }, []);
 
   const checkDuplicate = useCallback((data, excludeId) => {
     return addressService.checkDuplicate(data, excludeId);
@@ -65,6 +69,9 @@ export function useAddresses() {
   return {
     addresses,
     defaultAddress,
+    loading,
+    error,
+    refreshAddresses,
     addAddress,
     updateAddress,
     deleteAddress,

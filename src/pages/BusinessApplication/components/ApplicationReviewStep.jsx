@@ -1,7 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { getDocumentClassification } from '../constants/documentRequirements';
+
+const REVIEW_DECLARATION_FIELDS = [
+  'infoConfirmed',
+  'authorizationConfirmed',
+  'termsAgreed',
+];
 
 export default function ApplicationReviewStep({
   applicationData,
@@ -29,6 +35,8 @@ export default function ApplicationReviewStep({
     );
   }, [businessInfo.ownershipStructure, representative.position]);
 
+  const agreeAllRef = useRef(null);
+
   const handleCheckboxChange = (field, checked) => {
     onDeclarationChange?.({
       ...review,
@@ -36,12 +44,25 @@ export default function ApplicationReviewStep({
     });
   };
 
-  const isAllDeclarationsConfirmed =
-    Boolean(review.infoConfirmed) &&
-    Boolean(review.authorizationConfirmed) &&
-    Boolean(review.termsAgreed);
+  const isAllDeclarationsConfirmed = REVIEW_DECLARATION_FIELDS.every((field) => Boolean(review[field]));
+  const isPartiallyDeclared =
+    !isAllDeclarationsConfirmed && REVIEW_DECLARATION_FIELDS.some((field) => Boolean(review[field]));
 
-  const isReadyToSubmit = isAllDeclarationsConfirmed && allRequiredValid && !submitting;
+  const handleAgreeAllChange = (checked) => {
+    onDeclarationChange?.({
+      ...review,
+      ...Object.fromEntries(REVIEW_DECLARATION_FIELDS.map((field) => [field, checked])),
+    });
+  };
+
+  useEffect(() => {
+    if (agreeAllRef.current) {
+      agreeAllRef.current.indeterminate = isPartiallyDeclared;
+    }
+  }, [isPartiallyDeclared]);
+
+  const isReadyToSubmit =
+    isAllDeclarationsConfirmed && allRequiredValid && Boolean(emailVerification.isVerified) && !submitting;
 
   const menuItemsCount = (configuration.menuItems || []).length;
 
@@ -424,68 +445,113 @@ export default function ApplicationReviewStep({
         </div>
       </div>
 
-      {/* Declarations & Submission Card */}
+      {/* Declarations & Submission Card (Standardized with Rider Agreement Interface) */}
       <div className="review-submission-box">
-        <h3 className="submission-box-title">Legal Declarations & Merchant Agreement</h3>
-        <p className="submission-box-subtitle">
-          Please confirm all three statements to enable application submission:
-        </p>
+        <h3 className="submission-box-title">SALO Merchant Partner Terms & Legal Declarations</h3>
+        <div className="agreement-scroll-box">
+          <h4>1. Accuracy of Business & Permit Records</h4>
+          <p>
+            All business registration documents, government permits (DTI/SEC/CDA, Mayor’s Permit, BIR Form 2303, Sanitary & Fire Safety Permits), and bank settlement details submitted must be genuine, current, and legally valid.
+          </p>
 
-        <div className="submission-checkboxes-stack">
-          <label className="submission-check-row">
+          <h4>2. Food Safety & Order Quality Standards</h4>
+          <p>
+            Partner kitchens must prepare, package, and seal orders in compliance with the Philippine Food Safety Act (RA 10611) and local sanitation ordinances, ensuring tamper-evident handoff to SALO delivery partners.
+          </p>
+
+          <h4>3. Settlements, Commission & Payouts</h4>
+          <p>
+            Approved restaurant partners receive automated sales remittances to their verified bank account via PESONet or InstaPay according to SALO’s published merchant settlement schedule and transparent commission rates.
+          </p>
+
+          <h4>4. Data Privacy & Customer Confidentiality</h4>
+          <p>
+            Customer order details and contact information provided through SALO must be used solely for fulfilling orders and reservations in compliance with the Data Privacy Act of 2012 (RA 10173).
+          </p>
+        </div>
+
+        <div className="agreement-checkboxes-stack">
+          <label className="agreement-check-row agreement-check-all">
             <input
+              ref={agreeAllRef}
+              type="checkbox"
+              checked={isAllDeclarationsConfirmed}
+              onChange={(e) => handleAgreeAllChange(e.target.checked)}
+              className="wizard-checkbox-input"
+              aria-controls="biz-decl-info biz-decl-auth biz-decl-terms"
+            />
+            <span className="agreement-check-text">Agree to all declarations</span>
+          </label>
+
+          <label className="agreement-check-row">
+            <input
+              id="biz-decl-info"
               type="checkbox"
               checked={Boolean(review.infoConfirmed)}
               onChange={(e) => handleCheckboxChange('infoConfirmed', e.target.checked)}
+              className="wizard-checkbox-input"
             />
-            <span>
-              <strong>Accuracy of Information:</strong> I declare under penalty of perjury that all submitted restaurant
-              information, uploaded business permits, and banking details are genuine, accurate, and up-to-date.
+            <span className="agreement-check-text">
+              <strong>Accuracy of Information:</strong> I confirm that all submitted restaurant information, uploaded business permits, and banking details are genuine, accurate, and up-to-date.
             </span>
           </label>
 
-          <label className="submission-check-row">
+          <label className="agreement-check-row">
             <input
+              id="biz-decl-auth"
               type="checkbox"
               checked={Boolean(review.authorizationConfirmed)}
               onChange={(e) => handleCheckboxChange('authorizationConfirmed', e.target.checked)}
+              className="wizard-checkbox-input"
             />
-            <span>
-              <strong>Authority to Bind Establishment:</strong> I certify that I have the official mandate to bind this
-              operating restaurant to the SALO Merchant Terms and receive operational disbursement payouts.
+            <span className="agreement-check-text">
+              <strong>Authority to Bind Establishment:</strong> I certify that I am legally authorized to bind this restaurant to the SALO Merchant Terms and manage operational payouts.
             </span>
           </label>
 
-          <label className="submission-check-row">
+          <label className="agreement-check-row">
             <input
+              id="biz-decl-terms"
               type="checkbox"
               checked={Boolean(review.termsAgreed)}
               onChange={(e) => handleCheckboxChange('termsAgreed', e.target.checked)}
+              className="wizard-checkbox-input"
             />
-            <span>
-              <strong>Terms of Service & Food Safety Agreement:</strong> I agree to comply with SALO’s Merchant Terms of
-              Service, Philippine Food Safety Act (RA 10611), and Data Privacy Act (RA 10173).
+            <span className="agreement-check-text">
+              <strong>Terms of Service & Food Safety Agreement:</strong> I agree to the SALO Merchant Partner Terms of Service, Food Safety guidelines (RA 10611), and Platform Privacy Notice (RA 10173).
             </span>
           </label>
         </div>
+
+        {!isReadyToSubmit && (
+          <div className="wizard-validation-warning" role="alert">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>
+              {!emailVerification.isVerified
+                ? 'Please complete Step 1 (Email Verification) before submitting.'
+                : !isAllDeclarationsConfirmed
+                ? 'Please accept all declarations above to enable application submission.'
+                : 'Please complete all required fields and documents.'}
+            </span>
+          </div>
+        )}
 
         <div className="submission-action-bar">
           <Button
             type="button"
             variant="primary"
             size="lg"
+            fullWidth
             onClick={onSubmitApplication}
             loading={submitting}
             disabled={!isReadyToSubmit}
           >
-            {submitting ? 'Submitting Application...' : 'Submit Application →'}
+            {submitting ? 'Submitting Application...' : 'Submit Restaurant Application'}
           </Button>
-
-          {!isAllDeclarationsConfirmed && (
-            <span className="submission-hint-warning">
-              Please check all declarations above to enable submission.
-            </span>
-          )}
         </div>
       </div>
     </div>

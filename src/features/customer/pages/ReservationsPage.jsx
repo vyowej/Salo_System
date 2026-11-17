@@ -42,19 +42,14 @@ export default function ReservationsPage() {
   const todayKey = localDateKey(new Date());
 
   useEffect(() => {
-    const refresh = () => {
-      try {
-        setError('');
-        setReservations(customerService.getReservations());
-      } catch (loadError) {
-        setError(loadError.message || 'Unable to load your reservations.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    refresh();
-    window.addEventListener('salo:demoStoreUpdated', refresh);
-    return () => window.removeEventListener('salo:demoStoreUpdated', refresh);
+    try {
+      setError('');
+      setReservations(customerService.getReservations());
+    } catch (loadError) {
+      setError(loadError.message || 'Unable to load your reservations.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   // Summary counts
@@ -200,15 +195,8 @@ export default function ReservationsPage() {
 
   const handleConfirmCancel = () => {
     if (selectedResId) {
-      try {
-        setError('');
-        const updated = customerService.cancelReservation(selectedResId);
-        setReservations(updated);
-        setCancelModalOpen(false);
-        if (detailsRes?.id === selectedResId) setDetailsRes(null);
-      } catch (cancelError) {
-        setError(cancelError.message || 'Unable to request cancellation.');
-      }
+      setError('Reservation cancellation is not available yet. The reservation API is pending backend implementation.');
+      setCancelModalOpen(false);
     }
   };
 

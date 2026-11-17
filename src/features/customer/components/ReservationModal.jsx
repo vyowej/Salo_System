@@ -3,14 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Modal from '../../../components/common/Modal';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import customerService from '../../../services/customerService';
 import { useAuth } from '../../../hooks/useAuth';
-import {
-  computeSlotAvailability,
-  computeDayAvailability,
-  getMonthAvailabilityMap,
-  STANDARD_TIME_SLOTS,
-} from '../../../services/demo/reservationAvailability';
 
 const SEATING_AREAS = [
   { id: 'indoor', name: 'Main Indoor Hall', desc: 'Air-conditioned, cozy ambient lighting' },
@@ -25,7 +18,7 @@ function localDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
-export default function ReservationModal({ open, onClose, restaurant, onSuccess }) {
+export default function ReservationModal({ open, onClose, restaurant }) {
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -52,7 +45,7 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
   const [guestPhone, setGuestPhone] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting] = useState(false);
   const [confirmedReservation, setConfirmedReservation] = useState(null);
   const [formError, setFormError] = useState('');
 
@@ -65,23 +58,11 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
     }
   }, [user]);
 
-  const existingReservations = useMemo(() => {
-    return restaurant?.reservations || [];
-  }, [restaurant]);
+  // Pre-calculate month availability map (pending reservations backend)
+  const monthAvailability = useMemo(() => ({}), []);
 
-  // Pre-calculate month availability map
-  const monthAvailability = useMemo(() => {
-    if (!restaurant) return {};
-    const year = calendarDate.getFullYear();
-    const month = calendarDate.getMonth();
-    return getMonthAvailabilityMap(year, month, restaurant, existingReservations, Number(guests));
-  }, [calendarDate, restaurant, existingReservations, guests]);
-
-  // Compute selected day slots
-  const selectedDayData = useMemo(() => {
-    if (!restaurant || !date) return null;
-    return computeDayAvailability(date, restaurant, existingReservations, Number(guests));
-  }, [date, restaurant, existingReservations, guests]);
+  // Compute selected day slots (pending reservations backend)
+  const selectedDayData = useMemo(() => ({ slots: [] }), []);
 
   // Generate calendar days matrix
   const calendarDays = useMemo(() => {
@@ -149,12 +130,6 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
     if (!date) return 'Please choose a dining date on the availability calendar.';
     if (date < todayKey) return 'Reservations must be scheduled for today or a future date.';
     if (!time) return 'Please select an available arrival time slot.';
-
-    const slotAvail = computeSlotAvailability(time, date, restaurant, existingReservations, Number(guests));
-    if (!slotAvail.canAccommodate) {
-      return slotAvail.reason || 'This time slot cannot accommodate your requested party size.';
-    }
-
     if (!guestName.trim()) return 'Please provide the primary guest name.';
     if (!guestPhone.trim()) return 'Please provide a contact phone number for confirmation.';
 
@@ -168,32 +143,7 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
       return;
     }
 
-    setFormError('');
-    setIsSubmitting(true);
-    try {
-      const selectedAreaObj = SEATING_AREAS.find((s) => s.id === seatingArea);
-      const res = customerService.createReservation({
-        restaurantId: restaurant.id,
-        restaurantName: restaurant.name,
-        date,
-        time,
-        guests: Number(guests),
-        seatingArea: selectedAreaObj?.name || 'Main Indoor Hall',
-        depositAmount,
-        serviceFee,
-        specialRequests: specialRequests.trim(),
-        guestName: guestName.trim() || user?.name || 'Guest',
-        guestPhone: guestPhone.trim() || user?.phone || '',
-        guestEmail: guestEmail.trim() || user?.email || '',
-      });
-
-      setConfirmedReservation(res);
-      onSuccess?.(res);
-    } catch (submitError) {
-      setFormError(submitError.message || 'Unable to submit your reservation request.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    setFormError('Table reservations are not available yet. The reservation API endpoint is pending backend implementation.');
   };
 
   const handleResetAndClose = () => {
@@ -584,7 +534,7 @@ export default function ReservationModal({ open, onClose, restaurant, onSuccess 
                 overflowY: 'auto',
                 paddingRight: 2,
               }}>
-                {(selectedDayData?.slots || STANDARD_TIME_SLOTS.map((t) => ({ time: t, status: 'available', canAccommodate: true }))).map((slot) => {
+                {(selectedDayData?.slots || []).map((slot) => {
                   const isSelected = time === slot.time;
                   const isFull = slot.status === 'fully_booked';
                   const isClosed = slot.isClosed;

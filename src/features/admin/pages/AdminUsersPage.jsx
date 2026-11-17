@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
 import adminApiService from '../../../services/adminApiService';
-import { getAdminMock } from '../mocks';
 import {
   ConfirmDialog,
   DataTable,
@@ -19,8 +18,8 @@ import { ADMIN_ACCOUNT_CAPABILITIES, ADMIN_ACCOUNT_STATUSES } from '../constants
 import { formatDate, formatDateTime, formatPeso } from '../utils/format';
 import './AdminPages.css';
 
-const ORDERS = getAdminMock('orders').data;
-const RESERVATIONS = getAdminMock('reservations').data;
+const ORDERS = [];
+const RESERVATIONS = [];
 
 function mapBackendUser(user) {
   const fullName = [user.first_name, user.middle_initial ? `${user.middle_initial}.` : '', user.last_name]

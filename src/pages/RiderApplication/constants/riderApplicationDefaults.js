@@ -299,32 +299,3 @@ export const RIDER_STATUS_CONFIG = {
     progress: 100,
   },
 };
-
-export const MOCK_RIDER_ADMIN_FEEDBACK = {
-  'Needs Correction': {
-    reviewedBy: 'SALO Fleet Safety & Compliance (Officer R. Dalisay)',
-    reviewedAt: '2026-11-09T14:35:00Z',
-    flaggedSection: 'Driver & Vehicle Documents',
-    flaggedDocument: "Driver's License (Front & Back)",
-    feedback: "The uploaded Driver's License photo is blurry and the license expiry date is obscured. Please re-upload a clear, high-resolution color photo of both front and back with all four corners visible.",
-    actionPrompt: 'Update Driver’s License Document',
-  },
-  Rejected: {
-    reviewedBy: 'SALO Fleet Safety Committee',
-    reviewedAt: '2026-11-08T17:15:00Z',
-    reason: 'Vehicle does not meet current road safety and emissions standards, or incomplete background clearance.',
-    details: 'Our fleet intake requirements stipulate that all delivery vehicles must possess active registration and unblemished clearances. You may re-apply after 60 days with valid clearances.',
-  },
-  Approved: {
-    reviewedBy: 'SALO Rider Fleet Operations',
-    reviewedAt: '2026-11-09T12:00:00Z',
-    note: 'Welcome to the SALO Rider Partner Network! Your identity, vehicle registration, and background documents have passed compliance verification.',
-    activationChecklist: [
-      { id: 'guidelines', text: 'Review the SALO Rider Safety Handbook & Food Handling Guidelines', done: true },
-      { id: 'orientation', text: 'Watch the 10-minute online defensive driving & rider welfare orientation', done: true },
-      { id: 'gear', text: 'Schedule thermal delivery bag & uniform kit pickup at SALO Logistics Hub', done: false },
-      { id: 'dispatch_walkthrough', text: 'Walk through the live order acceptance, navigation, and COD flow in the Rider app', done: false },
-      { id: 'first_shift', text: 'Select your first delivery zone and submit your active weekly shift preferences', done: false },
-    ],
-  },
-};

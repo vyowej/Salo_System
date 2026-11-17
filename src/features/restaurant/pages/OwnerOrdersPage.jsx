@@ -110,8 +110,6 @@ export default function OwnerOrdersPage() {
 
   useEffect(() => {
     reload();
-    window.addEventListener('salo:demoStoreUpdated', reload);
-    return () => window.removeEventListener('salo:demoStoreUpdated', reload);
   }, [reload]);
 
   const filteredOrders = useMemo(() => {

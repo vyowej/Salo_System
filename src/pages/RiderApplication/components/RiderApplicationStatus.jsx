@@ -5,7 +5,6 @@ import Badge from '../../../components/common/Badge';
 import { Card, CardBody } from '../../../components/common/Card';
 import {
   RIDER_STATUS_CONFIG,
-  MOCK_RIDER_ADMIN_FEEDBACK,
 } from '../constants/riderApplicationDefaults';
 import './RiderApplicationStatus.css';
 
@@ -19,22 +18,14 @@ const RIDER_TIMELINE_STEPS = [
 export default function RiderApplicationStatus({
   initialStatus = 'Pending Review',
   applicationData = null,
-  onStatusChange,
 }) {
   const navigate = useNavigate();
   const [currentStatus, setCurrentStatus] = useState(initialStatus);
-  const [checklist, setChecklist] = useState(
-    MOCK_RIDER_ADMIN_FEEDBACK.Approved.activationChecklist
-  );
+  const [checklist, setChecklist] = useState([]);
 
   useEffect(() => {
     setCurrentStatus(initialStatus);
   }, [initialStatus]);
-
-  const handleStatusSelect = (newStatus) => {
-    setCurrentStatus(newStatus);
-    onStatusChange?.(newStatus);
-  };
 
   const handleToggleChecklist = (id) => {
     setChecklist((prev) =>
@@ -43,11 +34,11 @@ export default function RiderApplicationStatus({
   };
 
   const statusMeta = RIDER_STATUS_CONFIG[currentStatus] || RIDER_STATUS_CONFIG['Pending Review'];
-  const refNum = applicationData?.referenceNumber || 'SALO-RIDER-20261109-7814';
+  const refNum = applicationData?.referenceNumber || '—';
   const applicantName =
     applicationData?.personal?.firstName && applicationData?.personal?.lastName
       ? `${applicationData.personal.firstName} ${applicationData.personal.lastName}`
-      : applicationData?.name || 'Juan Dela Cruz';
+      : applicationData?.name || 'Rider Applicant';
   const deliveryMethod = applicationData?.deliveryMethod || 'motorcycle';
   const submittedDate = applicationData?.submittedAt
     ? new Date(applicationData.submittedAt).toLocaleDateString()
@@ -75,26 +66,6 @@ export default function RiderApplicationStatus({
 
   return (
     <div className="rider-app-status-container">
-      {/* Simulation Pill Controls */}
-      <div className="status-simulation-panel">
-        <div className="simulation-header">
-          <span className="simulation-tag">Rider Status Simulator</span>
-          <span className="simulation-subtext">Click any of the 8 mock application states below to evaluate UI:</span>
-        </div>
-        <div className="simulation-pills-row">
-          {Object.keys(RIDER_STATUS_CONFIG).map((statusKey) => (
-            <button
-              key={statusKey}
-              type="button"
-              className={`simulation-pill ${currentStatus === statusKey ? 'active' : ''}`}
-              onClick={() => handleStatusSelect(statusKey)}
-            >
-              {statusKey}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Main Status Hero Card */}
       <Card className="status-hero-card">
         <CardBody>
@@ -128,18 +99,13 @@ export default function RiderApplicationStatus({
           <div className="correction-icon-wrap" aria-hidden="true">⚠️</div>
           <div className="correction-body">
             <h3 className="correction-title">Action Required: Document Update Requested</h3>
-            <div className="correction-meta-row">
-              <span>Reviewed by: <strong>{MOCK_RIDER_ADMIN_FEEDBACK['Needs Correction'].reviewedBy}</strong></span>
-              <span>•</span>
-              <span>Flagged Section: <strong>{MOCK_RIDER_ADMIN_FEEDBACK['Needs Correction'].flaggedSection}</strong></span>
-              <span>•</span>
-              <span>Document: <strong>{MOCK_RIDER_ADMIN_FEEDBACK['Needs Correction'].flaggedDocument}</strong></span>
-            </div>
-            <div className="correction-feedback-box">
-              <p className="correction-feedback-text">
-                "{MOCK_RIDER_ADMIN_FEEDBACK['Needs Correction'].feedback}"
-              </p>
-            </div>
+            {applicationData?.reviewerNote && (
+              <div className="correction-feedback-box">
+                <p className="correction-feedback-text">
+                  &ldquo;{applicationData.reviewerNote}&rdquo;
+                </p>
+              </div>
+            )}
             <div className="correction-actions">
               <Button
                 variant="primary"
@@ -168,9 +134,9 @@ export default function RiderApplicationStatus({
             <div className="approved-icon" aria-hidden="true">🎉</div>
             <div className="approved-copy">
               <h3 className="approved-title">Congratulations! Your Rider Application is Approved!</h3>
-              <p className="approved-desc">
-                {MOCK_RIDER_ADMIN_FEEDBACK.Approved.note}
-              </p>
+              {applicationData?.reviewerNote && (
+                <p className="approved-desc">{applicationData.reviewerNote}</p>
+              )}
               <p className="approved-notice">
                 <em>Important Note:</em> Application approval and live delivery dispatch activation are distinct stages.
                 Please complete the 5 readiness items below before going online to accept orders.
@@ -216,12 +182,11 @@ export default function RiderApplicationStatus({
           <div className="rejected-icon" aria-hidden="true">✕</div>
           <div className="rejected-body">
             <h3 className="rejected-title">Application Status: Not Approved</h3>
-            <p className="rejected-reason">
-              <strong>Reason:</strong> {MOCK_RIDER_ADMIN_FEEDBACK.Rejected.reason}
-            </p>
-            <p className="rejected-details">
-              {MOCK_RIDER_ADMIN_FEEDBACK.Rejected.details}
-            </p>
+            {applicationData?.reviewerNote && (
+              <p className="rejected-reason">
+                <strong>Reason:</strong> {applicationData.reviewerNote}
+              </p>
+            )}
             <div className="rejected-actions">
               <Button
                 type="button"

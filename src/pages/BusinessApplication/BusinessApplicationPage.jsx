@@ -17,6 +17,7 @@ import ExitConfirmModal from './components/ExitConfirmModal';
 import {
   INITIAL_APPLICATION_STATE,
   WIZARD_STEPS,
+  validateRestaurantServices,
 } from './constants/applicationDefaults';
 import { getRequiredDocuments } from './constants/documentRequirements';
 import applicationService from '../../services/applicationService';
@@ -72,9 +73,7 @@ export default function BusinessApplicationPage() {
         ...prev,
         businessInfo: {
           ...prev.businessInfo,
-          businessEmail: (!prev.businessInfo.businessEmail || prev.emailVerification?.isSameAsAccount)
-            ? verified
-            : prev.businessInfo.businessEmail,
+          businessEmail: verified,
           restaurantName: (!prev.businessInfo.restaurantName && compName)
             ? compName
             : prev.businessInfo.restaurantName,
@@ -136,11 +135,6 @@ export default function BusinessApplicationPage() {
       if (!formData.businessInfo.businessPhone?.trim()) {
         errors.businessPhone = 'Please provide a business contact number.';
       }
-      if (!formData.businessInfo.businessEmail?.trim()) {
-        errors.businessEmail = 'Please provide an official business email address.';
-      } else if (!formData.businessInfo.businessEmail.includes('@')) {
-        errors.businessEmail = 'Please enter a valid email address.';
-      }
     }
 
     if (stepNumber === 3) {
@@ -158,9 +152,6 @@ export default function BusinessApplicationPage() {
         if (currentYear - birthYear < 18) {
           errors.dateOfBirth = 'Applicant must be at least 18 years of age.';
         }
-      }
-      if (!formData.representative.email?.trim() || !formData.representative.email.includes('@')) {
-        errors.email = 'Valid personal email is required.';
       }
       if (!formData.representative.phone?.trim()) {
         errors.phone = 'Mobile contact number is required.';
@@ -207,10 +198,9 @@ export default function BusinessApplicationPage() {
     }
 
     if (stepNumber === 7) {
-      const services = formData.configuration.services || {};
-      const hasAnyService = Boolean(services.delivery || services.pickup || services.dineIn);
-      if (!hasAnyService) {
-        errors.services = 'Please select at least one restaurant service (Delivery, Pickup, or Dine-in).';
+      const serviceError = validateRestaurantServices(formData.configuration.services);
+      if (serviceError) {
+        errors.services = serviceError;
       }
     }
 
@@ -242,6 +232,15 @@ export default function BusinessApplicationPage() {
   };
 
   const handleDirectStepJump = (targetStep) => {
+    if (targetStep > 1 && !formData.emailVerification?.isVerified) {
+      setValidationErrors((prev) => ({
+        ...prev,
+        verification: 'Please verify your email address with the 6-digit code before proceeding.',
+      }));
+      setCurrentStep(1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     setCurrentStep(targetStep);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -266,8 +265,23 @@ export default function BusinessApplicationPage() {
     });
   };
 
-  // Final Application Submission (Mock)
+  // Final Application Submission
   const handleSubmitApplication = async () => {
+    const verifiedEmail = (
+      formData.emailVerification?.isVerified ? formData.emailVerification?.verifiedEmail : ''
+    )?.trim();
+
+    if (!verifiedEmail) {
+      setValidationErrors((prev) => ({
+        ...prev,
+        verification: 'Please verify your email address with the 6-digit code before submitting.',
+        submit: 'Email verification is required before submitting your application.',
+      }));
+      setCurrentStep(1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     setSubmitting(true);
     setValidationErrors((prev) => ({ ...prev, submit: undefined }));
 
@@ -307,13 +321,6 @@ export default function BusinessApplicationPage() {
         return map[val] || 'business_owner';
       };
 
-      const verifiedEmail =
-        formData.emailVerification?.verifiedEmail ||
-        formData.emailVerification?.email ||
-        formData.representative?.email ||
-        user?.email ||
-        '';
-
       fd.append('restaurant_name', formData.businessInfo.restaurantName || '');
       if (formData.businessInfo.registeredName) {
         fd.append('registered_name', formData.businessInfo.registeredName);
@@ -324,7 +331,7 @@ export default function BusinessApplicationPage() {
         fd.append('description', formData.businessInfo.description);
       }
       fd.append('business_phone', formData.businessInfo.businessPhone || formData.representative.phone || '');
-      fd.append('business_email', formData.businessInfo.businessEmail || verifiedEmail);
+      fd.append('business_email', verifiedEmail);
 
       if (formData.businessInfo.cuisineType) {
         fd.append('categories[]', formData.businessInfo.cuisineType);
@@ -353,9 +360,9 @@ export default function BusinessApplicationPage() {
       if (formData.address.coordinates?.lng != null) fd.append('longitude', String(formData.address.coordinates.lng));
 
       const services = formData.configuration?.services || {};
-      fd.append('offers_delivery', services.delivery !== false ? '1' : '0');
-      fd.append('offers_pickup', services.pickup !== false ? '1' : '0');
-      fd.append('offers_dine_in', services.dineIn !== false ? '1' : '0');
+      fd.append('offers_delivery', services.delivery ? '1' : '0');
+      fd.append('offers_pickup', services.pickup ? '1' : '0');
+      fd.append('offers_dine_in', services.dineIn ? '1' : '0');
       fd.append('accepts_reservations', services.tableReservations ? '1' : '0');
 
       const dayIndexMap = {
@@ -437,7 +444,8 @@ export default function BusinessApplicationPage() {
       Boolean(formData.businessInfo.restaurantName) &&
       Boolean(formData.representative.firstName) &&
       Boolean(formData.address.street) &&
-      Boolean(formData.payout.accountHolder)
+      Boolean(formData.payout.accountHolder) &&
+      !validateRestaurantServices(formData.configuration?.services)
     );
   };
 

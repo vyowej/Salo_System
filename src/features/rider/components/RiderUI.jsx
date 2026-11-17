@@ -59,7 +59,7 @@ export function RiderStatePanel({ state, data, onStateChange }) {
       <div className="rider-state-alert is-error" role="alert">
         <strong>{data.errorTitle}</strong>
         <span>{data.errorMessage}</span>
-        <Button variant="secondary" size="sm" onClick={() => onStateChange('Sample data')}>{data.retryLabel}</Button>
+        <Button variant="secondary" size="sm" onClick={() => onStateChange('Ready')}>{data.retryLabel}</Button>
       </div>
     );
   }

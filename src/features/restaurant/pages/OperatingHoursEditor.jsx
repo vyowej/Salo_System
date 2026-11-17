@@ -10,7 +10,7 @@ import {
   isRestaurantOpen,
   normalizeOperatingHours,
   validateOperatingHours,
-} from '../../../services/demo/operatingHours';
+} from '../profile/operatingHoursUtils';
 import './OperatingHoursEditor.css';
 
 const CLOSURE_TYPES = ['Holiday', 'Renovation', 'Private Event', 'Emergency', 'Maintenance'];

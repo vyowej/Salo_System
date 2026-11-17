@@ -4,14 +4,13 @@ import Button from '../../../components/common/Button';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { StateView } from '../../../components/feedback';
 import CustomerLayout from '../../../layouts/CustomerLayout';
-import { CUSTOMER_INVITATION_SAMPLES } from '../../restaurant/pages/team/teamSamples';
 import './InvitationsInboxPage.css';
 
 export default function InvitationsInboxPage() {
   const [decisions, setDecisions] = useState({});
   const [confirmTarget, setConfirmTarget] = useState(null);
 
-  const invitations = CUSTOMER_INVITATION_SAMPLES;
+  const invitations = [];
   const pendingCount = invitations.filter((inv) => !decisions[inv.id]).length;
 
   const applyDecision = (invitation, response) => {

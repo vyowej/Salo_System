@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
 import useAddresses from '../../../hooks/useAddresses';
-import { INITIAL_RESTAURANTS } from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import RestaurantImage from '../components/RestaurantImage';
 import { checkAddressCoverage } from '../utils/deliveryCoverage';
@@ -49,7 +48,7 @@ export default function CartPage() {
   restaurantGroups.forEach((group, gIdx) => {
     if (group.fulfillment !== 'delivery') return;
     const letter = String.fromCharCode(65 + gIdx);
-    const restaurant = INITIAL_RESTAURANTS.find((r) => r.id === group.restaurantId);
+    const restaurant = group.restaurant || null;
 
     if (group.addressMode === 'multiple') {
       const missingItems = group.items.filter((i) => !i.deliveryAddress);

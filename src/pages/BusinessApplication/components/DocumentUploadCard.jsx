@@ -171,9 +171,6 @@ export default function DocumentUploadCard({
             ) : (
               <Badge variant="neutral" size="sm">Optional</Badge>
             )}
-            {enableCamera && (
-              <Badge variant="info" size="sm">Camera Supported</Badge>
-            )}
           </div>
           {description && <p className="doc-upload-desc">{description}</p>}
           {docConfig.conditionMessage && (

@@ -4,7 +4,7 @@
  * /api/restaurants/{id}, and /api/restaurants/{id}/menu.
  */
 
-import apiClient from './apiClient';
+import apiClient from './apiClient.js';
 
 function formatTime12h(hhmm) {
   if (!hhmm || typeof hhmm !== 'string') return '';

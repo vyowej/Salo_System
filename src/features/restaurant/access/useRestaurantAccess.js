@@ -1,19 +1,20 @@
 import { useContext } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
-import restaurantService from '../../../services/restaurantService';
 import { buildRestaurantAccess, canAccessNavigationItem } from './permissionMap';
-import RestaurantAccessContext from './restaurantAccessContext';
+import RestaurantAccessContext, { resolveBackendAccessData } from './RestaurantAccessContext.jsx';
+import RestaurantAccessStore from './restaurantAccessContext';
 
 export function useRestaurantAccess() {
   const { user } = useAuth();
-  const context = useContext(RestaurantAccessContext);
+  const context = useContext(RestaurantAccessStore);
   if (context) return context;
 
+  const { restaurants, memberships } = resolveBackendAccessData(user);
   const access = buildRestaurantAccess(
     user,
-    restaurantService.getMemberships(user),
-    restaurantService.getRestaurants(),
-    restaurantService.getSelectedRestaurantId(),
+    memberships,
+    restaurants,
+    restaurants[0]?.id ?? null,
   );
   return {
     ...access,
@@ -21,4 +22,5 @@ export function useRestaurantAccess() {
   };
 }
 
+export { RestaurantAccessContext };
 export default useRestaurantAccess;

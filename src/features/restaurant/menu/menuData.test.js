@@ -7,7 +7,6 @@ import {
   normalizeMenuItem,
   validateMenuItem,
 } from './menuData.js';
-import { demoAdapter } from '../../../services/demo/demoAdapter.js';
 
 test('menu normalization preserves legacy availability and maps old add-on rules', () => {
   const legacy = normalizeMenuItem({
@@ -67,44 +66,4 @@ test('valid add-on limits permit optional and required groups', () => {
       { name: 'Extras', minSelection: 0, maxSelection: 2, options: [{ name: 'Egg', price: 20 }] },
     ],
   }), {});
-});
-
-test('demo category updates persist to the shared customer restaurant data', () => {
-  const restaurantId = 'dalisay-heritage';
-  const originalCategories = demoAdapter.getMenuCategories(restaurantId);
-  const originalName = originalCategories[0].name;
-  const renamedCategory = `${originalName} Test`;
-  const renamed = originalCategories.map((category, index) => (
-    index === 0 ? { ...category, name: renamedCategory } : category
-  ));
-
-  demoAdapter.saveMenuCategories(renamed, restaurantId, [{ from: originalName, to: renamedCategory }]);
-  const sharedRestaurant = demoAdapter.getRestaurant(restaurantId);
-  assert.equal(sharedRestaurant.categories[0], renamedCategory);
-  assert.equal(sharedRestaurant.menu.find((item) => item.category === renamedCategory)?.category, renamedCategory);
-
-  demoAdapter.saveMenuCategories(originalCategories, restaurantId, [{ from: renamedCategory, to: originalName }]);
-});
-
-test('demo menu persistence stores photo references without temporary browser URLs', () => {
-  const restaurantId = 'dalisay-heritage';
-  const category = demoAdapter.getMenuCategories(restaurantId)[0].name;
-  const item = demoAdapter.addMenuItem({
-    name: 'Temporary photo test item',
-    price: 10,
-    category,
-    availability: 'hidden',
-    photo: { id: 'image-test', src: 'blob:temporary', alt: 'Test dish', width: 400, height: 400 },
-  }, restaurantId);
-
-  assert.deepEqual(demoAdapter.getRestaurant(restaurantId).menu.find((entry) => entry.id === item.id).photo, {
-    id: 'image-test',
-    name: '',
-    type: '',
-    size: 0,
-    width: 400,
-    height: 400,
-    alt: 'Test dish',
-  });
-  demoAdapter.deleteMenuItem(item.id, restaurantId);
 });

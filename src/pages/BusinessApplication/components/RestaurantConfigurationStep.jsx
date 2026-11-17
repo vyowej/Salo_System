@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Input, Select, Textarea, FormGroup, Label } from '../../../components/forms';
+import { Input, Select, Textarea, FormGroup, Label, ErrorMessage } from '../../../components/forms';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
@@ -18,7 +18,7 @@ const MENU_CATEGORIES = [
 export default function RestaurantConfigurationStep({
   data,
   onChange,
-  errors: _errors = {},
+  errors = {},
 }) {
   const logoInputRef = useRef(null);
   const coverInputRef = useRef(null);
@@ -431,6 +431,10 @@ export default function RestaurantConfigurationStep({
               </div>
             </label>
           </div>
+
+          {errors.services && (
+            <ErrorMessage>{errors.services}</ErrorMessage>
+          )}
 
           {/* Conditional Table Reservation Setup */}
           {data.services.tableReservations && (

@@ -1,4 +1,4 @@
-import { formatOperatingHours } from '../../../services/demo/operatingHours.js';
+import { formatOperatingHours } from './operatingHoursUtils.js';
 
 function listFromValue(value) {
   if (Array.isArray(value)) return value.map((entry) => String(entry).trim()).filter(Boolean);

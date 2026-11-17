@@ -52,12 +52,14 @@ export default function OrderDetailPage() {
     const refreshData = async () => {
       const orders = customerService.getOrders();
       setAllOrders(orders);
-      const rests = await customerService.getRestaurants();
-      setRestaurants(rests);
+      try {
+        const rests = await customerService.getRestaurants();
+        setRestaurants(rests);
+      } catch {
+        setRestaurants([]);
+      }
     };
     refreshData();
-    window.addEventListener('salo:demoStoreUpdated', refreshData);
-    return () => window.removeEventListener('salo:demoStoreUpdated', refreshData);
   }, [id]);
 
   const upcomingOrders = useMemo(
@@ -317,13 +319,7 @@ export default function OrderDetailPage() {
   }
 
   const handleConfirmCancel = () => {
-    try {
-      customerService.cancelOrder(order.id, cancelReason);
-      setAllOrders(customerService.getOrders());
-      setCancelModalOpen(false);
-    } catch (err) {
-      setCancelError(err.message || 'Unable to request cancellation.');
-    }
+    setCancelError('Order cancellation is not available yet. The customer order API is pending backend implementation.');
   };
 
   const handleReorder = () => {

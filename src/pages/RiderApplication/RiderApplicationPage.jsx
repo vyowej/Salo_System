@@ -860,6 +860,7 @@ export default function RiderApplicationPage() {
                   onChange={handlePersonalChange}
                   errors={validationErrors}
                   currentUser={user}
+                  verifiedEmail={formData.emailVerification?.verifiedEmail || formData.emailVerification?.email || ''}
                 />
               )}
 

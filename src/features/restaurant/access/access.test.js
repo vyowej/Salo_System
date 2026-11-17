@@ -154,16 +154,27 @@ test('useRestaurantAccess exposes ownership and restaurant memberships', async (
       return React.createElement('span', null, `${access.isOwner}:${access.restaurants.length}:${access.canAccessNavigationItem('menu')}`);
     }
 
+    const ownerUser = {
+      id: 2,
+      user_id: 2,
+      email: 'owner@salo.ph',
+      restaurant_ownerships: [
+        { restaurant_id: 1, restaurant_name: 'Kitchen One', restaurant_status: 'active' },
+        { restaurant_id: 2, restaurant_name: 'Kitchen Two', restaurant_status: 'active' },
+      ],
+      restaurant_staff_assignments: [],
+    };
+
     const html = renderToStaticMarkup(React.createElement(
       AuthContext.Provider,
-      { value: { user: { id: 2, email: 'owner@salo.ph' } } },
+      { value: { user: ownerUser } },
       React.createElement(RestaurantAccessProvider, null, React.createElement(Probe)),
     ));
 
     assert.match(html, />true:2:true</);
     const fallbackHtml = renderToStaticMarkup(React.createElement(
       AuthContext.Provider,
-      { value: { user: { id: 2, email: 'owner@salo.ph' } } },
+      { value: { user: ownerUser } },
       React.createElement(Probe),
     ));
     assert.match(fallbackHtml, />true:2:true</);

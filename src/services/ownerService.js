@@ -1,196 +1,184 @@
-import restaurantService from './restaurantService';
+import apiClient from './apiClient';
+import locationApiService from './locationApiService';
+
+function notAvailable(feature) {
+  throw new Error(`${feature} is not available yet. The backend API endpoint is pending implementation.`);
+}
 
 /**
- * Owner-facing service facade. Pages use this stable interface; the current
- * implementation delegates to the shared demo adapter.
+ * Owner-facing service facade.
+ * Category A endpoints (setup-status, location, coverage) are wired to Laravel.
+ * Category B endpoints return empty lists on reads and explicit unavailable errors on writes.
  */
 export const ownerService = {
-  getRestaurant(id) {
-    return restaurantService.getRestaurant(id);
+  async getSetupStatus(restaurantId) {
+    const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.get(`/restaurant/setup-status${query}`);
+    return res?.data ?? null;
   },
 
-  updateRestaurant(data, id) {
-    return restaurantService.updateRestaurant(data, id);
+  async getLocation() {
+    return locationApiService.getRestaurantLocation();
   },
 
-  updateBusinessProfile(data, id) {
-    return restaurantService.updateBusinessProfile(data, id);
+  async updateLocation(payload) {
+    return locationApiService.updateRestaurantLocation(payload);
   },
 
-  getMenuItems(id) {
-    return restaurantService.getMenuItems(id);
+  async updateCoverage(payload) {
+    return locationApiService.updateRestaurantCoverage(payload);
   },
 
-  getMenuCategories(id) {
-    return restaurantService.getMenuCategories(id);
+  getRestaurant() {
+    return null;
   },
 
-  saveMenuCategories(categories, id, categoryChanges) {
-    return restaurantService.saveMenuCategories(categories, id, categoryChanges);
+  updateRestaurant() {
+    notAvailable('Updating restaurant profile');
   },
 
-  addMenuItem(item, id) {
-    return restaurantService.addMenuItem(item, id);
+  updateBusinessProfile() {
+    notAvailable('Updating business profile');
   },
 
-  updateMenuItem(id, data, restaurantId) {
-    return restaurantService.updateMenuItem(id, data, restaurantId);
+  getMenuItems() {
+    return [];
   },
 
-  deleteMenuItem(id, restaurantId) {
-    return restaurantService.deleteMenuItem(id, restaurantId);
+  getMenuCategories() {
+    return [];
   },
 
-  removeImage(image) {
-    return restaurantService.removeImage(image);
+  saveMenuCategories() {
+    notAvailable('Saving menu categories');
   },
 
-  getOrders(id, options) {
-    return restaurantService.getOrders(id, options);
+  addMenuItem() {
+    notAvailable('Adding menu items');
   },
 
-  updateOrderStatus(id, status, restaurantId, details) {
-    return restaurantService.updateOrderStatus(id, status, restaurantId, details);
+  updateMenuItem() {
+    notAvailable('Updating menu items');
   },
 
-  resolveOrderCancellation(id, decision, restaurantId, reason) {
-    return restaurantService.resolveOrderCancellation(id, decision, restaurantId, reason);
+  deleteMenuItem() {
+    notAvailable('Deleting menu items');
   },
 
-  getReservations(id) {
-    return restaurantService.getReservations(id);
+  removeImage() {
+    return undefined;
   },
 
-  getReservationTables(restaurantId, reservationId) {
-    return restaurantService.getReservationTables(restaurantId, reservationId);
+  getOrders() {
+    return [];
   },
 
-  getReservationTableOptions(restaurantId, reservationId) {
-    return restaurantService.getReservationTableOptions(restaurantId, reservationId);
+  updateOrderStatus() {
+    notAvailable('Updating order status');
   },
 
-  getDiningAreas(restaurantId) {
-    return restaurantService.getDiningAreas(restaurantId);
+  resolveOrderCancellation() {
+    notAvailable('Resolving order cancellation');
   },
 
-  addDiningArea(name, restaurantId) {
-    return restaurantService.addDiningArea(name, restaurantId);
+  getReservations() {
+    return [];
   },
 
-  updateDiningArea(id, name, restaurantId) {
-    return restaurantService.updateDiningArea(id, name, restaurantId);
+  getReservationTables() {
+    return [];
   },
 
-  getTables(restaurantId, date, time) {
-    return restaurantService.getTables(restaurantId, date, time);
+  getReservationTableOptions() {
+    return [];
   },
 
-  getTableSchedule(tableId, date, restaurantId) {
-    return restaurantService.getTableSchedule(tableId, date, restaurantId);
+  getDiningAreas() {
+    return [];
   },
 
-  addTable(data, restaurantId) {
-    return restaurantService.addTable(data, restaurantId);
+  addDiningArea() {
+    notAvailable('Adding dining areas');
   },
 
-  updateTable(id, data, restaurantId) {
-    return restaurantService.updateTable(id, data, restaurantId);
+  updateDiningArea() {
+    notAvailable('Updating dining areas');
   },
 
-  setTableAvailability(id, status, restaurantId) {
-    return restaurantService.setTableAvailability(id, status, restaurantId);
+  getTables() {
+    return [];
   },
 
-  archiveTable(id, restaurantId) {
-    return restaurantService.archiveTable(id, restaurantId);
+  getTableSchedule() {
+    return [];
   },
 
-  deactivateTable(id, restaurantId) {
-    return restaurantService.deactivateTable(id, restaurantId);
+  addTable() {
+    notAvailable('Adding tables');
   },
 
-  reactivateTable(id, restaurantId) {
-    return restaurantService.reactivateTable(id, restaurantId);
+  updateTable() {
+    notAvailable('Updating tables');
   },
 
-  getInventorySettings(restaurantId) {
-    return restaurantService.getInventorySettings(restaurantId);
+  archiveTable() {
+    notAvailable('Archiving tables');
   },
 
-  setInventoryDeductionMode(mode, restaurantId) {
-    return restaurantService.setInventoryDeductionMode(mode, restaurantId);
+  reactivateTable() {
+    notAvailable('Reactivating tables');
   },
 
-  getInventoryItems(restaurantId) {
-    return restaurantService.getInventoryItems(restaurantId);
+  updateReservationStatus() {
+    notAvailable('Updating reservation status');
   },
 
-  getInventoryMovements(restaurantId, itemId) {
-    return restaurantService.getInventoryMovements(restaurantId, itemId);
+  assignReservationTable() {
+    notAvailable('Assigning reservation table');
   },
 
-  createInventoryItem(data, restaurantId) {
-    return restaurantService.createInventoryItem(data, restaurantId);
+  recordReservationPayment() {
+    notAvailable('Recording reservation payment');
   },
 
-  updateInventoryItem(id, data, restaurantId) {
-    return restaurantService.updateInventoryItem(id, data, restaurantId);
+  resolveReservationCancellation() {
+    notAvailable('Resolving reservation cancellation');
   },
 
-  receiveInventoryStock(id, quantity, restaurantId, reason) {
-    return restaurantService.receiveInventoryStock(id, quantity, restaurantId, reason);
+  getInventoryItems() {
+    return [];
   },
 
-  recordInventoryUsage(id, quantity, restaurantId, reason) {
-    return restaurantService.recordInventoryUsage(id, quantity, restaurantId, reason);
+  getInventoryMovements() {
+    return [];
   },
 
-  adjustInventoryStock(id, quantity, reason, restaurantId) {
-    return restaurantService.adjustInventoryStock(id, quantity, reason, restaurantId);
+  getInventoryConfig() {
+    return { deductionMode: 'manual' };
   },
 
-  returnInventoryStock(id, quantity, restaurantId, reason) {
-    return restaurantService.returnInventoryStock(id, quantity, restaurantId, reason);
+  updateInventoryConfig() {
+    notAvailable('Updating inventory configuration');
   },
 
-  markInventoryUnavailable(id, unavailable, restaurantId) {
-    return restaurantService.markInventoryUnavailable(id, unavailable, restaurantId);
+  adjustInventoryStock() {
+    notAvailable('Adjusting inventory stock');
   },
 
-  updateMenuItemStock(id, quantity, reason, restaurantId) {
-    return restaurantService.updateMenuItemStock(id, quantity, reason, restaurantId);
+  adjustMenuStock() {
+    notAvailable('Adjusting menu stock');
   },
 
-  assignReservationTable(id, tableId, restaurantId) {
-    return restaurantService.assignReservationTable(id, tableId, restaurantId);
+  getActivityLog() {
+    return [];
   },
 
-  confirmReservationTable(id, restaurantId) {
-    return restaurantService.confirmReservationTable(id, restaurantId);
+  getEarningsSummary() {
+    return null;
   },
 
-  resolveReservationCancellation(id, decision, restaurantId, reason) {
-    return restaurantService.resolveReservationCancellation(id, decision, restaurantId, reason);
-  },
-
-  recordReservationPayment(id, restaurantId, reference) {
-    return restaurantService.recordReservationPayment(id, restaurantId, reference);
-  },
-
-  updateReservationStatus(id, status, restaurantId, details) {
-    return restaurantService.updateReservationStatus(id, status, restaurantId, details);
-  },
-
-  getEarningsOverview(id) {
-    return restaurantService.getEarningsOverview(id);
-  },
-
-  getDashboardStats(id) {
-    return restaurantService.getDashboardStats(id);
-  },
-
-  logActivity(activity) {
-    return restaurantService.logActivity(activity);
+  requestPayout() {
+    notAvailable('Requesting payout');
   },
 };
 

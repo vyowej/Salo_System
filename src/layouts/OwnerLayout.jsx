@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useLogout } from '../hooks/useLogout';
@@ -15,8 +15,6 @@ import {
   OWNER_SIDEBAR_COLLAPSED_KEY,
 } from '../components/navigation/ownerNavConfig';
 import { buildProfileMenuItems, ROLE_META } from '../config/navigationConfig';
-import restaurantService from '../services/restaurantService';
-import { getLocalDateKey, normalizeOperatingHours } from '../services/demo/operatingHours';
 import RoleOnboardingModal from '../components/onboarding/RoleOnboardingModal';
 import { useRoleOnboarding } from '../hooks/useRoleOnboarding';
 import '../components/navigation/NavigationShell.css';
@@ -36,8 +34,8 @@ export default function OwnerLayout({ children }) {
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
-  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
-  const [pendingReservationsCount, setPendingReservationsCount] = useState(0);
+  const [pendingOrdersCount] = useState(0);
+  const [pendingReservationsCount] = useState(0);
 
   const selectedRestaurant = access.selectedRestaurant;
   const selectedRestaurantId = selectedRestaurant?.id;
@@ -45,50 +43,6 @@ export default function OwnerLayout({ children }) {
     access,
     selectedRestaurantId,
   });
-
-  useEffect(() => {
-    const syncCounts = () => {
-      if (!selectedRestaurantId) {
-        setPendingOrdersCount(0);
-        setPendingReservationsCount(0);
-        return;
-      }
-
-      try {
-        if (access.canAccessNavigationItem('orders')) {
-          const orders = restaurantService.getOrders(selectedRestaurantId);
-          setPendingOrdersCount(
-            orders.filter(
-              (order) =>
-                ['Pending', 'Pending Confirmation'].includes(order.status) ||
-                order.cancellationRequest?.status === 'requested'
-            ).length
-          );
-        } else {
-          setPendingOrdersCount(0);
-        }
-      } catch {
-        setPendingOrdersCount(0);
-      }
-
-      try {
-        if (access.canAccessNavigationItem('reservations')) {
-          const reservations = restaurantService.getReservations(selectedRestaurantId);
-          setPendingReservationsCount(
-            reservations.filter((res) => res.status === 'Pending').length
-          );
-        } else {
-          setPendingReservationsCount(0);
-        }
-      } catch {
-        setPendingReservationsCount(0);
-      }
-    };
-
-    syncCounts();
-    window.addEventListener('salo:demoStoreUpdated', syncCounts);
-    return () => window.removeEventListener('salo:demoStoreUpdated', syncCounts);
-  }, [selectedRestaurantId, access]);
 
   const navItems = useMemo(
     () =>
@@ -122,41 +76,8 @@ export default function OwnerLayout({ children }) {
     selectedRestaurant?.operatingSchedule?.acceptingOrders !== false
   );
 
-  const applyOpenClosedStatus = (nextOpen) => {
-    if (!selectedRestaurantId) return;
-    try {
-      const currentHours = normalizeOperatingHours(
-        restaurantService.getOperatingHours(selectedRestaurantId)
-      );
-      const todayKey = getLocalDateKey(new Date());
-      const filteredClosures = (currentHours.temporaryClosures || []).filter(
-        (closure) => !(closure.startDate <= todayKey && closure.endDate >= todayKey)
-      );
-
-      const nextHours = nextOpen
-        ? {
-            ...currentHours,
-            acceptingOrders: true,
-            temporaryClosures: filteredClosures,
-          }
-        : {
-            ...currentHours,
-            acceptingOrders: false,
-            temporaryClosures: [
-              ...filteredClosures,
-              {
-                id: 'manual-close-today',
-                startDate: todayKey,
-                endDate: todayKey,
-                reason: 'Temporarily closed by owner',
-              },
-            ],
-          };
-
-      restaurantService.updateOperatingHours(nextHours, selectedRestaurantId);
-    } catch {
-      /* Ignore if current staff role cannot manage hours */
-    }
+  const applyOpenClosedStatus = () => {
+    // Operating hours toggle API is pending backend implementation
   };
 
   const handleOpenClosedClick = () => {
@@ -254,9 +175,6 @@ export default function OwnerLayout({ children }) {
           )}
         />
         <main className="owner-content">
-          {!restaurantService.dataSource && (
-            <div className="owner-data-state" role="status">Loading restaurant workspace…</div>
-          )}
           {children}
         </main>
       </div>

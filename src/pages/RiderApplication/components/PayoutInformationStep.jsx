@@ -51,7 +51,7 @@ export default function PayoutInformationStep({
           <path d="M7 11V7a5 5 0 0110 0v4" />
         </svg>
         <div className="callout-copy">
-          <strong>Settlement Confidentiality:</strong> Your payout account is used exclusively for electronic disbursements (via InstaPay or PESONet). No banking credentials or balance inquiries are performed in this frontend prototype.
+          <strong>Settlement Confidentiality:</strong> Your payout account is used exclusively for electronic disbursements (via InstaPay or PESONet). No banking passwords or balance inquiries are ever requested.
         </div>
       </div>
 

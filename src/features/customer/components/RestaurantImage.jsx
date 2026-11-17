@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import restaurantService, { resolvePublicStorageUrl } from '../../../services/restaurantService';
+import { resolvePublicStorageUrl } from '../../../services/restaurantService';
 
 export default function RestaurantImage({
   image,
@@ -13,16 +13,9 @@ export default function RestaurantImage({
   const [imgFailed, setImgFailed] = useState(false);
 
   useEffect(() => {
-    let active = true;
     setImgFailed(false);
 
-    if (image?.id) {
-      restaurantService.getImageUrl(image).then((url) => {
-        if (active) setSrc(url || resolvePublicStorageUrl(image) || '');
-      }).catch(() => {
-        if (active) setSrc(resolvePublicStorageUrl(image) || '');
-      });
-    } else if (typeof image === 'string') {
+    if (typeof image === 'string') {
       const trimmed = image.trim();
       const isUrlOrPath = /^(https?:|data:|blob:|\/)/i.test(trimmed) || /^(restaurants|users|riders|promotions)\//i.test(trimmed);
       setSrc(isUrlOrPath ? resolvePublicStorageUrl(trimmed) : '');
@@ -31,10 +24,6 @@ export default function RestaurantImage({
     } else {
       setSrc('');
     }
-
-    return () => {
-      active = false;
-    };
   }, [image]);
 
   const effectiveSrc = !imgFailed && src ? src : fallbackSrc;

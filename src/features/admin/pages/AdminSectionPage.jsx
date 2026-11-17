@@ -1,45 +1,18 @@
-import { DataTable, EmptyState, PageHeader, StatCard } from '../components';
 import AdminLayout from '../../../layouts/AdminLayout';
-import { getFinancialTransactions, getPlatformTotals } from '../mocks';
-import { formatPeso } from '../utils/format';
+import { PageHeader, StateView } from '../components';
+import { useAdminPageSearch } from '../contexts/useAdminSearch';
+import './AdminPages.css';
 
-export default function AdminSectionPage({ title, description, routeName }) {
-  const isFinancialView = routeName === 'finance workspace' || routeName === 'reporting';
-  if (isFinancialView) {
-    const totals = getPlatformTotals();
-    const transactions = getFinancialTransactions();
-    const columns = [
-      { key: 'id', label: 'Reference' },
-      { key: 'type', label: 'Record type' },
-      { key: 'customerName', label: 'Customer' },
-      { key: 'restaurant', label: 'Restaurant' },
-      { key: 'paymentMethod', label: 'Payment method' },
-      { key: 'paymentStatus', label: 'Payment status' },
-      { key: 'amount', label: 'Snapshot amount', render: (transaction) => formatPeso(transaction.amount) },
-    ];
-    return (
-      <AdminLayout>
-        <section className="admin-shell-page">
-          <PageHeader title={title} description={description} />
-          <div className="admin-stat-grid">
-            <StatCard label="Order GMV" value={formatPeso(totals.gmv)} hint="Customer totals from stored order snapshots" tone="gold" />
-            <StatCard label="Platform revenue" value={formatPeso(totals.platformRevenue)} hint="Commission, fees, discount funding, reservation fees" tone="gold" />
-            <StatCard label="Restaurant sales" value={formatPeso(totals.restaurantSales)} hint="Before commission and adjustments" tone="gold" />
-            <StatCard label="Refunds / adjustments" value={formatPeso(totals.refunds)} hint="Recorded order refund adjustments" tone="brown" />
-          </div>
-          <p className="admin-shell-note">This report uses the same transaction snapshots as order details. GMV is not platform revenue, and later fee changes never recalculate past orders.</p>
-          <DataTable columns={columns} rows={transactions} emptyTitle="No financial transactions" emptyDescription="There are no transaction snapshots available." />
-        </section>
-      </AdminLayout>
-    );
-  }
+export default function AdminSectionPage({ title = 'Admin section', description = '' }) {
+  useAdminPageSearch({ disabled: true });
   return (
     <AdminLayout>
       <section className="admin-shell-page">
         <PageHeader title={title} description={description} />
-        <EmptyState
-          title={`No ${title.toLowerCase()} records`}
-          description={`There are no ${title.toLowerCase()} records available for ${routeName}.`}
+        <StateView
+          state="empty"
+          title="This section is not available yet"
+          description="This admin module will be enabled once its backend API endpoints are connected."
         />
       </section>
     </AdminLayout>

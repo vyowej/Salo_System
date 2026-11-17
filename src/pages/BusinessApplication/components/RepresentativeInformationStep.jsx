@@ -1,6 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Input, Select, ErrorMessage } from '../../../components/forms';
+import LinkedAccountBanner from '../../../components/application/LinkedAccountBanner';
 import { REPRESENTATIVE_POSITIONS } from '../constants/applicationDefaults';
+
+function splitAccountName(fullName) {
+  const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: '', lastName: '' };
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  };
+}
 
 export default function RepresentativeInformationStep({
   data,
@@ -9,9 +20,8 @@ export default function RepresentativeInformationStep({
   errors = {},
   currentUser = null,
 }) {
-  const [sameAsVerified, setSameAsVerified] = useState(
-    Boolean(verifiedEmail && data.email === verifiedEmail)
-  );
+  const accountName = (currentUser?.name || '').trim();
+  const hasAccountName = Boolean(accountName);
 
   const handleChange = (field, value) => {
     onChange?.({
@@ -20,44 +30,41 @@ export default function RepresentativeInformationStep({
     });
   };
 
-  // Pre-fill from authenticated customer profile if representative info is empty
+  // Auto-populate name from authenticated SALO account and keep verified email synced
   useEffect(() => {
-    if (currentUser && !data.firstName) {
-      const nameParts = (currentUser.name || '').trim().split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+    const updates = {};
+    if (accountName) {
+      const { firstName, lastName } = splitAccountName(accountName);
+      if (firstName && data.firstName !== firstName) updates.firstName = firstName;
+      if (lastName && data.lastName !== lastName) updates.lastName = lastName;
+    }
+    if (verifiedEmail && data.email !== verifiedEmail) {
+      updates.email = verifiedEmail;
+    }
+    if (Object.keys(updates).length > 0) {
       onChange?.({
         ...data,
-        firstName: data.firstName || firstName,
-        lastName: data.lastName || lastName,
-        email: data.email || verifiedEmail || currentUser.email || '',
-      });
-    } else if (verifiedEmail && !data.email) {
-      onChange?.({
-        ...data,
-        email: verifiedEmail,
+        ...updates,
       });
     }
-  }, [currentUser, verifiedEmail]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleToggleSameEmail = (checked) => {
-    setSameAsVerified(checked);
-    if (checked && verifiedEmail) {
-      handleChange('email', verifiedEmail);
-    }
-  };
+  }, [accountName, verifiedEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="wizard-step-container">
       <div className="wizard-step-header">
         <h2 className="wizard-step-heading">Owner & Authorized Representative</h2>
         <p className="wizard-step-subheading">
-          Enter the credentials of the authorized individual responsible for this application.
-          The applicant does not need to be the sole registered owner, but must hold legal authorization.
+          Confirm the details of the authorized individual responsible for this restaurant partner application.
         </p>
       </div>
 
       <div className="wizard-form-grid">
+        <LinkedAccountBanner
+          accountName={accountName}
+          verifiedEmail={verifiedEmail || data.email}
+          roleLabel="Representative Name"
+        />
+
         <div className="grid-cols-2">
           <Input
             id="rep-first-name"
@@ -66,6 +73,8 @@ export default function RepresentativeInformationStep({
             value={data.firstName || ''}
             onChange={(e) => handleChange('firstName', e.target.value)}
             error={errors.firstName}
+            disabled={hasAccountName && Boolean(data.firstName)}
+            helper={hasAccountName ? 'Populated from your SALO account.' : undefined}
             required
           />
 
@@ -86,6 +95,8 @@ export default function RepresentativeInformationStep({
             value={data.lastName || ''}
             onChange={(e) => handleChange('lastName', e.target.value)}
             error={errors.lastName}
+            disabled={hasAccountName && Boolean(data.lastName)}
+            helper={hasAccountName ? 'Populated from your SALO account.' : undefined}
             required
           />
 
@@ -126,50 +137,17 @@ export default function RepresentativeInformationStep({
           </Select>
         </div>
 
-        <div className="grid-cols-2">
-          <div>
-            <Input
-              id="rep-email"
-              type="email"
-              label="Personal / Representative Email"
-              placeholder="e.g. mariaclara@example.com"
-              value={data.email || ''}
-              onChange={(e) => {
-                setSameAsVerified(false);
-                handleChange('email', e.target.value);
-              }}
-              error={errors.email}
-              required
-              helper={
-                sameAsVerified
-                  ? 'Same as verified business email.'
-                  : 'Official merchant correspondence will be sent to this representative.'
-              }
-            />
-            {verifiedEmail && (
-              <label className="checkbox-inline-option">
-                <input
-                  type="checkbox"
-                  checked={sameAsVerified}
-                  onChange={(e) => handleToggleSameEmail(e.target.checked)}
-                />
-                <span>Same as verified business email ({verifiedEmail})</span>
-              </label>
-            )}
-          </div>
-
-          <Input
-            id="rep-phone"
-            type="tel"
-            label="Personal Mobile Number"
-            placeholder="e.g. 0917-123-4567"
-            value={data.phone || ''}
-            onChange={(e) => handleChange('phone', e.target.value)}
-            error={errors.phone}
-            required
-            helper="For two-factor merchant authentication and urgent notices."
-          />
-        </div>
+        <Input
+          id="rep-phone"
+          type="tel"
+          label="Personal Mobile Number"
+          placeholder="e.g. 0917-123-4567"
+          value={data.phone || ''}
+          onChange={(e) => handleChange('phone', e.target.value)}
+          error={errors.phone}
+          required
+          helper="For two-factor merchant authentication and urgent notices."
+        />
 
         {/* Legal Declaration */}
         <div className="wizard-checkbox-card">

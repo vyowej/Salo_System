@@ -35,11 +35,11 @@ export default function AddressesPage() {
     setFormModalOpen(true);
   };
 
-  const handleSaveAddress = (payload) => {
+  const handleSaveAddress = async (payload) => {
     if (editingAddress?.id) {
-      updateAddress(editingAddress.id, payload);
+      await updateAddress(editingAddress.id, payload);
     } else {
-      addAddress(payload);
+      await addAddress(payload);
     }
   };
 
@@ -48,9 +48,9 @@ export default function AddressesPage() {
     setDeleteModalOpen(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (addressToDelete?.id) {
-      deleteAddress(addressToDelete.id);
+      await deleteAddress(addressToDelete.id);
     }
     setDeleteModalOpen(false);
     setAddressToDelete(null);

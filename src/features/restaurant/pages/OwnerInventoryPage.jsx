@@ -72,8 +72,6 @@ export default function OwnerInventoryPage() {
 
   useEffect(() => {
     loadInventory();
-    window.addEventListener('salo:demoStoreUpdated', loadInventory);
-    return () => window.removeEventListener('salo:demoStoreUpdated', loadInventory);
   }, [loadInventory]);
 
   const filteredMenuItems = useMemo(() => filterInventoryMenuItems(menuItems, {

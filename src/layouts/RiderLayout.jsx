@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 import { useLogout } from '../hooks/useLogout';
 import { useSidebarCollapse } from '../hooks/useSidebarCollapse';
 import TopBar from '../components/navigation/TopBar';
@@ -12,11 +13,8 @@ import {
   RIDER_SIDEBAR_COLLAPSED_KEY,
 } from '../components/navigation/riderNavConfig';
 import { buildProfileMenuItems, ROLE_META } from '../config/navigationConfig';
-import { getRiderMock } from '../features/rider/mocks';
 import { MOBILE_PRIMARY_NAV_KEYS } from '../features/rider/constants/riderConstants';
-import ScenarioLink from '../features/rider/components/ScenarioLink';
-import { withScenario } from '../features/rider/utils/scenarioLinks';
-import useScenario from '../features/rider/hooks/useScenario';
+import riderService from '../services/riderService';
 import RoleOnboardingModal from '../components/onboarding/RoleOnboardingModal';
 import { useRoleOnboarding } from '../hooks/useRoleOnboarding';
 import '../components/navigation/NavigationShell.css';
@@ -28,17 +26,30 @@ const mkIcon = (path) => (
   </svg>
 );
 
-function getStatusPill(profile, activeDelivery) {
-  if (activeDelivery || profile?.availability === 'on_delivery') {
+function getStatusPill(availability, activeDelivery) {
+  if (activeDelivery) {
     return { label: 'On delivery', tone: 'orange' };
   }
-  if (profile?.availability === 'online_available') {
+  if (availability === 'online') {
     return { label: 'Online', tone: 'green' };
+  }
+  if (availability === 'temporarily_unavailable') {
+    return { label: 'Paused', tone: 'gray' };
   }
   return { label: 'Offline', tone: 'gray' };
 }
 
+function getInitials(name = 'Rider') {
+  return String(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('') || 'R';
+}
+
 export default function RiderLayout({ children }) {
+  const { user } = useAuth();
   const { requestLogout, logoutDialogProps } = useLogout();
   const [collapsed, toggleCollapsed] = useSidebarCollapse(RIDER_SIDEBAR_COLLAPSED_KEY, true);
   const riderOnboarding = useRoleOnboarding('rider');
@@ -47,25 +58,38 @@ export default function RiderLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
+  const [dashboard, setDashboard] = useState(null);
 
-  const scenario = useScenario();
-  const profile = getRiderMock('riderProfile', scenario);
-  const notifications = getRiderMock('notifications', scenario);
-  const deliveries = getRiderMock('deliveries', scenario);
-  const unreadNotifications = Array.isArray(notifications)
-    ? notifications.filter((item) => item.unread).length
-    : 0;
-  const activeDelivery = deliveries?.active;
-  const statusPill = getStatusPill(profile, activeDelivery);
+  useEffect(() => {
+    let active = true;
+    const loadDashboard = async () => {
+      try {
+        const data = await riderService.getDashboard();
+        if (active) setDashboard(data);
+      } catch {
+        if (active) setDashboard(null);
+      }
+    };
+    loadDashboard();
+    window.addEventListener('salo:riderUpdated', loadDashboard);
+    return () => {
+      active = false;
+      window.removeEventListener('salo:riderUpdated', loadDashboard);
+    };
+  }, []);
+
+  const activeDelivery = dashboard?.active_delivery || null;
+  const availability = dashboard?.availability || 'offline';
+  const statusPill = getStatusPill(availability, activeDelivery);
 
   const items = useMemo(
     () =>
       RIDER_NAV_CONFIG.map((item) => ({
         ...item,
-        href: withScenario(item.path, location.search),
+        href: item.path,
         dot: item.id === 'deliveries' && Boolean(activeDelivery),
       })),
-    [location.search, activeDelivery]
+    [activeDelivery]
   );
 
   const activePath = location.pathname;
@@ -87,122 +111,134 @@ export default function RiderLayout({ children }) {
   }, [isMapPage]);
 
   const profileMenuItems = buildProfileMenuItems({
-    profileHref: withScenario(ROLE_META.rider.profileHref, location.search),
-    settingsHref: withScenario(ROLE_META.rider.settingsHref, location.search),
-    onSwitchAccount: () => setSwitchAccountOpen(true),
+    profileHref: ROLE_META.rider.profileHref,
+    settingsHref: ROLE_META.rider.settingsHref,
+    onSwitchWorkspace: () => setSwitchAccountOpen(true),
     onLogout: requestLogout,
   });
 
-  const primaryNavItems = items.filter((item) => MOBILE_PRIMARY_NAV_KEYS.includes(item.id));
-  const moreNavItems = items.filter((item) => !MOBILE_PRIMARY_NAV_KEYS.includes(item.id));
+  const primaryBottomItems = items.filter((item) => MOBILE_PRIMARY_NAV_KEYS.includes(item.id));
+  const overflowItems = items.filter((item) => !MOBILE_PRIMARY_NAV_KEYS.includes(item.id));
+  const activeNavItem = items.find((item) => item.id === current);
+
+  const displayName = user?.name || dashboard?.rider?.name || user?.username || 'Rider';
+  const displayEmail = user?.email || dashboard?.rider?.email || '';
+  const displayInitials = getInitials(displayName);
+
+  const topbarLeft = (
+    <div className="rider-topbar-title-group">
+      <div className="rider-topbar-breadcrumb">
+        <span>Rider</span>
+        <span aria-hidden="true">/</span>
+        <strong>{activeNavItem?.label || 'Dashboard'}</strong>
+      </div>
+    </div>
+  );
+
+  const topbarRight = (
+    <div className="rider-topbar-actions">
+      <span className={`rider-status-pill ${statusPill.tone}`}>
+        <span className="rider-status-dot" aria-hidden="true" />
+        {statusPill.label}
+      </span>
+
+      <ProfileMenu
+        name={displayName}
+        email={displayEmail}
+        initials={displayInitials}
+        roleLabel={ROLE_META.rider.label}
+        items={profileMenuItems}
+      />
+    </div>
+  );
 
   return (
-    <div className={`rider-shell navigation-shell ${isMapPage ? 'rider-map-shell' : ''}`}>
-      <div className={`rider-sidebar navigation-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
-        <SideBar
-          items={items}
-          activeId={current}
-          collapsed={collapsed}
-          onToggleCollapse={toggleCollapsed}
-          mobileOpen={mobileOpen}
-          onMobileClose={() => setMobileOpen(false)}
-          logoHref={withScenario('/rider', location.search)}
-          onLogout={requestLogout}
-        />
-      </div>
+    <div className="salo-shell salo-shell--rider">
+      <SideBar
+        brandTitle="SALO"
+        brandSub="Rider Fleet"
+        brandHref="/rider"
+        navItems={items}
+        activeId={current}
+        collapsed={collapsed}
+        onToggleCollapse={toggleCollapsed}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
+      />
 
-      <div className={`rider-main navigation-main ${collapsed ? 'sidebar-collapsed' : ''} ${isMapPage ? 'rider-map-main' : ''}`}>
+      <div className="salo-shell__main">
         <TopBar
-          mobileMenuOpen={mobileOpen}
-          onMenuToggle={() => setMobileOpen((value) => !value)}
-          showNotifications
-          notificationCount={unreadNotifications}
-          notificationsHref={withScenario('/rider/notifications', location.search)}
-          roleLabel={ROLE_META.rider.label}
-          roleTone={ROLE_META.rider.tone}
-          showThemeToggle
-          headingExtras={(
-            <ScenarioLink
-              to="/rider#driver-mode"
-              className={`rider-status-pill rider-status-pill--${statusPill.tone}`}
-              aria-label={`Driver status: ${statusPill.label}. Go to Driver Mode`}
-              title="Go to Driver Mode"
-            >
-              <span className="rider-status-pill-dot" aria-hidden="true" />
-              <span>{statusPill.label}</span>
-            </ScenarioLink>
-          )}
-          profileButton={(
-            <ProfileMenu
-              profileName={profile.name}
-              profileEmail={profile.email}
-              profileInitials={profile.initials}
-              profileAvatar={profile.photo}
-              roleLabel={ROLE_META.rider.label}
-              roleTone={ROLE_META.rider.tone}
-              menuItems={profileMenuItems}
-            />
-          )}
+          left={topbarLeft}
+          right={topbarRight}
+          showMobileMenuButton
+          mobileBrandHref="/rider"
+          onOpenMobileMenu={() => setMobileOpen(true)}
         />
-        <main className={`rider-content ${isMapPage ? 'rider-content-map' : ''}`}>
+
+        <main className={`salo-shell__content ${isMapPage ? 'rider-main-map' : ''}`}>
           {children}
         </main>
-        <nav className="rider-mobile-nav navigation-mobile-bottom-nav" aria-label="Rider mobile navigation">
-          {primaryNavItems.map((item) => (
-            <ScenarioLink
+      </div>
+
+      {!isMapPage && (
+        <nav className="rider-bottom-nav" aria-label="Primary rider navigation">
+          {primaryBottomItems.map((item) => (
+            <a
               key={item.id}
-              to={item.href}
-              className={`rider-mobile-nav-item navigation-mobile-nav-item ${current === item.id ? 'is-active active' : ''}`}
-              aria-current={current === item.id ? 'page' : undefined}
-              onClick={() => setMoreOpen(false)}
+              href={item.path}
+              className={`rider-bottom-link ${current === item.id ? 'active' : ''}`}
             >
               {item.icon}
-              <span>{item.id === 'map' ? 'Map' : item.label === 'Delivery History' ? 'History' : item.label}</span>
-            </ScenarioLink>
+              <span>{item.shortLabel || item.label}</span>
+              {item.dot && <span className="rider-bottom-dot" aria-hidden="true" />}
+            </a>
           ))}
-          <button
-            type="button"
-            className={`rider-mobile-nav-item navigation-mobile-nav-item ${moreOpen || moreNavItems.some((item) => item.id === current) ? 'is-active active' : ''}`}
-            aria-expanded={moreOpen}
-            aria-controls="rider-mobile-more-menu"
-            onClick={() => setMoreOpen((open) => !open)}
-          >
-            {mkIcon('M5 12h.01M12 12h.01M19 12h.01')}
-            <span>More</span>
-          </button>
-          {moreOpen && (
-            <div className="rider-mobile-more-menu" id="rider-mobile-more-menu">
-              {moreNavItems.map((item) => (
-                <ScenarioLink
+          {overflowItems.length > 0 && (
+            <button
+              type="button"
+              className={`rider-bottom-link ${moreOpen ? 'active' : ''}`}
+              onClick={() => setMoreOpen((v) => !v)}
+            >
+              {mkIcon('M4 12h16M4 6h16M4 18h16')}
+              <span>More</span>
+            </button>
+          )}
+        </nav>
+      )}
+
+      {moreOpen && (
+        <div className="rider-more-drawer" role="dialog" aria-label="More rider pages">
+          <div className="rider-more-backdrop" onClick={() => setMoreOpen(false)} />
+          <div className="rider-more-sheet">
+            <div className="rider-more-header">
+              <strong>More</strong>
+              <button type="button" onClick={() => setMoreOpen(false)} aria-label="Close menu">✕</button>
+            </div>
+            <div className="rider-more-links">
+              {overflowItems.map((item) => (
+                <a
                   key={item.id}
-                  to={item.href}
-                  className={`rider-mobile-more-item ${current === item.id ? 'is-active' : ''}`}
+                  href={item.path}
+                  className={current === item.id ? 'active' : ''}
                   onClick={() => setMoreOpen(false)}
                 >
                   {item.icon}
                   <span>{item.label}</span>
-                </ScenarioLink>
+                </a>
               ))}
             </div>
-          )}
-        </nav>
-      </div>
+          </div>
+        </div>
+      )}
+
       <SwitchAccountModal
         open={switchAccountOpen}
         onClose={() => setSwitchAccountOpen(false)}
-        currentRole="rider"
-      />
-
-      <RoleOnboardingModal
-        open={riderOnboarding.shouldShow}
-        role="rider"
-        user={riderOnboarding.user}
-        riderDashboardData={riderOnboarding.riderDashboardData}
-        onComplete={riderOnboarding.completeOnboarding}
-        onSkip={riderOnboarding.skipOnboarding}
       />
 
       <ConfirmDialog {...logoutDialogProps} />
+
+      <RoleOnboardingModal {...riderOnboarding} />
     </div>
   );
 }

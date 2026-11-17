@@ -289,40 +289,14 @@ export const APPLICATION_STATUS_CONFIG = {
   },
 };
 
-export const MOCK_ADMIN_FEEDBACK_SAMPLES = {
-  'Additional Documents Required': {
-    reviewedBy: 'SALO Onboarding Compliance Team',
-    reviewedAt: '2026-11-10T09:30:00Z',
-    requestedDocument: 'Sanitary Permit / Health Certificate',
-    reason: 'Food safety verification for prepared meals and kitchen sanitation inspection.',
-    instructions: 'Please upload an active Sanitary Permit issued by the City Health Department for the current calendar year. Ensure all text and permit numbers are clearly readable.',
-    dueDate: '2026-11-24',
-    actionPrompt: 'Upload Requested Document',
-  },
-  'Needs Correction': {
-    reviewedBy: 'SALO Onboarding Operations (Officer M. Santos)',
-    reviewedAt: '2026-11-09T14:20:00Z',
-    flaggedSection: 'Business Documents & Permits',
-    flaggedDocument: "Mayor's / Business Permit",
-    feedback: "The uploaded Mayor's Permit has expired (dated 2024/2025). Please upload the official 2026 Business Permit renewal receipt or certified temporary operating clearance from the City Licensing Office. Ensure all four corners of the certificate are clearly legible.",
-    actionPrompt: 'Upload Updated Permit Document',
-  },
-  Rejected: {
-    reviewedBy: 'SALO Partner Compliance Committee',
-    reviewedAt: '2026-11-08T16:45:00Z',
-    reason: 'Ineligible operating location or duplicate business registration detected under another active SALO merchant account.',
-    details: 'The submitted physical kitchen address is currently registered under an active partner agreement with exclusivity commitments. For questions or disputes, please contact partner-support@salo.ph referencing your application code.',
-  },
-  Approved: {
-    reviewedBy: 'SALO Merchant Onboarding Team',
-    reviewedAt: '2026-11-09T11:00:00Z',
-    note: 'Congratulations! All business registrations, TIN verification, and local permits have passed validation.',
-    activationChecklist: [
-      { id: 'profile', text: 'Confirm restaurant profile and kitchen contact numbers', done: true },
-      { id: 'hours', text: 'Review confirmed weekly operating & pickup hours', done: true },
-      { id: 'menu', text: 'Upload restaurant dish photos and customize add-ons/variations', done: false },
-      { id: 'bank', text: 'Settlement test deposit verification (scheduled within 48h)', done: false },
-      { id: 'inspection', text: 'Optional virtual kitchen onboarding call with SALO Merchant Success', done: false },
-    ],
-  },
-};
+/**
+ * Validates Step 7 fulfillment services.
+ * Backend requires at least Delivery or Pickup / Takeout (Table Reservations is optional).
+ */
+export function validateRestaurantServices(services = {}) {
+  const hasRequiredFulfillment = Boolean(services?.delivery || services?.pickup);
+  if (!hasRequiredFulfillment) {
+    return 'Please select at least Delivery or Pickup / Takeout. Table Reservations is optional and cannot be the only selected service.';
+  }
+  return null;
+}

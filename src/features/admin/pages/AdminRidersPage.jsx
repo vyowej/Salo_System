@@ -13,11 +13,10 @@ import {
 } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
-import { getAdminMock } from '../mocks';
 import { formatDate, formatPeso } from '../utils/format';
 import './AdminPages.css';
 
-const ORDERS = getAdminMock('orders').data;
+const ORDERS = [];
 
 const STATUS_LABELS = {
   active: 'Active',

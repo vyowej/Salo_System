@@ -1,0 +1,305 @@
+.salo-camera-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 16px);
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.salo-camera-instructions {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3, 12px);
+  background: var(--surface-secondary, #f8f9fa);
+  border: 1px solid var(--border-secondary, #e5e7eb);
+  border-radius: var(--radius-md, 10px);
+  padding: 10px 14px;
+}
+
+[data-theme="dark"] .salo-camera-instructions {
+  background: #252529;
+  border-color: #353539;
+}
+
+.salo-camera-instruction-icon {
+  font-size: 18px;
+  line-height: 1.3;
+  flex-shrink: 0;
+}
+
+.salo-camera-instruction-text {
+  margin: 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary, #525252);
+  line-height: 1.45;
+}
+
+.salo-camera-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: min(52vh, 400px);
+  background: #111214;
+  border-radius: var(--radius-lg, 14px);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-primary, #e5e7eb);
+}
+
+.salo-camera-viewfinder,
+.salo-camera-preview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.salo-camera-video,
+.salo-camera-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.salo-camera-preview-img {
+  object-fit: contain;
+  background: #0d0e10;
+}
+
+.salo-camera-video.is-mirrored {
+  transform: scaleX(-1);
+}
+
+.salo-camera-permission-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 18, 20, 0.92);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-5, 20px);
+  gap: var(--space-2, 8px);
+  z-index: 4;
+}
+
+.salo-camera-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--salo-orange, #f36b2b);
+  animation: saloCameraSpin 0.8s linear infinite;
+  margin-bottom: 4px;
+}
+
+@keyframes saloCameraSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.salo-camera-status-title {
+  font-size: var(--text-sm, 14px);
+  font-weight: 700;
+}
+
+.salo-camera-status-hint {
+  font-size: var(--text-xs, 12px);
+  color: rgba(255, 255, 255, 0.72);
+  max-width: 280px;
+}
+
+.salo-camera-guide {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 2;
+}
+
+.salo-camera-guide-box {
+  position: relative;
+  width: min(82%, 340px);
+  height: min(68%, 220px);
+  border: 1.5px dashed rgba(255, 255, 255, 0.55);
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.28);
+}
+
+.salo-camera-guide.is-selfie .salo-camera-guide-box {
+  width: min(56%, 210px);
+  height: min(76%, 250px);
+  border-radius: 9999px;
+}
+
+.guide-corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-color: var(--salo-orange, #f36b2b);
+  border-style: solid;
+}
+
+.salo-camera-guide.is-selfie .guide-corner {
+  display: none;
+}
+
+.guide-corner.tl {
+  top: -2px;
+  left: -2px;
+  border-width: 3px 0 0 3px;
+  border-top-left-radius: 10px;
+}
+
+.guide-corner.tr {
+  top: -2px;
+  right: -2px;
+  border-width: 3px 3px 0 0;
+  border-top-right-radius: 10px;
+}
+
+.guide-corner.bl {
+  bottom: -2px;
+  left: -2px;
+  border-width: 0 0 3px 3px;
+  border-bottom-left-radius: 10px;
+}
+
+.guide-corner.br {
+  bottom: -2px;
+  right: -2px;
+  border-width: 0 3px 3px 0;
+  border-bottom-right-radius: 10px;
+}
+
+.salo-camera-guide-caption {
+  margin-top: 12px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  z-index: 3;
+}
+
+.salo-camera-flip-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 150ms ease;
+}
+
+.salo-camera-flip-btn:hover {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.salo-camera-preview-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: var(--salo-green, #2e7d32);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.salo-camera-error {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-5, 20px);
+  background: var(--surface-secondary, #f8f9fa);
+  color: var(--text-primary, #171717);
+  gap: var(--space-2, 8px);
+}
+
+[data-theme="dark"] .salo-camera-error {
+  background: #1c1c20;
+  color: #f3f4f6;
+}
+
+.salo-camera-error-icon {
+  color: var(--salo-danger, #dc2626);
+  margin-bottom: 4px;
+}
+
+.salo-camera-error-title {
+  margin: 0;
+  font-size: var(--font-size-base, 15px);
+  font-weight: 700;
+}
+
+.salo-camera-error-msg {
+  margin: 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary, #525252);
+  max-width: 340px;
+  line-height: 1.5;
+}
+
+[data-theme="dark"] .salo-camera-error-msg {
+  color: #a1a1aa;
+}
+
+.salo-camera-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3, 12px);
+  padding-top: var(--space-2, 8px);
+  border-top: 1px solid var(--border-secondary, #f1f3f5);
+  flex-wrap: wrap;
+}
+
+[data-theme="dark"] .salo-camera-footer {
+  border-color: #2e2e32;
+}
+
+@media (max-width: 540px) {
+  .salo-camera-stage {
+    aspect-ratio: 3 / 4;
+    max-height: 55vh;
+  }
+
+  .salo-camera-footer {
+    justify-content: stretch;
+  }
+
+  .salo-camera-footer > button {
+    flex: 1 1 auto;
+  }
+}

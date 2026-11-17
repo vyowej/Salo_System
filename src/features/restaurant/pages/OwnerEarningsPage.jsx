@@ -112,7 +112,7 @@ export default function OwnerEarningsPage() {
           boxShadow: 'var(--shadow-sm)',
         }}>
           <span style={{ fontSize: 11, color: 'var(--salo-green)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.06em' }}>
-            Pending payout (demo)
+            Pending payout
           </span>
           <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--salo-green)', margin: 'var(--space-2) 0' }}>
             ₱{earnings.pendingPayout.toLocaleString('en-PH')}

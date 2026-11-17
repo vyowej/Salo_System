@@ -11,7 +11,7 @@ export { filterOptions } from './filterOptions';
 export { safetyContent } from './safetyContent';
 export { emergencyContacts } from './emergencyContacts';
 
-export const RIDER_SCREEN_STATES = ['Sample data', 'Loading', 'Empty', 'Error', 'Success'];
+export const RIDER_SCREEN_STATES = ['Loading', 'Empty', 'Error', 'Success'];
 export const VEHICLE_TYPES = ['Motorcycle', 'Bicycle', 'E-bike / E-scooter', 'Other approved vehicle'];
 export const RIDER_APPLICATION_STATUSES = ['Draft', 'Submitted', 'Under Review', 'Requires Additional Information', 'Approved', 'Rejected', 'Suspended'];
 export const RIDER_ACCOUNT_STATES = ['Pending approval', 'Approved · Awaiting activation', 'Active', 'Suspended', 'Deactivated'];

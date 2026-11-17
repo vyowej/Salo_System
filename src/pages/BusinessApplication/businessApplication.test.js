@@ -12,6 +12,7 @@ import {
   APPLICATION_STATUS_CONFIG,
   INITIAL_APPLICATION_STATE,
   WIZARD_STEPS,
+  validateRestaurantServices,
 } from './constants/applicationDefaults.js';
 
 test('document matrix requires DTI for Sole Proprietorship', () => {
@@ -149,4 +150,48 @@ test('initial application state has expected default structure', () => {
   assert.equal(typeof INITIAL_APPLICATION_STATE.configuration, 'object');
   assert.equal(INITIAL_APPLICATION_STATE.emailVerification.isVerified, false);
   assert.equal(INITIAL_APPLICATION_STATE.configuration.services.dineIn, true, 'dineIn must be enabled by default in services');
+});
+
+test('validateRestaurantServices requires Delivery or Pickup / Takeout and treats Table Reservations as optional', () => {
+  // Delivery only -> valid
+  assert.equal(
+    validateRestaurantServices({ delivery: true, pickup: false, tableReservations: false }),
+    null
+  );
+
+  // Pickup only -> valid
+  assert.equal(
+    validateRestaurantServices({ delivery: false, pickup: true, tableReservations: false }),
+    null
+  );
+
+  // Delivery + Table Reservations -> valid
+  assert.equal(
+    validateRestaurantServices({ delivery: true, pickup: false, tableReservations: true }),
+    null
+  );
+
+  // Pickup + Table Reservations -> valid
+  assert.equal(
+    validateRestaurantServices({ delivery: false, pickup: true, tableReservations: true }),
+    null
+  );
+
+  // Table Reservations only -> must fail
+  const reservationsOnlyErr = validateRestaurantServices({
+    delivery: false,
+    pickup: false,
+    tableReservations: true,
+  });
+  assert.ok(reservationsOnlyErr, 'Table Reservations alone must fail validation');
+  assert.match(reservationsOnlyErr, /Delivery or Pickup/i);
+
+  // No services selected -> must fail
+  const noneSelectedErr = validateRestaurantServices({
+    delivery: false,
+    pickup: false,
+    tableReservations: false,
+  });
+  assert.ok(noneSelectedErr, 'No services selected must fail validation');
+  assert.match(noneSelectedErr, /Delivery or Pickup/i);
 });

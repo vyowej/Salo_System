@@ -225,25 +225,6 @@
   gap: var(--space-5, 20px);
 }
 
-.wizard-mock-pill-alert {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2, 8px);
-  background: var(--salo-gold-light, #fbf3e2);
-  color: #7a4b0b;
-  border-radius: var(--radius-md, 10px);
-  padding: var(--space-3, 12px) var(--space-4, 16px);
-  font-size: var(--text-xs, 11px);
-  line-height: var(--line-height-snug, 1.35);
-  border: 1px dashed rgba(230, 126, 34, 0.4);
-}
-
-[data-theme="dark"] .wizard-mock-pill-alert {
-  background: #2a2215;
-  color: #f3c27e;
-  border-color: #553d1d;
-}
-
 .verify-flow-container {
   display: flex;
   flex-direction: column;

@@ -4,7 +4,7 @@
  * customer saved addresses, Admin service areas, restaurant coverage, and live tracking.
  */
 
-import apiClient from './apiClient';
+import apiClient from './apiClient.js';
 
 const FALLBACK_PROVINCES = [
   'Metro Manila',

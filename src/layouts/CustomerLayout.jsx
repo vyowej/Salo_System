@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import { useLogout } from '../hooks/useLogout';
+import useAddresses from '../hooks/useAddresses';
 import TopBar from '../components/navigation/TopBar';
 import SideBar from '../components/navigation/SideBar';
 import ProfileMenu from '../components/navigation/ProfileMenu';
@@ -17,7 +18,6 @@ import {
 } from '../components/navigation/customerNavConfig';
 import { buildProfileMenuItems, ROLE_META } from '../config/navigationConfig';
 import customerService from '../services/customerService';
-import { CUSTOMER_INVITATION_COUNT } from '../features/restaurant/pages/team/teamSamples';
 import '../components/navigation/NavigationShell.css';
 import './CustomerLayout.css';
 
@@ -60,7 +60,11 @@ export default function CustomerLayout({ children }) {
   const [hasActiveOrder, setHasActiveOrder] = useState(false);
   const [hasReservationUpdate, setHasReservationUpdate] = useState(false);
 
-  const [defaultAddress, setDefaultAddress] = useState(() => customerService.getDefaultAddress());
+  const {
+    addresses: addressOptions,
+    defaultAddress,
+    setDefaultAddress: setDefaultAddressApi,
+  } = useAddresses();
   const [searchQuery, setSearchQuery] = useState(() => new URLSearchParams(location.search).get('q') || '');
   const [recentSearches, setRecentSearches] = useState(() => customerService.getRecentSearches());
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
@@ -72,7 +76,6 @@ export default function CustomerLayout({ children }) {
   }, [location.search]);
 
   useEffect(() => {
-    setDefaultAddress(customerService.getDefaultAddress());
     setRecentSearches(customerService.getRecentSearches());
   }, [location.pathname]);
 
@@ -98,11 +101,9 @@ export default function CustomerLayout({ children }) {
 
     syncAttentionState();
     window.addEventListener('salo:notificationsUpdated', syncAttentionState);
-    window.addEventListener('salo:demoStoreUpdated', syncAttentionState);
 
     return () => {
       window.removeEventListener('salo:notificationsUpdated', syncAttentionState);
-      window.removeEventListener('salo:demoStoreUpdated', syncAttentionState);
     };
   }, [location.pathname]);
 
@@ -151,16 +152,13 @@ export default function CustomerLayout({ children }) {
         if (item.id === 'reservations') {
           return { ...item, dot: hasReservationUpdate };
         }
-        if (item.id === 'invitations') {
-          return { ...item, badge: CUSTOMER_INVITATION_COUNT };
-        }
         return item;
       }),
     [hasActiveOrder, hasReservationUpdate]
   );
 
   const profileName = user?.name || user?.username || 'Customer';
-  const profileEmail = user?.email || user?.username || 'customer@salo.local';
+  const profileEmail = user?.email || user?.username || '';
   const profileInitials = getInitials(profileName);
 
   const profileMenuItems = buildProfileMenuItems({
@@ -187,8 +185,6 @@ export default function CustomerLayout({ children }) {
       navigate(target);
     }
   };
-
-  const addressOptions = customerService.getSavedAddresses();
 
   const topbarSearch = (
     <div className={`customer-topbar-controls ${mobileSearchOpen ? 'search-expanded' : ''}`}>
@@ -222,10 +218,9 @@ export default function CustomerLayout({ children }) {
                   key={address.id}
                   type="button"
                   className={`customer-topbar-address-option ${defaultAddress?.id === address.id ? 'active' : ''}`}
-                  onMouseDown={(event) => {
+                  onMouseDown={async (event) => {
                     event.preventDefault();
-                    const next = customerService.setDefaultAddress(address.id);
-                    setDefaultAddress(next.find((item) => item.isDefault) || next[0] || null);
+                    await setDefaultAddressApi(address.id);
                     setAddressMenuOpen(false);
                   }}
                 >

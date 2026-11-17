@@ -6,7 +6,6 @@ import Button from '../../../components/common/Button';
 import RestaurantImage from '../components/RestaurantImage';
 
 export default function FavoritesPage() {
-  const [restaurants, setRestaurants] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -16,11 +15,9 @@ export default function FavoritesPage() {
         const allRestaurants = await customerService.getRestaurants();
         const favoriteIds = customerService.getFavoriteRestaurants();
         const savedFavorites = allRestaurants.filter((restaurant) => favoriteIds.includes(restaurant.id));
-        setRestaurants(allRestaurants);
         setFavorites(savedFavorites);
       } catch {
         setFavorites([]);
-        setRestaurants([]);
       } finally {
         setLoading(false);
       }
@@ -36,10 +33,8 @@ export default function FavoritesPage() {
     return () => window.removeEventListener('salo:favoritesUpdated', handleFavoritesUpdated);
   }, []);
 
-  const handleToggleFavorite = (restaurantId) => {
-    const next = customerService.toggleFavoriteRestaurant(restaurantId);
-    const nextFavorites = restaurants.filter((restaurant) => next.includes(restaurant.id));
-    setFavorites(nextFavorites);
+  const handleToggleFavorite = () => {
+    // Favorites API not available yet
   };
 
   return (

@@ -10,7 +10,6 @@ import {
   RIDER_APPLICATION_STEPS,
   INITIAL_RIDER_APPLICATION_STATE,
   RIDER_STATUS_CONFIG,
-  MOCK_RIDER_ADMIN_FEEDBACK,
 } from './constants/riderApplicationDefaults.js';
 
 test('delivery methods catalog includes all 5 transport modes', () => {
@@ -133,10 +132,6 @@ test('status simulation configuration contains all 8 required states', () => {
     assert.ok(meta.variant, `Status ${statusKey} must have a badge variant`);
     assert.ok(typeof meta.progress === 'number', `Status ${statusKey} must have a numeric progress value`);
   });
-
-  assert.ok(MOCK_RIDER_ADMIN_FEEDBACK['Needs Correction'].feedback, 'Must provide Needs Correction mock feedback');
-  assert.ok(MOCK_RIDER_ADMIN_FEEDBACK.Approved.activationChecklist.length >= 3, 'Must provide Approved activation checklist');
-  assert.ok(MOCK_RIDER_ADMIN_FEEDBACK.Rejected.reason, 'Must provide Rejected reason');
 });
 
 test('camera config maps facing mode and identifies photo requirements', async () => {
