@@ -15,12 +15,9 @@ import RestaurantImage from '../../customer/components/RestaurantImage';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import OperatingHoursEditor from './OperatingHoursEditor';
 import {
-  createBusinessProfilePatch,
   formatBusinessAddress,
-  getRemovedImageReferences,
   getStagedImageIds,
   toBusinessProfileForm,
-  validateBusinessProfile,
 } from '../profile/businessProfileData';
 import './OwnerProfilePage.css';
 
@@ -169,25 +166,46 @@ export default function OwnerProfilePage() {
     activeRestaurantId.current = selectedRestaurantId;
   }, [selectedRestaurantId]);
 
-  const loadProfile = useCallback(() => {
+  const loadProfile = useCallback(async () => {
     setLoading(true);
     setError('');
     setFieldErrors({});
     setStagedLogoPreview(null);
     setStagedCoverPreview(null);
-    const pendingImages = [...stagedImageIds.current];
     stagedImageIds.current.clear();
-    if (pendingImages.length) {
-      Promise.allSettled(pendingImages.map((id) => restaurantService.removeImage({ id }))).then((results) => {
-        if (results.some((result) => result.status === 'rejected')) {
-          setError('The selected restaurant loaded, but one or more unsaved images could not be removed from demo storage.');
-        }
-      });
-    }
     try {
-      const restaurant = ownerService.getRestaurant(selectedRestaurantId);
-      if (!restaurant) throw new Error('Restaurant profile is unavailable.');
-      const data = toBusinessProfileForm(restaurant);
+      const [profile, loc] = await Promise.all([
+        ownerService.getProfile(selectedRestaurantId),
+        locationApiService.getRestaurantLocation().catch(() => null),
+      ]);
+      if (!profile) throw new Error('Restaurant profile is unavailable.');
+
+      const data = toBusinessProfileForm({
+        id: profile.restaurant_id,
+        name: profile.restaurant_name,
+        businessType: profile.business_type,
+        description: profile.description || '',
+        phone: profile.contact_phone || '',
+        contactEmail: profile.business_email || '',
+        logoImage: profile.logo_image ? { id: 'logo', src: profile.logo_image } : null,
+        coverPhoto: profile.cover_image ? { id: 'cover', src: profile.cover_image } : null,
+        fulfillment: {
+          delivery: Boolean(profile.offers_delivery),
+          pickup: Boolean(profile.offers_pickup),
+        },
+        location: {
+          province: loc?.address?.province || profile.address?.province || '',
+          city: loc?.address?.city || profile.address?.city || '',
+          barangay: loc?.address?.barangay || profile.address?.barangay || '',
+          streetAddress: loc?.address?.street || profile.address?.street || '',
+          postalCode: loc?.address?.postal_code || profile.address?.postal_code || '',
+          latitude: loc?.address?.latitude ?? '',
+          longitude: loc?.address?.longitude ?? '',
+        },
+        deliveryCoverage: {
+          areas: loc?.coverage_areas || [],
+        },
+      });
       setInitial(data);
       setFormData(data);
       setSaved(false);
@@ -248,7 +266,12 @@ export default function OwnerProfilePage() {
 
   async function handleSave(event) {
     event.preventDefault();
-    const nextFieldErrors = validateBusinessProfile(formData, permissions);
+    if (saving) return;
+
+    const nextFieldErrors = {};
+    if (!formData.fulfillment?.delivery && !formData.fulfillment?.pickup) {
+      nextFieldErrors.offers_delivery = 'At least one ordering service (delivery or pickup) must remain enabled.';
+    }
     setFieldErrors(nextFieldErrors);
     if (Object.keys(nextFieldErrors).length) {
       setError('Review the highlighted fields before saving.');
@@ -258,33 +281,59 @@ export default function OwnerProfilePage() {
     setSaving(true);
     setError('');
     try {
-      const patch = createBusinessProfilePatch(formData, permissions);
-      ownerService.updateBusinessProfile(patch, selectedRestaurantId);
-      const currentImageIds = new Set([
-        formData.logoImage?.id,
-        formData.coverPhoto?.id,
-        ...formData.profilePhotos.map((image) => image.id),
-      ].filter(Boolean));
-      const stagedImagesToRemove = [...stagedImageIds.current]
-        .filter((id) => !currentImageIds.has(id))
-        .map((id) => ({ id }));
-      const removedImages = permissions.canManagePhotos
-        ? [...getRemovedImageReferences(formData, initial), ...stagedImagesToRemove]
-        : [];
-      const nextInitial = copy(formData);
-      setInitial(nextInitial);
-      setFormData(nextInitial);
+      let updatedProfile = await ownerService.updateProfile(selectedRestaurantId, {
+        description: formData.description || '',
+        contact_phone: formData.phone || '',
+        business_email: formData.contactEmail || '',
+        offers_delivery: Boolean(formData.fulfillment?.delivery),
+        offers_pickup: Boolean(formData.fulfillment?.pickup),
+      });
+
+      const logoFile = formData.logoImage?.file || null;
+      const coverFile = formData.coverPhoto?.file || null;
+      const removeLogo = !formData.logoImage && Boolean(initial?.logoImage);
+      const removeCover = !formData.coverPhoto && Boolean(initial?.coverPhoto);
+
+      if (logoFile || coverFile || removeLogo || removeCover) {
+        updatedProfile = await ownerService.updateBranding(selectedRestaurantId, {
+          logoFile,
+          coverFile,
+          removeLogo,
+          removeCover,
+        });
+      }
+
+      const nextData = toBusinessProfileForm({
+        ...formData,
+        description: updatedProfile?.description || '',
+        phone: updatedProfile?.contact_phone || '',
+        contactEmail: updatedProfile?.business_email || '',
+        logoImage: updatedProfile?.logo_image ? { id: 'logo', src: updatedProfile.logo_image } : null,
+        coverPhoto: updatedProfile?.cover_image ? { id: 'cover', src: updatedProfile.cover_image } : null,
+        fulfillment: {
+          delivery: Boolean(updatedProfile?.offers_delivery),
+          pickup: Boolean(updatedProfile?.offers_pickup),
+        },
+      });
+      setInitial(nextData);
+      setFormData(nextData);
+      setStagedLogoPreview(null);
+      setStagedCoverPreview(null);
       stagedImageIds.current.clear();
       setSaved(true);
-
-      const cleanupResults = await Promise.allSettled(
-        removedImages.map((image) => restaurantService.removeImage(image)),
-      );
-      if (cleanupResults.some((result) => result.status === 'rejected')) {
-        setError('Profile saved, but one or more replaced or removed images could not be cleaned up.');
-      }
     } catch (saveError) {
-      setError(saveError.message || 'Unable to save the business profile.');
+      const mapped = {};
+      if (saveError?.errors && typeof saveError.errors === 'object') {
+        Object.entries(saveError.errors).forEach(([k, msgs]) => {
+          const msg = Array.isArray(msgs) ? msgs[0] : String(msgs);
+          if (k === 'business_email') mapped.contactEmail = msg;
+          else if (k === 'contact_phone') mapped.phone = msg;
+          else mapped[k] = msg;
+        });
+        setFieldErrors(mapped);
+      }
+      const firstErr = Object.values(mapped)[0];
+      setError(firstErr || saveError.message || 'Unable to save the business profile.');
     } finally {
       setSaving(false);
     }
@@ -377,10 +426,8 @@ export default function OwnerProfilePage() {
                     id="profile-name"
                     label="Restaurant name"
                     value={formData.name}
-                    onChange={(event) => updateProfile({ name: event.target.value })}
-                    error={fieldErrors.name}
-                    required
-                    disabled={saving}
+                    helper="Restaurant name cannot be changed after approval."
+                    disabled
                   />
                   <Input
                     id="profile-cuisine"

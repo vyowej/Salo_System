@@ -11,6 +11,8 @@ use App\Features\Locations\Controllers\CustomerAddressController;
 use App\Features\Locations\Controllers\LocationLookupController;
 use App\Features\Locations\Controllers\RestaurantLocationController;
 use App\Features\Locations\Controllers\TrackingController;
+use App\Features\Restaurants\Controllers\OwnerMenuController;
+use App\Features\Restaurants\Controllers\OwnerProfileController;
 use App\Features\Restaurants\Controllers\RestaurantApplicationController;
 use App\Features\Restaurants\Controllers\RestaurantController;
 use App\Features\Riders\Controllers\RiderApplicationController;
@@ -100,6 +102,27 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
 
     Route::middleware('role:owner')->group(function (): void {
         Route::get('/setup-status', [RestaurantController::class, 'setupStatus']);
+
+        Route::get('/profile', [OwnerProfileController::class, 'show']);
+        Route::patch('/profile', [OwnerProfileController::class, 'update']);
+        Route::post('/profile/media', [OwnerProfileController::class, 'updateMedia']);
+        Route::patch('/accepting-status', [OwnerProfileController::class, 'updateAcceptingStatus']);
+
+        Route::get('/operating-hours', [OwnerProfileController::class, 'operatingHours']);
+        Route::put('/operating-hours', [OwnerProfileController::class, 'updateOperatingHours']);
+
+        Route::get('/menu/categories', [OwnerMenuController::class, 'categories']);
+        Route::post('/menu/categories', [OwnerMenuController::class, 'storeCategory']);
+        Route::put('/menu/categories/reorder', [OwnerMenuController::class, 'reorderCategories']);
+        Route::patch('/menu/categories/{categoryId}', [OwnerMenuController::class, 'updateCategory'])->whereNumber('categoryId');
+        Route::delete('/menu/categories/{categoryId}', [OwnerMenuController::class, 'destroyCategory'])->whereNumber('categoryId');
+
+        Route::get('/menu/items', [OwnerMenuController::class, 'items']);
+        Route::post('/menu/items', [OwnerMenuController::class, 'storeItem']);
+        Route::post('/menu/items/{itemId}', [OwnerMenuController::class, 'updateItem'])->whereNumber('itemId');
+        Route::patch('/menu/items/{itemId}', [OwnerMenuController::class, 'updateItem'])->whereNumber('itemId');
+        Route::patch('/menu/items/{itemId}/availability', [OwnerMenuController::class, 'updateItemAvailability'])->whereNumber('itemId');
+        Route::delete('/menu/items/{itemId}', [OwnerMenuController::class, 'destroyItem'])->whereNumber('itemId');
     });
 
     Route::middleware('role:owner,staff')->group(function (): void {

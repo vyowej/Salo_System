@@ -89,14 +89,30 @@ export default function OwnerMenuPage() {
   const [deleteCategory, setDeleteCategory] = useState(null);
   const [replacementCategoryId, setReplacementCategoryId] = useState('');
 
-  const loadMenu = useCallback(() => {
+  const loadMenu = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const items = ownerService.getMenuItems(selectedRestaurantId).map(normalizeMenuItem);
+      const [rawItems, rawCategories] = await Promise.all([
+        ownerService.fetchMenuItems(selectedRestaurantId),
+        ownerService.fetchMenuCategories(selectedRestaurantId),
+      ]);
+      const items = (rawItems || []).map((item) =>
+        normalizeMenuItem({
+          ...item,
+          photo: item.photo_url ? { id: `item-${item.id}`, src: item.photo_url } : null,
+        }),
+      );
       setMenuItems(items);
       setCategories(normalizeMenuCategories({
-        categories: ownerService.getMenuCategories(selectedRestaurantId),
+        categories: (rawCategories || []).map((cat) => ({
+          id: cat.id,
+          name: cat.name,
+          description: cat.description,
+          visible: cat.is_active !== false,
+          sortOrder: cat.sort_order ?? 0,
+          itemsCount: cat.items_count ?? 0,
+        })),
       }));
       setSelectedCategory('All');
     } catch (loadError) {
@@ -182,17 +198,16 @@ export default function OwnerMenuPage() {
 
   async function handleSaveItem(event) {
     event.preventDefault();
+    if (saving) return;
     setError('');
     const canManagePricing = access.canAccess(['menu.pricing.manage']);
     const nextItem = { ...formData };
     if (editingItem) {
       if (!canManagePricing) {
         nextItem.price = editingItem.price;
-        nextItem.discountedPrice = editingItem.discountedPrice ?? '';
       }
       if (!access.canAccess(['menu.availability.manage'])) nextItem.availability = editingItem.availability;
       if (!access.canAccess(['menu.photos.manage'])) nextItem.photo = editingItem.photo || null;
-      if (!access.canAccess(['menu.addons.manage'])) nextItem.addOns = editingItem.addOns || [];
     }
     const validationErrors = validateMenuItem(nextItem, { canManagePricing: canManagePricing || !editingItem });
     if (Object.keys(validationErrors).length) {
@@ -208,75 +223,67 @@ export default function OwnerMenuPage() {
       return;
     }
 
-    const beforePhoto = editingItem?.photo;
+    const matchedCategory = categories.find((c) => c.name === nextItem.category) || categories[0];
+    if (!matchedCategory) {
+      setFormErrors({ category: 'Create a menu category first.' });
+      return;
+    }
+
     setSaving(true);
     try {
-      const payload = (!editingItem || access.canAccess(['menu.items.edit'])) ? {
-        name: nextItem.name.trim(),
+      const photoFile = nextItem.photo?.file || null;
+      const removePhoto = Boolean(editingItem?.photo && !nextItem.photo);
+      const apiPayload = {
+        menu_category_id: matchedCategory.id,
+        item_name: nextItem.name.trim(),
         description: nextItem.description.trim(),
-        category: nextItem.category,
-        preparationInfo: nextItem.preparationInfo.trim(),
-        dietaryInfo: nextItem.dietaryInfo,
-      } : {};
-      if (!editingItem || canManagePricing) {
-        payload.price = Number(nextItem.price);
-        payload.discountedPrice = nextItem.discountedPrice === '' ? null : Number(nextItem.discountedPrice);
-      }
-      if (!editingItem || access.canAccess(['menu.availability.manage'])) payload.availability = nextItem.availability;
-      if (!editingItem || access.canAccess(['menu.photos.manage'])) payload.photo = nextItem.photo;
-      if (!editingItem || access.canAccess(['menu.addons.manage'])) payload.addOns = nextItem.addOns;
+        base_price: Number(nextItem.price),
+        availability_status: nextItem.availability,
+      };
 
       if (editingItem) {
-        ownerService.updateMenuItem(editingItem.id, payload, selectedRestaurantId);
+        await ownerService.updateMenuItemApi(selectedRestaurantId, editingItem.id, apiPayload, photoFile, removePhoto);
       } else {
-        ownerService.addMenuItem({ ...payload, isAvailable: payload.availability === 'available' }, selectedRestaurantId);
+        await ownerService.createMenuItem(selectedRestaurantId, apiPayload, photoFile);
       }
       setModalOpen(false);
-      loadMenu();
-      if (beforePhoto?.id && beforePhoto.id !== nextItem.photo?.id) {
-        try {
-          await ownerService.removeImage(beforePhoto);
-        } catch (cleanupError) {
-          setError(`Menu item saved, but its previous photo could not be removed: ${cleanupError.message}`);
-        }
-      }
+      await loadMenu();
     } catch (saveError) {
-      setError(saveError.message || 'Unable to save the menu item.');
+      const mapped = {};
+      if (saveError?.errors && typeof saveError.errors === 'object') {
+        Object.entries(saveError.errors).forEach(([k, msgs]) => {
+          const msg = Array.isArray(msgs) ? msgs[0] : String(msgs);
+          if (k === 'item_name') mapped.name = msg;
+          else if (k === 'base_price') mapped.price = msg;
+          else if (k === 'menu_category_id') mapped.category = msg;
+          else if (k === 'availability_status') mapped.availability = msg;
+          else mapped[k] = msg;
+        });
+        setFormErrors(mapped);
+      }
+      const firstErr = Object.values(mapped)[0];
+      setError(firstErr || saveError.message || 'Unable to save the menu item.');
     } finally {
       setSaving(false);
     }
   }
 
   async function closeItemModal() {
-    const stagedPhoto = formData.photo;
-    if (stagedPhoto?.id && stagedPhoto.id !== editingItem?.photo?.id) {
-      try {
-        await ownerService.removeImage(stagedPhoto);
-      } catch (cleanupError) {
-        setError(`Unable to remove the unsaved menu photo: ${cleanupError.message}`);
-      }
-    }
     setModalOpen(false);
   }
 
   function handlePhotoChange(photo) {
-    const previousPhoto = formData.photo;
     setFormData((current) => ({ ...current, photo }));
-    if (previousPhoto?.id && previousPhoto.id !== editingItem?.photo?.id && previousPhoto.id !== photo?.id) {
-      ownerService.removeImage(previousPhoto).catch((cleanupError) => {
-        setError(`Unable to remove the replaced draft photo: ${cleanupError.message}`);
-      });
-    }
   }
 
-  function updateAvailability(item, availability) {
+  async function updateAvailability(item, availability) {
     if (!access.canAccess(['menu.availability.manage'])) {
       setError('You do not have permission to change availability.');
       return;
     }
     try {
-      ownerService.updateMenuItem(item.id, { availability }, selectedRestaurantId);
-      loadMenu();
+      await ownerService.updateMenuItemAvailability(selectedRestaurantId, item.id, availability);
+      await loadMenu();
     } catch (updateError) {
       setError(updateError.message || 'Unable to update availability.');
     }
@@ -287,34 +294,27 @@ export default function OwnerMenuPage() {
       setError('You do not have permission to remove menu items.');
       return;
     }
-    const item = menuItems.find((entry) => entry.id === id);
     try {
-      ownerService.deleteMenuItem(id, selectedRestaurantId);
+      await ownerService.deleteMenuItemApi(selectedRestaurantId, id);
       setDeleteId(null);
-      loadMenu();
-      if (item?.photo?.id) {
-        try {
-          await ownerService.removeImage(item.photo);
-        } catch (cleanupError) {
-          setError(`Menu item removed, but its photo could not be removed: ${cleanupError.message}`);
-        }
-      }
+      await loadMenu();
     } catch (deleteError) {
+      setDeleteId(null);
       setError(deleteError.message || 'Unable to remove the menu item.');
     }
   }
 
-  function saveCategories(nextCategories, categoryChanges = []) {
+  async function saveCategories(nextCategories) {
     if (!access.canAccess(['menu.categories.manage'])) {
       setError('You do not have permission to manage menu categories.');
-      return;
+      return false;
     }
     try {
-      const saved = ownerService.saveMenuCategories(nextCategories, selectedRestaurantId, categoryChanges);
-      setCategories(normalizeMenuCategories({ categories: saved }));
-      if (selectedCategory !== 'All' && !saved.some((category) => category.name === selectedCategory)) {
-        setSelectedCategory('All');
+      const orderedIds = nextCategories.map((c) => c.id).filter((id) => typeof id === 'number');
+      if (orderedIds.length) {
+        await ownerService.reorderMenuCategories(selectedRestaurantId, orderedIds);
       }
+      await loadMenu();
       setError('');
       return true;
     } catch (saveError) {
@@ -323,8 +323,9 @@ export default function OwnerMenuPage() {
     }
   }
 
-  function submitCategory(event) {
+  async function submitCategory(event) {
     event.preventDefault();
+    if (saving) return;
     const name = categoryName.trim();
     if (!name) {
       setError('Enter a category name.');
@@ -335,39 +336,37 @@ export default function OwnerMenuPage() {
       setError('A category with that name already exists.');
       return;
     }
-    const existingIndex = categories.findIndex((category) => category.id === editingCategoryId);
-    const next = [...categories];
-    let categoryChanges = [];
-    if (existingIndex >= 0) {
-      const previousName = next[existingIndex].name;
-      if (previousName !== name) categoryChanges = [{ from: previousName, to: name }];
-      next[existingIndex] = { ...next[existingIndex], name };
-    }
-    else next.push({ id: createId('category'), name, visible: true, sortOrder: next.length });
-    if (saveCategories(next, categoryChanges)) {
+    setSaving(true);
+    try {
+      if (editingCategoryId) {
+        await ownerService.updateMenuCategory(selectedRestaurantId, editingCategoryId, { category_name: name });
+      } else {
+        await ownerService.createMenuCategory(selectedRestaurantId, { category_name: name });
+      }
       setCategoryName('');
       setEditingCategoryId(null);
-      loadMenu();
+      await loadMenu();
+    } catch (saveError) {
+      const msg = saveError?.errors?.category_name?.[0] || saveError.message || 'Unable to save category.';
+      setError(msg);
+    } finally {
+      setSaving(false);
     }
   }
 
-  function confirmDeleteCategory() {
-    if (!deleteCategory) return;
-    const itemsUsingCategory = menuItems.filter((item) => item.category === deleteCategory.name);
-    if (itemsUsingCategory.length && !replacementCategoryId) {
-      setError('Choose another category for the menu items before removing this category.');
-      return;
-    }
+  async function confirmDeleteCategory() {
+    if (!deleteCategory || saving) return;
+    setSaving(true);
     try {
-      const changes = itemsUsingCategory.length
-        ? [{ from: deleteCategory.name, to: categories.find((category) => category.id === replacementCategoryId).name }]
-        : [];
-      if (!saveCategories(categories.filter((category) => category.id !== deleteCategory.id), changes)) return;
+      await ownerService.deleteMenuCategory(selectedRestaurantId, deleteCategory.id);
       setDeleteCategory(null);
       setReplacementCategoryId('');
-      loadMenu();
+      await loadMenu();
     } catch (deleteError) {
+      setDeleteCategory(null);
       setError(deleteError.message || 'Unable to remove the category.');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -529,8 +528,8 @@ export default function OwnerMenuPage() {
               <Field label="Regular price (₱)" error={formErrors.price}>
                 <input type="number" min="0.01" step="0.01" required value={formData.price} onChange={(event) => setFormData({ ...formData, price: event.target.value })} style={CONTROL_STYLE} />
               </Field>
-              <Field label="Discounted price (optional)" error={formErrors.discountedPrice}>
-                <input type="number" min="0.01" step="0.01" value={formData.discountedPrice} onChange={(event) => setFormData({ ...formData, discountedPrice: event.target.value })} style={CONTROL_STYLE} />
+              <Field label="Discounted price (Coming soon)" error={formErrors.discountedPrice}>
+                <input type="number" min="0.01" step="0.01" disabled value={formData.discountedPrice} placeholder="Coming soon" style={CONTROL_STYLE} />
               </Field>
             </div>
           </>}
@@ -540,11 +539,11 @@ export default function OwnerMenuPage() {
             </select>
           </Field>}
           {access.canAccess(['menu.photos.manage']) && <ImageUploader id="menu-item-photo" label="Menu item photo" value={formData.photo} onChange={handlePhotoChange} deferCleanup />}
-          {(!editingItem || access.canAccess(['menu.items.edit'])) && <Field label="Preparation information">
-            <input value={formData.preparationInfo} onChange={(event) => setFormData({ ...formData, preparationInfo: event.target.value })} placeholder="Optional preparation or serving notes" style={CONTROL_STYLE} />
+          {(!editingItem || access.canAccess(['menu.items.edit'])) && <Field label="Preparation information (Coming soon)">
+            <input disabled value={formData.preparationInfo} placeholder="Coming soon" style={CONTROL_STYLE} />
           </Field>}
-          {(!editingItem || access.canAccess(['menu.items.edit'])) && <Field label="Dietary information (comma separated)">
-            <input value={formData.dietaryInfo.join(', ')} onChange={(event) => setFormData({ ...formData, dietaryInfo: event.target.value.split(',').map((entry) => entry.trim()).filter(Boolean) })} placeholder="e.g. Vegetarian, Contains dairy" style={CONTROL_STYLE} />
+          {(!editingItem || access.canAccess(['menu.items.edit'])) && <Field label="Dietary information (Coming soon)">
+            <input disabled value={formData.dietaryInfo.join(', ')} placeholder="Coming soon" style={CONTROL_STYLE} />
           </Field>}
           {access.canAccess(['menu.addons.manage']) && (
             <section style={{ borderTop: '1px solid var(--border-secondary)', paddingTop: 14 }}>

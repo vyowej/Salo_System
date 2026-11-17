@@ -17,6 +17,7 @@ import {
 import { buildProfileMenuItems, ROLE_META } from '../config/navigationConfig';
 import RoleOnboardingModal from '../components/onboarding/RoleOnboardingModal';
 import { useRoleOnboarding } from '../hooks/useRoleOnboarding';
+import ownerService from '../services/ownerService';
 import '../components/navigation/NavigationShell.css';
 import './OwnerLayout.css';
 
@@ -71,13 +72,26 @@ export default function OwnerLayout({ children }) {
   const profileName = user?.name || selectedRestaurant?.name || 'Restaurant Team';
   const profileEmail = user?.email || user?.username || 'Restaurant workspace';
 
-  const isRestaurantOpenNow = Boolean(
-    selectedRestaurant?.isOpen &&
-    selectedRestaurant?.operatingSchedule?.acceptingOrders !== false
-  );
+  const [acceptingOrdersOverride, setAcceptingOrdersOverride] = useState(null);
+  const isRestaurantOpenNow = acceptingOrdersOverride !== null
+    ? acceptingOrdersOverride
+    : Boolean(
+      selectedRestaurant?.isOpen &&
+      selectedRestaurant?.operatingSchedule?.acceptingOrders !== false
+    );
 
-  const applyOpenClosedStatus = () => {
-    // Operating hours toggle API is pending backend implementation
+  const applyOpenClosedStatus = async (nextOpen) => {
+    if (!selectedRestaurantId || selectedRestaurant?.status !== 'active') return;
+    try {
+      const updated = await ownerService.updateAcceptingStatus(selectedRestaurantId, {
+        accepting_orders: nextOpen,
+      });
+      if (updated) {
+        setAcceptingOrdersOverride(Boolean(updated.accepting_orders));
+      }
+    } catch {
+      // Keep UI unchanged on failure
+    }
   };
 
   const handleOpenClosedClick = () => {
@@ -175,7 +189,36 @@ export default function OwnerLayout({ children }) {
           )}
         />
         <main className="owner-content">
-          {children}
+          {selectedRestaurant && selectedRestaurant.status !== 'active' ? (
+            <section
+              aria-label="Restaurant application status"
+              style={{
+                maxWidth: 640,
+                margin: '48px auto',
+                padding: '28px 24px',
+                borderRadius: 12,
+                border: '1px solid var(--border-primary)',
+                background: 'var(--surface-primary)',
+              }}
+            >
+              <h2 style={{ margin: '0 0 8px' }}>Restaurant Workspace Pending Activation</h2>
+              <p style={{ margin: '0 0 16px', color: 'var(--text-secondary)' }}>
+                <strong>{selectedRestaurant.name || 'Your restaurant'}</strong> currently has status{' '}
+                <strong>{selectedRestaurant.status}</strong>. The owner workspace is available once your restaurant
+                application is approved and active.
+              </p>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <Link to="/become-a-partner/status" className="salo-btn salo-btn--primary">
+                  View Application Status
+                </Link>
+                <Link to="/customer" className="salo-btn salo-btn--outline">
+                  Return to Customer Portal
+                </Link>
+              </div>
+            </section>
+          ) : (
+            children
+          )}
         </main>
       </div>
 

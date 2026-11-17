@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { ErrorState, LoadingSpinner } from '../../../components/feedback';
-import restaurantService from '../../../services/restaurantService';
+import ownerService from '../../../services/ownerService';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import {
   OPERATING_DAYS,
@@ -25,6 +25,62 @@ function createId() {
     : `closure-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const DAY_KEY_TO_DOW = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+const DOW_TO_DAY_KEY = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' };
+
+function fromBackendHours(rows = [], profile = null) {
+  const weeklySchedule = {};
+  OPERATING_DAYS.forEach(({ key }) => {
+    weeklySchedule[key] = { closed: true, periods: [] };
+  });
+
+  rows.forEach((row) => {
+    const key = DOW_TO_DAY_KEY[Number(row.day_of_week)];
+    if (!key) return;
+    if (row.is_closed) {
+      weeklySchedule[key] = { closed: true, periods: [] };
+      return;
+    }
+    weeklySchedule[key].closed = false;
+    weeklySchedule[key].periods.push({
+      id: row.id ? String(row.id) : createId(),
+      open: String(row.opening_time || '09:00').slice(0, 5),
+      close: String(row.closing_time || '21:00').slice(0, 5),
+    });
+  });
+
+  return normalizeOperatingHours({
+    weeklySchedule,
+    acceptingOrders: profile ? Boolean(profile.accepting_orders) : true,
+    acceptingReservations: profile ? Boolean(profile.accepting_reservations) : true,
+    temporaryClosures: [],
+  });
+}
+
+function toBackendHoursPayload(hours) {
+  const rows = [];
+  OPERATING_DAYS.forEach(({ key }) => {
+    const dow = DAY_KEY_TO_DOW[key];
+    const day = hours.weeklySchedule[key];
+    if (!day || day.closed || !day.periods.length) {
+      rows.push({ day_of_week: dow, is_closed: true });
+      return;
+    }
+    day.periods.forEach((period) => {
+      const open = String(period.open || '09:00').slice(0, 5);
+      const close = String(period.close || '21:00').slice(0, 5);
+      rows.push({
+        day_of_week: dow,
+        opening_time: open,
+        closing_time: close,
+        closes_next_day: close <= open,
+        is_closed: false,
+      });
+    });
+  });
+  return rows;
+}
+
 export default function OperatingHoursEditor({ restaurantId }) {
   const access = useRestaurantAccess();
   const canManageHours = access.canAccess(['business.hours.manage']);
@@ -37,11 +93,15 @@ export default function OperatingHoursEditor({ restaurantId }) {
   const [closureDraft, setClosureDraft] = useState(null);
   const [editingClosureId, setEditingClosureId] = useState(null);
 
-  const loadHours = useCallback(() => {
+  const loadHours = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const current = normalizeOperatingHours(restaurantService.getOperatingHours(restaurantId));
+      const [rows, profile] = await Promise.all([
+        ownerService.getOperatingHours(restaurantId),
+        ownerService.getProfile(restaurantId),
+      ]);
+      const current = fromBackendHours(rows, profile);
       setHours(current);
       setInitial(current);
       setSaved(false);
@@ -134,6 +194,7 @@ export default function OperatingHoursEditor({ restaurantId }) {
 
   async function saveHours(event) {
     event.preventDefault();
+    if (saving) return;
     const validation = validateOperatingHours(hours);
     if (validation) {
       setError(validation);
@@ -142,12 +203,21 @@ export default function OperatingHoursEditor({ restaurantId }) {
     setSaving(true);
     setError('');
     try {
-      const updated = normalizeOperatingHours(restaurantService.updateOperatingHours(hours, restaurantId));
+      const payload = toBackendHoursPayload(hours);
+      const [savedRows, savedProfile] = await Promise.all([
+        ownerService.updateOperatingHours(restaurantId, payload),
+        ownerService.updateAcceptingStatus(restaurantId, {
+          accepting_orders: Boolean(hours.acceptingOrders),
+          accepting_reservations: Boolean(hours.acceptingReservations),
+        }),
+      ]);
+      const updated = fromBackendHours(savedRows, savedProfile);
       setHours(updated);
       setInitial(updated);
       setSaved(true);
     } catch (saveError) {
-      setError(saveError.message || 'Unable to save restaurant operating hours.');
+      const firstErr = saveError?.errors ? Object.values(saveError.errors).flat()[0] : null;
+      setError(firstErr || saveError.message || 'Unable to save restaurant operating hours.');
     } finally {
       setSaving(false);
     }
