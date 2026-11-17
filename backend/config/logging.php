@@ -131,6 +131,13 @@ return [
             'handler' => NullHandler::class,
         ],
 
+        'qa_mail' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/qa-mail.log'),
+            'level' => 'debug',
+            'replace_placeholders' => true,
+        ],
+
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],
