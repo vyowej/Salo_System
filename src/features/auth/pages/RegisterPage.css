@@ -10,6 +10,31 @@
   line-height: 1.4;
 }
 
+/* Composite name row: First Name | M.I. (72-90px) | Last Name */
+.register-name-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.register-mi-col {
+  width: 82px;
+  min-width: 72px;
+  max-width: 90px;
+}
+
+.register-mi-col .form-label {
+  white-space: nowrap;
+  font-size: var(--font-size-xs);
+}
+
+.register-mi-input {
+  text-align: center;
+  text-transform: uppercase;
+  font-weight: var(--font-weight-semibold);
+}
+
 /* Username field wrapper — collapses hint margin into the form gap */
 .register-username-field {
   display: flex;
@@ -22,4 +47,15 @@
   font-size: var(--font-size-xs, 11px);
   color: var(--text-muted);
   line-height: 1.4;
+}
+
+@media (max-width: 440px) {
+  .register-name-row {
+    grid-template-columns: minmax(0, 1fr) 74px minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  .register-mi-col {
+    width: 74px;
+  }
 }

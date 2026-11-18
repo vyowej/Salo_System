@@ -1,6 +1,11 @@
+/* ============================================================
+   SALO — Public Auth Showcase & Split Layout (LandingPage.css)
+   Animations use transform & opacity only (plus SVG stroke-dashoffset).
+   ============================================================ */
+
 .salo-split-page {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(420px, 1fr);
+  grid-template-columns: minmax(0, 1.32fr) minmax(440px, 1fr);
   width: 100%;
   height: 100vh;
   height: 100dvh;
@@ -9,50 +14,67 @@
   background: var(--surface-primary);
 }
 
+/* ── Left Showcase Panel ─────────────────────────────────── */
 .salo-intro-panel {
   position: relative;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--salo-brown-hover);
+  background: #22140D;
   color: #FFFFFF;
 }
 
 .salo-intro-content {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   width: 100%;
   height: 100%;
-  padding: clamp(var(--space-6), 4vw, var(--space-12));
+  padding: clamp(var(--space-6), 3.6vw, var(--space-10));
   pointer-events: none;
 }
 
 .salo-intro-top {
   position: relative;
-  z-index: 1;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   flex: 0 0 auto;
 }
 
-.salo-intro-top > span {
+.salo-intro-tagline {
   margin-top: var(--space-2);
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 248, 240, 0.88);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.1em;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 8px rgba(18, 10, 6, 0.55);
 }
 
+/* Compact banner is hidden on desktop (>= 1024px) */
+.salo-intro-compact-banner {
+  display: none;
+}
+
+/* ── Full Showcase Carousel (Desktop >= 1024px) ──────────── */
 .salo-intro-slideshow {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 1;
   overflow: hidden;
   outline: none;
+}
+
+.salo-intro-slides-stage {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  height: 100%;
 }
 
 .salo-intro-slide {
@@ -60,7 +82,8 @@
   inset: 0;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--transition-normal);
+  transition: opacity 800ms ease;
+  will-change: opacity;
 }
 
 .salo-intro-slide.active {
@@ -72,79 +95,762 @@
   display: block;
   width: 100%;
   height: 100%;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
+  transform: scale(1);
+  transform-origin: var(--kb-origin, center center);
+  will-change: transform;
 }
 
+.salo-intro-slide.active img {
+  animation: salo-ken-burns 6500ms ease-out forwards;
+}
+
+@keyframes salo-ken-burns {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.07);
+  }
+}
+
+/* Warm deep-brown brand overlay:
+   stronger at top-left (behind logo/tagline) and bottom (behind copy & mini-UI),
+   lighter in the center so the food photography stays vivid. */
 .salo-intro-shade {
   position: absolute;
   inset: 0;
+  z-index: 1;
   pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--salo-brown-hover) 78%, transparent) 0%,
-    color-mix(in srgb, var(--salo-brown-hover) 24%, transparent) 34%,
-    color-mix(in srgb, var(--salo-brown-hover) 72%, transparent) 62%,
-    color-mix(in srgb, var(--salo-brown-hover) 96%, transparent) 100%
-  );
+  background:
+    radial-gradient(
+      68% 42% at 0% 0%,
+      rgba(34, 20, 13, 0.86) 0%,
+      rgba(54, 32, 21, 0.45) 52%,
+      transparent 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(34, 20, 13, 0.62) 0%,
+      rgba(54, 32, 21, 0.14) 36%,
+      rgba(54, 32, 21, 0.22) 50%,
+      rgba(34, 20, 13, 0.84) 74%,
+      rgba(24, 14, 9, 0.96) 100%
+    );
 }
 
+/* ── Bottom Showcase Copy + Mini-UI + Controls ───────────── */
 .salo-intro-bottom {
   position: absolute;
   z-index: 2;
-  right: clamp(var(--space-6), 4vw, var(--space-12));
-  bottom: clamp(var(--space-6), 4vw, var(--space-12));
-  left: clamp(var(--space-6), 4vw, var(--space-12));
-  max-width: 640px;
+  right: clamp(var(--space-6), 3.6vw, var(--space-10));
+  bottom: clamp(var(--space-6), 3.4vw, var(--space-10));
+  left: clamp(var(--space-6), 3.6vw, var(--space-10));
+  max-width: 600px;
   color: #FFFFFF;
 }
 
-.salo-intro-bottom > h1 {
-  margin: 0 0 var(--space-5);
-  color: #FFFFFF;
-  font-family: var(--font-display);
-  font-size: var(--text-h1);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: -0.035em;
-  line-height: var(--line-height-tight);
+.salo-showcase-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .salo-intro-caption {
-  animation: salo-caption-in var(--transition-normal) both;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.salo-intro-caption > span {
-  display: block;
-  margin-bottom: var(--space-1);
-  color: rgba(255, 255, 255, 0.82);
+.salo-intro-caption--outgoing {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  animation: salo-copy-fade-out 250ms ease forwards;
+}
+
+@keyframes salo-copy-fade-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+.salo-mask-line {
+  overflow: hidden;
+  padding-bottom: 2px;
+}
+
+.salo-intro-kicker {
+  display: inline-block;
+  color: var(--salo-gold, #F4C542);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.1em;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
-.salo-intro-caption h2 {
-  margin: 0 0 var(--space-2);
+.salo-intro-headline {
+  margin: 0;
   color: #FFFFFF;
   font-family: var(--font-display);
-  font-size: var(--text-h3);
+  font-size: clamp(26px, 2.8vw, 38px);
   font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
+  letter-spacing: -0.025em;
+  line-height: 1.15;
 }
 
-.salo-intro-caption p {
+.salo-intro-subline {
   max-width: 52ch;
   margin: 0;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 248, 240, 0.92);
   font-size: var(--font-size-sm);
-  line-height: var(--line-height-normal);
+  line-height: 1.5;
 }
 
+/* Masked slide-up text reveal (100ms stagger, 600ms each) */
+.salo-intro-caption--incoming .salo-intro-kicker,
+.salo-intro-caption--incoming .salo-intro-headline,
+.salo-intro-caption--incoming .salo-intro-subline {
+  animation: salo-mask-slide-up 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.salo-intro-caption--incoming .salo-intro-kicker {
+  animation-delay: 0ms;
+}
+
+.salo-intro-caption--incoming .salo-intro-headline {
+  animation-delay: 100ms;
+}
+
+.salo-intro-caption--incoming .salo-intro-subline {
+  animation-delay: 200ms;
+}
+
+/* When transitioning from a previous slide, wait 250ms for outgoing text to fade out first */
+.salo-intro-caption--incoming.is-transition-enter .salo-intro-kicker {
+  animation-delay: 250ms;
+}
+
+.salo-intro-caption--incoming.is-transition-enter .salo-intro-headline {
+  animation-delay: 350ms;
+}
+
+.salo-intro-caption--incoming.is-transition-enter .salo-intro-subline {
+  animation-delay: 450ms;
+}
+
+@keyframes salo-mask-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Decorative Mini-UI Showcase Cards ───────────────────── */
+.salo-mini-ui {
+  max-width: 470px;
+  animation: salo-mini-enter 550ms cubic-bezier(0.22, 1, 0.36, 1) 500ms both;
+}
+
+.salo-mini-ui.is-transition-enter {
+  animation-delay: 750ms;
+}
+
+@keyframes salo-mini-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.salo-mini-card {
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 248, 240, 0.2);
+  background: rgba(34, 20, 13, 0.76);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.salo-mini-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.salo-mini-card__eyebrow {
+  display: block;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 248, 240, 0.72);
+  margin-bottom: 2px;
+}
+
+.salo-mini-card__title {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: #FFFFFF;
+}
+
+.salo-mini-card__pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  background: rgba(255, 248, 240, 0.14);
+  color: #FFF8F0;
+  border: 1px solid rgba(255, 248, 240, 0.18);
+  white-space: nowrap;
+}
+
+.salo-mini-card__pill--gold {
+  background: rgba(244, 197, 66, 0.2);
+  border-color: rgba(244, 197, 66, 0.42);
+  color: #FDE68A;
+}
+
+.salo-mini-card__pill--green {
+  background: rgba(107, 143, 91, 0.26);
+  border-color: rgba(107, 143, 91, 0.5);
+  color: #D7E4AE;
+}
+
+/* Slide 1: Four feature chips pop in with a stagger */
+.salo-mini-chips-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.salo-mini-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(34, 20, 13, 0.76);
+  border: 1px solid rgba(255, 248, 240, 0.22);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #FFF8F0;
+  font-size: 12px;
+  font-weight: var(--font-weight-semibold);
+  animation: salo-chip-pop 450ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(620ms + var(--chip-index, 0) * 120ms);
+}
+
+.salo-mini-ui.is-transition-enter .salo-mini-chip {
+  animation-delay: calc(850ms + var(--chip-index, 0) * 120ms);
+}
+
+@keyframes salo-chip-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.salo-mini-chip__icon {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  align-items: center;
+  justify-content: center;
+  background: rgba(214, 90, 46, 0.26);
+  color: #F4C542;
+  flex-shrink: 0;
+}
+
+.salo-mini-chip__icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Slide 2: Multi-cart rows slide in one by one, total counts up, button pulses once */
+.salo-mini-cart-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.salo-mini-cart-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 248, 240, 0.08);
+  border: 1px solid rgba(255, 248, 240, 0.1);
+  animation: salo-row-slide-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(680ms + var(--row-index, 0) * 280ms);
+}
+
+.salo-mini-ui.is-transition-enter .salo-mini-cart-row {
+  animation-delay: calc(920ms + var(--row-index, 0) * 280ms);
+}
+
+@keyframes salo-row-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.salo-mini-cart-row__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.salo-mini-cart-row__store {
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  color: #FFF8F0;
+}
+
+.salo-mini-cart-row__item {
+  font-size: 11px;
+  color: rgba(255, 248, 240, 0.78);
+}
+
+.salo-mini-cart-row__price {
+  font-size: 12px;
+  font-weight: var(--font-weight-bold);
+  color: #F4C542;
+}
+
+.salo-mini-cart-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 248, 240, 0.14);
+}
+
+.salo-mini-cart-total {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(255, 248, 240, 0.82);
+}
+
+.salo-mini-cart-total strong {
+  font-size: 15px;
+  font-weight: var(--font-weight-bold);
+  color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
+}
+
+.salo-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: var(--salo-orange, #D65A2E);
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.02em;
+}
+
+.salo-mini-btn--pulse {
+  animation: salo-btn-pulse 560ms ease-in-out 2050ms 1 both;
+}
+
+.salo-mini-ui.is-transition-enter .salo-mini-btn--pulse {
+  animation-delay: 2300ms;
+}
+
+@keyframes salo-btn-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+
+/* Slide 3: Reservations seat dots + Confirmed badge with self-drawing SVG check */
+.salo-mini-reserve-seats-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: 4px;
+}
+
+.salo-mini-seat-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.salo-mini-seat-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 248, 240, 0.35);
+  background: rgba(255, 248, 240, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.salo-mini-seat-dot__fill {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--salo-gold, #F4C542);
+  animation: salo-seat-fill 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(700ms + var(--seat-index, 0) * 230ms);
+}
+
+.salo-mini-ui.is-transition-enter .salo-mini-seat-dot__fill {
+  animation-delay: calc(950ms + var(--seat-index, 0) * 230ms);
+}
+
+@keyframes salo-seat-fill {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.salo-mini-reserve-meta {
+  font-size: 11px;
+  color: rgba(255, 248, 240, 0.8);
+}
+
+.salo-mini-confirmed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(107, 143, 91, 0.32);
+  border: 1px solid rgba(153, 188, 139, 0.65);
+  color: #ECF4E8;
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  animation: salo-badge-pop 420ms cubic-bezier(0.22, 1, 0.36, 1) 1680ms both;
+}
+
+.salo-mini-ui.is-transition-enter .salo-mini-confirmed-badge {
+  animation-delay: 1930ms;
+}
+
+@keyframes salo-badge-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.salo-mini-confirmed-check {
+  width: 13px;
+  height: 13px;
+  color: #B7E2BA;
+}
+
+.salo-mini-confirmed-check path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: salo-check-draw 480ms ease-out 1820ms forwards;
+}
+
+.salo-mini-ui.is-transition-enter .salo-mini-confirmed-check path {
+  animation-delay: 2070ms;
+}
+
+@keyframes salo-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Slide 4: Delivery timeline filling through Accepted > Preparing > Out for Delivery > Delivered */
+.salo-mini-timeline {
+  position: relative;
+  padding-top: 6px;
+}
+
+.salo-mini-timeline__track {
+  position: relative;
+  height: 4px;
+  margin: 0 18px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 248, 240, 0.18);
+  overflow: hidden;
+}
+
+.salo-mini-timeline__progress {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--salo-orange, #D65A2E) 0%, var(--salo-green, #6B8F5B) 100%);
+  transform-origin: left center;
+  animation: salo-timeline-fill 1950ms cubic-bezier(0.22, 1, 0.36, 1) 700ms both;
+}
+
+.salo-mini-ui.is-transition-enter .salo-mini-timeline__progress {
+  animation-delay: 950ms;
+}
+
+@keyframes salo-timeline-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.salo-mini-timeline__steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.salo-mini-timeline__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 5px;
+}
+
+.salo-mini-timeline__node {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 248, 240, 0.4);
+  background: rgba(34, 20, 13, 0.9);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.salo-mini-timeline__node-fill {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--salo-green, #6B8F5B);
+  animation: salo-seat-fill 320ms ease-out both;
+  animation-delay: calc(700ms + var(--step-index, 0) * 520ms);
+}
+
+.salo-mini-ui.is-transition-enter .salo-mini-timeline__node-fill {
+  animation-delay: calc(950ms + var(--step-index, 0) * 520ms);
+}
+
+.salo-mini-timeline__label {
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  color: rgba(255, 248, 240, 0.92);
+  line-height: 1.2;
+  animation: salo-step-label-in 360ms ease-out both;
+  animation-delay: calc(700ms + var(--step-index, 0) * 520ms);
+}
+
+.salo-mini-ui.is-transition-enter .salo-mini-timeline__label {
+  animation-delay: calc(950ms + var(--step-index, 0) * 520ms);
+}
+
+@keyframes salo-step-label-in {
+  from {
+    opacity: 0.45;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Slide 5 & 6: Partner cards with Accept button press effect + menu toggle */
+.salo-mini-partner-order {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 248, 240, 0.88);
+}
+
+.salo-mini-partner-total {
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  color: #F4C542;
+}
+
+.salo-mini-btn--press {
+  position: relative;
+  min-width: 74px;
+  animation: salo-btn-press 480ms ease-in-out 1350ms both;
+}
+
+.salo-mini-ui.is-transition-enter .salo-mini-btn--press {
+  animation-delay: 1600ms;
+}
+
+@keyframes salo-btn-press {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.salo-mini-btn__label-default {
+  animation: salo-label-hide 200ms ease 1550ms forwards;
+}
+
+.salo-mini-btn__label-pressed {
+  position: absolute;
+  opacity: 0;
+  animation: salo-label-show 240ms ease 1550ms forwards;
+}
+
+.salo-mini-ui.is-transition-enter .salo-mini-btn__label-default,
+.salo-mini-ui.is-transition-enter .salo-mini-btn__label-pressed {
+  animation-delay: 1800ms;
+}
+
+@keyframes salo-label-hide {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes salo-label-show {
+  to {
+    opacity: 1;
+  }
+}
+
+.salo-mini-menu-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 248, 240, 0.14);
+}
+
+.salo-mini-menu-toggle-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.salo-mini-menu-item-name {
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  color: #FFF8F0;
+}
+
+.salo-mini-menu-item-status {
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  color: #B7E2BA;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  background: rgba(107, 143, 91, 0.28);
+}
+
+.salo-mini-switch {
+  width: 34px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: rgba(107, 143, 91, 0.85);
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.salo-mini-switch__thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  transform: translateX(0);
+  animation: salo-switch-slide 400ms cubic-bezier(0.22, 1, 0.36, 1) 1850ms forwards;
+}
+
+.salo-mini-ui.is-transition-enter .salo-mini-switch__thumb {
+  animation-delay: 2100ms;
+}
+
+@keyframes salo-switch-slide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(16px);
+  }
+}
+
+.salo-mini-rider-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ── Carousel Controls (Progress Dots + Pause/Play + Prev/Next) ── */
 .salo-intro-controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  margin-top: var(--space-5);
+  margin-top: var(--space-4);
 }
 
 .salo-intro-dots,
@@ -158,114 +864,147 @@
 }
 
 .salo-intro-dot {
-  width: var(--space-2);
-  height: var(--space-2);
+  position: relative;
+  width: 10px;
+  height: 8px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 248, 240, 0.35);
+  overflow: hidden;
   cursor: pointer;
-  transition: width var(--transition-fast), background-color var(--transition-fast);
+  transition: opacity var(--transition-fast);
+}
+
+.salo-intro-dot:hover {
+  background: rgba(255, 248, 240, 0.55);
 }
 
 .salo-intro-dot.active {
-  width: var(--space-5);
+  width: 34px;
+  background: rgba(255, 248, 240, 0.28);
+}
+
+.salo-intro-dot__fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-full);
   background: #FFFFFF;
+  transform-origin: left center;
+  animation: salo-dot-progress 6500ms linear forwards;
+}
+
+.salo-intro-dot__fill.is-paused {
+  animation-play-state: paused;
+}
+
+@keyframes salo-dot-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 .salo-intro-arrows {
   gap: var(--space-2);
 }
 
-.salo-intro-arrows button {
+.salo-intro-control-btn {
   display: grid;
-  width: var(--space-8);
-  height: var(--space-8);
+  width: 32px;
+  height: 32px;
   place-items: center;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 248, 240, 0.42);
   border-radius: var(--radius-full);
-  background: transparent;
+  background: rgba(34, 20, 13, 0.45);
   color: #FFFFFF;
   cursor: pointer;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+  transition: opacity var(--transition-fast);
 }
 
-.salo-intro-arrows button:hover {
+.salo-intro-control-btn:hover {
   border-color: #FFFFFF;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 248, 240, 0.16);
 }
 
-.salo-intro-arrows svg {
-  width: 18px;
-  height: 18px;
+.salo-intro-control-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
+.salo-intro-slideshow:focus {
+  outline: none;
+}
+
+.salo-intro-slideshow:focus-visible,
 .salo-intro-slideshow :focus-visible {
   outline: 2px solid #FFFFFF;
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
-@keyframes salo-caption-in {
-  from {
-    opacity: 0;
-    transform: translateY(var(--space-2));
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
+/* ── Right Panel: Auth Form Side ─────────────────────────── */
 .salo-auth-panel {
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
   min-width: 0;
   min-height: 0;
-  padding: clamp(24px, 3.2vw, 48px);
+  padding: clamp(24px, 3vw, 44px);
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--surface-primary);
   color: var(--text-primary);
 }
 
-.salo-auth-top {
-  display: flex;
-  min-height: 36px;
-  justify-content: flex-start;
-  align-items: center;
-}
-
-.salo-auth-brand-mobile {
-  display: none;
-}
-
-.salo-auth-brand-mobile .brand-mark__tagline {
-  font-size: var(--text-caption);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
+/* Shared container aligned to top with consistent offset so the tab switcher never jumps */
 .salo-auth-content {
   width: 100%;
   max-width: 440px;
-  margin: auto;
-  padding: var(--space-6) 0;
+  margin: 0 auto;
+  padding-top: clamp(16px, 3.2vh, 36px);
+  padding-bottom: var(--space-4);
 }
 
+/* Sliding tab switcher (250ms transform) */
 .salo-auth-switch {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-1);
-  padding: var(--space-1);
+  padding: 4px;
   margin-bottom: var(--space-6);
-  border: 1px solid var(--border-secondary);
+  border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
   background: var(--surface-secondary);
+  isolation: isolate;
+}
+
+.salo-auth-switch-indicator {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: var(--radius-sm);
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-xs);
+  z-index: 0;
+  pointer-events: none;
+  transform: translateX(0%);
+  transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.salo-auth-switch-indicator.is-register {
+  transform: translateX(100%);
 }
 
 .salo-auth-switch button {
-  min-height: var(--space-10);
+  position: relative;
+  z-index: 1;
+  min-height: 38px;
   padding: var(--space-2) var(--space-3);
   border: 0;
   border-radius: var(--radius-sm);
@@ -275,7 +1014,8 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
-  transition: color var(--transition-fast), background var(--transition-fast);
+  outline: none;
+  transition: color var(--transition-fast);
 }
 
 .salo-auth-switch button:hover {
@@ -283,9 +1023,33 @@
 }
 
 .salo-auth-switch button.active {
-  background: var(--surface-primary);
   color: var(--text-primary);
-  box-shadow: var(--shadow-xs);
+}
+
+/* Show focus ring ONLY on keyboard :focus-visible; never leave a lingering outline on click */
+.salo-auth-switch button:focus {
+  outline: none;
+}
+
+.salo-auth-switch button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Short fade/slide-in when switching tabs (200ms) */
+.salo-auth-form-stage {
+  animation: salo-form-switch-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes salo-form-switch-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .salo-auth-content .auth-header {
@@ -335,40 +1099,15 @@
 
 .salo-auth-legal {
   margin: auto 0 0;
-  padding-top: var(--space-3);
+  padding-top: var(--space-4);
   color: var(--text-muted);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-normal);
   text-align: center;
 }
 
-@media (max-width: 1100px) and (min-width: 821px) {
-  .salo-split-page {
-    grid-template-columns: minmax(0, 1.05fr) minmax(400px, 0.95fr);
-  }
-
-  .salo-intro-content,
-  .salo-intro-bottom {
-    padding-left: var(--space-8);
-    padding-right: var(--space-8);
-  }
-
-  .salo-intro-bottom {
-    left: var(--space-8);
-    right: var(--space-8);
-    padding: 0;
-  }
-
-  .salo-intro-bottom > h1 {
-    font-size: var(--text-h2);
-  }
-
-  .salo-auth-panel {
-    padding: var(--space-6);
-  }
-}
-
-@media (max-height: 700px) and (min-width: 821px) {
+/* ── Desktop Compact Height Scaling ──────────────────────── */
+@media (max-height: 740px) and (min-width: 1024px) {
   .salo-intro-content {
     padding-top: var(--space-5);
     padding-bottom: var(--space-5);
@@ -378,17 +1117,15 @@
     bottom: var(--space-5);
   }
 
-  .salo-intro-bottom > h1 {
-    margin-bottom: var(--space-3);
-    font-size: var(--text-h2);
+  .salo-showcase-stage {
+    gap: var(--space-3);
   }
 
-  .salo-intro-caption h2 {
-    margin-bottom: var(--space-1);
-    font-size: var(--text-h4);
+  .salo-intro-headline {
+    font-size: clamp(22px, 2.3vw, 30px);
   }
 
-  .salo-intro-caption p {
+  .salo-intro-subline {
     font-size: var(--font-size-xs);
   }
 
@@ -397,7 +1134,7 @@
   }
 
   .salo-auth-content {
-    padding: var(--space-3) 0;
+    padding-top: var(--space-2);
   }
 
   .salo-auth-switch {
@@ -407,32 +1144,30 @@
   .salo-auth-content .auth-header {
     margin-bottom: var(--space-3);
   }
-
-  .salo-auth-content .auth-form {
-    gap: var(--space-2);
-  }
-
-  .salo-auth-content .auth-footer-prompt {
-    margin-top: var(--space-3);
-    padding-top: var(--space-3);
-  }
 }
 
-@media (max-width: 900px) {
+/* ── Stacked Responsive Layout (< 1024px) ────────────────── */
+@media (max-width: 1023px) {
   .salo-split-page {
     display: flex;
     flex-direction: column;
     height: auto;
     min-height: 100dvh;
-    overflow: visible;
+    overflow-x: hidden;
+    overflow-y: visible;
   }
 
   .salo-intro-panel {
     order: 0;
     min-height: 0;
     height: auto;
-    background: var(--bg-primary);
-    color: var(--text-primary);
+    background: #22140D;
+    color: #FFFFFF;
+  }
+
+  /* Hide full carousel & mini-UI cards below 1024px so form stays above the fold */
+  .salo-intro-slideshow {
+    display: none;
   }
 
   .salo-intro-content {
@@ -440,39 +1175,102 @@
     inset: auto;
     height: auto;
     padding: var(--space-4) var(--space-5);
+    pointer-events: auto;
+    gap: var(--space-3);
   }
 
   .salo-intro-top {
-    gap: 0;
+    position: relative;
+    z-index: 2;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-2);
   }
 
-  .salo-intro-top .brand-mark__name {
-    color: var(--text-primary);
+  .salo-intro-tagline {
+    margin-top: 0;
+    font-size: 10px;
   }
 
-  .salo-intro-top > span {
-    color: var(--text-secondary);
+  .salo-intro-compact-banner {
+    display: block;
+    position: relative;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    padding: var(--space-4);
+    border: 1px solid rgba(255, 248, 240, 0.16);
   }
 
-  .salo-intro-slideshow {
-    display: none;
+  .salo-intro-compact-photo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 40%;
+    z-index: 0;
+  }
+
+  .salo-intro-compact-shade {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(
+      135deg,
+      rgba(34, 20, 13, 0.9) 0%,
+      rgba(54, 32, 21, 0.74) 55%,
+      rgba(34, 20, 13, 0.92) 100%
+    );
+  }
+
+  .salo-intro-compact-copy {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .salo-intro-compact-headline {
+    margin: 0;
+    font-size: clamp(18px, 3.8vw, 24px);
+    font-weight: var(--font-weight-semibold);
+    color: #FFFFFF;
+    line-height: 1.2;
+  }
+
+  .salo-intro-compact-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .salo-intro-compact-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: var(--radius-full);
+    background: rgba(255, 248, 240, 0.14);
+    border: 1px solid rgba(255, 248, 240, 0.22);
+    color: #FFF8F0;
+    font-size: 11px;
+    font-weight: var(--font-weight-semibold);
   }
 
   .salo-auth-panel {
     order: 1;
+    flex: 1 1 auto;
     min-height: auto;
-    padding: var(--space-4) var(--space-5) var(--space-6);
+    padding: var(--space-5) var(--space-5) var(--space-6);
     overflow: visible;
   }
 
-  .salo-auth-top {
-    display: none;
-  }
-
   .salo-auth-content {
-    max-width: 480px;
+    max-width: 460px;
     margin: 0 auto;
-    padding: var(--space-3) 0;
+    padding-top: 0;
   }
 
   .salo-auth-legal {
@@ -480,25 +1278,27 @@
   }
 }
 
+/* ── Small Mobile (down to 360px width) ──────────────────── */
 @media (max-width: 520px) {
   .salo-intro-content {
     padding: var(--space-3) var(--space-4);
+    gap: var(--space-2);
+  }
+
+  .salo-intro-compact-banner {
+    padding: var(--space-3);
   }
 
   .salo-auth-panel {
-    padding: var(--space-3) var(--space-4) var(--space-5);
+    padding: var(--space-4) var(--space-4) var(--space-5);
   }
 
-  .salo-auth-content {
-    padding: var(--space-2) 0;
+  .salo-auth-switch {
+    margin-bottom: var(--space-4);
   }
 
   .salo-auth-content .auth-header {
     margin-bottom: var(--space-4);
-  }
-
-  .salo-auth-content .auth-form {
-    gap: var(--space-3);
   }
 
   .salo-auth-content .grid-cols-2 {
@@ -512,12 +1312,95 @@
   }
 }
 
+/* ── Reduced Motion ──────────────────────────────────────── */
+.salo-intro-slideshow.is-reduced-motion .salo-intro-slide,
+.salo-intro-slideshow.is-reduced-motion .salo-intro-slide img,
+.salo-intro-slideshow.is-reduced-motion .salo-intro-kicker,
+.salo-intro-slideshow.is-reduced-motion .salo-intro-headline,
+.salo-intro-slideshow.is-reduced-motion .salo-intro-subline,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-ui,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-chip,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-cart-row,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-btn--pulse,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-seat-dot__fill,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-confirmed-badge,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-confirmed-check path,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-timeline__progress,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-timeline__node-fill,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-timeline__label,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-btn--press,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-btn__label-default,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-btn__label-pressed,
+.salo-intro-slideshow.is-reduced-motion .salo-mini-switch__thumb,
+.salo-intro-slideshow.is-reduced-motion .salo-intro-dot__fill {
+  animation: none !important;
+  transition: none !important;
+}
+
+.salo-mini-ui.is-reduced-motion .salo-mini-confirmed-check path {
+  stroke-dashoffset: 0 !important;
+}
+
+.salo-mini-ui.is-reduced-motion .salo-mini-timeline__progress {
+  transform: scaleX(1) !important;
+}
+
+.salo-mini-ui.is-reduced-motion .salo-mini-btn__label-default {
+  opacity: 0 !important;
+}
+
+.salo-mini-ui.is-reduced-motion .salo-mini-btn__label-pressed {
+  opacity: 1 !important;
+}
+
+.salo-mini-ui.is-reduced-motion .salo-mini-switch__thumb {
+  transform: translateX(16px) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .salo-intro-slide,
-  .salo-intro-dot,
-  .salo-intro-arrows button,
-  .salo-intro-caption {
-    animation: none;
-    transition: none;
+  .salo-intro-slide.active img,
+  .salo-intro-kicker,
+  .salo-intro-headline,
+  .salo-intro-subline,
+  .salo-mini-ui,
+  .salo-mini-chip,
+  .salo-mini-cart-row,
+  .salo-mini-btn--pulse,
+  .salo-mini-seat-dot__fill,
+  .salo-mini-confirmed-badge,
+  .salo-mini-confirmed-check path,
+  .salo-mini-timeline__progress,
+  .salo-mini-timeline__node-fill,
+  .salo-mini-timeline__label,
+  .salo-mini-btn--press,
+  .salo-mini-btn__label-default,
+  .salo-mini-btn__label-pressed,
+  .salo-mini-switch__thumb,
+  .salo-intro-dot__fill,
+  .salo-auth-switch-indicator,
+  .salo-auth-form-stage {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .salo-mini-confirmed-check path {
+    stroke-dashoffset: 0 !important;
+  }
+
+  .salo-mini-timeline__progress {
+    transform: scaleX(1) !important;
+  }
+
+  .salo-mini-btn__label-default {
+    opacity: 0 !important;
+  }
+
+  .salo-mini-btn__label-pressed {
+    opacity: 1 !important;
+  }
+
+  .salo-mini-switch__thumb {
+    transform: translateX(16px) !important;
   }
 }

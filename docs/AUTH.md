@@ -59,6 +59,7 @@ Initializes the session and returns a CSRF token (while also setting the `XSRF-T
 
 ### 3.2 `POST /api/auth/register`
 Creates a new customer account (`user_role = 'customer'`, `account_status = 'active'`), hashes the password into `users.password_hash`, logs the user in, and regenerates the session ID. Any `user_role` or `role` field supplied by the client is ignored.
+- `middle_initial` is optional (`nullable`, single letter `A-Z`, auto-uppercased; an empty string is stored as `null`, and a single letter with a trailing period such as `"D."` is normalized to `"D"`). Multi-character values or digits are rejected with `422`.
 
 **Request Body:**
 ```json

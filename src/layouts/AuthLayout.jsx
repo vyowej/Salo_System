@@ -1,16 +1,16 @@
 import { Link } from 'react-router-dom';
 import BrandMark from '../components/common/BrandMark';
-import ThemeToggle from '../components/navigation/ThemeToggle';
 import './AuthLayout.css';
 
 /**
  * SALO Two-Column Auth Layout
  * Desktop: Warm brand presentation on left (with local food photography) + Form on right.
  * Mobile: Clean stacked responsive experience.
+ * Public pages do not show a light/dark toggle.
  */
 export default function AuthLayout({
   children,
-  headline = 'Kain tayo!',
+  headline = 'Good food tastes better together.',
   subheading = 'Good food, good company, great memories.',
   imageSrc = '/images/auth/login-food.png',
   imageAlt = 'Authentic Filipino Salo-salo Spread',
@@ -30,9 +30,6 @@ export default function AuthLayout({
             </svg>
             <span>Back to SALO</span>
           </Link>
-          <div className="auth-topbar-actions">
-            <ThemeToggle />
-          </div>
         </header>
 
         <div className="auth-compact-card animate-fade-in" style={maxWidth ? { maxWidth: `${maxWidth}px` } : undefined}>
@@ -50,7 +47,6 @@ export default function AuthLayout({
   // Full Two-Column Split Layout for Login and Registration
   return (
     <div className="auth-page-shell">
-      {/* Floating Topbar: Back to Home + Theme Toggle */}
       <header className="auth-topbar">
         <Link to="/" className="auth-back-link" aria-label="Return to SALO Home">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
@@ -58,9 +54,6 @@ export default function AuthLayout({
           </svg>
           <span>Back to SALO</span>
         </Link>
-        <div className="auth-topbar-actions">
-          <ThemeToggle />
-        </div>
       </header>
 
       {/* Main Two-Column Split Frame */}
@@ -87,7 +80,7 @@ export default function AuthLayout({
               loading="eager"
             />
             <div className="auth-food-caption">
-              <span>Salo-salo sa sarap</span>
+              <span>Order. Reserve. Gather.</span>
               <span className="auth-food-badge">Authentic Comfort</span>
             </div>
           </div>
@@ -95,13 +88,13 @@ export default function AuthLayout({
           {/* Feature Highlights Row */}
           <div className="auth-feature-row">
             <span className="auth-feature-pill">
-              <span role="img" aria-label="food">🍛</span> Multi-Kitchen Cart
+              Multi-restaurant cart
             </span>
             <span className="auth-feature-pill">
-              <span role="img" aria-label="table">🪑</span> Table Reservations
+              Table reservations
             </span>
             <span className="auth-feature-pill">
-              <span role="img" aria-label="delivery">🛵</span> Express Delivery
+              Delivery &amp; pickup
             </span>
           </div>
         </aside>

@@ -222,6 +222,7 @@ class RiderService
             'rider_id' => (int) $rider->rider_id,
             'user_id' => (int) $user->user_id,
             'first_name' => $user->first_name,
+            'middle_initial' => $user->middle_initial,
             'last_name' => $user->last_name,
             'email' => $user->email,
             'phone_number' => $user->phone_number,

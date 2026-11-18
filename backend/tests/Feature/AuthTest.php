@@ -90,6 +90,77 @@ class AuthTest extends TestCase
             ->assertJsonStructure(['errors' => ['username', 'first_name', 'last_name', 'email', 'password']]);
     }
 
+    public function test_register_middle_initial_validation_and_normalization(): void
+    {
+        // 1. Valid lowercase single letter -> uppercased and stored
+        $validResponse = $this->postJson('/api/auth/register', [
+            'username' => 'mi_valid_user',
+            'first_name' => 'Cassidy',
+            'middle_initial' => 'd',
+            'last_name' => 'Santos',
+            'email' => 'mi_valid@example.com',
+            'password' => 'SecretPass123!',
+            'password_confirmation' => 'SecretPass123!',
+        ]);
+
+        $validResponse->assertStatus(201)
+            ->assertJsonPath('data.user.first_name', 'Cassidy')
+            ->assertJsonPath('data.user.middle_initial', 'D')
+            ->assertJsonPath('data.user.last_name', 'Santos');
+
+        $this->assertDatabaseHas('users', [
+            'username' => 'mi_valid_user',
+            'middle_initial' => 'D',
+        ]);
+
+        // 2. Empty string / null -> allowed and stored as null
+        $emptyResponse = $this->postJson('/api/auth/register', [
+            'username' => 'mi_empty_user',
+            'first_name' => 'Mateo',
+            'middle_initial' => '',
+            'last_name' => 'Reyes',
+            'email' => 'mi_empty@example.com',
+            'password' => 'SecretPass123!',
+            'password_confirmation' => 'SecretPass123!',
+        ]);
+
+        $emptyResponse->assertStatus(201)
+            ->assertJsonPath('data.user.middle_initial', null);
+
+        $this->assertDatabaseHas('users', [
+            'username' => 'mi_empty_user',
+            'middle_initial' => null,
+        ]);
+
+        // 3. Two characters -> rejected (422)
+        $twoCharResponse = $this->postJson('/api/auth/register', [
+            'username' => 'mi_twochar_user',
+            'first_name' => 'Elena',
+            'middle_initial' => 'AB',
+            'last_name' => 'Cruz',
+            'email' => 'mi_twochar@example.com',
+            'password' => 'SecretPass123!',
+            'password_confirmation' => 'SecretPass123!',
+        ]);
+
+        $twoCharResponse->assertStatus(422)
+            ->assertJsonStructure(['errors' => ['middle_initial']]);
+
+        // 4. Digit -> rejected (422)
+        $digitResponse = $this->postJson('/api/auth/register', [
+            'username' => 'mi_digit_user',
+            'first_name' => 'Marco',
+            'middle_initial' => '7',
+            'last_name' => 'Lim',
+            'email' => 'mi_digit@example.com',
+            'password' => 'SecretPass123!',
+            'password_confirmation' => 'SecretPass123!',
+        ]);
+
+        $digitResponse->assertStatus(422)
+            ->assertJsonStructure(['errors' => ['middle_initial']]);
+    }
+
     public function test_register_cannot_self_assign_admin_role(): void
     {
         $response = $this->postJson('/api/auth/register', [

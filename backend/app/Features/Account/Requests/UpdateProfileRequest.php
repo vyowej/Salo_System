@@ -71,7 +71,7 @@ class UpdateProfileRequest extends FormRequest
                 Rule::unique('users', 'username')->ignore($userId, 'user_id'),
             ],
             'first_name' => ['sometimes', 'required', 'string', 'max:100'],
-            'middle_initial' => ['sometimes', 'nullable', 'string', 'size:1'],
+            'middle_initial' => ['sometimes', 'nullable', 'string', 'size:1', 'regex:/^[a-zA-Z]$/'],
             'last_name' => ['sometimes', 'required', 'string', 'max:100'],
             'phone_number' => ['sometimes', 'nullable', 'string', 'regex:/^09\d{9}$/'],
             'date_of_birth' => ['sometimes', 'nullable', 'date', 'before:today'],

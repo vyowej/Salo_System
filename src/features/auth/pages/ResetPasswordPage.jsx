@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthLayout from '../../../layouts/AuthLayout';
-import { Input } from '../../../components/forms';
+import { Input, PasswordField } from '../../../components/forms';
 import Button from '../../../components/common/Button';
 import authService from '../../../services/authService';
 
@@ -16,7 +16,7 @@ export default function ResetPasswordPage() {
     passwordConfirmation: '',
   }));
 
-  const [showPassword, setShowPassword] = useState(false);
+  const [passwordResetKey, setPasswordResetKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(() =>
@@ -37,6 +37,7 @@ export default function ResetPasswordPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setPasswordResetKey((prev) => prev + 1);
     setError(null);
 
     if (!token) {
@@ -140,46 +141,29 @@ export default function ResetPasswordPage() {
             autoComplete="email"
           />
 
-          <Input
+          <PasswordField
             id="reset-password"
             name="password"
-            type={showPassword ? 'text' : 'password'}
             label="New Password"
             placeholder="Min. 8 characters"
             value={formData.password}
             onChange={handleChange}
             required
             autoComplete="new-password"
+            resetKey={passwordResetKey}
           />
 
-          <Input
+          <PasswordField
             id="reset-confirm"
             name="passwordConfirmation"
-            type={showPassword ? 'text' : 'password'}
             label="Confirm New Password"
             placeholder="Repeat new password"
             value={formData.passwordConfirmation}
             onChange={handleChange}
             required
             autoComplete="new-password"
+            resetKey={passwordResetKey}
           />
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-6px' }}>
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '11px',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                padding: 0,
-              }}
-            >
-              {showPassword ? 'Hide passwords' : 'Show passwords'}
-            </button>
-          </div>
 
           <Button
             type="submit"

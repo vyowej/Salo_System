@@ -23,6 +23,13 @@
   color: var(--salo-error);
 }
 
+.form-label-optional {
+  font-weight: var(--font-weight-normal);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+
 /* ── Helper / description ────────────────────────────── */
 .form-helper {
   font-size: var(--font-size-xs);
@@ -102,6 +109,55 @@
 /* ── Input with icons ────────────────────────────────── */
 .input.has-icon-left  { padding-left: 36px; }
 .input.has-icon-right { padding-right: 36px; }
+.input.has-password-toggle { padding-right: 44px; }
+
+/* Hide native browser password reveal/clear icons (Edge/IE) */
+.password-field-input::-ms-reveal,
+.password-field-input::-ms-clear,
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+.password-field-toggle {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.password-field-toggle:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.password-field-toggle:focus {
+  outline: none;
+}
+
+.password-field-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  color: var(--text-primary);
+}
+
+.password-field-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* ── Textarea ────────────────────────────────────────── */
 .textarea {

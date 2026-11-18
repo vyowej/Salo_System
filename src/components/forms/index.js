@@ -8,3 +8,4 @@ export {
   HelperText,
   ErrorMessage,
 } from './FormElements';
+export { PasswordField } from './PasswordField';

@@ -1,18 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from '../../../layouts/AuthLayout';
-import { Input } from '../../../components/forms';
+import { Input, PasswordField } from '../../../components/forms';
 import Button from '../../../components/common/Button';
 import { useAuth } from '../../../hooks/useAuth';
+import { sanitizeMiddleInitial, toUsernameSlug } from '../utils/registerFieldUtils';
 import './RegisterPage.css';
-
-/** Slugify a string to a safe username fragment */
-function toUsernameSlug(str) {
-  return str
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-    .slice(0, 20);
-}
 
 export default function RegisterPage({ embedded = false, onSwitch }) {
   const navigate = useNavigate();
@@ -20,6 +13,7 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
 
   const [formData, setFormData] = useState({
     firstName: '',
+    middleInitial: '',
     lastName: '',
     username: '',
     email: '',
@@ -28,12 +22,12 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
     agreeTerms: false,
   });
 
-  const [showPassword, setShowPassword] = useState(false);
+  const [passwordResetKey, setPasswordResetKey] = useState(0);
   const [error, setError] = useState(null);
   // Track whether the user has manually customised the username field
   const isUsernameCustomized = useRef(false);
 
-  // Auto-generate username from first + last name unless manually edited
+  // Auto-generate username from first + last name ONLY (never includes middle initial)
   useEffect(() => {
     if (isUsernameCustomized.current) return;
     const slug = toUsernameSlug(formData.firstName + formData.lastName);
@@ -48,6 +42,16 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
       isUsernameCustomized.current = true;
     }
 
+    if (name === 'middleInitial') {
+      const cleaned = sanitizeMiddleInitial(value);
+      setFormData((prev) => ({
+        ...prev,
+        middleInitial: cleaned,
+      }));
+      if (error) setError(null);
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
@@ -57,6 +61,7 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setPasswordResetKey((prev) => prev + 1);
     setError(null);
 
     // Validation
@@ -89,9 +94,12 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
       return;
     }
 
+    const normalizedMiddleInitial = sanitizeMiddleInitial(formData.middleInitial);
+
     try {
       await register({
         first_name: formData.firstName.trim(),
+        middle_initial: normalizedMiddleInitial ? normalizedMiddleInitial : null,
         last_name: formData.lastName.trim(),
         username: formData.username.trim(),
         email: formData.email.trim(),
@@ -124,8 +132,8 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
       )}
 
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
-        {/* Row 1 — Composite name */}
-        <div className="grid-cols-2" style={{ gap: 'var(--space-3)' }}>
+        {/* Row 1 — First Name | M.I. (optional) | Last Name */}
+        <div className="register-name-row">
           <Input
             id="register-firstname"
             name="firstName"
@@ -136,6 +144,25 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
             required
             autoComplete="given-name"
           />
+
+          <div className="register-mi-col">
+            <Input
+              id="register-middle-initial"
+              name="middleInitial"
+              label={(
+                <>
+                  M.I. <span className="form-label-optional">(optional)</span>
+                </>
+              )}
+              placeholder="e.g. D"
+              value={formData.middleInitial}
+              onChange={handleChange}
+              maxLength={2}
+              inputMode="text"
+              autoComplete="additional-name"
+              className="register-mi-input"
+            />
+          </div>
 
           <Input
             id="register-lastname"
@@ -179,48 +206,31 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
           </p>
         </div>
 
-        {/* Row 4 — Passwords */}
-        <div className="grid-cols-2" style={{ gap: 'var(--space-3)' }}>
-          <Input
+        {/* Row 4 — Passwords (independent per-field eye toggles) */}
+        <div className="grid-cols-2 register-password-row" style={{ gap: 'var(--space-3)' }}>
+          <PasswordField
             id="register-password"
             name="password"
-            type={showPassword ? 'text' : 'password'}
             label="Password"
             placeholder="Min. 8 characters"
             value={formData.password}
             onChange={handleChange}
             required
             autoComplete="new-password"
+            resetKey={passwordResetKey}
           />
 
-          <Input
+          <PasswordField
             id="register-confirm"
             name="passwordConfirmation"
-            type={showPassword ? 'text' : 'password'}
             label="Confirm Password"
             placeholder="Repeat password"
             value={formData.passwordConfirmation}
             onChange={handleChange}
             required
             autoComplete="new-password"
+            resetKey={passwordResetKey}
           />
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-4px' }}>
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '11px',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              padding: 0,
-            }}
-          >
-            {showPassword ? 'Hide passwords' : 'Show passwords'}
-          </button>
         </div>
 
         <label className="checkbox-group" style={{ fontSize: 'var(--font-size-xs)', alignItems: 'flex-start', marginTop: 'var(--space-1)' }}>
@@ -270,8 +280,8 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
 
   return (
     <AuthLayout
-      headline="Kain tayo!"
-      subheading="Good food, good company, great memories."
+      headline="Good food tastes better together."
+      subheading="Order from multiple kitchens, reserve tables, and gather over great meals."
       imageSrc="/images/auth/login-food.png"
       imageAlt="Traditional Filipino Feast"
       badgeText="Create Your Account"
