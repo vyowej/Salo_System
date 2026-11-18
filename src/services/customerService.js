@@ -5,6 +5,7 @@
  * respective backend endpoints are implemented.
  */
 
+import apiClient from './apiClient.js';
 import publicRestaurantService from './publicRestaurantService.js';
 import addressService from './addressService.js';
 
@@ -77,7 +78,27 @@ export const customerService = {
     return next;
   },
 
-  // Orders (Category B: no customer orders backend endpoint yet)
+  // Checkout & Orders (backed by /api/customer/checkout and /api/customer/orders)
+  async placeCheckoutOrder(payload) {
+    const res = await apiClient.post('/customer/checkout', payload);
+    return res?.data?.checkout ?? null;
+  },
+
+  async fetchOrders(params = {}) {
+    const sp = new URLSearchParams();
+    if (params.page) sp.set('page', String(params.page));
+    if (params.per_page) sp.set('per_page', String(params.per_page));
+    if (params.status && params.status !== 'all') sp.set('status', params.status);
+    const qs = sp.toString();
+    const res = await apiClient.get(`/customer/orders${qs ? `?${qs}` : ''}`);
+    return res?.data ?? { orders: [], pagination: {} };
+  },
+
+  async fetchOrderDetail(orderId) {
+    const res = await apiClient.get(`/customer/orders/${orderId}`);
+    return res?.data?.order ?? null;
+  },
+
   getOrders() {
     return [];
   },

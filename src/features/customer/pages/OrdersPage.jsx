@@ -65,13 +65,51 @@ export default function OrdersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { addItem, setRestaurantFulfillment, setRestaurantAddress } = useCart();
   const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const rawTab = searchParams.get('tab');
   const activeTab = TABS.some((t) => t.id === rawTab) ? rawTab : 'upcoming';
 
   useEffect(() => {
-    setOrders(customerService.getOrders());
+    let active = true;
+    setLoading(true);
+    setError('');
+    (async () => {
+      try {
+        const res = await customerService.fetchOrders({ page: 1, per_page: 50 });
+        if (!active) return;
+        const mapped = (res?.orders || []).map((o) => ({
+          id: String(o.order_id),
+          orderReference: o.order_reference,
+          overallStatus: o.order_status,
+          createdAt: o.placed_at,
+          grandTotal: Number(o.total_amount ?? 0),
+          fulfillmentSummary: o.fulfillment === 'delivery' ? 'Delivery' : 'Pickup',
+          paymentMethod: o.payment_method,
+          paymentStatus: o.payment_status,
+          subOrders: [
+            {
+              restaurantId: String(o.restaurant_id),
+              restaurantName: o.restaurant_name,
+              restaurantLogoUrl: o.restaurant_logo_url,
+              fulfillment: o.fulfillment,
+              deliveryFee: Number(o.delivery_fee ?? 0),
+              items: [],
+            },
+          ],
+        }));
+        setOrders(mapped);
+      } catch (err) {
+        if (active) setError(err?.message || 'Unable to load your orders.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleTabChange = (tabId) => {
@@ -157,7 +195,11 @@ export default function OrdersPage() {
         })}
       </div>
 
-      {filteredOrders.length === 0 ? (
+      {loading ? (
+        <StateView state="loading" title="Loading orders..." description="Fetching your latest orders from SALO." />
+      ) : error ? (
+        <StateView state="error" title="Unable to load orders" description={error} />
+      ) : filteredOrders.length === 0 ? (
         <StateView
           state="empty"
           title={EMPTY_MESSAGES[activeTab]}

@@ -1,0 +1,387 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Features\Restaurants\Services\AvailabilityService;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Tests\TestCase;
+
+class CheckoutOrderTest extends TestCase
+{
+    use DatabaseTransactions;
+
+    private function createUser(string $prefix = 'cust'): User
+    {
+        return User::create([
+            'username' => "{$prefix}_".random_int(10000, 99999),
+            'first_name' => ucfirst($prefix),
+            'last_name' => 'Buyer',
+            'phone_number' => '+639171234567',
+            'email' => "{$prefix}_".random_int(10000, 99999).'@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'active',
+        ]);
+    }
+
+    private function createPlatformAreaAndUserAddress(User $user, string $city = 'Quezon City', string $barangay = 'Diliman'): int
+    {
+        $provinceId = (int) (DB::table('provinces')->where('province_name', 'Metro Manila')->value('province_id')
+            ?? DB::table('provinces')->insertGetId(['province_name' => 'Metro Manila']));
+
+        $cityId = (int) (DB::table('cities')->where('province_id', $provinceId)->where('city_name', $city)->value('city_id')
+            ?? DB::table('cities')->insertGetId(['province_id' => $provinceId, 'city_name' => $city]));
+
+        $barangayId = (int) (DB::table('barangays')->where('city_id', $cityId)->where('barangay_name', $barangay)->value('barangay_id')
+            ?? DB::table('barangays')->insertGetId(['city_id' => $cityId, 'barangay_name' => $barangay]));
+
+        DB::table('platform_service_areas')->insertOrIgnore([
+            'province_id' => $provinceId,
+            'city_id' => $cityId,
+            'barangay_id' => null,
+            'area_level' => 'city',
+            'is_active' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $addressId = (int) DB::table('addresses')->insertGetId([
+            'barangay_id' => $barangayId,
+            'street' => '123 Katipunan Ave',
+            'postal_code' => '1101',
+            'latitude' => 14.6500,
+            'longitude' => 121.0700,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('user_addresses')->insert([
+            'user_id' => $user->user_id,
+            'address_id' => $addressId,
+            'address_label' => 'Home',
+            'recipient_name' => "{$user->first_name} {$user->last_name}",
+            'recipient_phone' => '+639171234567',
+            'is_default' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $addressId;
+    }
+
+    private function createOpenRestaurant(string $name, array $overrides = []): int
+    {
+        $addrId = app(\App\Support\AddressService::class)->createAddress([
+            'province' => 'Metro Manila',
+            'city' => 'Quezon City',
+            'barangay' => 'Diliman',
+            'street' => '55 Maginhawa St',
+        ]);
+
+        $restaurantId = (int) DB::table('restaurants')->insertGetId(array_merge([
+            'restaurant_name' => $name,
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'sole_proprietorship',
+            'contact_phone' => '09171112222',
+            'business_email' => strtolower(str_replace(' ', '', $name)).'@example.com',
+            'address_id' => $addrId,
+            'offers_delivery' => 1,
+            'offers_pickup' => 1,
+            'offers_dine_in' => 1,
+            'accepting_orders' => 1,
+            'restaurant_status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], $overrides));
+
+        // Open 00:00 -> 23:59 every day in Asia/Manila so tests are deterministic at any hour
+        for ($d = 0; $d <= 6; $d++) {
+            DB::table('operating_hours')->insert([
+                'restaurant_id' => $restaurantId,
+                'day_of_week' => $d,
+                'opening_time' => '00:00:00',
+                'closing_time' => '23:59:00',
+                'closes_next_day' => 0,
+                'is_closed' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return $restaurantId;
+    }
+
+    private function createMenuItem(int $restaurantId, string $name, string $price, array $overrides = []): int
+    {
+        $catId = (int) (DB::table('menu_categories')->where('restaurant_id', $restaurantId)->value('menu_category_id')
+            ?? DB::table('menu_categories')->insertGetId([
+                'restaurant_id' => $restaurantId,
+                'category_name' => 'Mains',
+                'sort_order' => 0,
+                'is_active' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
+
+        return (int) DB::table('menu_items')->insertGetId(array_merge([
+            'restaurant_id' => $restaurantId,
+            'menu_category_id' => $catId,
+            'item_name' => $name,
+            'base_price' => $price,
+            'availability_status' => 'available',
+            'approval_status' => 'approved',
+            'sort_order' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], $overrides));
+    }
+
+    public function test_multi_restaurant_cod_checkout_snapshots_fees_and_idempotency(): void
+    {
+        $buyer = $this->createUser('multi');
+        $addressId = $this->createPlatformAreaAndUserAddress($buyer, 'Quezon City', 'Diliman');
+
+        $restA = $this->createOpenRestaurant('Kusina Alpha');
+        $restB = $this->createOpenRestaurant('Kape Beta');
+
+        $itemA = $this->createMenuItem($restA, 'Pork Sisig', '12.34');
+        $itemB = $this->createMenuItem($restB, 'Iced Barako', '85.50');
+
+        $payload = [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-multi-'.random_int(100000, 999999),
+            'groups' => [
+                [
+                    'restaurant_id' => $restA,
+                    'fulfillment' => 'delivery',
+                    'address_id' => $addressId,
+                    'delivery_notes' => 'Gate 2',
+                    'items' => [
+                        // Tampered client price/total must be ignored
+                        ['menu_item_id' => $itemA, 'quantity' => 3, 'unit_price' => 1.00, 'total' => 3.00],
+                    ],
+                ],
+                [
+                    'restaurant_id' => $restB,
+                    'fulfillment' => 'pickup',
+                    'items' => [
+                        ['menu_item_id' => $itemB, 'quantity' => 2],
+                    ],
+                ],
+            ],
+        ];
+
+        $res = $this->actingAs($buyer)->postJson('/api/customer/checkout', $payload)
+            ->assertStatus(201);
+
+        $checkout = $res->json('data.checkout');
+        // Rest A: 12.34 * 3 = 37.02 + 49.00 delivery = 86.02
+        // Rest B: 85.50 * 2 = 171.00 + 0.00 pickup = 171.00
+        // Total = 257.02
+        $this->assertEqualsWithDelta(257.02, $checkout['total_amount'], 0.001);
+        $this->assertCount(2, $checkout['orders']);
+
+        $orderA = $checkout['orders'][0];
+        $orderB = $checkout['orders'][1];
+
+        $this->assertEqualsWithDelta(37.02, $orderA['subtotal_amount'], 0.001);
+        $this->assertEqualsWithDelta(49.00, $orderA['delivery_fee'], 0.001);
+        $this->assertEqualsWithDelta(86.02, $orderA['total_amount'], 0.001);
+        $this->assertSame('pending', $orderA['order_status']);
+        $this->assertSame('cod', $orderA['payment']['method']);
+        $this->assertSame('pending', $orderA['payment']['status']);
+        $this->assertStringContainsString('123 Katipunan Ave', $orderA['delivery_address']['address_text']);
+
+        $this->assertEqualsWithDelta(171.00, $orderB['subtotal_amount'], 0.001);
+        $this->assertEqualsWithDelta(0.00, $orderB['delivery_fee'], 0.001);
+        $this->assertEqualsWithDelta(171.00, $orderB['total_amount'], 0.001);
+        $this->assertNull($orderB['delivery_address']);
+
+        // Idempotency: same key twice creates nothing new
+        $res2 = $this->actingAs($buyer)->postJson('/api/customer/checkout', $payload)->assertStatus(201);
+        $this->assertSame($checkout['checkout_id'], $res2->json('data.checkout.checkout_id'));
+        $this->assertSame(1, DB::table('checkouts')->where('idempotency_key', $payload['idempotency_key'])->count());
+
+        // Later menu price change does NOT alter existing order_items snapshot
+        DB::table('menu_items')->where('menu_item_id', $itemA)->update(['base_price' => '999.00']);
+        $detail = $this->actingAs($buyer)->getJson("/api/customer/orders/{$orderA['order_id']}")->assertOk();
+        $this->assertEqualsWithDelta(12.34, $detail->json('data.order.items.0.unit_price'), 0.001);
+        $this->assertEqualsWithDelta(37.02, $detail->json('data.order.items.0.line_total'), 0.001);
+
+        // Audit logs created
+        $this->assertDatabaseHas('audit_logs', ['entity_type' => 'checkouts', 'entity_id' => (string) $checkout['checkout_id'], 'action' => 'customer_checkout_created']);
+        $this->assertDatabaseHas('audit_logs', ['entity_type' => 'orders', 'entity_id' => (string) $orderA['order_id'], 'action' => 'customer_order_placed']);
+    }
+
+    public function test_all_or_nothing_rejections_and_validation_rules(): void
+    {
+        $buyer = $this->createUser('val');
+        $otherUser = $this->createUser('other');
+        $buyerAddr = $this->createPlatformAreaAndUserAddress($buyer, 'Quezon City', 'Diliman');
+        $otherAddr = $this->createPlatformAreaAndUserAddress($otherUser, 'Quezon City', 'Diliman');
+
+        $restOpen = $this->createOpenRestaurant('Open Rest');
+        $validItem = $this->createMenuItem($restOpen, 'Valid Dish', '100.00');
+        $soldOutItem = $this->createMenuItem($restOpen, 'Sold Out Dish', '100.00', ['availability_status' => 'sold_out']);
+        $hiddenItem = $this->createMenuItem($restOpen, 'Hidden Dish', '100.00', ['availability_status' => 'hidden']);
+        $unapprovedItem = $this->createMenuItem($restOpen, 'Pending Dish', '100.00', ['approval_status' => 'pending']);
+
+        $restOther = $this->createOpenRestaurant('Other Rest');
+        $otherItem = $this->createMenuItem($restOther, 'Other Dish', '50.00');
+
+        // 1. All-or-nothing: group 0 valid, group 1 has sold_out item -> 0 checkouts/orders created
+        $beforeCheckouts = DB::table('checkouts')->count();
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-bad-1-'.random_int(10000, 99999),
+            'groups' => [
+                [
+                    'restaurant_id' => $restOpen,
+                    'fulfillment' => 'pickup',
+                    'items' => [['menu_item_id' => $validItem, 'quantity' => 1]],
+                ],
+                [
+                    'restaurant_id' => $restOpen,
+                    'fulfillment' => 'pickup',
+                    'items' => [['menu_item_id' => $soldOutItem, 'quantity' => 1]],
+                ],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.1.items.0.menu_item_id']);
+        $this->assertSame($beforeCheckouts, DB::table('checkouts')->count());
+
+        // 2. Hidden, unapproved, wrong-restaurant, duplicate item, and quantity > max
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-bad-2-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $restOpen,
+                'fulfillment' => 'pickup',
+                'items' => [
+                    ['menu_item_id' => $hiddenItem, 'quantity' => 1],
+                    ['menu_item_id' => $unapprovedItem, 'quantity' => 1],
+                    ['menu_item_id' => $otherItem, 'quantity' => 1],
+                    ['menu_item_id' => $validItem, 'quantity' => 1],
+                    ['menu_item_id' => $validItem, 'quantity' => 1],
+                ],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors([
+            'groups.0.items.0.menu_item_id',
+            'groups.0.items.1.menu_item_id',
+            'groups.0.items.2.menu_item_id',
+            'groups.0.items.4.menu_item_id',
+        ]);
+
+        // 3. Address not owned by user -> 422
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-bad-addr-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $restOpen,
+                'fulfillment' => 'delivery',
+                'address_id' => $otherAddr,
+                'items' => [['menu_item_id' => $validItem, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.address_id']);
+
+        // 4. Out of restaurant coverage -> 422
+        $makatiId = (int) (DB::table('cities')->where('city_name', 'Makati')->value('city_id')
+            ?? DB::table('cities')->insertGetId([
+                'province_id' => DB::table('provinces')->where('province_name', 'Metro Manila')->value('province_id'),
+                'city_name' => 'Makati',
+            ]));
+        DB::table('service_areas')->insert([
+            'restaurant_id' => $restOpen,
+            'city_id' => $makatiId,
+            'barangay_id' => null,
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-bad-cov-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $restOpen,
+                'fulfillment' => 'delivery',
+                'address_id' => $buyerAddr,
+                'items' => [['menu_item_id' => $validItem, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.address_id']);
+
+        // 5. Accepting orders off & closed hours
+        DB::table('restaurants')->where('restaurant_id', $restOpen)->update(['accepting_orders' => 0]);
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-paused-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $restOpen,
+                'fulfillment' => 'pickup',
+                'items' => [['menu_item_id' => $validItem, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.restaurant_id']);
+
+        // Closed hours
+        DB::table('restaurants')->where('restaurant_id', $restOpen)->update(['accepting_orders' => 1]);
+        DB::table('operating_hours')->where('restaurant_id', $restOpen)->update(['is_closed' => 1]);
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-closed-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $restOpen,
+                'fulfillment' => 'pickup',
+                'items' => [['menu_item_id' => $validItem, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.restaurant_id']);
+
+        // 6. Non-COD payment method -> 422
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'gcash',
+            'idempotency_key' => 'idem-gcash-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $restOpen,
+                'fulfillment' => 'pickup',
+                'items' => [['menu_item_id' => $validItem, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['payment_method']);
+    }
+
+    public function test_customer_order_authorization_and_list_isolation(): void
+    {
+        $buyerA = $this->createUser('buyerA');
+        $buyerB = $this->createUser('buyerB');
+        $rest = $this->createOpenRestaurant('Auth Kitchen');
+        $item = $this->createMenuItem($rest, 'Tapsilog', '120.00');
+
+        // Unauthenticated -> 401
+        $this->postJson('/api/customer/checkout', [])->assertStatus(401);
+        $this->getJson('/api/customer/orders')->assertStatus(401);
+        $this->getJson('/api/customer/orders/1')->assertStatus(401);
+
+        $res = $this->actingAs($buyerA)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-auth-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'pickup',
+                'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(201);
+
+        $orderId = $res->json('data.checkout.orders.0.order_id');
+
+        // Buyer A sees it in list and detail
+        $this->actingAs($buyerA)->getJson('/api/customer/orders')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.orders');
+        $this->actingAs($buyerA)->getJson("/api/customer/orders/{$orderId}")->assertOk();
+
+        // Buyer B gets empty list and 404 on Buyer A's order
+        $this->actingAs($buyerB)->getJson('/api/customer/orders')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.orders');
+        $this->actingAs($buyerB)->getJson("/api/customer/orders/{$orderId}")->assertStatus(404);
+    }
+}

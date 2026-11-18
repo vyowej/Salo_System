@@ -48,36 +48,100 @@ export default function OrderDetailPage() {
   const [lookupQuery, setLookupQuery] = useState('');
   const [liveTracking, setLiveTracking] = useState(null);
 
+  const [order, setOrder] = useState(null);
+  const [orderLoading, setOrderLoading] = useState(true);
+  const [orderError, setOrderError] = useState('');
+
   useEffect(() => {
-    const refreshData = async () => {
-      const orders = customerService.getOrders();
-      setAllOrders(orders);
+    let active = true;
+    setOrderLoading(true);
+    setOrderError('');
+
+    const mapBackendOrder = (raw) => ({
+      id: String(raw.order_id),
+      orderReference: raw.order_reference,
+      overallStatus: raw.order_status || 'pending',
+      createdAt: raw.placed_at,
+      grandTotal: Number(raw.total_amount ?? 0),
+      paymentMethod: raw.payment?.method || 'cod',
+      paymentStatus: raw.payment?.status || 'pending',
+      subOrders: [
+        {
+          restaurantId: String(raw.restaurant_id),
+          restaurantName: raw.restaurant_name,
+          restaurantLogoUrl: raw.restaurant_logo_url,
+          fulfillment: raw.fulfillment,
+          status: raw.order_status || 'pending',
+          subtotal: Number(raw.subtotal_amount ?? 0),
+          deliveryFee: Number(raw.delivery_fee ?? 0),
+          total: Number(raw.total_amount ?? 0),
+          deliveryAddress: raw.delivery_address
+            ? {
+                recipientName: raw.delivery_address.recipient_name,
+                phone: raw.delivery_address.phone,
+                addressText: raw.delivery_address.address_text,
+                notes: raw.delivery_address.notes,
+              }
+            : null,
+          items: (raw.items || []).map((it) => ({
+            id: String(it.menu_item_id || it.order_item_id),
+            name: it.item_name,
+            qty: Number(it.quantity),
+            price: Number(it.unit_price),
+            lineTotal: Number(it.line_total),
+          })),
+        },
+      ],
+    });
+
+    (async () => {
       try {
-        const rests = await customerService.getRestaurants();
-        setRestaurants(rests);
-      } catch {
-        setRestaurants([]);
+        let targetId = id;
+        if (id === 'track') {
+          const listRes = await customerService.fetchOrders({ per_page: 10 });
+          const fetchedOrders = listRes?.orders || [];
+          if (active) {
+            setAllOrders(fetchedOrders.map((o) => ({
+              id: String(o.order_id),
+              overallStatus: o.order_status,
+              subOrders: [{ restaurantName: o.restaurant_name }],
+            })));
+          }
+          const upcoming = fetchedOrders.find((o) =>
+            !['delivered', 'completed', 'picked up', 'cancelled', 'rejected', 'failed'].includes(String(o.order_status || '').toLowerCase())
+          );
+          targetId = upcoming ? String(upcoming.order_id) : null;
+          if (!targetId) {
+            if (active) setOrder(null);
+            return;
+          }
+        }
+
+        const raw = await customerService.fetchOrderDetail(targetId);
+        if (!active) return;
+        setOrder(raw ? mapBackendOrder(raw) : null);
+
+        const rests = await customerService.getRestaurants().catch(() => []);
+        if (active) setRestaurants(rests);
+      } catch (err) {
+        if (active) {
+          setOrder(null);
+          setOrderError(err?.status === 404 ? 'Order not found.' : (err?.message || 'Unable to load order details.'));
+        }
+      } finally {
+        if (active) setOrderLoading(false);
       }
+    })();
+
+    return () => {
+      active = false;
     };
-    refreshData();
   }, [id]);
 
   const upcomingOrders = useMemo(
-    () => allOrders.filter((o) => isUpcomingOrder(o)),
-    [allOrders],
+    () => (order && isUpcomingOrder(order) ? [order] : []),
+    [order],
   );
-
-  // Resolve the active order:
-  // - If a specific order ID is in the URL, find it.
-  // - If id === 'track' and there is at least 1 upcoming order, default to the first upcoming order.
-  // - If id === 'track' and there are NO upcoming orders, render the Standby Customer Map Tracker!
-  const order = useMemo(() => {
-    if (id === 'track') {
-      return upcomingOrders[0] || null;
-    }
-    const found = allOrders.find((o) => o.id === id);
-    return found ? { ...found, overallStatus: found.overallStatus || 'Pending Confirmation' } : null;
-  }, [allOrders, upcomingOrders, id]);
 
   const defaultAddress = useMemo(() => customerService.getDefaultAddress(), []);
 
@@ -305,10 +369,21 @@ export default function OrderDetailPage() {
     );
   }
 
+  if (orderLoading) {
+    return (
+      <CustomerLayout>
+        <div style={{ textAlign: 'center', padding: 'var(--space-16) 0', color: 'var(--text-secondary)' }}>
+          Loading order details...
+        </div>
+      </CustomerLayout>
+    );
+  }
+
   if (!order) {
     return (
       <CustomerLayout>
         <div style={{ textAlign: 'center', padding: 'var(--space-16) 0' }}>
+          {orderError && <p role="alert" style={{ color: 'var(--salo-error)', marginBottom: 12 }}>{orderError}</p>}
           <p style={{ color: 'var(--text-muted)' }}>Order not found.</p>
           <Link to="/customer/orders" style={{ textDecoration: 'none', marginTop: 12, display: 'inline-block' }}>
             <Button variant="primary">Return to Order History</Button>

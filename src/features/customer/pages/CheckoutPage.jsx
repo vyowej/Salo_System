@@ -1,31 +1,40 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
 import useAddresses from '../../../hooks/useAddresses';
 import customerService from '../../../services/customerService';
-import locationApiService from '../../../services/locationApiService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import AddressFormModal from '../components/AddressFormModal';
 
 const PAYMENT_METHODS = [
-  { id: 'cod', name: 'Cash on Delivery (COD)', desc: 'Pay with cash upon arrival of each delivery', icon: '💵' },
-  { id: 'gcash', name: 'GCash', desc: 'Fast, secure e-wallet payment via mobile number', icon: '📱' },
-  { id: 'maya', name: 'Maya', desc: 'Pay via Maya wallet or scan QR Ph', icon: '💳' },
-  { id: 'card', name: 'Credit or Debit Card', desc: 'Visa, Mastercard, JCB, or BancNet', icon: '💳' },
+  { id: 'cod', name: 'Cash on Delivery (COD)', desc: 'Pay with cash upon arrival of each delivery', icon: '💵', enabled: true },
+  { id: 'gcash', name: 'GCash (Coming soon)', desc: 'Online e-wallet payments are not enabled yet', icon: '📱', enabled: false },
+  { id: 'maya', name: 'Maya (Coming soon)', desc: 'Online e-wallet payments are not enabled yet', icon: '💳', enabled: false },
+  { id: 'card', name: 'Credit or Debit Card (Coming soon)', desc: 'Card payments are not enabled yet', icon: '💳', enabled: false },
 ];
 
+function createIdempotencyKey() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `salo-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export default function CheckoutPage() {
-  const { restaurantGroups, itemsSubtotal, totalDeliveryFees, grandTotal, setRestaurantAddress } = useCart();
+  const { restaurantGroups, itemsSubtotal, totalDeliveryFees, grandTotal, setRestaurantAddress, clearCart } = useCart();
   const { addresses, addAddress } = useAddresses();
 
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [orderNotes, setOrderNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [groupErrors, setGroupErrors] = useState({});
+  const [confirmedCheckout, setConfirmedCheckout] = useState(null);
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [targetRestaurantIdForNewAddress, setTargetRestaurantIdForNewAddress] = useState(null);
+  const idempotencyKeyRef = useRef(createIdempotencyKey());
 
   const handleModalSaveAddress = async (newAddrPayload) => {
     const saved = await addAddress(newAddrPayload);
@@ -36,6 +45,54 @@ export default function CheckoutPage() {
   const hasMissingDeliveryAddresses = restaurantGroups.some(
     (group) => group.fulfillment === 'delivery' && !group.deliveryAddress
   );
+
+  if (confirmedCheckout) {
+    return (
+      <CustomerLayout>
+        <section style={{ maxWidth: 720, margin: '24px auto', padding: 'var(--space-6)', background: 'var(--surface-primary)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-xl)' }}>
+          <Badge variant="success" size="md">Order Confirmed (COD)</Badge>
+          <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, margin: '12px 0 6px' }}>
+            Maraming salamat! Your order has been placed.
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-5)' }}>
+            Total Confirmed Amount: <strong>₱{Number(confirmedCheckout.total_amount || 0).toFixed(2)}</strong> · Payment: Cash on Delivery (Pending collection)
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
+            {(confirmedCheckout.orders || []).map((ord) => (
+              <div key={ord.order_id} style={{ padding: 'var(--space-4)', border: '1px solid var(--border-secondary)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-secondary)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <strong>{ord.restaurant_name}</strong>
+                  <Badge variant="warning" size="sm">{ord.order_status}</Badge>
+                </div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  Ref: <strong>{ord.order_reference}</strong> · {ord.fulfillment === 'delivery' ? 'Delivery' : 'Pickup'}
+                </div>
+                <div style={{ fontSize: 'var(--font-size-xs)', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Subtotal: ₱{Number(ord.subtotal_amount).toFixed(2)} · Fee: ₱{Number(ord.delivery_fee).toFixed(2)}</span>
+                  <strong>Total: ₱{Number(ord.total_amount).toFixed(2)}</strong>
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <Link to={`/customer/orders/${ord.order_id}`} style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--accent)' }}>
+                    View Order Details →
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+            <Link to="/customer/orders" style={{ textDecoration: 'none' }}>
+              <Button variant="primary">View My Orders</Button>
+            </Link>
+            <Link to="/customer/restaurants" style={{ textDecoration: 'none' }}>
+              <Button variant="outline">Browse More Restaurants</Button>
+            </Link>
+          </div>
+        </section>
+      </CustomerLayout>
+    );
+  }
 
   if (restaurantGroups.length === 0) {
     return (
@@ -51,6 +108,7 @@ export default function CheckoutPage() {
   }
 
   const handlePlaceOrder = async () => {
+    if (isSubmitting) return;
     if (hasMissingDeliveryAddresses) {
       setError('Each delivery sub-order must have a saved delivery address before checkout can continue.');
       return;
@@ -58,44 +116,45 @@ export default function CheckoutPage() {
 
     setIsSubmitting(true);
     setError(null);
+    setGroupErrors({});
 
     try {
-      for (const group of restaurantGroups) {
-        const restaurant = await customerService.getRestaurantById(group.restaurantId);
-        if (!restaurant) throw new Error(`${group.restaurantName} is unavailable for ordering.`);
-        if (restaurant.operatingSchedule?.acceptingOrders === false) {
-          throw new Error(`${restaurant.name} is not accepting orders right now. Your cart has been kept.`);
-        }
-        if (!restaurant.isOpen) {
-          throw new Error(`${restaurant.name} is currently closed. Your cart has been kept.`);
-        }
-        if (group.fulfillment === 'delivery' && group.deliveryAddress) {
-          if (group.deliveryAddress.isServiceAreaSupported === false) {
-            throw new Error(
-              group.deliveryAddress.serviceAreaMessage ||
-              `Selected delivery address (${group.deliveryAddress.city}) is outside SALO's active service area.`,
-            );
-          }
-          try {
-            const areaCheck = await locationApiService.validateServiceArea({
-              province: group.deliveryAddress.province || 'Metro Manila',
-              city: group.deliveryAddress.city || '',
-              barangay: group.deliveryAddress.barangay || null,
-            });
-            if (areaCheck && areaCheck.supported === false) {
-              throw new Error(areaCheck.reason || 'Selected delivery address is outside SALO service area.');
-            }
-          } catch (err) {
-            if (err?.message && /outside|service area|does not deliver/i.test(err.message)) {
-              throw err;
-            }
-          }
-        }
-      }
+      const payload = {
+        payment_method: 'cod',
+        idempotency_key: idempotencyKeyRef.current,
+        groups: restaurantGroups.map((group) => ({
+          restaurant_id: Number(group.restaurantId),
+          fulfillment: group.fulfillment === 'pickup' ? 'pickup' : 'delivery',
+          address_id: group.fulfillment === 'delivery' && group.deliveryAddress?.id
+            ? Number(group.deliveryAddress.id)
+            : null,
+          delivery_notes: orderNotes.trim() || group.deliveryAddress?.notes || null,
+          items: group.items.map((item) => ({
+            menu_item_id: Number(item.id),
+            quantity: Number(item.quantity),
+          })),
+        })),
+      };
 
-      throw new Error('Order submission is not available yet. The checkout API endpoint is pending backend implementation.');
+      const checkout = await customerService.placeCheckoutOrder(payload);
+      clearCart();
+      idempotencyKeyRef.current = createIdempotencyKey();
+      setConfirmedCheckout(checkout);
     } catch (err) {
-      setError(err?.message || 'Failed to submit consolidated order. Please try again.');
+      const nextGroupErrors = {};
+      if (err?.errors && typeof err.errors === 'object') {
+        Object.entries(err.errors).forEach(([key, msgs]) => {
+          const match = key.match(/^groups\.(\d+)\./);
+          const list = Array.isArray(msgs) ? msgs : [String(msgs)];
+          if (match) {
+            const idx = Number(match[1]);
+            nextGroupErrors[idx] = [...(nextGroupErrors[idx] || []), ...list];
+          }
+        });
+      }
+      setGroupErrors(nextGroupErrors);
+      const firstGroupMsg = Object.values(nextGroupErrors).flat()[0];
+      setError(firstGroupMsg || err?.message || 'Failed to submit order. Please review your cart and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -265,6 +324,13 @@ export default function CheckoutPage() {
                   <div style={{ marginTop: 'var(--space-2)', fontSize: 11, color: 'var(--text-muted)' }}>
                     {group.items.map((i) => `${i.quantity}x ${i.name}`).join(' · ')}
                   </div>
+                  {groupErrors[idx]?.length > 0 && (
+                    <div role="alert" style={{ marginTop: 'var(--space-2)', padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--status-error-bg)', color: 'var(--status-error-text)', fontSize: 'var(--font-size-xs)' }}>
+                      {groupErrors[idx].map((msg, mIdx) => (
+                        <div key={mIdx}>{msg}</div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -290,7 +356,8 @@ export default function CheckoutPage() {
                       borderRadius: 'var(--radius-md)',
                       border: isSelected ? '1.5px solid var(--accent)' : '1px solid var(--border-primary)',
                       background: isSelected ? 'var(--accent-subtle)' : 'var(--surface-primary)',
-                      cursor: 'pointer',
+                      cursor: method.enabled ? 'pointer' : 'not-allowed',
+                      opacity: method.enabled ? 1 : 0.6,
                       transition: 'all var(--transition-fast)',
                     }}
                   >
@@ -299,7 +366,8 @@ export default function CheckoutPage() {
                       name="paymentMethod"
                       value={method.id}
                       checked={isSelected}
-                      onChange={() => setPaymentMethod(method.id)}
+                      disabled={!method.enabled}
+                      onChange={() => method.enabled && setPaymentMethod(method.id)}
                     />
                     <span style={{ fontSize: 20 }}>{method.icon}</span>
                     <div style={{ flex: 1 }}>
@@ -371,9 +439,12 @@ export default function CheckoutPage() {
               fontWeight: 700,
               color: 'var(--text-primary)',
             }}>
-              <span>Total Amount</span>
+              <span>Estimated Total</span>
               <span style={{ color: 'var(--accent)' }}>₱{grandTotal.toLocaleString()}</span>
             </div>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
+              Estimated total — final prices and delivery fees are confirmed by the server on checkout.
+            </p>
           </div>
 
           <Button

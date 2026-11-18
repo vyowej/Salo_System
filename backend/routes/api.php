@@ -11,6 +11,7 @@ use App\Features\Locations\Controllers\CustomerAddressController;
 use App\Features\Locations\Controllers\LocationLookupController;
 use App\Features\Locations\Controllers\RestaurantLocationController;
 use App\Features\Locations\Controllers\TrackingController;
+use App\Features\Orders\Controllers\CustomerOrderController;
 use App\Features\Restaurants\Controllers\OwnerMenuController;
 use App\Features\Restaurants\Controllers\OwnerProfileController;
 use App\Features\Restaurants\Controllers\RestaurantApplicationController;
@@ -93,6 +94,10 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
     Route::patch('/addresses/{id}/default', [CustomerAddressController::class, 'setDefault'])->whereNumber('id');
     Route::delete('/addresses/{id}', [CustomerAddressController::class, 'destroy'])->whereNumber('id');
     Route::get('/orders/{id}/tracking', [TrackingController::class, 'customerOrderTracking'])->whereNumber('id');
+
+    Route::post('/checkout', [CustomerOrderController::class, 'checkout']);
+    Route::get('/orders', [CustomerOrderController::class, 'index']);
+    Route::get('/orders/{id}', [CustomerOrderController::class, 'show'])->whereNumber('id');
 });
 
 Route::prefix('restaurant')->middleware('auth')->group(function (): void {
