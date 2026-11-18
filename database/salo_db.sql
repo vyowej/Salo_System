@@ -206,6 +206,7 @@ CREATE TABLE restaurants (
     accepts_reservations         TINYINT(1)      NOT NULL DEFAULT 0,
     accepting_orders             TINYINT(1)      NOT NULL DEFAULT 1 COMMENT 'Manual pause; delivery/pickup/dine-in flags are the capabilities',
     accepting_reservations       TINYINT(1)      NOT NULL DEFAULT 1 COMMENT 'Manual pause; accepts_reservations is the capability',
+    inventory_deduction_mode     ENUM('manual','on_completion') NOT NULL DEFAULT 'manual',
     reservation_min_notice_hours SMALLINT UNSIGNED NOT NULL DEFAULT 2,
     reservation_max_party_size   SMALLINT UNSIGNED NOT NULL DEFAULT 8,
     reservation_notes            TEXT            NULL,

@@ -239,6 +239,8 @@ class RiderDeliveryService
                     request: $request,
                 );
 
+                $this->notifyDeliveryAssigned($order, $user);
+
                 return;
             }
 
@@ -269,6 +271,8 @@ class RiderDeliveryService
                 newValues: ['delivery_status' => 'accepted', 'order_id' => $orderId, 'rider_id' => $riderId],
                 request: $request,
             );
+
+            $this->notifyDeliveryAssigned($order, $user);
         });
 
         $row = $this->baseAssignedDeliveryQuery($riderId)
@@ -460,6 +464,35 @@ class RiderDeliveryService
         $row = $this->baseAssignedDeliveryQuery($riderId)->where('d.order_id', $orderId)->first();
 
         return $this->formatAssignedDelivery($row);
+    }
+
+    private function notifyDeliveryAssigned(object $order, User $riderUser): void
+    {
+        $riderFirstName = trim((string) ($riderUser->first_name ?? '')) ?: 'A rider';
+        $orderId = (int) $order->order_id;
+        $orderRef = (string) $order->order_reference;
+        $restaurantName = (string) $order->restaurant_name;
+
+        $this->notificationService->notifyUser(
+            userId: (int) $order->customer_id,
+            workspace: 'customer',
+            type: 'delivery_rider_assigned',
+            title: "Rider assigned to {$orderRef}",
+            body: "{$riderFirstName} accepted your delivery from {$restaurantName}.",
+            relatedEntityType: 'order',
+            relatedEntityId: $orderId,
+        );
+
+        $recipientIds = $this->notificationService->resolveRestaurantOrderHandlerUserIds((int) $order->restaurant_id);
+        $this->notificationService->notifyUsers(
+            userIds: $recipientIds,
+            workspace: 'restaurant',
+            type: 'delivery_rider_assigned',
+            title: "Rider assigned to {$orderRef}",
+            body: "{$riderFirstName} accepted delivery for order {$orderRef}.",
+            relatedEntityType: 'order',
+            relatedEntityId: $orderId,
+        );
     }
 
     private function hasUnfinishedDelivery(int $riderId): bool

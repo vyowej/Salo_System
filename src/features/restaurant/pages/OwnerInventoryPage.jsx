@@ -47,6 +47,7 @@ export default function OwnerInventoryPage() {
   const [historyItem, setHistoryItem] = useState(null);
   const [history, setHistory] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
 
   const can = (permission) => access.canAccess([permission]);
 
@@ -54,9 +55,10 @@ export default function OwnerInventoryPage() {
     setLoading(true);
     setError('');
     try {
-      const [rawItems, rawCategories] = await Promise.all([
+      const [rawItems, rawCategories, inventoryConfig] = await Promise.all([
         ownerService.fetchMenuItems(restaurantId),
         ownerService.fetchMenuCategories(restaurantId),
+        ownerService.getInventoryConfig(restaurantId),
       ]);
       setItems(ownerService.getInventoryItems(restaurantId));
       setMenuItems(
@@ -81,7 +83,7 @@ export default function OwnerInventoryPage() {
           })),
         }),
       );
-      setSettings(ownerService.getInventoryConfig(restaurantId));
+      setSettings((current) => ({ ...current, ...inventoryConfig }));
       if (historyItem) setHistory(ownerService.getInventoryMovements(restaurantId, historyItem));
     } catch (loadError) {
       setError(loadError?.message || INVENTORY_MENU_DISPLAY.errors.load);
@@ -106,12 +108,16 @@ export default function OwnerInventoryPage() {
   );
   const alertCounts = useMemo(() => getInventoryMenuAlertCounts(menuItems), [menuItems]);
 
-  const runAction = async (action) => {
+  const runAction = async (action, successMessage = '') => {
     setError('');
+    setStatusMessage('');
     setSaving(true);
     try {
       await action();
       await loadInventory();
+      if (successMessage) {
+        setStatusMessage(successMessage);
+      }
     } catch (actionError) {
       setError(actionError?.message || INVENTORY_MENU_DISPLAY.errors.save);
     } finally {
@@ -246,6 +252,7 @@ export default function OwnerInventoryPage() {
         )}
 
         {error && <div className="owner-inventory-error" role="alert">{error}</div>}
+        {statusMessage && <div className="owner-inventory-success" role="status">{statusMessage}</div>}
         {loading ? <LoadingSpinner size="lg" label={INVENTORY_MENU_DISPLAY.page.loading} />
           : error && menuItems.length === 0 ? <ErrorState title={INVENTORY_MENU_DISPLAY.page.loadErrorTitle} description={error} onRetry={loadInventory} />
             : (
@@ -275,14 +282,19 @@ export default function OwnerInventoryPage() {
                     <span>{INVENTORY_MENU_DISPLAY.settings.fieldLabel}</span>
                     <select
                       aria-label={INVENTORY_MENU_DISPLAY.settings.fieldAriaLabel}
+                      aria-busy={saving}
                       value={settings.deductionMode}
-                      disabled={!can('inventory.adjustStock')}
-                      onChange={(event) => runAction(() => ownerService.updateInventoryConfig(restaurantId, { deductionMode: event.target.value }))}
+                      disabled={!can('inventory.adjustStock') || saving}
+                      onChange={(event) => runAction(
+                        () => ownerService.updateInventoryConfig(restaurantId, { deductionMode: event.target.value }),
+                        INVENTORY_MENU_DISPLAY.settings.saveSuccess,
+                      )}
                     >
                       {INVENTORY_MENU_DISPLAY.settings.modes.map((mode) => (
                         <option key={mode.value} value={mode.value}>{mode.label}</option>
                       ))}
                     </select>
+                    {saving && <span className="owner-inventory-saving">{INVENTORY_MENU_DISPLAY.settings.saving}</span>}
                   </label>
                 </section>
 

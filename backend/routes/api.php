@@ -15,6 +15,7 @@ use App\Features\Locations\Controllers\TrackingController;
 use App\Features\Notifications\Controllers\NotificationController;
 use App\Features\Orders\Controllers\CustomerOrderController;
 use App\Features\Orders\Controllers\RestaurantOrderController;
+use App\Features\Restaurants\Controllers\OwnerInventoryController;
 use App\Features\Restaurants\Controllers\OwnerMenuController;
 use App\Features\Restaurants\Controllers\OwnerProfileController;
 use App\Features\Restaurants\Controllers\RestaurantApplicationController;
@@ -161,6 +162,9 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::get('/location', [RestaurantLocationController::class, 'show']);
         Route::patch('/location', [RestaurantLocationController::class, 'updateLocation']);
         Route::put('/coverage', [RestaurantLocationController::class, 'updateCoverage']);
+
+        Route::get('/inventory/config', [OwnerInventoryController::class, 'showConfig']);
+        Route::patch('/inventory/config', [OwnerInventoryController::class, 'updateConfig']);
 
         Route::get('/orders', [RestaurantOrderController::class, 'index']);
         Route::get('/orders/{id}', [RestaurantOrderController::class, 'show'])->whereNumber('id');

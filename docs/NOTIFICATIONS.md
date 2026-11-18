@@ -32,6 +32,8 @@ All notification endpoints require cookie-session authentication (`auth` middlew
 | Order rejected | `customer` | `order_rejected` | Order customer (includes rejection reason) | `order` |
 | Order preparing | `customer` | `order_preparing` | Order customer | `order` |
 | Order ready (pickup / dispatch) | `customer` | `order_ready` | Order customer | `order` |
+| Rider accepted delivery | `customer` | `delivery_rider_assigned` | Order customer (rider `first_name` only) | `order` |
+| Rider accepted delivery | `restaurant` | `delivery_rider_assigned` | Restaurant owner(s) + active order-handler staff | `order` |
 | Order picked up (`out_for_delivery`) | `customer` | `order_out_for_delivery` | Order customer (rider `first_name` only) | `order` |
 | Order delivered | `customer` | `order_delivered` | Order customer (rider `first_name` only) | `order` |
 | Pickup order completed | `customer` | `order_completed` | Order customer | `order` |
@@ -83,4 +85,4 @@ All notification endpoints require cookie-session authentication (`auth` middlew
 
 - **Granular admin permissions:** No per-permission admin roles exist yet, so all active `user_role = 'admin'` accounts receive admin notifications.
 - **No `user_account_types` table:** Staff role membership is derived dynamically by `User::resolveRoleContext()` from `restaurant_staff.staff_status = 'active'`.
-- **Out of scope:** Email/SMS/push delivery, notification preferences, reservation/refund/payout/earnings notifications, staff permission editing, removing staff, ownership transfer, and scheduled expiry/cleanup jobs.
+- **Out of scope:** Email/SMS/push delivery, notification preferences, reservation/refund/payout/earnings notifications, `delivery_available` broadcast (deferred until `riders` has a real DB availability column instead of `Cache`-only `rider:availability:{rider_id}`), staff permission editing, removing staff, ownership transfer, and scheduled expiry/cleanup jobs.

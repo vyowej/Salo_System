@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Features\Notifications\Services\NotificationService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -444,5 +445,108 @@ class NotificationsTest extends TestCase
         }
 
         $this->assertSame(0, DB::table('notifications')->where('user_id', $user->user_id)->where('type', 'test_rb')->count());
+    }
+
+    public function test_delivery_assignment_notifies_customer_and_restaurant_handlers_with_privacy_and_duplicate_guards(): void
+    {
+        $owner = $this->createUser('customer', 'owda', 'Elena');
+        $handlerStaff = $this->createUser('customer', 'stda1', 'Carlo');
+        $nonHandlerStaff = $this->createUser('customer', 'stda2', 'Ana');
+        $customer = $this->createUser('customer', 'cuda', 'Pedro');
+        $riderUser = $this->createUser('customer', 'rdda1', 'Marco');
+        $otherRiderUser = $this->createUser('customer', 'rdda2', 'Lucas');
+
+        $restaurantId = $this->createActiveRestaurant($owner, 'Pasig Kitchen');
+
+        DB::table('restaurant_staff')->insert([
+            [
+                'restaurant_id' => $restaurantId,
+                'user_id' => $handlerStaff->user_id,
+                'invited_by' => $owner->user_id,
+                'staff_position' => 'Order Handler',
+                'staff_status' => 'active',
+                'joined_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'restaurant_id' => $restaurantId,
+                'user_id' => $nonHandlerStaff->user_id,
+                'invited_by' => $owner->user_id,
+                'staff_position' => 'Inventory Manager',
+                'staff_status' => 'active',
+                'joined_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $cityId = (int) DB::table('cities')->value('city_id');
+        $riderId = (int) DB::table('riders')->insertGetId([
+            'user_id' => $riderUser->user_id,
+            'vehicle_type' => 'bicycle',
+            'emergency_contact_name' => 'Jane',
+            'emergency_contact_relationship' => 'sibling',
+            'emergency_contact_phone' => '09171112222',
+            'base_city_id' => $cityId,
+            'rider_status' => 'active',
+            'approved_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $otherRiderId = (int) DB::table('riders')->insertGetId([
+            'user_id' => $otherRiderUser->user_id,
+            'vehicle_type' => 'bicycle',
+            'emergency_contact_name' => 'John',
+            'emergency_contact_relationship' => 'sibling',
+            'emergency_contact_phone' => '09171113333',
+            'base_city_id' => $cityId,
+            'rider_status' => 'active',
+            'approved_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $orderId = $this->createOrder($restaurantId, 'Pasig Kitchen', $customer, 'delivery', 'ready');
+
+        // Offline rider cannot accept -> 403 and zero notifications
+        $this->actingAs($riderUser)->postJson("/api/rider/deliveries/{$orderId}/accept")->assertStatus(403);
+        $this->assertSame(0, DB::table('notifications')->where('type', 'delivery_rider_assigned')->count());
+
+        // Non-rider customer cannot accept -> 403 and zero notifications
+        $this->actingAs($customer)->postJson("/api/rider/deliveries/{$orderId}/accept")->assertStatus(403);
+        $this->assertSame(0, DB::table('notifications')->where('type', 'delivery_rider_assigned')->count());
+
+        // Put both riders online via Cache
+        Cache::forever("rider:availability:{$riderId}", ['status' => 'online', 'is_online' => true]);
+        Cache::forever("rider:availability:{$otherRiderId}", ['status' => 'online', 'is_online' => true]);
+
+        // Successful accept
+        $this->actingAs($riderUser)->postJson("/api/rider/deliveries/{$orderId}/accept")->assertOk();
+
+        // Duplicate accept by second rider -> 409, no duplicate notifications
+        $this->actingAs($otherRiderUser)->postJson("/api/rider/deliveries/{$orderId}/accept")->assertStatus(409);
+
+        $custNotif = DB::table('notifications')
+            ->where('user_id', $customer->user_id)
+            ->where('workspace', 'customer')
+            ->where('type', 'delivery_rider_assigned')
+            ->get();
+        $this->assertCount(1, $custNotif);
+        $this->assertSame('order', $custNotif[0]->related_entity_type);
+        $this->assertSame($orderId, (int) $custNotif[0]->related_entity_id);
+        $this->assertStringContainsString('Marco', $custNotif[0]->body);
+        $this->assertStringNotContainsString('+639171234567', $custNotif[0]->body);
+        $this->assertStringNotContainsString('User', $custNotif[0]->body);
+
+        $this->assertSame(1, DB::table('notifications')->where('user_id', $owner->user_id)->where('workspace', 'restaurant')->where('type', 'delivery_rider_assigned')->count());
+        $this->assertSame(1, DB::table('notifications')->where('user_id', $handlerStaff->user_id)->where('workspace', 'restaurant')->where('type', 'delivery_rider_assigned')->count());
+        $this->assertSame(0, DB::table('notifications')->where('user_id', $nonHandlerStaff->user_id)->count());
+
+        // Not-ready order cannot be accepted -> 409, no notifications
+        $pendingOrderId = $this->createOrder($restaurantId, 'Pasig Kitchen', $customer, 'delivery', 'pending');
+        $this->actingAs($otherRiderUser)->postJson("/api/rider/deliveries/{$pendingOrderId}/accept")->assertStatus(409);
+        $this->assertSame(0, DB::table('notifications')->where('related_entity_id', $pendingOrderId)->where('type', 'delivery_rider_assigned')->count());
     }
 }

@@ -378,12 +378,33 @@ export const ownerService = {
     return [];
   },
 
-  getInventoryConfig() {
-    return { deductionMode: 'manual' };
+  async getInventoryConfig(restaurantId) {
+    const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.get(`/restaurant/inventory/config${query}`);
+    const config = res?.data?.config;
+    if (!config || typeof config.deduction_mode !== 'string' || !config.deduction_mode) {
+      throw new Error('Invalid inventory configuration response from server.');
+    }
+    return {
+      restaurantId: config.restaurant_id ?? restaurantId ?? null,
+      deductionMode: config.deduction_mode,
+    };
   },
 
-  updateInventoryConfig() {
-    notAvailable('Updating inventory configuration');
+  async updateInventoryConfig(restaurantId, payload = {}) {
+    const deductionMode = payload?.deductionMode ?? payload?.deduction_mode;
+    const res = await apiClient.patch('/restaurant/inventory/config', {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      deduction_mode: deductionMode,
+    });
+    const config = res?.data?.config;
+    if (!config || typeof config.deduction_mode !== 'string' || !config.deduction_mode) {
+      throw new Error('Invalid inventory configuration response from server.');
+    }
+    return {
+      restaurantId: config.restaurant_id ?? restaurantId ?? null,
+      deductionMode: config.deduction_mode,
+    };
   },
 
   adjustInventoryStock() {

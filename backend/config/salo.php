@@ -45,4 +45,16 @@ return [
             'Menu Manager',
         ],
     ],
+
+    'inventory' => [
+        'deduction_modes' => [
+            'manual',
+            'on_completion',
+        ],
+        // Allowed restaurant_staff.staff_position values for inventory management (case-insensitive, trimmed).
+        'manager_positions' => [
+            'Manager',
+            'Inventory Manager',
+        ],
+    ],
 ];

@@ -120,6 +120,32 @@ test('getNotificationRoute maps all 4 workspaces and falls back safely for unkno
     getNotificationRoute({ workspace: 'admin', type: 'unknown_admin_event' }),
     '/admin',
   );
+
+  const assignedCust = normalizeNotification({
+    notification_id: 201,
+    workspace: 'customer',
+    type: 'delivery_rider_assigned',
+    title: 'Rider assigned',
+    body: 'Marco accepted your delivery.',
+    related_entity_type: 'order',
+    related_entity_id: 44,
+    is_read: false,
+    read_at: null,
+    created_at: '2026-11-18T23:00:00+08:00',
+  });
+  assert.equal(assignedCust.category, 'delivery');
+  assert.equal(assignedCust.categoryLabel, 'Delivery');
+  assert.equal(assignedCust.href, '/customer/orders/44');
+
+  assert.equal(
+    getNotificationRoute({
+      workspace: 'restaurant',
+      type: 'delivery_rider_assigned',
+      related_entity_type: 'order',
+      related_entity_id: 44,
+    }),
+    '/owner/orders',
+  );
 });
 
 test('normalizeUnreadCounts maps total and all 4 workspaces', () => {

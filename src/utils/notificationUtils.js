@@ -14,6 +14,7 @@ const WORKSPACE_FALLBACK_ROUTES = {
 
 const CATEGORY_LABELS = {
   order: 'Order update',
+  delivery: 'Delivery',
   invitation: 'Team invitation',
   application: 'Application',
   rider: 'Rider account',
@@ -34,6 +35,7 @@ export function assertValidWorkspace(workspace) {
 export function getNotificationCategory(type) {
   const code = String(type || '').toLowerCase();
   if (code.startsWith('order_')) return 'order';
+  if (code.startsWith('delivery_')) return 'delivery';
   if (code.startsWith('staff_invitation_')) return 'invitation';
   if (code.includes('_application_')) return 'application';
   if (code.startsWith('rider_')) return 'rider';

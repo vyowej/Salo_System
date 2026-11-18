@@ -33,6 +33,19 @@
   background: var(--status-error-bg);
 }
 
+.owner-inventory-success {
+  border: var(--card-border-width) solid var(--status-success-text);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  color: var(--status-success-text);
+  background: var(--status-success-bg);
+}
+
+.owner-inventory-saving {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
 .owner-inventory-alert-summary,
 .owner-inventory-settings,
 .owner-inventory-form,

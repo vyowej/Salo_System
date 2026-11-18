@@ -47,6 +47,8 @@ export const INVENTORY_MENU_DISPLAY = Object.freeze({
     description: 'On-completion deductions apply to tracked menu quantities and are recorded once per order.',
     fieldLabel: 'Deduction mode',
     fieldAriaLabel: 'Inventory deduction mode',
+    saving: 'Saving deduction mode...',
+    saveSuccess: 'Inventory deduction mode saved.',
     modes: Object.freeze([
       Object.freeze({ value: 'manual', label: 'Manual (default)' }),
       Object.freeze({ value: 'on_completion', label: 'On order completion' }),

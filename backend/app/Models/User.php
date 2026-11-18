@@ -168,6 +168,16 @@ class User extends Authenticatable
 
     public static function isOrderHandlerPosition(?string $position): bool
     {
+        return self::matchesConfiguredPosition($position, 'salo.orders.handler_positions');
+    }
+
+    public static function isInventoryManagerPosition(?string $position): bool
+    {
+        return self::matchesConfiguredPosition($position, 'salo.inventory.manager_positions');
+    }
+
+    private static function matchesConfiguredPosition(?string $position, string $configKey): bool
+    {
         $normalized = strtolower(trim((string) $position));
         if ($normalized === '') {
             return false;
@@ -175,7 +185,7 @@ class User extends Authenticatable
 
         $allowed = array_map(
             static fn (mixed $item): string => strtolower(trim((string) $item)),
-            (array) config('salo.orders.handler_positions', []),
+            (array) config($configKey, []),
         );
 
         return in_array($normalized, $allowed, true);
