@@ -18,6 +18,7 @@ import riderService from '../services/riderService';
 import RoleOnboardingModal from '../components/onboarding/RoleOnboardingModal';
 import RiderNotificationsMenu from '../features/rider/components/RiderNotificationsMenu';
 import useRiderGpsTracker from '../features/rider/hooks/useRiderGpsTracker';
+import { RiderGpsContext } from '../features/rider/context/RiderGpsContext';
 import { useRoleOnboarding } from '../hooks/useRoleOnboarding';
 import '../components/navigation/NavigationShell.css';
 import './RiderLayout.css';
@@ -101,7 +102,7 @@ export default function RiderLayout({ children }) {
   const riderStatus = user?.rider_profile?.rider_status ?? dashboard?.rider?.rider_status ?? null;
   const shouldTrackGps = riderStatus === 'active' && (availability === 'online' || Boolean(activeDelivery));
 
-  useRiderGpsTracker({
+  const gpsTracker = useRiderGpsTracker({
     enabled: shouldTrackGps,
     deliveryId: activeDelivery?.delivery_id ?? null,
   });
@@ -145,7 +146,8 @@ export default function RiderLayout({ children }) {
   const displayInitials = getInitials(displayName);
 
   return (
-    <div className={`rider-shell navigation-shell ${isMapPage ? 'rider-map-shell' : ''}`}>
+    <RiderGpsContext.Provider value={gpsTracker}>
+      <div className={`rider-shell navigation-shell ${isMapPage ? 'rider-map-shell' : ''}`}>
       <div className={`rider-sidebar navigation-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <SideBar
           items={items}
@@ -263,7 +265,8 @@ export default function RiderLayout({ children }) {
         onSkip={riderOnboarding.skipOnboarding}
       />
 
-      <ConfirmDialog {...logoutDialogProps} />
-    </div>
+        <ConfirmDialog {...logoutDialogProps} />
+      </div>
+    </RiderGpsContext.Provider>
   );
 }
