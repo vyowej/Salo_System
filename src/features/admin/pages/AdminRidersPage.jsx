@@ -125,28 +125,36 @@ export default function AdminRidersPage() {
     if (!pendingAction || savingAction) return;
     const { rider, action } = pendingAction;
     const statusMap = {
-      Activate: 'active',
-      Reactivate: 'active',
       Suspend: 'suspended',
       Deactivate: 'inactive',
     };
-    const backendStatus = statusMap[action];
-    if (!backendStatus) {
-      setPendingAction(null);
-      return;
-    }
 
     setSavingAction(true);
     setError('');
     try {
-      const updatedRow = await adminApiService.updateRiderStatus(rider.rider_id, {
-        status: backendStatus,
-        reason,
-      });
-      const nextStatusLabel = STATUS_LABELS[String(updatedRow?.rider_status || backendStatus).toLowerCase()] || rider.status;
+      let updatedRow = null;
+      let fallbackStatus = rider.rawStatus;
+      if (action === 'Activate') {
+        updatedRow = await adminApiService.activateRider(rider.rider_id);
+        fallbackStatus = 'active';
+      } else {
+        const backendStatus = statusMap[action];
+        if (!backendStatus) {
+          setPendingAction(null);
+          return;
+        }
+        updatedRow = await adminApiService.updateRiderStatus(rider.rider_id, {
+          status: backendStatus,
+          reason,
+        });
+        fallbackStatus = backendStatus;
+      }
+
+      const nextRawStatus = updatedRow?.rider_status || fallbackStatus;
+      const nextStatusLabel = STATUS_LABELS[String(nextRawStatus).toLowerCase()] || rider.status;
       const updated = {
         ...rider,
-        rawStatus: updatedRow?.rider_status || backendStatus,
+        rawStatus: nextRawStatus,
         status: nextStatusLabel,
         approvedAt: updatedRow?.approved_at || rider.approvedAt,
       };
@@ -169,8 +177,7 @@ export default function AdminRidersPage() {
     { key: 'status', label: 'Status', render: (rider) => <StatusBadge status={rider.status} /> },
     { key: 'actions', label: 'Actions', render: (rider) => <div className="admin-action-row">
       {rider.status === 'Active' && canDeactivate && <button className="admin-action-button admin-action-button--danger" type="button" onClick={() => askAction(rider, 'Suspend')}>Suspend</button>}
-      {rider.status === 'Suspended' && canActivate && <button className="admin-action-button" type="button" onClick={() => askAction(rider, 'Reactivate')}>Reactivate</button>}
-      {rider.status !== 'Active' && rider.status !== 'Suspended' && canActivate && <button className="admin-action-button" type="button" onClick={() => askAction(rider, 'Activate')}>Activate</button>}
+      {rider.rawStatus === 'approved' && canActivate && <button className="admin-action-button" type="button" onClick={() => askAction(rider, 'Activate')}>Activate</button>}
       {canDeactivate && rider.status !== 'Deactivated' && <button className="admin-action-button" type="button" onClick={() => askAction(rider, 'Deactivate')}>Deactivate</button>}
     </div> },
   ];
@@ -311,7 +318,7 @@ export default function AdminRidersPage() {
             </ul>
             <div className="admin-action-row">
               {selected.status === 'Active' && canDeactivate && <button className="admin-action-button admin-action-button--danger" type="button" onClick={() => askAction(selected, 'Suspend')}>Suspend</button>}
-              {selected.status !== 'Active' && canActivate && <button className="admin-action-button" type="button" onClick={() => askAction(selected, selected.status === 'Suspended' ? 'Reactivate' : 'Activate')}>Activate / Reactivate</button>}
+              {selected.rawStatus === 'approved' && canActivate && <button className="admin-action-button" type="button" onClick={() => askAction(selected, 'Activate')}>Activate</button>}
               {canDeactivate && selected.status !== 'Deactivated' && <button className="admin-action-button" type="button" onClick={() => askAction(selected, 'Deactivate')}>Deactivate</button>}
             </div>
           </div>}

@@ -105,7 +105,7 @@ class AdminManagementController extends Controller
     public function updateRiderStatus(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
-            'status' => ['required', 'string', Rule::in(['pending', 'approved', 'rejected', 'active', 'inactive', 'suspended'])],
+            'status' => ['required', 'string', Rule::in(['inactive', 'suspended'])],
             'reason' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -120,6 +120,20 @@ class AdminManagementController extends Controller
         return ApiResponse::success(
             data: ['rider' => $rider],
             message: 'Rider status updated.',
+        );
+    }
+
+    public function activateRider(Request $request, int $id): JsonResponse
+    {
+        $rider = $this->adminManagementService->activateRider(
+            riderId: $id,
+            admin: $request->user(),
+            request: $request,
+        );
+
+        return ApiResponse::success(
+            data: ['rider' => $rider],
+            message: 'Rider activated.',
         );
     }
 

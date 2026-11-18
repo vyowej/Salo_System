@@ -49,9 +49,11 @@ export default function OrderDetailPage() {
     cancelledBy: raw.cancelled_by ?? null,
     createdAt: raw.placed_at ?? null,
     acceptedAt: raw.accepted_at ?? null,
+    deliveredAt: raw.delivered_at ?? null,
     completedAt: raw.completed_at ?? null,
     cancelledAt: raw.cancelled_at ?? null,
     rejectedAt: raw.rejected_at ?? null,
+    riderFirstName: raw.rider?.first_name ?? null,
     grandTotal: Number(raw.total_amount ?? 0),
     totalAmount: Number(raw.total_amount ?? 0),
     paymentMethod: raw.payment?.method || 'cod',
@@ -327,23 +329,29 @@ export default function OrderDetailPage() {
       : null);
 
   const customerMapStatusText =
-    statusKey === 'ready'
-      ? fulfillment === 'pickup'
-        ? `Your order from ${activeSub?.restaurantName} is ready for pickup`
-        : `Your order from ${activeSub?.restaurantName} is ready — waiting for rider`
-      : statusKey === 'preparing'
-        ? `${activeSub?.restaurantName} is preparing your meal`
-        : statusKey === 'accepted'
-          ? `${activeSub?.restaurantName} accepted your order`
-          : statusKey === 'completed'
-            ? fulfillment === 'pickup'
-              ? `Order picked up and completed at ${activeSub?.restaurantName}`
-              : 'Order completed'
-            : statusKey === 'rejected'
-              ? `Order was rejected by ${activeSub?.restaurantName}`
-              : statusKey === 'cancelled'
-                ? 'Order cancelled'
-                : `Order received by ${activeSub?.restaurantName} · Awaiting restaurant confirmation`;
+    statusKey === 'delivered'
+      ? `Order delivered${order.riderFirstName ? ` by ${order.riderFirstName}` : ''}`
+      : statusKey === 'out_for_delivery'
+        ? `Out for delivery${order.riderFirstName ? ` with ${order.riderFirstName}` : ''}`
+        : statusKey === 'ready'
+          ? fulfillment === 'pickup'
+            ? `Your order from ${activeSub?.restaurantName} is ready for pickup`
+            : order.riderFirstName
+              ? `Ready · Assigned to rider ${order.riderFirstName}`
+              : `Your order from ${activeSub?.restaurantName} is ready`
+          : statusKey === 'preparing'
+            ? `${activeSub?.restaurantName} is preparing your meal`
+            : statusKey === 'accepted'
+              ? `${activeSub?.restaurantName} accepted your order`
+              : statusKey === 'completed'
+                ? fulfillment === 'pickup'
+                  ? `Order picked up and completed at ${activeSub?.restaurantName}`
+                  : 'Order completed'
+                : statusKey === 'rejected'
+                  ? `Order was rejected by ${activeSub?.restaurantName}`
+                  : statusKey === 'cancelled'
+                    ? 'Order cancelled'
+                    : `Order received by ${activeSub?.restaurantName} · Awaiting restaurant confirmation`;
 
   return (
     <CustomerLayout>
@@ -644,10 +652,13 @@ export default function OrderDetailPage() {
               <div className="customer-track-checkpoint is-dropoff">
                 <div className="customer-track-checkpoint__top">
                   <span>Delivery Destination</span>
-                  <em>{statusKey === 'ready' ? 'Waiting for rider' : formatOrderStatusText(subStatus, fulfillment)}</em>
+                  <em>{formatOrderStatusText(subStatus, fulfillment)}</em>
                 </div>
                 <strong>{activeSub?.deliveryAddress?.recipientName || 'Delivery Address'}</strong>
                 <small>{customerDeliveryAddress || 'Address on file'}</small>
+                {order.riderFirstName && (
+                  <small>Assigned rider: <strong>{order.riderFirstName}</strong></small>
+                )}
                 {activeSub?.deliveryAddress?.notes && (
                   <small>Notes: {activeSub.deliveryAddress.notes}</small>
                 )}

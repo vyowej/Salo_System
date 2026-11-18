@@ -19,6 +19,7 @@ use App\Features\Restaurants\Controllers\RestaurantApplicationController;
 use App\Features\Restaurants\Controllers\RestaurantController;
 use App\Features\Riders\Controllers\RiderApplicationController;
 use App\Features\Riders\Controllers\RiderController;
+use App\Features\Riders\Controllers\RiderDeliveryController;
 use App\Support\ApiResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -85,6 +86,12 @@ Route::prefix('rider')->middleware('auth')->group(function (): void {
         Route::patch('/profile', [RiderController::class, 'updateProfile']);
         Route::patch('/availability', [RiderController::class, 'updateAvailability']);
         Route::post('/location', [TrackingController::class, 'recordRiderLocation']);
+
+        Route::get('/deliveries/available', [RiderDeliveryController::class, 'available']);
+        Route::get('/deliveries/current', [RiderDeliveryController::class, 'current']);
+        Route::post('/deliveries/{orderId}/accept', [RiderDeliveryController::class, 'accept'])->whereNumber('orderId');
+        Route::post('/deliveries/{orderId}/picked-up', [RiderDeliveryController::class, 'pickedUp'])->whereNumber('orderId');
+        Route::post('/deliveries/{orderId}/delivered', [RiderDeliveryController::class, 'delivered'])->whereNumber('orderId');
     });
 });
 
@@ -162,6 +169,7 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::patch('/restaurants/{id}/status', [AdminManagementController::class, 'updateRestaurantStatus'])->whereNumber('id');
 
     Route::get('/riders', [AdminManagementController::class, 'riders']);
+    Route::post('/riders/{id}/activate', [AdminManagementController::class, 'activateRider'])->whereNumber('id');
     Route::patch('/riders/{id}/status', [AdminManagementController::class, 'updateRiderStatus'])->whereNumber('id');
 
     Route::get('/audit-logs', [AdminManagementController::class, 'auditLogs']);

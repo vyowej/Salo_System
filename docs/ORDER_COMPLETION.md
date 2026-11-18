@@ -7,7 +7,7 @@ Step 9a covers:
 - **Customer order tracking:** real status timeline (`Pending -> Accepted -> Preparing -> Ready -> Completed`, or `Rejected` / `Cancelled`) with `Asia/Manila` timestamps and separate payment status
 - **Customer cancellation (pending orders only):** `POST /api/customer/orders/{id}/cancel`
 
-Out of scope (deferred to **Step 9b**): delivery dispatch, rider assignment, `out_for_delivery`, `delivered`, and rider delivery completion.
+Out of scope for Step 9a (delivery dispatch, rider assignment, `out_for_delivery`, and `delivered` are covered in [DELIVERY.md](./DELIVERY.md); `delivered -> completed` remains unbuilt).
 
 ---
 

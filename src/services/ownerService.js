@@ -41,12 +41,14 @@ function normalizeRestaurantOrder(raw) {
     paidAt,
     rejectionReason: raw.rejection_reason ?? null,
     acceptedAt: raw.accepted_at ?? null,
+    deliveredAt: raw.delivered_at ?? null,
     completedAt: raw.completed_at ?? null,
     cancelledAt: raw.cancelled_at ?? null,
     cancelledBy: raw.cancelled_by ?? null,
     cancellationReason: raw.cancellation_reason ?? null,
     rejectedAt: raw.rejected_at ?? null,
     createdAt: raw.placed_at ?? raw.created_at ?? null,
+    riderFirstName: raw.rider?.first_name ?? null,
     items: Array.isArray(raw.items)
       ? raw.items.map((item) => ({
           id: item.order_item_id ?? item.menu_item_id ?? item.id,

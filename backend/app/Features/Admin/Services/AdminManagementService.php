@@ -336,6 +336,10 @@ class AdminManagementService
      */
     public function updateRiderStatus(int $riderId, string $status, ?string $reason, User $admin, Request $request): array
     {
+        if ($status === 'active') {
+            abort(422, 'Use POST /api/admin/riders/{id}/activate to activate an approved rider.');
+        }
+
         $rider = DB::table('riders')->where('rider_id', $riderId)->first();
         abort_unless($rider !== null, 404, 'Rider not found.');
 
@@ -344,9 +348,6 @@ class AdminManagementService
                 'rider_status' => $status,
                 'updated_at' => now(),
             ];
-            if ($status === 'active' && $rider->approved_at === null) {
-                $updates['approved_at'] = now();
-            }
 
             DB::table('riders')->where('rider_id', $riderId)->update($updates);
 
@@ -358,6 +359,53 @@ class AdminManagementService
                 oldValues: ['rider_status' => $rider->rider_status],
                 newValues: ['rider_status' => $status],
                 reason: $reason,
+                request: $request,
+            );
+        });
+
+        return (array) DB::table('riders')->where('rider_id', $riderId)->first();
+    }
+
+    /**
+     * Activate an approved rider (admin only, blocks self-activation, 409 if not approved).
+     *
+     * @return array<string, mixed>
+     */
+    public function activateRider(int $riderId, User $admin, Request $request): array
+    {
+        DB::transaction(function () use ($riderId, $admin, $request): void {
+            $rider = DB::table('riders')
+                ->where('rider_id', $riderId)
+                ->lockForUpdate()
+                ->first();
+
+            abort_unless($rider !== null, 404, 'Rider not found.');
+
+            if ((int) $rider->user_id === (int) $admin->user_id) {
+                abort(403, 'Forbidden: admins cannot activate their own rider account.');
+            }
+
+            if ($rider->rider_status !== 'approved') {
+                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+                    "Only approved riders can be activated (current status: {$rider->rider_status})."
+                );
+            }
+
+            $now = now();
+            DB::table('riders')
+                ->where('rider_id', $riderId)
+                ->update([
+                    'rider_status' => 'active',
+                    'updated_at' => $now,
+                ]);
+
+            $this->auditLogService->record(
+                actorUserId: (int) $admin->user_id,
+                action: 'admin_rider_activated',
+                entityType: 'riders',
+                entityId: $riderId,
+                oldValues: ['rider_status' => 'approved'],
+                newValues: ['rider_status' => 'active'],
                 request: $request,
             );
         });

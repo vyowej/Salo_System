@@ -94,9 +94,11 @@ export default function OrdersPage() {
           cancellationReason: o.cancellation_reason ?? null,
           createdAt: o.placed_at,
           acceptedAt: o.accepted_at ?? null,
+          deliveredAt: o.delivered_at ?? null,
           completedAt: o.completed_at ?? null,
           cancelledAt: o.cancelled_at ?? null,
           rejectedAt: o.rejected_at ?? null,
+          riderFirstName: o.rider?.first_name ?? null,
           grandTotal: Number(o.total_amount ?? 0),
           totalAmount: Number(o.total_amount ?? 0),
           fulfillmentSummary: o.fulfillment === 'delivery' ? 'Delivery' : 'Pickup',
@@ -267,6 +269,7 @@ export default function OrdersPage() {
                   {/* Row 2: date/time + payment method & separate payment status */}
                   <p className="customer-order-card__meta">
                     {formatDateTimeManila(order.createdAt)} · {order.fulfillmentSummary} · Payment: {formatPaymentStatusLabel(order.paymentStatus)}
+                    {order.riderFirstName ? ` · Rider: ${order.riderFirstName}` : ''}
                   </p>
                   <div
                     aria-label="Order status timeline"

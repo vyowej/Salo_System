@@ -157,7 +157,7 @@ class RiderApplicationWorkflowTest extends TestCase
 
         $this->actingAs($applicant)->patchJson('/api/rider/availability', [
             'status' => 'online',
-        ])->assertStatus(422);
+        ])->assertStatus(403);
 
         $this->assertDatabaseHas('audit_logs', [
             'entity_type' => 'rider_applications',

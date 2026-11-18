@@ -32,6 +32,9 @@ class CustomerOrderService
 
         $query = DB::table('orders as o')
             ->leftJoin('restaurants as r', 'r.restaurant_id', '=', 'o.restaurant_id')
+            ->leftJoin('deliveries as d', 'd.order_id', '=', 'o.order_id')
+            ->leftJoin('riders as rd', 'rd.rider_id', '=', 'd.rider_id')
+            ->leftJoin('users as ru', 'ru.user_id', '=', 'rd.user_id')
             ->where('o.customer_id', $user->user_id)
             ->select([
                 'o.order_id',
@@ -53,6 +56,8 @@ class CustomerOrderService
                 'o.rejection_reason',
                 'o.rejected_at',
                 'o.placed_at',
+                'd.delivered_at',
+                'ru.first_name as rider_first_name',
                 'r.logo_image',
             ]);
 
@@ -103,6 +108,7 @@ class CustomerOrderService
                 'payment_status' => $payment?->payment_status ?? 'pending',
                 'paid_at' => OrderTimestampFormatter::toManilaIso($payment?->paid_at),
                 'accepted_at' => OrderTimestampFormatter::toManilaIso($row->accepted_at),
+                'delivered_at' => OrderTimestampFormatter::toManilaIso($row->delivered_at),
                 'completed_at' => OrderTimestampFormatter::toManilaIso($row->completed_at),
                 'cancelled_at' => OrderTimestampFormatter::toManilaIso($row->cancelled_at),
                 'cancelled_by' => $row->cancelled_by,
@@ -110,6 +116,7 @@ class CustomerOrderService
                 'rejection_reason' => $row->rejection_reason,
                 'rejected_at' => OrderTimestampFormatter::toManilaIso($row->rejected_at),
                 'placed_at' => OrderTimestampFormatter::toManilaIso($row->placed_at),
+                'rider' => $row->rider_first_name ? ['first_name' => $row->rider_first_name] : null,
             ];
         })->all();
 
@@ -134,10 +141,15 @@ class CustomerOrderService
     {
         $row = DB::table('orders as o')
             ->leftJoin('restaurants as r', 'r.restaurant_id', '=', 'o.restaurant_id')
+            ->leftJoin('deliveries as d', 'd.order_id', '=', 'o.order_id')
+            ->leftJoin('riders as rd', 'rd.rider_id', '=', 'd.rider_id')
+            ->leftJoin('users as ru', 'ru.user_id', '=', 'rd.user_id')
             ->where('o.order_id', $orderId)
             ->where('o.customer_id', $user->user_id)
             ->select([
                 'o.*',
+                'd.delivered_at',
+                'ru.first_name as rider_first_name',
                 'r.logo_image',
             ])
             ->first();
@@ -202,6 +214,7 @@ class CustomerOrderService
             ],
             'items' => $items,
             'accepted_at' => OrderTimestampFormatter::toManilaIso($row->accepted_at),
+            'delivered_at' => OrderTimestampFormatter::toManilaIso($row->delivered_at),
             'completed_at' => OrderTimestampFormatter::toManilaIso($row->completed_at),
             'cancelled_at' => OrderTimestampFormatter::toManilaIso($row->cancelled_at),
             'cancelled_by' => $row->cancelled_by,
@@ -209,6 +222,7 @@ class CustomerOrderService
             'rejection_reason' => $row->rejection_reason,
             'rejected_at' => OrderTimestampFormatter::toManilaIso($row->rejected_at),
             'placed_at' => OrderTimestampFormatter::toManilaIso($row->placed_at),
+            'rider' => $row->rider_first_name ? ['first_name' => $row->rider_first_name] : null,
         ];
     }
 

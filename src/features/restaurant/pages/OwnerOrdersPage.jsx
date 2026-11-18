@@ -14,6 +14,8 @@ const TABS = [
   { id: 'accepted', label: 'Accepted' },
   { id: 'preparing', label: 'Preparing' },
   { id: 'ready', label: 'Ready' },
+  { id: 'out_for_delivery', label: 'Out for Delivery' },
+  { id: 'delivered', label: 'Delivered' },
   { id: 'completed', label: 'Completed' },
   { id: 'rejected', label: 'Rejected' },
   { id: 'cancelled', label: 'Cancelled' },
@@ -24,9 +26,10 @@ const STATUS_VARIANTS = {
   accepted: 'info',
   preparing: 'primary',
   ready: 'success',
-  rejected: 'error',
   out_for_delivery: 'info',
+  delivered: 'success',
   completed: 'success',
+  rejected: 'error',
   cancelled: 'default',
 };
 
@@ -35,9 +38,10 @@ const STATUS_LABELS = {
   accepted: 'Accepted',
   preparing: 'Preparing',
   ready: 'Ready',
-  rejected: 'Rejected',
   out_for_delivery: 'Out for Delivery',
+  delivered: 'Delivered',
   completed: 'Completed',
+  rejected: 'Rejected',
   cancelled: 'Cancelled',
 };
 
@@ -311,6 +315,9 @@ export default function OwnerOrdersPage() {
                         <p style={{ margin: 0 }}>Method: {order.fulfillment || 'Not specified'}</p>
                         <p style={{ margin: '4px 0' }}>Payment: {order.paymentMethod || 'Not specified'} · {order.paymentStatus || 'Status unavailable'}</p>
                         <p style={{ margin: '4px 0' }}>Items: {formatPeso(order.subtotal)} · Delivery: {formatPeso(order.deliveryFee)}</p>
+                        {order.riderFirstName && (
+                          <p style={{ margin: '4px 0' }}>Assigned rider: <strong>{order.riderFirstName}</strong></p>
+                        )}
                       </section>
                       {(order.isScheduled || order.scheduledDate || order.scheduledTime) && (
                         <section>
@@ -381,7 +388,19 @@ export default function OwnerOrdersPage() {
                       </Button>
                     ) : statusKey === 'ready' ? (
                       <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', margin: 0 }}>
-                        {isPickup ? 'Order is ready for customer pickup.' : 'Order is ready for rider dispatch.'}
+                        {isPickup
+                          ? 'Order is ready for customer pickup.'
+                          : order.riderFirstName
+                            ? `Assigned to rider ${order.riderFirstName} · awaiting pickup.`
+                            : 'Order is ready for rider assignment.'}
+                      </p>
+                    ) : statusKey === 'out_for_delivery' ? (
+                      <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', margin: 0 }}>
+                        Out for delivery{order.riderFirstName ? ` with ${order.riderFirstName}` : ''}.
+                      </p>
+                    ) : statusKey === 'delivered' ? (
+                      <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', margin: 0 }}>
+                        Delivered{order.deliveredAt ? ` at ${formatDateTime(order.deliveredAt)}` : ''}.
                       </p>
                     ) : null}
                   </div>

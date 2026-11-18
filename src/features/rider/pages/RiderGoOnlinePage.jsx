@@ -91,16 +91,22 @@ export default function RiderGoOnlinePage() {
   }
 
   const isOnline = isRiderOnline(dashboard?.availability);
+  const isRiderActive = dashboard?.rider?.rider_status === 'active';
 
   return (
     <div className="rider-page-shell">
       <PageHeader title="Go online" subtitle="Manage your driver availability." eyebrow="Availability" />
       <Card>
         <CardBody className="rider-go-online-body">
+          {!isRiderActive && (
+            <div role="status" style={{ marginBottom: 'var(--space-3)', color: 'var(--status-warning-text, #7c5800)', fontWeight: 600 }}>
+              Awaiting activation — only active riders can go online.
+            </div>
+          )}
           <div className="rider-go-online-header">
             <div>
               <h2>Driver Mode: {isOnline ? 'Online' : 'Offline'}</h2>
-              <p>Base city: {dashboard?.rider?.base_city || 'Not set'} · Account status: {dashboard?.rider?.rider_status || 'active'}</p>
+              <p>Base city: {dashboard?.rider?.base_city || 'Not set'} · Account status: {dashboard?.rider?.rider_status || 'pending'}</p>
             </div>
           </div>
 
@@ -108,8 +114,8 @@ export default function RiderGoOnlinePage() {
           {notice && <p role="status" style={{ color: 'var(--success, #2e7d32)' }}>{notice}</p>}
 
           <div className="rider-go-online-actions">
-            <Button variant={isOnline ? 'secondary' : 'primary'} onClick={handleToggle} disabled={saving}>
-              {saving ? 'Updating...' : isOnline ? 'Go offline' : 'Go online'}
+            <Button variant={isOnline ? 'secondary' : 'primary'} onClick={handleToggle} disabled={saving || !isRiderActive}>
+              {!isRiderActive ? 'Awaiting activation' : saving ? 'Updating...' : isOnline ? 'Go offline' : 'Go online'}
             </Button>
             <Link to="/rider">
               <Button variant="secondary">Back to dashboard</Button>

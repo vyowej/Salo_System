@@ -84,6 +84,11 @@ export const adminApiService = {
     return response?.data ?? { items: [], meta: {} };
   },
 
+  async activateRider(riderId) {
+    const response = await apiClient.post(`/admin/riders/${riderId}/activate`, {});
+    return response?.data?.rider ?? null;
+  },
+
   async updateRiderStatus(riderId, { status, reason = '' }) {
     const response = await apiClient.patch(`/admin/riders/${riderId}/status`, {
       status,

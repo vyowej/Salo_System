@@ -75,6 +75,7 @@ export default function RiderDashboardPage() {
 
   const rider = dashboard?.rider || {};
   const stats = dashboard?.stats || {};
+  const isRiderActive = rider.rider_status === 'active';
   const isOnline = isRiderOnline(dashboard?.availability);
   const activeDelivery = dashboard?.active_delivery || null;
   const displayName = user?.name || rider.name || user?.username || 'Rider';
@@ -82,6 +83,23 @@ export default function RiderDashboardPage() {
   return (
     <div className="rider-page-shell rider-dashboard-page">
       <PageHeader title="Rider dashboard" subtitle="Ready for today's deliveries?" eyebrow="Rider overview" />
+
+      {!isRiderActive && (
+        <div
+          role="status"
+          style={{
+            marginBottom: 'var(--space-4)',
+            padding: 'var(--space-3) var(--space-4)',
+            borderRadius: 'var(--radius-md)',
+            background: 'var(--status-warning-bg, #fff8e1)',
+            color: 'var(--status-warning-text, #7c5800)',
+            fontSize: 'var(--font-size-sm)',
+            fontWeight: 600,
+          }}
+        >
+          Awaiting activation — an admin must activate your rider account (status: {rider.rider_status || 'approved'}) before you can go online or accept deliveries.
+        </div>
+      )}
 
       {error && (
         <div role="alert" style={{ marginBottom: 'var(--space-4)', color: 'var(--danger, #c62828)', fontSize: 'var(--font-size-sm)' }}>
@@ -110,9 +128,9 @@ export default function RiderDashboardPage() {
                 variant={isOnline ? 'secondary' : 'primary'}
                 size="sm"
                 onClick={handleToggleAvailability}
-                disabled={toggling}
+                disabled={toggling || !isRiderActive}
               >
-                {toggling ? 'Updating...' : isOnline ? 'Go offline' : 'Go online'}
+                {!isRiderActive ? 'Awaiting activation' : toggling ? 'Updating...' : isOnline ? 'Go offline' : 'Go online'}
               </Button>
             </div>
           </CardBody>
@@ -140,8 +158,19 @@ export default function RiderDashboardPage() {
       ) : (
         <GlobalStateView
           state="empty"
-          title="No active delivery"
-          description="Delivery job offers and dispatch pooling will appear here once the rider dispatch API is connected."
+          title={isRiderActive ? 'No active delivery' : 'Awaiting activation'}
+          description={
+            isRiderActive
+              ? 'Go online and accept a ready order from Available deliveries.'
+              : 'Your account must be activated by an admin before you can accept deliveries.'
+          }
+          action={
+            isRiderActive ? (
+              <Link to="/rider/deliveries">
+                <Button variant="primary" size="sm">View available deliveries</Button>
+              </Link>
+            ) : null
+          }
         />
       )}
     </div>

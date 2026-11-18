@@ -62,12 +62,15 @@ The backend exposes `order_handler_positions` (from `config('salo.orders.handler
 | `accepted` | `preparing` | Restaurant (`POST /api/restaurant/orders/{id}/prepare`) |
 | `preparing` | `ready` | Restaurant (`POST /api/restaurant/orders/{id}/ready`) |
 | `ready` | `completed` | Restaurant (`POST /api/restaurant/orders/{id}/complete`, `pickup` orders only; `delivery` returns `409`) |
+| `ready` | `out_for_delivery` | Assigned rider (`POST /api/rider/deliveries/{orderId}/picked-up`, `delivery` orders only) |
+| `out_for_delivery` | `delivered` | Assigned rider (`POST /api/rider/deliveries/{orderId}/delivered`, `delivery` orders only; sets `deliveries.delivered_at`, leaves `orders.completed_at` `NULL`) |
+| `delivered` | *(Terminal in Step 9b)* | — |
 | `completed` | *(Terminal)* | — |
 | `rejected` | *(Terminal)* | — |
 | `cancelled` | *(Terminal)* | — |
 
 - Any transition outside this table (including double-accept, acting on a `cancelled` or `rejected` order, or calling `/complete` on a `delivery` order) returns HTTP `409 Conflict`.
-- `Out for Delivery` and rider delivery completion remain out of scope (deferred to Step 9b). See [ORDER_COMPLETION.md](./ORDER_COMPLETION.md) for pickup completion and customer cancellation details.
+- `delivered -> completed` remains out of scope in Step 9b. See [ORDER_COMPLETION.md](./ORDER_COMPLETION.md) and [DELIVERY.md](./DELIVERY.md) for details.
 
 ---
 

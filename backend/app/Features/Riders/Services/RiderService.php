@@ -7,7 +7,7 @@ use App\Support\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class RiderService
 {
@@ -132,22 +132,18 @@ class RiderService
     {
         $rider = $this->requireRiderRecord($user);
 
-        if ($rider->rider_status !== 'active') {
-            throw ValidationException::withMessages([
-                'status' => ['Only active riders can change online availability. Complete onboarding activation first.'],
-            ]);
+        if (! $user->isActiveAccount() || $rider->rider_status !== 'active') {
+            abort(403, 'Only active riders with an active account can change online availability.');
         }
 
-        if ($status === 'offline') {
+        if ($status !== 'online') {
             $hasActiveDelivery = DB::table('deliveries')
                 ->where('rider_id', $rider->rider_id)
                 ->whereIn('delivery_status', ['accepted', 'picked_up'])
                 ->exists();
 
             if ($hasActiveDelivery) {
-                throw ValidationException::withMessages([
-                    'status' => ['Cannot go offline while handling an active delivery.'],
-                ]);
+                throw new ConflictHttpException('Cannot go offline while handling an unfinished delivery.');
             }
         }
 
@@ -184,6 +180,13 @@ class RiderService
         abort_unless($rider !== null, 404, 'Rider profile not found.');
 
         return $rider;
+    }
+
+    public function isOnline(int $riderId): bool
+    {
+        $state = $this->getAvailabilityState($riderId);
+
+        return ($state['status'] ?? 'offline') === 'online';
     }
 
     /**

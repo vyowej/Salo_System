@@ -96,6 +96,15 @@ export default function RiderLayout({ children }) {
   );
 
   const activePath = location.pathname;
+  const riderStatus = user?.rider_profile?.rider_status ?? dashboard?.rider?.rider_status ?? null;
+  const isOperationalRoute = [
+    '/rider/go-online',
+    '/rider/deliveries',
+    '/rider/deliveries/active',
+    '/rider/active',
+    '/rider/jobs',
+  ].includes(activePath);
+  const isBlockedPendingActivation = Boolean(riderStatus && riderStatus !== 'active' && isOperationalRoute);
   const current =
     items.find(
       (item) =>
@@ -178,7 +187,15 @@ export default function RiderLayout({ children }) {
         />
 
         <main className={`rider-content ${isMapPage ? 'rider-content-map' : ''}`}>
-          {children}
+          {isBlockedPendingActivation ? (
+            <div className="rider-page-shell" role="status" style={{ padding: 'var(--space-6)' }}>
+              <h2 style={{ marginTop: 0 }}>Awaiting activation</h2>
+              <p>
+                Your rider account status is <strong>{riderStatus}</strong>. An admin must activate your account before you can go online or accept deliveries.
+              </p>
+              <Link to="/rider" style={{ fontWeight: 600 }}>Return to Rider Dashboard</Link>
+            </div>
+          ) : children}
         </main>
 
         {!isMapPage && (

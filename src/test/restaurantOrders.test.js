@@ -243,15 +243,26 @@ test('Step 9a orderTimeline, complete/cancel service methods, and UI pages match
     assert.equal(pickupSteps[3].timestamp, null);
     assert.equal(pickupSteps[4].timestamp, '2026-11-18T11:20:00+08:00');
 
-    // Delivery timeline stops at Ready and shows waiting-for-rider wording
+    // Delivery timeline extends to Out for delivery -> Delivered
     const deliverySteps = buildOrderTimelineSteps({
       fulfillment: 'delivery',
-      overallStatus: 'ready',
+      overallStatus: 'delivered',
       createdAt: '2026-11-18T11:00:00+08:00',
       acceptedAt: '2026-11-18T11:05:00+08:00',
+      deliveredAt: '2026-11-18T11:30:00+08:00',
     });
-    assert.deepEqual(deliverySteps.map((s) => s.label), ['Pending', 'Accepted', 'Preparing', 'Ready']);
-    assert.equal(formatOrderStatusText('ready', 'delivery'), 'Ready — waiting for rider');
+    assert.deepEqual(deliverySteps.map((s) => s.label), [
+      'Pending',
+      'Accepted',
+      'Preparing',
+      'Ready',
+      'Out for delivery',
+      'Delivered',
+    ]);
+    assert.equal(deliverySteps[5].timestamp, '2026-11-18T11:30:00+08:00');
+    assert.equal(formatOrderStatusText('ready', 'delivery'), 'Ready');
+    assert.equal(formatOrderStatusText('out_for_delivery', 'delivery'), 'Out for delivery');
+    assert.equal(formatOrderStatusText('delivered', 'delivery'), 'Delivered');
     assert.equal(formatOrderStatusText('ready', 'pickup'), 'Ready for pickup');
 
     // Rejected & Cancelled terminal timelines
@@ -324,6 +335,107 @@ test('Step 9a orderTimeline, complete/cancel service methods, and UI pages match
     assert.equal(orderDetailSrc.includes('QUICK_RIDER_MESSAGES'), false);
     assert.ok(orderDetailSrc.includes('canCustomerCancelOrder'));
     assert.ok(orderDetailSrc.includes('cancelOrder'));
+  } finally {
+    globalThis.fetch = previousFetch;
+    await server.close();
+  }
+});
+
+test('Step 9b riderService, admin activation, rider UI states, and no fake remittance UI', async () => {
+  const server = await createServer({
+    configFile: false,
+    root: ROOT_DIR,
+    server: { middlewareMode: true },
+    appType: 'custom',
+    logLevel: 'silent',
+  });
+
+  const previousFetch = globalThis.fetch;
+
+  try {
+    const { clearCsrfCache } = await server.ssrLoadModule('/src/services/apiClient.js');
+    const { riderService } = await server.ssrLoadModule('/src/services/riderService.js');
+    const { adminApiService } = await server.ssrLoadModule('/src/services/adminApiService.js');
+
+    clearCsrfCache();
+    globalThis.fetch = async (url) => {
+      if (url.endsWith('/auth/csrf')) {
+        return new Response(JSON.stringify({ success: true, data: { csrf_token: 's9b-csrf' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/rider/deliveries/available')) {
+        return new Response(
+          JSON.stringify({ success: true, data: { deliveries: [{ order_id: 91, restaurant_name: 'Grill' }], pagination: { current_page: 1, last_page: 1 } } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/rider/deliveries/91/accept')) {
+        return new Response(
+          JSON.stringify({ success: true, data: { delivery: { order_id: 91, delivery_status: 'accepted' } } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/rider/deliveries/91/picked-up')) {
+        return new Response(
+          JSON.stringify({ success: true, data: { delivery: { order_id: 91, delivery_status: 'picked_up', order_status: 'out_for_delivery' } } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/rider/deliveries/91/delivered')) {
+        return new Response(
+          JSON.stringify({ success: true, data: { delivery: { order_id: 91, delivery_status: 'delivered', order_status: 'delivered', payment_status: 'paid' } } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/admin/riders/12/activate')) {
+        return new Response(
+          JSON.stringify({ success: true, data: { rider: { rider_id: 12, rider_status: 'active' } } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('{}', { status: 404 });
+    };
+
+    const avail = await riderService.getAvailableDeliveries();
+    assert.equal(avail.deliveries[0].order_id, 91);
+    assert.equal((await riderService.acceptDelivery(91)).delivery_status, 'accepted');
+    assert.equal((await riderService.markPickedUp(91)).delivery_status, 'picked_up');
+    assert.equal((await riderService.markDelivered(91, 229)).payment_status, 'paid');
+    assert.equal((await adminApiService.activateRider(12)).rider_status, 'active');
+
+    const [
+      deliveriesSrc,
+      activeSrc,
+      earningsSrc,
+      dashboardSrc,
+      layoutSrc,
+      ownerOrdersSrc,
+    ] = await Promise.all([
+      fs.readFile(new URL('../features/rider/pages/RiderDeliveriesPage.jsx', import.meta.url), 'utf8'),
+      fs.readFile(new URL('../features/rider/pages/RiderActiveDeliveryPage.jsx', import.meta.url), 'utf8'),
+      fs.readFile(new URL('../features/rider/pages/RiderEarningsPage.jsx', import.meta.url), 'utf8'),
+      fs.readFile(new URL('../features/rider/pages/RiderDashboardPage.jsx', import.meta.url), 'utf8'),
+      fs.readFile(new URL('../layouts/RiderLayout.jsx', import.meta.url), 'utf8'),
+      fs.readFile(new URL('../features/restaurant/pages/OwnerOrdersPage.jsx', import.meta.url), 'utf8'),
+    ]);
+
+    // Rider UI buttons, disabled states, awaiting activation, and no localStorage / self-remit UI
+    assert.equal(deliveriesSrc.includes('localStorage'), false);
+    assert.ok(deliveriesSrc.includes('Accept'));
+    assert.ok(deliveriesSrc.includes('acceptingId !== null'));
+    assert.ok(activeSrc.includes('Picked Up'));
+    assert.ok(activeSrc.includes('Delivered'));
+    assert.ok(activeSrc.includes('amount_to_collect'));
+    assert.ok(activeSrc.includes('disabled={submitting'));
+    assert.ok(dashboardSrc.includes('Awaiting activation'));
+    assert.ok(layoutSrc.includes('Awaiting activation'));
+    assert.ok(earningsSrc.includes('not available yet'));
+    assert.equal(earningsSrc.includes('Confirm Remittance'), false);
+    assert.ok(ownerOrdersSrc.includes('out_for_delivery'));
+    assert.ok(ownerOrdersSrc.includes('delivered'));
+    assert.ok(ownerOrdersSrc.includes('riderFirstName'));
   } finally {
     globalThis.fetch = previousFetch;
     await server.close();

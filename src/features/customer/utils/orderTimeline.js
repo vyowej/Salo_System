@@ -3,12 +3,14 @@
  * Keeps pickup vs delivery wording accurate for Step 9a (no rider dispatch / fake ETA).
  */
 
-const ORDER_PROGRESSION = ['pending', 'accepted', 'preparing', 'ready', 'completed'];
+const PICKUP_PROGRESSION = ['pending', 'accepted', 'preparing', 'ready', 'completed'];
+const DELIVERY_PROGRESSION = ['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
 
 export function normalizeOrderStatusKey(status) {
   const raw = String(status || 'pending').trim().toLowerCase();
   if (raw === 'pending confirmation') return 'pending';
   if (raw === 'ready for pickup' || raw === 'ready for dispatch') return 'ready';
+  if (raw === 'out for delivery') return 'out_for_delivery';
   return raw;
 }
 
@@ -17,7 +19,9 @@ export function formatOrderStatusText(status, fulfillment = 'delivery') {
   if (key === 'pending') return 'Pending';
   if (key === 'accepted') return 'Accepted';
   if (key === 'preparing') return 'Preparing';
-  if (key === 'ready') return fulfillment === 'pickup' ? 'Ready for pickup' : 'Ready — waiting for rider';
+  if (key === 'ready') return fulfillment === 'pickup' ? 'Ready for pickup' : 'Ready';
+  if (key === 'out_for_delivery') return 'Out for delivery';
+  if (key === 'delivered') return 'Delivered';
   if (key === 'completed') return 'Completed';
   if (key === 'rejected') return 'Rejected';
   if (key === 'cancelled') return 'Cancelled';
@@ -49,6 +53,7 @@ export function buildOrderTimelineSteps(order) {
   const statusKey = normalizeOrderStatusKey(order?.overallStatus ?? order?.order_status ?? order?.status);
   const placedAt = order?.createdAt ?? order?.placedAt ?? order?.placed_at ?? null;
   const acceptedAt = order?.acceptedAt ?? order?.accepted_at ?? null;
+  const deliveredAt = order?.deliveredAt ?? order?.delivered_at ?? null;
   const completedAt = order?.completedAt ?? order?.completed_at ?? null;
   const rejectedAt = order?.rejectedAt ?? order?.rejected_at ?? null;
   const cancelledAt = order?.cancelledAt ?? order?.cancelled_at ?? null;
@@ -67,7 +72,8 @@ export function buildOrderTimelineSteps(order) {
     ];
   }
 
-  const currentIdx = Math.max(ORDER_PROGRESSION.indexOf(statusKey), 0);
+  const progression = fulfillment === 'pickup' ? PICKUP_PROGRESSION : DELIVERY_PROGRESSION;
+  const currentIdx = Math.max(progression.indexOf(statusKey), 0);
 
   const steps = [
     {
@@ -108,6 +114,23 @@ export function buildOrderTimelineSteps(order) {
       current: currentIdx === 4,
       timestamp: completedAt,
     });
+  } else {
+    steps.push(
+      {
+        key: 'out_for_delivery',
+        label: 'Out for delivery',
+        reached: currentIdx >= 4,
+        current: currentIdx === 4,
+        timestamp: null,
+      },
+      {
+        key: 'delivered',
+        label: 'Delivered',
+        reached: currentIdx >= 5,
+        current: currentIdx === 5,
+        timestamp: deliveredAt,
+      },
+    );
   }
 
   return steps;
