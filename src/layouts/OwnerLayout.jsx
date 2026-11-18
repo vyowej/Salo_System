@@ -16,6 +16,7 @@ import {
 } from '../components/navigation/ownerNavConfig';
 import { buildProfileMenuItems, ROLE_META } from '../config/navigationConfig';
 import RoleOnboardingModal from '../components/onboarding/RoleOnboardingModal';
+import OwnerNotificationsMenu from '../features/restaurant/components/OwnerNotificationsMenu';
 import { useRoleOnboarding } from '../hooks/useRoleOnboarding';
 import ownerService from '../services/ownerService';
 import '../components/navigation/NavigationShell.css';
@@ -145,11 +146,6 @@ export default function OwnerLayout({ children }) {
     </div>
   ) : null;
 
-  const totalPendingAlerts = pendingOrdersCount + pendingReservationsCount;
-  const bellTarget = pendingOrdersCount > 0 || pendingReservationsCount === 0
-    ? '/owner/orders'
-    : '/owner/reservations';
-
   return (
     <div className="owner-shell navigation-shell">
       <div className={`owner-sidebar navigation-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
@@ -169,9 +165,7 @@ export default function OwnerLayout({ children }) {
         <TopBar
           mobileMenuOpen={mobileOpen}
           onMenuToggle={() => setMobileOpen((value) => !value)}
-          showNotifications
-          notificationCount={totalPendingAlerts}
-          notificationsHref={bellTarget}
+          notificationsSlot={<OwnerNotificationsMenu />}
           roleLabel={ROLE_META.restaurant.label}
           roleTone={ROLE_META.restaurant.tone}
           showThemeToggle

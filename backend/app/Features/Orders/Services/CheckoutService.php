@@ -2,7 +2,9 @@
 
 namespace App\Features\Orders\Services;
 
+use App\Features\Account\Requests\UpdateProfileRequest;
 use App\Features\Locations\Services\ServiceAreaValidationService;
+use App\Features\Notifications\Services\NotificationService;
 use App\Features\Restaurants\Services\AvailabilityService;
 use App\Models\User;
 use App\Support\AuditLogService;
@@ -20,6 +22,7 @@ class CheckoutService
         private readonly ServiceAreaValidationService $serviceAreaValidationService,
         private readonly CustomerOrderService $customerOrderService,
         private readonly AuditLogService $auditLogService,
+        private readonly NotificationService $notificationService,
     ) {}
 
     /**
@@ -146,31 +149,38 @@ class CheckoutService
                         if (! $coverage['supported']) {
                             $groupErrors["groups.{$gIdx}.address_id"][] = $coverage['reason'];
                         } else {
-                            $addressParts = array_filter([
-                                $addressRow->house_number,
-                                $addressRow->building_name,
-                                $addressRow->street,
-                                $addressRow->barangay_name ? 'Brgy. '.$addressRow->barangay_name : null,
-                                $addressRow->city_name,
-                                $addressRow->province_name,
-                                $addressRow->postal_code,
-                            ]);
+                            $contactPhone = UpdateProfileRequest::normalizePhilippineMobile(
+                                (string) ($addressRow->recipient_phone ?: $user->phone_number ?: '')
+                            );
+                            if ($contactPhone === '' || preg_match('/^09\d{9}$/', $contactPhone) !== 1) {
+                                $groupErrors["groups.{$gIdx}.address_id"][] = 'A valid contact phone number is required for delivery orders.';
+                            } else {
+                                $addressParts = array_filter([
+                                    $addressRow->house_number,
+                                    $addressRow->building_name,
+                                    $addressRow->street,
+                                    $addressRow->barangay_name ? 'Brgy. '.$addressRow->barangay_name : null,
+                                    $addressRow->city_name,
+                                    $addressRow->province_name,
+                                    $addressRow->postal_code,
+                                ]);
 
-                            $addressSnapshot = [
-                                'address_id' => (int) $addressRow->address_id,
-                                'recipient_name' => $addressRow->recipient_name ?: trim("{$user->first_name} {$user->last_name}"),
-                                'phone' => $addressRow->recipient_phone ?: $user->phone_number,
-                                'address_text' => implode(', ', $addressParts),
-                                'latitude' => $addressRow->latitude,
-                                'longitude' => $addressRow->longitude,
-                                'notes' => $deliveryNotes,
-                            ];
+                                $addressSnapshot = [
+                                    'address_id' => (int) $addressRow->address_id,
+                                    'recipient_name' => $addressRow->recipient_name ?: trim("{$user->first_name} {$user->last_name}"),
+                                    'phone' => $contactPhone,
+                                    'address_text' => implode(', ', $addressParts),
+                                    'latitude' => $addressRow->latitude,
+                                    'longitude' => $addressRow->longitude,
+                                    'notes' => $deliveryNotes,
+                                ];
+                            }
                         }
                     }
                 }
             }
 
-            $seenItemIds = [];
+            $seenConfigIndices = [];
             $preparedItems = [];
             $subtotalCents = 0;
 
@@ -182,12 +192,6 @@ class CheckoutService
                     $groupErrors["groups.{$gIdx}.items.{$iIdx}.quantity"][] = "Quantity must be between 1 and {$maxQty}.";
                     continue;
                 }
-
-                if (isset($seenItemIds[$menuItemId])) {
-                    $groupErrors["groups.{$gIdx}.items.{$iIdx}.menu_item_id"][] = 'Duplicate menu item in the same restaurant group.';
-                    continue;
-                }
-                $seenItemIds[$menuItemId] = true;
 
                 $menuItem = DB::table('menu_items as mi')
                     ->join('menu_categories as mc', 'mc.menu_category_id', '=', 'mi.menu_category_id')
@@ -222,16 +226,130 @@ class CheckoutService
                     continue;
                 }
 
-                $unitCents = $this->toCents((string) $menuItem->base_price);
-                $lineTotalCents = $unitCents * $quantity;
+                $rawAddOnIds = isset($itemInput['add_on_option_ids']) && is_array($itemInput['add_on_option_ids'])
+                    ? array_map('intval', $itemInput['add_on_option_ids'])
+                    : [];
+
+                if (count($rawAddOnIds) !== count(array_unique($rawAddOnIds))) {
+                    $groupErrors["groups.{$gIdx}.items.{$iIdx}.add_on_option_ids"][] = "Duplicate add-on selection for {$menuItem->item_name}.";
+                    continue;
+                }
+
+                $addOnGroups = DB::table('add_on_groups')
+                    ->where('menu_item_id', $menuItemId)
+                    ->orderBy('sort_order')
+                    ->orderBy('add_on_group_id')
+                    ->get([
+                        'add_on_group_id',
+                        'group_name',
+                        'is_required',
+                        'minimum_selections',
+                        'maximum_selections',
+                    ]);
+
+                $addOnGroupIds = $addOnGroups->pluck('add_on_group_id')->map(fn ($id) => (int) $id)->all();
+                $optionsById = $addOnGroupIds === []
+                    ? collect()
+                    : DB::table('add_on_options')
+                        ->whereIn('add_on_group_id', $addOnGroupIds)
+                        ->get([
+                            'add_on_option_id',
+                            'add_on_group_id',
+                            'option_name',
+                            'additional_price',
+                            'is_available',
+                        ])
+                        ->keyBy('add_on_option_id');
+
+                $groupsById = $addOnGroups->keyBy('add_on_group_id');
+                $selectedAddOns = [];
+                $selectedCountByGroup = [];
+                $addOnsValid = true;
+
+                foreach ($rawAddOnIds as $optId) {
+                    $opt = $optionsById->get($optId);
+                    if (! $opt) {
+                        $groupErrors["groups.{$gIdx}.items.{$iIdx}.add_on_option_ids"][] = "Selected add-on #{$optId} is not valid for {$menuItem->item_name}.";
+                        $addOnsValid = false;
+                        continue;
+                    }
+                    if ((int) $opt->is_available !== 1) {
+                        $groupErrors["groups.{$gIdx}.items.{$iIdx}.add_on_option_ids"][] = "Add-on \"{$opt->option_name}\" for {$menuItem->item_name} is currently unavailable.";
+                        $addOnsValid = false;
+                        continue;
+                    }
+
+                    $grp = $groupsById->get((int) $opt->add_on_group_id);
+                    $grpId = (int) $opt->add_on_group_id;
+                    $selectedCountByGroup[$grpId] = ($selectedCountByGroup[$grpId] ?? 0) + 1;
+                    $addOnPriceCents = $this->toCents((string) $opt->additional_price);
+
+                    $selectedAddOns[] = [
+                        'add_on_option_id' => (int) $opt->add_on_option_id,
+                        'group_name' => $grp ? (string) $grp->group_name : 'Add-on',
+                        'option_name' => (string) $opt->option_name,
+                        'additional_price_cents' => $addOnPriceCents,
+                        'additional_price_decimal' => $this->fromCents($addOnPriceCents),
+                    ];
+                }
+
+                if ($addOnsValid) {
+                    foreach ($addOnGroups as $grp) {
+                        $grpId = (int) $grp->add_on_group_id;
+                        $count = $selectedCountByGroup[$grpId] ?? 0;
+                        $minSel = (bool) $grp->is_required ? max(1, (int) $grp->minimum_selections) : (int) $grp->minimum_selections;
+                        $maxSel = (int) $grp->maximum_selections;
+
+                        if ($count < $minSel) {
+                            $groupErrors["groups.{$gIdx}.items.{$iIdx}.add_on_option_ids"][] = "Select at least {$minSel} option(s) for \"{$grp->group_name}\" on {$menuItem->item_name}.";
+                            $addOnsValid = false;
+                        } elseif ($maxSel > 0 && $count > $maxSel) {
+                            $groupErrors["groups.{$gIdx}.items.{$iIdx}.add_on_option_ids"][] = "Select no more than {$maxSel} option(s) for \"{$grp->group_name}\" on {$menuItem->item_name}.";
+                            $addOnsValid = false;
+                        }
+                    }
+                }
+
+                if (! $addOnsValid) {
+                    continue;
+                }
+
+                $sortedOptionIds = $rawAddOnIds;
+                sort($sortedOptionIds);
+                $configKey = $menuItemId.':'.implode(',', $sortedOptionIds);
+
+                $baseCents = $this->toCents((string) $menuItem->base_price);
+                $addOnsCents = array_sum(array_column($selectedAddOns, 'additional_price_cents'));
+                $unitWithAddOnsCents = $baseCents + $addOnsCents;
+
+                if (isset($seenConfigIndices[$configKey])) {
+                    $existingIdx = $seenConfigIndices[$configKey];
+                    $combinedQty = $preparedItems[$existingIdx]['quantity'] + $quantity;
+                    if ($combinedQty > $maxQty) {
+                        $groupErrors["groups.{$gIdx}.items.{$iIdx}.quantity"][] = "Quantity must be between 1 and {$maxQty}.";
+                        continue;
+                    }
+                    $oldLineCents = $preparedItems[$existingIdx]['line_total_cents'];
+                    $newLineCents = $unitWithAddOnsCents * $combinedQty;
+                    $preparedItems[$existingIdx]['quantity'] = $combinedQty;
+                    $preparedItems[$existingIdx]['line_total_cents'] = $newLineCents;
+                    $preparedItems[$existingIdx]['line_total_decimal'] = $this->fromCents($newLineCents);
+                    $subtotalCents += ($newLineCents - $oldLineCents);
+                    continue;
+                }
+
+                $lineTotalCents = $unitWithAddOnsCents * $quantity;
                 $subtotalCents += $lineTotalCents;
 
+                $seenConfigIndices[$configKey] = count($preparedItems);
                 $preparedItems[] = [
                     'menu_item_id' => (int) $menuItem->menu_item_id,
                     'item_name' => $menuItem->item_name,
-                    'unit_price_decimal' => $this->fromCents($unitCents),
+                    'unit_price_decimal' => $this->fromCents($baseCents),
                     'quantity' => $quantity,
+                    'line_total_cents' => $lineTotalCents,
                     'line_total_decimal' => $this->fromCents($lineTotalCents),
+                    'add_ons' => $selectedAddOns,
                 ];
             }
 
@@ -333,7 +451,7 @@ class CheckoutService
                 $createdOrderIds[] = $orderId;
 
                 foreach ($group['items'] as $item) {
-                    DB::table('order_items')->insert([
+                    $orderItemId = (int) DB::table('order_items')->insertGetId([
                         'order_id' => $orderId,
                         'menu_item_id' => $item['menu_item_id'],
                         'item_name' => $item['item_name'],
@@ -342,6 +460,17 @@ class CheckoutService
                         'line_total' => $item['line_total_decimal'],
                         'created_at' => $now,
                     ]);
+
+                    foreach ($item['add_ons'] ?? [] as $addOn) {
+                        DB::table('order_item_add_ons')->insert([
+                            'order_item_id' => $orderItemId,
+                            'add_on_option_id' => $addOn['add_on_option_id'],
+                            'group_name' => $addOn['group_name'],
+                            'option_name' => $addOn['option_name'],
+                            'additional_price' => $addOn['additional_price_decimal'],
+                            'created_at' => $now,
+                        ]);
+                    }
                 }
 
                 $paymentRef = $this->generateUniqueReference('payments', 'payment_reference', 'SALO-PAY');
@@ -378,6 +507,18 @@ class CheckoutService
                         'payment_method' => 'cod',
                     ],
                     request: $request,
+                );
+
+                $recipientIds = $this->notificationService->resolveRestaurantOrderHandlerUserIds((int) $rest->restaurant_id);
+                $customerFirstName = trim((string) ($user->first_name ?? '')) ?: 'A customer';
+                $this->notificationService->notifyUsers(
+                    userIds: $recipientIds,
+                    workspace: 'restaurant',
+                    type: 'order_received',
+                    title: "New order {$orderRef}",
+                    body: "{$customerFirstName} placed a {$group['fulfillment']} order ({$orderRef}).",
+                    relatedEntityType: 'order',
+                    relatedEntityId: $orderId,
                 );
             }
 

@@ -3,6 +3,7 @@
 namespace App\Features\Restaurants\Services;
 
 use App\Features\Auth\Services\OtpService;
+use App\Features\Notifications\Services\NotificationService;
 use App\Features\Restaurants\Requests\SubmitRestaurantApplicationRequest;
 use App\Models\User;
 use App\Support\AddressService;
@@ -21,6 +22,7 @@ class RestaurantApplicationService
         private readonly AddressService $addressService,
         private readonly FileStorageService $fileStorageService,
         private readonly AuditLogService $auditLogService,
+        private readonly NotificationService $notificationService,
     ) {}
 
     /**
@@ -326,6 +328,18 @@ class RestaurantApplicationService
                 request: $request,
             );
 
+            $applicantFirstName = trim((string) ($user->first_name ?? '')) ?: 'An applicant';
+            $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $user->user_id);
+            $this->notificationService->notifyUsers(
+                userIds: $adminIds,
+                workspace: 'admin',
+                type: 'restaurant_application_submitted',
+                title: 'New restaurant application',
+                body: "{$applicantFirstName} submitted a restaurant application ({$referenceNumber}).",
+                relatedEntityType: 'restaurant_applications',
+                relatedEntityId: $applicationId,
+            );
+
             return $this->getApplicationById($applicationId);
         });
         } catch (\Throwable $e) {
@@ -418,6 +432,18 @@ class RestaurantApplicationService
                         'application_status' => 'resubmitted',
                         'updated_at' => $now,
                     ]);
+
+                $applicantFirstName = trim((string) ($user->first_name ?? '')) ?: 'An applicant';
+                $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $user->user_id);
+                $this->notificationService->notifyUsers(
+                    userIds: $adminIds,
+                    workspace: 'admin',
+                    type: 'restaurant_application_resubmitted',
+                    title: 'Restaurant application resubmitted',
+                    body: "{$applicantFirstName} uploaded requested documents for application {$app->reference_number}.",
+                    relatedEntityType: 'restaurant_applications',
+                    relatedEntityId: $applicationId,
+                );
             }
 
             $this->auditLogService->record(

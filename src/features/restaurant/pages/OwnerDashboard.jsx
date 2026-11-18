@@ -15,19 +15,105 @@ function formatPeso(amount) {
 }
 
 function getOrderStatusBadge(status) {
+  const norm = String(status || '').toLowerCase();
   const map = {
-    Pending: 'warning',
-    'Pending Confirmation': 'warning',
-    Accepted: 'info',
-    Preparing: 'primary',
-    'Ready for Pickup': 'success',
-    'Ready for Dispatch': 'success',
-    'Out for Delivery': 'info',
-    Completed: 'success',
-    Rejected: 'error',
-    Cancelled: 'default',
+    pending: 'warning',
+    accepted: 'info',
+    preparing: 'primary',
+    ready: 'success',
+    out_for_delivery: 'info',
+    delivered: 'success',
+    completed: 'success',
+    rejected: 'error',
+    cancelled: 'default',
   };
-  return map[status] || 'default';
+  return map[norm] || 'default';
+}
+
+function formatOrderStatusLabel(status, fulfillment) {
+  const norm = String(status || '').toLowerCase();
+  if (norm === 'ready') {
+    return fulfillment === 'pickup' ? 'Ready for Pickup' : 'Ready for Dispatch';
+  }
+  const labels = {
+    pending: 'Pending',
+    accepted: 'Accepted',
+    preparing: 'Preparing',
+    out_for_delivery: 'Out for Delivery',
+    delivered: 'Delivered',
+    completed: 'Completed',
+    rejected: 'Rejected',
+    cancelled: 'Cancelled',
+  };
+  return labels[norm] || status || 'Pending';
+}
+
+function toLocalDateKey(dateValue) {
+  const d = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function computeDashboardStatsFromOrders(orders = [], reservations = [], now = new Date()) {
+  const todayKey = toLocalDateKey(now);
+  const weekAgoMs = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  let todayRevenue = 0;
+  let ordersToday = 0;
+  let pendingOrders = 0;
+  let preparingOrders = 0;
+  let completedToday = 0;
+  let weeklyRevenue = 0;
+  let monthlyRevenue = 0;
+  let validOrderCount = 0;
+  let validOrderSum = 0;
+
+  for (const order of orders) {
+    const status = String(order.status || '').toLowerCase();
+    const total = Number(order.total || 0);
+    const createdDate = order.createdAt ? new Date(order.createdAt) : null;
+    const isValidDate = createdDate && !Number.isNaN(createdDate.getTime());
+    const isToday = isValidDate && toLocalDateKey(createdDate) === todayKey;
+    const isCompleted = status === 'completed' || status === 'delivered';
+
+    if (isToday) ordersToday += 1;
+    if (status === 'pending') pendingOrders += 1;
+    if (status === 'preparing') preparingOrders += 1;
+    if (isToday && isCompleted) {
+      completedToday += 1;
+      todayRevenue += total;
+    }
+
+    if (isValidDate && isCompleted) {
+      if (createdDate.getTime() >= weekAgoMs) weeklyRevenue += total;
+      if (createdDate.getMonth() === currentMonth && createdDate.getFullYear() === currentYear) {
+        monthlyRevenue += total;
+      }
+    }
+
+    if (status !== 'rejected' && status !== 'cancelled') {
+      validOrderCount += 1;
+      validOrderSum += total;
+    }
+  }
+
+  return {
+    stats: {
+      todayRevenue,
+      ordersToday,
+      pendingOrders,
+      preparingOrders,
+      completedToday,
+      pendingReservations: reservations.filter((r) => r.status === 'Pending').length,
+      avgOrderValue: validOrderCount > 0 ? Math.round((validOrderSum / validOrderCount) * 100) / 100 : 0,
+      totalMenuItems: 0,
+      unavailableItems: 0,
+    },
+    weeklyRevenue,
+    monthlyRevenue,
+  };
 }
 
 function getReservationStatusBadge(status) {
@@ -86,22 +172,44 @@ export default function OwnerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const loadDashboard = useCallback(() => {
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const rest = ownerService.getRestaurant(selectedRestaurantId);
-      const s = ownerService.getDashboardStats(selectedRestaurantId);
-      const orders = ownerService.getOrders(selectedRestaurantId, {
-        canViewCustomer: access.canAccess(['orders.customer.view']),
-      });
+      const canViewCustomer = access.canAccess(['orders.customer.view']);
+      const canOrderHandle = access.canAccess(['orders.view', 'orders.handle']);
+
+      const [profileResult, ordersResult] = await Promise.all([
+        access.isOwner && selectedRestaurantId
+          ? ownerService.getProfile(selectedRestaurantId).catch(() => null)
+          : Promise.resolve(null),
+        canOrderHandle
+          ? ownerService.fetchRestaurantOrders({
+              page: 1,
+              perPage: 50,
+              restaurantId: selectedRestaurantId,
+            })
+          : Promise.resolve({ orders: [] }),
+      ]);
+
+      const rest = profileResult || access.selectedRestaurant || null;
+      const rawOrders = Array.isArray(ordersResult?.orders) ? ordersResult.orders : [];
+      const orders = rawOrders.map((order) => ({
+        ...order,
+        customerName: canViewCustomer ? order.customerName : 'Customer',
+        itemCount: Array.isArray(order.items)
+          ? order.items.reduce((sum, item) => sum + Number(item.quantity || 1), 0)
+          : 0,
+      }));
+
       const reservations = ownerService.getReservations(selectedRestaurantId);
-      const earnings = ownerService.getEarningsOverview(selectedRestaurantId);
       const localToday = new Date();
-      const todayKey = `${localToday.getFullYear()}-${String(localToday.getMonth() + 1).padStart(2, '0')}-${String(localToday.getDate()).padStart(2, '0')}`;
+      const todayKey = toLocalDateKey(localToday);
+      const computed = computeDashboardStatsFromOrders(orders, reservations, localToday);
+
       const nextSummary = {
-        weeklyRevenue: earnings.thisWeek,
-        monthlyRevenue: earnings.thisMonth,
+        weeklyRevenue: computed.weeklyRevenue,
+        monthlyRevenue: computed.monthlyRevenue,
         todayReservations: reservations.filter((reservation) => reservation.date === todayKey).length,
         availableTables: null,
         lowStockItems: null,
@@ -123,7 +231,7 @@ export default function OwnerDashboard() {
       }
 
       setRestaurant(rest);
-      setStats(s);
+      setStats(computed.stats);
       setSummary(nextSummary);
       setSummaryWarnings(warnings);
       setRecentOrders(orders.slice(0, 5));
@@ -131,7 +239,7 @@ export default function OwnerDashboard() {
         .filter((r) => r.status === 'Pending' || r.status === 'Confirmed')
         .slice(0, 3));
     } catch (loadError) {
-      setError(loadError.message || 'Unable to load restaurant overview.');
+      setError(loadError?.message || 'Unable to load restaurant overview.');
     } finally {
       setLoading(false);
     }
@@ -141,11 +249,20 @@ export default function OwnerDashboard() {
     loadDashboard();
   }, [loadDashboard]);
 
-  function handleOrderAction(orderId, newStatus) {
+  async function handleOrderAction(orderId, action) {
     try {
-      ownerService.updateOrderStatus(orderId, newStatus, selectedRestaurantId);
+      if (action === 'accept') {
+        await ownerService.acceptOrder(orderId, selectedRestaurantId);
+      } else if (action === 'prepare') {
+        await ownerService.prepareOrder(orderId, selectedRestaurantId);
+      } else if (action === 'ready') {
+        await ownerService.readyOrder(orderId, selectedRestaurantId);
+      } else if (action === 'complete') {
+        await ownerService.completeOrder(orderId, selectedRestaurantId);
+      }
+      await loadDashboard();
     } catch (actionError) {
-      setError(actionError.message || 'Unable to update order status.');
+      setError(actionError?.message || 'Unable to update order status.');
     }
   }
 
@@ -309,7 +426,7 @@ export default function OwnerDashboard() {
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
                 <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
-                  {order.id}
+                  {order.orderReference || `#${order.id}`}
                 </span>
                 <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
                   {order.customerName}
@@ -322,14 +439,14 @@ export default function OwnerDashboard() {
                 </span>
                 <span>
                   <Badge variant={getOrderStatusBadge(order.status)} size="sm" dot>
-                    {order.status}
+                    {formatOrderStatusLabel(order.status, order.fulfillment)}
                   </Badge>
                 </span>
                 <span style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                  {(order.status === 'Pending' || order.status === 'Pending Confirmation') && (
+                  {order.status === 'pending' && (
                     <>
                       <button
-                        onClick={() => handleOrderAction(order.id, 'Accepted')}
+                        onClick={() => handleOrderAction(order.id, 'accept')}
                         style={{
                           padding: '4px 10px',
                           fontSize: 11,
@@ -360,9 +477,9 @@ export default function OwnerDashboard() {
                       </button>
                     </>
                   )}
-                  {order.status === 'Accepted' && (
+                  {order.status === 'accepted' && (
                     <button
-                      onClick={() => handleOrderAction(order.id, 'Preparing')}
+                      onClick={() => handleOrderAction(order.id, 'prepare')}
                       style={{
                         padding: '4px 10px',
                         fontSize: 11,
@@ -377,9 +494,9 @@ export default function OwnerDashboard() {
                       Start Prep
                     </button>
                   )}
-                  {order.status === 'Preparing' && (
+                  {order.status === 'preparing' && (
                     <button
-                      onClick={() => handleOrderAction(order.id, order.fulfillment === 'pickup' ? 'Ready for Pickup' : 'Ready for Dispatch')}
+                      onClick={() => handleOrderAction(order.id, 'ready')}
                       style={{
                         padding: '4px 10px',
                         fontSize: 11,
@@ -394,9 +511,13 @@ export default function OwnerDashboard() {
                       {order.fulfillment === 'pickup' ? 'Ready for Pickup' : 'Ready for Dispatch'}
                     </button>
                   )}
-                  {(order.status === 'Ready for Pickup' || order.status === 'Ready for Dispatch' || order.status === 'Out for Delivery' || order.status === 'Completed' || order.status === 'Cancelled' || order.status === 'Rejected') && (
+                  {['ready', 'out_for_delivery', 'delivered', 'completed', 'cancelled', 'rejected'].includes(order.status) && (
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>
-                      {order.status === 'Completed' ? '✓ Done' : ['Cancelled', 'Rejected'].includes(order.status) ? `✕ ${order.status}` : '—'}
+                      {order.status === 'completed' || order.status === 'delivered'
+                        ? '✓ Done'
+                        : ['cancelled', 'rejected'].includes(order.status)
+                          ? `✕ ${formatOrderStatusLabel(order.status, order.fulfillment)}`
+                          : '—'}
                     </span>
                   )}
                 </span>

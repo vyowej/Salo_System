@@ -2,6 +2,7 @@
 
 namespace App\Features\Orders\Services;
 
+use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
 use App\Support\AuditLogService;
@@ -16,6 +17,7 @@ class CustomerOrderService
     public function __construct(
         private readonly FileStorageService $fileStorageService,
         private readonly AuditLogService $auditLogService,
+        private readonly NotificationService $notificationService,
     ) {}
 
     /**
@@ -158,7 +160,7 @@ class CustomerOrderService
             throw new NotFoundHttpException('Order not found.');
         }
 
-        $items = DB::table('order_items')
+        $rawItems = DB::table('order_items')
             ->where('order_id', $orderId)
             ->orderBy('order_item_id')
             ->get([
@@ -168,7 +170,25 @@ class CustomerOrderService
                 'unit_price',
                 'quantity',
                 'line_total',
-            ])
+            ]);
+
+        $orderItemIds = $rawItems->pluck('order_item_id')->map(fn ($id) => (int) $id)->all();
+        $addOnsByOrderItem = $orderItemIds === []
+            ? collect()
+            : DB::table('order_item_add_ons')
+                ->whereIn('order_item_id', $orderItemIds)
+                ->orderBy('order_item_add_on_id')
+                ->get([
+                    'order_item_add_on_id',
+                    'order_item_id',
+                    'add_on_option_id',
+                    'group_name',
+                    'option_name',
+                    'additional_price',
+                ])
+                ->groupBy('order_item_id');
+
+        $items = $rawItems
             ->map(fn ($item) => [
                 'order_item_id' => (int) $item->order_item_id,
                 'menu_item_id' => $item->menu_item_id !== null ? (int) $item->menu_item_id : null,
@@ -176,6 +196,18 @@ class CustomerOrderService
                 'unit_price' => (float) $item->unit_price,
                 'quantity' => (int) $item->quantity,
                 'line_total' => (float) $item->line_total,
+                'add_ons' => $addOnsByOrderItem->get($item->order_item_id, collect())
+                    ->map(fn ($ao) => [
+                        'id' => $ao->add_on_option_id !== null ? (int) $ao->add_on_option_id : null,
+                        'add_on_option_id' => $ao->add_on_option_id !== null ? (int) $ao->add_on_option_id : null,
+                        'group_name' => $ao->group_name,
+                        'name' => $ao->option_name,
+                        'option_name' => $ao->option_name,
+                        'price' => (float) $ao->additional_price,
+                        'additional_price' => (float) $ao->additional_price,
+                    ])
+                    ->values()
+                    ->all(),
             ])
             ->values()
             ->all();
@@ -302,6 +334,28 @@ class CustomerOrderService
                 newValues: $newAuditValues,
                 reason: $cleanReason,
                 request: $request,
+            );
+
+            $this->notificationService->notifyUser(
+                userId: (int) $user->user_id,
+                workspace: 'customer',
+                type: 'order_cancelled',
+                title: "Order {$order->order_reference} cancelled",
+                body: "Your order {$order->order_reference} at {$order->restaurant_name} has been cancelled.",
+                relatedEntityType: 'order',
+                relatedEntityId: $orderId,
+            );
+
+            $handlerIds = $this->notificationService->resolveRestaurantOrderHandlerUserIds((int) $order->restaurant_id);
+            $customerFirstName = trim((string) ($user->first_name ?? '')) ?: 'A customer';
+            $this->notificationService->notifyUsers(
+                userIds: $handlerIds,
+                workspace: 'restaurant',
+                type: 'order_cancelled_by_customer',
+                title: "Order {$order->order_reference} cancelled",
+                body: "{$customerFirstName} cancelled pending order {$order->order_reference}.",
+                relatedEntityType: 'order',
+                relatedEntityId: $orderId,
             );
         });
 

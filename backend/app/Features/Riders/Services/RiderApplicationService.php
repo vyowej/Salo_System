@@ -3,6 +3,7 @@
 namespace App\Features\Riders\Services;
 
 use App\Features\Auth\Services\OtpService;
+use App\Features\Notifications\Services\NotificationService;
 use App\Features\Riders\Requests\SubmitRiderApplicationRequest;
 use App\Models\User;
 use App\Support\AddressService;
@@ -21,6 +22,7 @@ class RiderApplicationService
         private readonly AddressService $addressService,
         private readonly FileStorageService $fileStorageService,
         private readonly AuditLogService $auditLogService,
+        private readonly NotificationService $notificationService,
     ) {}
 
     /**
@@ -197,6 +199,18 @@ class RiderApplicationService
                 request: $request,
             );
 
+            $applicantFirstName = trim((string) ($user->first_name ?? '')) ?: 'An applicant';
+            $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $user->user_id);
+            $this->notificationService->notifyUsers(
+                userIds: $adminIds,
+                workspace: 'admin',
+                type: 'rider_application_submitted',
+                title: 'New rider application',
+                body: "{$applicantFirstName} submitted a rider application ({$referenceNumber}).",
+                relatedEntityType: 'rider_applications',
+                relatedEntityId: $applicationId,
+            );
+
             return $this->getApplicationById($applicationId);
         });
         } catch (\Throwable $e) {
@@ -285,6 +299,18 @@ class RiderApplicationService
                         'application_status' => 'resubmitted',
                         'updated_at' => $now,
                     ]);
+
+                $applicantFirstName = trim((string) ($user->first_name ?? '')) ?: 'An applicant';
+                $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $user->user_id);
+                $this->notificationService->notifyUsers(
+                    userIds: $adminIds,
+                    workspace: 'admin',
+                    type: 'rider_application_resubmitted',
+                    title: 'Rider application resubmitted',
+                    body: "{$applicantFirstName} uploaded requested documents for application {$app->reference_number}.",
+                    relatedEntityType: 'rider_applications',
+                    relatedEntityId: $applicationId,
+                );
             }
 
             $this->auditLogService->record(

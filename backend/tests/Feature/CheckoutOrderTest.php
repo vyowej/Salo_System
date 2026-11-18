@@ -28,7 +28,7 @@ class CheckoutOrderTest extends TestCase
         ]);
     }
 
-    private function createPlatformAreaAndUserAddress(User $user, string $city = 'Quezon City', string $barangay = 'Diliman'): int
+    private function createPlatformAreaAndUserAddress(User $user, string $city = 'Quezon City', string $barangay = 'Diliman', bool $isDefault = true): int
     {
         $provinceId = (int) (DB::table('provinces')->where('province_name', 'Metro Manila')->value('province_id')
             ?? DB::table('provinces')->insertGetId(['province_name' => 'Metro Manila']));
@@ -62,10 +62,10 @@ class CheckoutOrderTest extends TestCase
         DB::table('user_addresses')->insert([
             'user_id' => $user->user_id,
             'address_id' => $addressId,
-            'address_label' => 'Home',
+            'address_label' => $isDefault ? 'Home' : 'Work',
             'recipient_name' => "{$user->first_name} {$user->last_name}",
             'recipient_phone' => '+639171234567',
-            'is_default' => 1,
+            'is_default' => $isDefault ? 1 : 0,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -253,7 +253,7 @@ class CheckoutOrderTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors(['groups.1.items.0.menu_item_id']);
         $this->assertSame($beforeCheckouts, DB::table('checkouts')->count());
 
-        // 2. Hidden, unapproved, wrong-restaurant, duplicate item, and quantity > max
+        // 2. Hidden, unapproved, and wrong-restaurant items
         $this->actingAs($buyer)->postJson('/api/customer/checkout', [
             'payment_method' => 'cod',
             'idempotency_key' => 'idem-bad-2-'.random_int(10000, 99999),
@@ -272,7 +272,6 @@ class CheckoutOrderTest extends TestCase
             'groups.0.items.0.menu_item_id',
             'groups.0.items.1.menu_item_id',
             'groups.0.items.2.menu_item_id',
-            'groups.0.items.4.menu_item_id',
         ]);
 
         // 3. Address not owned by user -> 422
@@ -495,5 +494,378 @@ class CheckoutOrderTest extends TestCase
                 'items' => [['menu_item_id' => $item, 'quantity' => 1]],
             ]],
         ])->assertStatus(409);
+    }
+
+    public function test_same_restaurant_with_multiple_delivery_addresses_creates_separate_orders_and_fees(): void
+    {
+        $buyer = $this->createUser('multiaddr');
+        $addressOne = $this->createPlatformAreaAndUserAddress($buyer, 'Quezon City', 'Diliman', true);
+        $addressTwo = $this->createPlatformAreaAndUserAddress($buyer, 'Quezon City', 'Loyola Heights', false);
+        $rest = $this->createOpenRestaurant('Multi Address Grill');
+        $itemA = $this->createMenuItem($rest, 'Inasal', '150.00');
+        $itemB = $this->createMenuItem($rest, 'Sisig', '110.00');
+
+        $response = $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-multi-addr-'.random_int(10000, 99999),
+            'groups' => [
+                [
+                    'restaurant_id' => $rest,
+                    'fulfillment' => 'delivery',
+                    'address_id' => $addressOne,
+                    'expected_total' => 349.00,
+                    'items' => [['menu_item_id' => $itemA, 'quantity' => 2]],
+                ],
+                [
+                    'restaurant_id' => $rest,
+                    'fulfillment' => 'delivery',
+                    'address_id' => $addressTwo,
+                    'expected_total' => 159.00,
+                    'items' => [['menu_item_id' => $itemB, 'quantity' => 1]],
+                ],
+            ],
+        ])->assertStatus(201);
+
+        $checkout = $response->json('data.checkout');
+        $this->assertEquals(508.00, $checkout['total_amount']);
+        $this->assertCount(2, $checkout['orders']);
+
+        $ordersByAddress = collect($checkout['orders'])->keyBy(fn (array $order) => (int) DB::table('orders')->where('order_id', $order['order_id'])->value('delivery_address_id'));
+
+        $this->assertTrue($ordersByAddress->has($addressOne));
+        $this->assertTrue($ordersByAddress->has($addressTwo));
+        $this->assertEquals(49.00, $ordersByAddress[$addressOne]['delivery_fee']);
+        $this->assertEquals(349.00, $ordersByAddress[$addressOne]['total_amount']);
+        $this->assertEquals(49.00, $ordersByAddress[$addressTwo]['delivery_fee']);
+        $this->assertEquals(159.00, $ordersByAddress[$addressTwo]['total_amount']);
+    }
+
+    public function test_delivery_checkout_requires_valid_contact_phone_while_pickup_does_not(): void
+    {
+        $buyerWithoutPhone = User::create([
+            'username' => 'nophone_'.random_int(10000, 99999),
+            'first_name' => 'No',
+            'last_name' => 'Phone',
+            'phone_number' => null,
+            'email' => 'nophone_'.random_int(10000, 99999).'@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'active',
+        ]);
+
+        $addressId = $this->createPlatformAreaAndUserAddress($buyerWithoutPhone, 'Quezon City', 'Diliman', true);
+        DB::table('user_addresses')
+            ->where('user_id', $buyerWithoutPhone->user_id)
+            ->where('address_id', $addressId)
+            ->update(['recipient_phone' => null]);
+
+        $rest = $this->createOpenRestaurant('Phone Check Resto');
+        $item = $this->createMenuItem($rest, 'Adobo', '180.00');
+
+        // Delivery without any valid contact phone -> 422
+        $this->actingAs($buyerWithoutPhone)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-no-phone-deliv-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'delivery',
+                'address_id' => $addressId,
+                'expected_total' => 229.00,
+                'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.address_id']);
+
+        // Invalid phone number on user -> 422
+        DB::table('users')
+            ->where('user_id', $buyerWithoutPhone->user_id)
+            ->update(['phone_number' => '12345']);
+
+        $this->actingAs($buyerWithoutPhone->fresh())->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-bad-phone-deliv-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'delivery',
+                'address_id' => $addressId,
+                'expected_total' => 229.00,
+                'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.address_id']);
+
+        // Pickup without phone -> 201
+        DB::table('users')
+            ->where('user_id', $buyerWithoutPhone->user_id)
+            ->update(['phone_number' => null]);
+
+        $this->actingAs($buyerWithoutPhone->fresh())->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-no-phone-pickup-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'pickup',
+                'expected_total' => 180.00,
+                'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(201);
+    }
+
+    public function test_delivery_notes_enforce_500_character_limit_and_preserve_per_group_notes(): void
+    {
+        $buyer = $this->createUser('notes');
+        $addressOne = $this->createPlatformAreaAndUserAddress($buyer, 'Quezon City', 'Diliman', true);
+        $addressTwo = $this->createPlatformAreaAndUserAddress($buyer, 'Quezon City', 'Loyola Heights', false);
+        $rest = $this->createOpenRestaurant('Notes Resto');
+        $item = $this->createMenuItem($rest, 'Pancit', '150.00');
+
+        // 501 characters -> 422
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-notes-501-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'delivery',
+                'address_id' => $addressOne,
+                'delivery_notes' => str_repeat('a', 501),
+                'expected_total' => 199.00,
+                'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.delivery_notes']);
+
+        // 500 characters on group 0 and distinct note on group 1 -> 201
+        $maxNote = str_repeat('b', 500);
+        $secondNote = 'Leave at lobby reception';
+        $response = $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-notes-500-'.random_int(10000, 99999),
+            'groups' => [
+                [
+                    'restaurant_id' => $rest,
+                    'fulfillment' => 'delivery',
+                    'address_id' => $addressOne,
+                    'delivery_notes' => $maxNote,
+                    'expected_total' => 199.00,
+                    'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+                ],
+                [
+                    'restaurant_id' => $rest,
+                    'fulfillment' => 'delivery',
+                    'address_id' => $addressTwo,
+                    'delivery_notes' => $secondNote,
+                    'expected_total' => 199.00,
+                    'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+                ],
+            ],
+        ])->assertStatus(201);
+
+        $orders = $response->json('data.checkout.orders');
+        $this->assertCount(2, $orders);
+        $this->assertSame($maxNote, DB::table('orders')->where('order_id', $orders[0]['order_id'])->value('delivery_notes'));
+        $this->assertSame($secondNote, DB::table('orders')->where('order_id', $orders[1]['order_id'])->value('delivery_notes'));
+    }
+
+    public function test_paid_and_free_add_ons_validation_pricing_persistence_and_separate_lines(): void
+    {
+        $buyer = $this->createUser('addons');
+        $addressId = $this->createPlatformAreaAndUserAddress($buyer, 'Quezon City', 'Diliman', true);
+        $rest = $this->createOpenRestaurant('Addons Kitchen');
+        $chickenRice = $this->createMenuItem($rest, 'Chicken Rice', '120.00');
+        $otherItem = $this->createMenuItem($rest, 'Pork Chop', '150.00');
+
+        $groupId = (int) DB::table('add_on_groups')->insertGetId([
+            'menu_item_id' => $chickenRice,
+            'group_name' => 'Extras',
+            'is_required' => 0,
+            'minimum_selections' => 0,
+            'maximum_selections' => 2,
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $freeChili = (int) DB::table('add_on_options')->insertGetId([
+            'add_on_group_id' => $groupId,
+            'option_name' => 'Chili Garlic',
+            'additional_price' => '0.00',
+            'is_available' => 1,
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $extraEgg = (int) DB::table('add_on_options')->insertGetId([
+            'add_on_group_id' => $groupId,
+            'option_name' => 'Extra Egg',
+            'additional_price' => '25.00',
+            'is_available' => 1,
+            'sort_order' => 2,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $extraCheese = (int) DB::table('add_on_options')->insertGetId([
+            'add_on_group_id' => $groupId,
+            'option_name' => 'Extra Cheese',
+            'additional_price' => '35.00',
+            'is_available' => 1,
+            'sort_order' => 3,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $soldOutAddOn = (int) DB::table('add_on_options')->insertGetId([
+            'add_on_group_id' => $groupId,
+            'option_name' => 'Truffle Oil',
+            'additional_price' => '50.00',
+            'is_available' => 0,
+            'sort_order' => 4,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $otherGroupId = (int) DB::table('add_on_groups')->insertGetId([
+            'menu_item_id' => $otherItem,
+            'group_name' => 'Sauce',
+            'is_required' => 1,
+            'minimum_selections' => 1,
+            'maximum_selections' => 1,
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $otherOption = (int) DB::table('add_on_options')->insertGetId([
+            'add_on_group_id' => $otherGroupId,
+            'option_name' => 'Gravy',
+            'additional_price' => '15.00',
+            'is_available' => 1,
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // 1. Invalid add-on ID -> 422
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-addon-invalid-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'delivery',
+                'address_id' => $addressId,
+                'items' => [['menu_item_id' => $chickenRice, 'quantity' => 1, 'add_on_option_ids' => [999999]]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.items.0.add_on_option_ids']);
+
+        // 2. Add-on belonging to another menu item -> 422
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-addon-wrong-item-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'delivery',
+                'address_id' => $addressId,
+                'items' => [['menu_item_id' => $chickenRice, 'quantity' => 1, 'add_on_option_ids' => [$otherOption]]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.items.0.add_on_option_ids']);
+
+        // 3. Unavailable add-on -> 422
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-addon-unavail-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'delivery',
+                'address_id' => $addressId,
+                'items' => [['menu_item_id' => $chickenRice, 'quantity' => 1, 'add_on_option_ids' => [$soldOutAddOn]]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.items.0.add_on_option_ids']);
+
+        // 4. Exceeding maximum_selections (max 2, sent 3) -> 422
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-addon-max-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'delivery',
+                'address_id' => $addressId,
+                'items' => [['menu_item_id' => $chickenRice, 'quantity' => 1, 'add_on_option_ids' => [$freeChili, $extraEgg, $extraCheese]]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.items.0.add_on_option_ids']);
+
+        // 5. Missing required add-on group on Pork Chop -> 422
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-addon-req-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'delivery',
+                'address_id' => $addressId,
+                'items' => [['menu_item_id' => $otherItem, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.items.0.add_on_option_ids']);
+
+        // 6. Client expected_total manipulation rejected with 409 using authoritative DB prices
+        // Line 1: Chicken Rice (120) + Extra Egg (25) + Extra Cheese (35) = 180 * 2 = 360
+        // + Delivery 49 = 409 (NOT 289)
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-addon-409-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'delivery',
+                'address_id' => $addressId,
+                'expected_total' => 289.00,
+                'items' => [['menu_item_id' => $chickenRice, 'quantity' => 2, 'add_on_option_ids' => [$extraEgg, $extraCheese]]],
+            ]],
+        ])->assertStatus(409)->assertJsonPath('data.groups.0.total_amount', 409);
+
+        // 7. Same menu item with identical add-ons merges quantities + different add-ons stays separate lines
+        // Line A: Chicken Rice (120) + Chili Garlic (0) + Extra Egg (25) = 145 * (1 + 1) = 290
+        // Line B: Chicken Rice (120) + Extra Cheese (35) = 155 * 1 = 155
+        // Subtotal = 445, Delivery = 49, Total = 494
+        $success = $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-addon-ok-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'delivery',
+                'address_id' => $addressId,
+                'expected_total' => 494.00,
+                'items' => [
+                    ['menu_item_id' => $chickenRice, 'quantity' => 1, 'add_on_option_ids' => [$freeChili, $extraEgg]],
+                    ['menu_item_id' => $chickenRice, 'quantity' => 1, 'add_on_option_ids' => [$extraEgg, $freeChili]],
+                    ['menu_item_id' => $chickenRice, 'quantity' => 1, 'add_on_option_ids' => [$extraCheese]],
+                ],
+            ]],
+        ])->assertStatus(201);
+
+        $order = $success->json('data.checkout.orders.0');
+        $this->assertEquals(445.00, $order['subtotal_amount']);
+        $this->assertEquals(49.00, $order['delivery_fee']);
+        $this->assertEquals(494.00, $order['total_amount']);
+        $this->assertCount(2, $order['items']);
+
+        $this->assertSame(2, $order['items'][0]['quantity']);
+        $this->assertEquals(290.00, $order['items'][0]['line_total']);
+        $this->assertCount(2, $order['items'][0]['add_ons']);
+
+        $this->assertSame(1, $order['items'][1]['quantity']);
+        $this->assertEquals(155.00, $order['items'][1]['line_total']);
+        $this->assertCount(1, $order['items'][1]['add_ons']);
+        $this->assertSame('Extra Cheese', $order['items'][1]['add_ons'][0]['name']);
+        $this->assertEquals(35.00, $order['items'][1]['add_ons'][0]['price']);
+
+        // 8. Mutate live add-on option name and price; order detail retains historical snapshot
+        DB::table('add_on_options')
+            ->where('add_on_option_id', $extraCheese)
+            ->update(['option_name' => 'Imported Cheese', 'additional_price' => '99.00']);
+
+        $detail = $this->actingAs($buyer)
+            ->getJson('/api/customer/orders/'.$order['order_id'])
+            ->assertStatus(200)
+            ->json('data.order');
+
+        $this->assertSame('Extra Cheese', $detail['items'][1]['add_ons'][0]['name']);
+        $this->assertEquals(35.00, $detail['items'][1]['add_ons'][0]['price']);
+        $this->assertEquals(155.00, $detail['items'][1]['line_total']);
     }
 }

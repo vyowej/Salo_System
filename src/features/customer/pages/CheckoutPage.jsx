@@ -1,15 +1,24 @@
 import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
+import { useAuth } from '../../../hooks/useAuth';
 import { useCart } from '../../../hooks/useCart';
 import useAddresses from '../../../hooks/useAddresses';
+import accountService from '../../../services/accountService';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import AddressFormModal from '../components/AddressFormModal';
 import {
   buildCheckoutPayload,
+  DELIVERY_NOTES_MAX_LENGTH,
+  expandRestaurantGroupsToSubOrders,
   findAddressBySelectionId,
+  isValidPhilippineMobile,
+  normalizePhilippineMobile,
+  parseCheckoutValidationErrors,
+  validateDeliveryContactPhone,
+  validateDeliveryNotes,
   validateGroupDeliveryAddress,
 } from '../utils/checkoutAddressValidation';
 
@@ -28,36 +37,112 @@ function createIdempotencyKey() {
 }
 
 export default function CheckoutPage() {
-  const { restaurantGroups, itemsSubtotal, totalDeliveryFees, grandTotal, setRestaurantAddress, clearCart } = useCart();
+  const { user, updateUser } = useAuth();
+  const {
+    restaurantGroups,
+    itemsSubtotal,
+    totalDeliveryFees,
+    grandTotal,
+    setRestaurantAddress,
+    setItemAddress,
+    clearCart,
+  } = useCart();
   const { addresses, loading: addressesLoading, addAddress } = useAddresses();
 
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [orderNotes, setOrderNotes] = useState('');
+  const [orderNotesBySubOrder, setOrderNotesBySubOrder] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [priceReviewNotice, setPriceReviewNotice] = useState('');
   const [serverGroupTotals, setServerGroupTotals] = useState({});
   const [groupErrors, setGroupErrors] = useState({});
+  const [itemErrorsByGroup, setItemErrorsByGroup] = useState({});
+  const [hasItemCheckoutError, setHasItemCheckoutError] = useState(false);
   const [confirmedCheckout, setConfirmedCheckout] = useState(null);
   const [formModalOpen, setFormModalOpen] = useState(false);
-  const [targetRestaurantIdForNewAddress, setTargetRestaurantIdForNewAddress] = useState(null);
+  const [targetForNewAddress, setTargetForNewAddress] = useState(null);
+  const [phoneInput, setPhoneInput] = useState(() => user?.phone_number || user?.phone || '');
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [phoneSaving, setPhoneSaving] = useState(false);
+  const [phoneSaveError, setPhoneSaveError] = useState('');
+  const [phoneSavedMessage, setPhoneSavedMessage] = useState('');
   const idempotencyKeyRef = useRef(createIdempotencyKey());
+
+  const subOrders = useMemo(
+    () => expandRestaurantGroupsToSubOrders(restaurantGroups),
+    [restaurantGroups]
+  );
+
+  const applySubOrderAddress = (subOrder, nextAddress) => {
+    if (subOrder.addressMode === 'multiple') {
+      (subOrder.items || []).forEach((item) => {
+        if (item.cartItemId) {
+          setItemAddress(item.cartItemId, nextAddress);
+        }
+      });
+      return;
+    }
+    setRestaurantAddress(subOrder.restaurantId, nextAddress);
+  };
 
   const handleModalSaveAddress = async (newAddrPayload) => {
     const saved = await addAddress(newAddrPayload);
-    if (targetRestaurantIdForNewAddress && saved) {
-      setRestaurantAddress(targetRestaurantIdForNewAddress, saved);
+    if (targetForNewAddress && saved) {
+      if (Array.isArray(targetForNewAddress.itemIds) && targetForNewAddress.itemIds.length > 0) {
+        targetForNewAddress.itemIds.forEach((cartItemId) => setItemAddress(cartItemId, saved));
+      } else if (targetForNewAddress.restaurantId) {
+        setRestaurantAddress(targetForNewAddress.restaurantId, saved);
+      }
       setGroupErrors({});
       setError(null);
     }
   };
 
   const groupValidations = useMemo(
-    () => restaurantGroups.map((group) => validateGroupDeliveryAddress(group, addresses, addressesLoading)),
-    [restaurantGroups, addresses, addressesLoading]
+    () => subOrders.map((subOrder) => validateGroupDeliveryAddress(subOrder, addresses, addressesLoading)),
+    [subOrders, addresses, addressesLoading]
   );
 
   const hasInvalidDeliveryAddresses = groupValidations.some((v) => !v.isValid);
+  const hasDeliverySubOrders = subOrders.some((subOrder) => subOrder.fulfillment === 'delivery');
+  const phoneValidation = useMemo(
+    () => validateDeliveryContactPhone(user, subOrders),
+    [user, subOrders]
+  );
+  const hasInvalidPhoneForDelivery = !phoneValidation.isValid;
+  const notesValidation = useMemo(
+    () => validateDeliveryNotes({ orderNotes, orderNotesBySubOrder, subOrders }),
+    [orderNotes, orderNotesBySubOrder, subOrders]
+  );
+  const hasInvalidDeliveryNotes = !notesValidation.isValid;
+
+  const handleSavePhone = async (e) => {
+    e.preventDefault();
+    setPhoneSaveError('');
+    setPhoneSavedMessage('');
+
+    const normalized = normalizePhilippineMobile(phoneInput);
+    if (!isValidPhilippineMobile(normalized)) {
+      setPhoneSaveError('Enter a valid Philippine mobile number (e.g. 09171234567 or +639171234567).');
+      return;
+    }
+
+    setPhoneSaving(true);
+    try {
+      const updatedUser = await accountService.updateProfile({ phone_number: normalized });
+      updateUser(updatedUser);
+      setPhoneInput(updatedUser?.phone_number || updatedUser?.phone || normalized);
+      setIsEditingPhone(false);
+      setPhoneSavedMessage('Contact phone number saved.');
+      setError(null);
+    } catch (err) {
+      const fieldMsg = err?.errors?.phone_number?.[0] || err?.errors?.phone_number;
+      setPhoneSaveError(fieldMsg || err?.message || 'Unable to save contact phone number.');
+    } finally {
+      setPhoneSaving(false);
+    }
+  };
 
   if (confirmedCheckout) {
     return (
@@ -122,16 +207,16 @@ export default function CheckoutPage() {
 
   const hasServerTotals = Object.keys(serverGroupTotals).length > 0;
   const displayedItemsSubtotal = hasServerTotals
-    ? restaurantGroups.reduce(
-        (sum, group) =>
-          sum + (serverGroupTotals[String(group.restaurantId)]?.subtotalAmount ?? Number(group.subtotal || 0)),
+    ? subOrders.reduce(
+        (sum, subOrder) =>
+          sum + (serverGroupTotals[subOrder.subOrderKey]?.subtotalAmount ?? Number(subOrder.subtotal || 0)),
         0
       )
     : itemsSubtotal;
   const displayedDeliveryFees = hasServerTotals
-    ? restaurantGroups.reduce(
-        (sum, group) =>
-          sum + (serverGroupTotals[String(group.restaurantId)]?.deliveryFee ?? Number(group.deliveryFee || 0)),
+    ? subOrders.reduce(
+        (sum, subOrder) =>
+          sum + (serverGroupTotals[subOrder.subOrderKey]?.deliveryFee ?? Number(subOrder.deliveryFee || 0)),
         0
       )
     : totalDeliveryFees;
@@ -149,24 +234,36 @@ export default function CheckoutPage() {
       );
       return;
     }
+    if (hasInvalidPhoneForDelivery) {
+      setError(phoneValidation.error || 'A valid contact phone number is required for delivery orders.');
+      return;
+    }
+    if (hasInvalidDeliveryNotes) {
+      setError(notesValidation.error || `Delivery notes cannot exceed ${DELIVERY_NOTES_MAX_LENGTH} characters.`);
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
     setPriceReviewNotice('');
     setGroupErrors({});
+    setItemErrorsByGroup({});
+    setHasItemCheckoutError(false);
 
+    let submittedPayload = null;
     try {
       const expectedTotalsByRestaurant = Object.fromEntries(
         Object.entries(serverGroupTotals).map(([rid, info]) => [rid, info.totalAmount])
       );
-      const payload = buildCheckoutPayload({
+      submittedPayload = buildCheckoutPayload({
         restaurantGroups,
         orderNotes,
+        orderNotesBySubOrder,
         idempotencyKey: idempotencyKeyRef.current,
         expectedTotalsByRestaurant,
       });
 
-      const checkout = await customerService.placeCheckoutOrder(payload);
+      const checkout = await customerService.placeCheckoutOrder(submittedPayload);
       clearCart();
       setServerGroupTotals({});
       idempotencyKeyRef.current = createIdempotencyKey();
@@ -174,8 +271,9 @@ export default function CheckoutPage() {
     } catch (err) {
       if (err?.status === 409 && Array.isArray(err?.data?.data?.groups)) {
         const nextTotals = {};
-        err.data.data.groups.forEach((g) => {
-          nextTotals[String(g.restaurant_id)] = {
+        err.data.data.groups.forEach((g, gIdx) => {
+          const key = subOrders[gIdx]?.subOrderKey || String(g.restaurant_id);
+          nextTotals[key] = {
             subtotalAmount: Number(g.subtotal_amount),
             deliveryFee: Number(g.delivery_fee),
             totalAmount: Number(g.total_amount),
@@ -187,20 +285,19 @@ export default function CheckoutPage() {
         return;
       }
 
-      const nextGroupErrors = {};
-      if (err?.errors && typeof err.errors === 'object') {
-        Object.entries(err.errors).forEach(([key, msgs]) => {
-          const match = key.match(/^groups\.(\d+)\./);
-          const list = Array.isArray(msgs) ? msgs : [String(msgs)];
-          if (match) {
-            const idx = Number(match[1]);
-            nextGroupErrors[idx] = [...(nextGroupErrors[idx] || []), ...list];
-          }
-        });
-      }
-      setGroupErrors(nextGroupErrors);
-      const firstGroupMsg = Object.values(nextGroupErrors).flat()[0];
-      setError(firstGroupMsg || err?.message || 'Failed to submit order. Please review your cart and try again.');
+      const parsed = parseCheckoutValidationErrors(
+        err?.errors,
+        subOrders,
+        submittedPayload?.groups || []
+      );
+      setGroupErrors(parsed.groupErrors);
+      setItemErrorsByGroup(parsed.itemErrorsByGroup);
+      setHasItemCheckoutError(parsed.hasItemErrors);
+      setError(
+        parsed.summaryMessage ||
+          err?.message ||
+          'Failed to submit order. Please review your cart and try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -233,15 +330,34 @@ export default function CheckoutPage() {
       )}
 
       {error && (
-        <div style={{
+        <div role="alert" style={{
           padding: 'var(--space-3) var(--space-4)',
           background: 'var(--status-error-bg)',
           color: 'var(--status-error-text)',
           borderRadius: 'var(--radius-md)',
           fontSize: 'var(--font-size-sm)',
           marginBottom: 'var(--space-5)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 'var(--space-3)',
+          flexWrap: 'wrap',
         }}>
-          {error}
+          <span>{error}</span>
+          {hasItemCheckoutError && (
+            <Link
+              to="/customer/cart"
+              style={{
+                fontSize: 'var(--font-size-xs)',
+                fontWeight: 700,
+                color: 'var(--status-error-text)',
+                textDecoration: 'underline',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Review &amp; Update Items in Cart →
+            </Link>
+          )}
         </div>
       )}
 
@@ -271,11 +387,11 @@ export default function CheckoutPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
           <div>
             <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, marginBottom: 'var(--space-3)' }}>
-              1. Delivery & Fulfillment Allocations ({restaurantGroups.length} Sub-Orders)
+              1. Delivery & Fulfillment Allocations ({subOrders.length} Sub-Orders)
             </h2>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              {restaurantGroups.map((group, idx) => {
+              {subOrders.map((group, idx) => {
                 const validation = groupValidations[idx] || { isValid: true, error: null };
                 const selectedValue =
                   group.deliveryAddress?.id != null && findAddressBySelectionId(addresses, group.deliveryAddress.id)
@@ -285,10 +401,11 @@ export default function CheckoutPage() {
                   ...(validation.error ? [validation.error] : []),
                   ...((groupErrors[idx] || []).filter((msg) => msg !== validation.error)),
                 ];
+                const serverTotal = serverGroupTotals[group.subOrderKey];
 
                 return (
                 <div
-                  key={group.restaurantId}
+                  key={group.subOrderKey}
                   style={{
                     background: 'var(--surface-primary)',
                     border: '1px solid var(--border-primary)',
@@ -300,7 +417,10 @@ export default function CheckoutPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-2)' }}>
                     <div>
                       <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)' }}>
-                        RESTAURANT {idx + 1}
+                        SUB-ORDER {idx + 1}
+                        {group.addressMode === 'multiple' && group.addressGroupCount > 1
+                          ? ` · SPLIT DELIVERY ${group.addressGroupIndex + 1} OF ${group.addressGroupCount}`
+                          : ''}
                       </span>
                       <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700 }}>
                         {group.restaurantName}
@@ -328,17 +448,20 @@ export default function CheckoutPage() {
                           onChange={(e) => {
                             const val = e.target.value;
                             if (val === '__add_new__') {
-                              setTargetRestaurantIdForNewAddress(group.restaurantId);
+                              setTargetForNewAddress({
+                                restaurantId: group.restaurantId,
+                                itemIds: group.addressMode === 'multiple' ? group.items.map((i) => i.cartItemId) : null,
+                              });
                               setFormModalOpen(true);
                               return;
                             }
                             if (!val) {
-                              setRestaurantAddress(group.restaurantId, null);
+                              applySubOrderAddress(group, null);
                               return;
                             }
                             const matched = findAddressBySelectionId(addresses, val);
                             if (matched) {
-                              setRestaurantAddress(group.restaurantId, matched);
+                              applySubOrderAddress(group, matched);
                               setGroupErrors((prev) => {
                                 if (!prev[idx]) return prev;
                                 const next = { ...prev };
@@ -413,7 +536,10 @@ export default function CheckoutPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              setTargetRestaurantIdForNewAddress(group.restaurantId);
+                              setTargetForNewAddress({
+                                restaurantId: group.restaurantId,
+                                itemIds: group.addressMode === 'multiple' ? group.items.map((i) => i.cartItemId) : null,
+                              });
                               setFormModalOpen(true);
                             }}
                           >
@@ -428,15 +554,94 @@ export default function CheckoutPage() {
                     </p>
                   )}
 
-                  <div style={{ marginTop: 'var(--space-2)', fontSize: 11, color: 'var(--text-muted)' }}>
-                    {group.items.map((i) => `${i.quantity}x ${i.name}`).join(' · ')}
+                  <div style={{ marginTop: 'var(--space-2)', display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
+                    {group.items.map((i, itemIdx) => {
+                      const itemMsgs = itemErrorsByGroup[idx]?.[Number(i.id)];
+                      const hasItemErr = Array.isArray(itemMsgs) && itemMsgs.length > 0;
+                      const addOns = Array.isArray(i.selectedAddOns) ? i.selectedAddOns : [];
+                      const addOnText = addOns
+                        .map((a) => `${a.name}${Number(a.price || 0) > 0 ? ` (+₱${Number(a.price).toLocaleString()})` : ''}`)
+                        .join(', ');
+                      const lineTotal = Number.isFinite(Number(i.itemTotal))
+                        ? Number(i.itemTotal)
+                        : (Number(i.price || 0) + addOns.reduce((s, a) => s + Number(a.price || 0), 0)) * Number(i.quantity || 1);
+                      return (
+                        <div
+                          key={i.cartItemId || `${i.id}-${itemIdx}`}
+                          style={hasItemErr ? {
+                            color: 'var(--status-error-text)',
+                            background: 'var(--status-error-bg)',
+                            padding: '4px 6px',
+                            borderRadius: 'var(--radius-sm)',
+                            fontWeight: 600,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: 8,
+                          } : {
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: 8,
+                          }}
+                        >
+                          <span>
+                            {i.quantity}x {i.name}
+                            {addOnText ? ` (${addOnText})` : ''}
+                            {hasItemErr ? ' (Unavailable)' : ''}
+                          </span>
+                          <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            ₱{lineTotal.toLocaleString()}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {serverGroupTotals[String(group.restaurantId)] && (
+                  <div style={{ marginTop: 'var(--space-3)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <label
+                        htmlFor={`suborder-notes-${group.subOrderKey}`}
+                        style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}
+                      >
+                        Sub-Order Delivery Notes (optional)
+                      </label>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: (orderNotesBySubOrder[group.subOrderKey] || '').length > DELIVERY_NOTES_MAX_LENGTH
+                            ? 'var(--status-error-text)'
+                            : 'var(--text-muted)',
+                        }}
+                      >
+                        {(orderNotesBySubOrder[group.subOrderKey] || '').length}/{DELIVERY_NOTES_MAX_LENGTH}
+                      </span>
+                    </div>
+                    <textarea
+                      id={`suborder-notes-${group.subOrderKey}`}
+                      placeholder={group.deliveryAddress?.notes ? `Default address note: ${group.deliveryAddress.notes}` : 'Optional notes for this sub-order...'}
+                      value={orderNotesBySubOrder[group.subOrderKey] || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setOrderNotesBySubOrder((prev) => ({
+                          ...prev,
+                          [group.subOrderKey]: val,
+                        }));
+                      }}
+                      maxLength={DELIVERY_NOTES_MAX_LENGTH}
+                      rows={2}
+                      className="textarea"
+                      style={{ width: '100%', fontSize: 'var(--font-size-xs)' }}
+                    />
+                    {notesValidation.errors[group.subOrderKey] && (
+                      <div role="alert" style={{ marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)' }}>
+                        {notesValidation.errors[group.subOrderKey]}
+                      </div>
+                    )}
+                  </div>
+                  {serverTotal && (
                     <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--font-size-xs)', color: 'var(--text-primary)', fontWeight: 600 }}>
-                      Updated Sub-Order Total: ₱{serverGroupTotals[String(group.restaurantId)].totalAmount.toLocaleString()}
-                      {' '}(Subtotal ₱{serverGroupTotals[String(group.restaurantId)].subtotalAmount.toLocaleString()}
+                      Updated Sub-Order Total: ₱{serverTotal.totalAmount.toLocaleString()}
+                      {' '}(Subtotal ₱{serverTotal.subtotalAmount.toLocaleString()}
                       {group.fulfillment === 'delivery'
-                        ? ` + Delivery ₱${serverGroupTotals[String(group.restaurantId)].deliveryFee.toLocaleString()}`
+                        ? ` + Delivery ₱${serverTotal.deliveryFee.toLocaleString()}`
                         : ''})
                     </div>
                   )}
@@ -445,6 +650,16 @@ export default function CheckoutPage() {
                       {combinedGroupErrors.map((msg, mIdx) => (
                         <div key={mIdx}>{msg}</div>
                       ))}
+                      {itemErrorsByGroup[idx] && Object.keys(itemErrorsByGroup[idx]).length > 0 && (
+                        <div style={{ marginTop: 6 }}>
+                          <Link
+                            to="/customer/cart"
+                            style={{ fontWeight: 700, color: 'var(--status-error-text)', textDecoration: 'underline' }}
+                          >
+                            Return to Cart to review affected items →
+                          </Link>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -452,6 +667,103 @@ export default function CheckoutPage() {
               })}
             </div>
           </div>
+
+          {/* ── Contact Phone Number (Delivery Orders) ────────── */}
+          {hasDeliverySubOrders && (
+            <div style={{
+              background: 'var(--surface-primary)',
+              border: hasInvalidPhoneForDelivery ? '1px solid var(--status-error-text)' : '1px solid var(--border-primary)',
+              borderRadius: 'var(--radius-lg)',
+              padding: 'var(--space-4)',
+              boxShadow: 'var(--shadow-xs)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)', gap: 'var(--space-2)' }}>
+                <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, margin: 0 }}>
+                  Contact Phone Number
+                </h2>
+                {phoneValidation.isValid && !isEditingPhone && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setPhoneInput(phoneValidation.phone || '');
+                      setPhoneSaveError('');
+                      setPhoneSavedMessage('');
+                      setIsEditingPhone(true);
+                    }}
+                  >
+                    Change
+                  </Button>
+                )}
+              </div>
+
+              {phoneValidation.isValid && !isEditingPhone ? (
+                <div>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    📱 {phoneValidation.phone}
+                  </p>
+                  <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                    Riders will use this number to contact you upon delivery.
+                  </p>
+                  {phoneSavedMessage && (
+                    <p style={{ margin: '6px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--status-success-text, #15803d)', fontWeight: 600 }}>
+                      {phoneSavedMessage}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <form onSubmit={handleSavePhone} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                    {phoneValidation.error || 'Enter a Philippine mobile number (e.g. 09171234567) for delivery updates.'}
+                  </p>
+                  <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <input
+                      type="tel"
+                      value={phoneInput}
+                      onChange={(e) => {
+                        setPhoneInput(e.target.value);
+                        setPhoneSaveError('');
+                      }}
+                      placeholder="09171234567"
+                      aria-label="Contact phone number"
+                      style={{
+                        flex: 1,
+                        minWidth: 180,
+                        padding: '8px 12px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border-primary)',
+                        background: 'var(--surface-secondary)',
+                        color: 'var(--text-primary)',
+                        fontSize: 'var(--font-size-sm)',
+                      }}
+                    />
+                    <Button type="submit" variant="primary" size="sm" loading={phoneSaving} disabled={phoneSaving}>
+                      Save Phone Number
+                    </Button>
+                    {phoneValidation.isValid && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setIsEditingPhone(false);
+                          setPhoneSaveError('');
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+                  {(phoneSaveError || (!phoneValidation.isValid && phoneValidation.error)) && (
+                    <div role="alert" style={{ fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)' }}>
+                      {phoneSaveError || phoneValidation.error}
+                    </div>
+                  )}
+                </form>
+              )}
+            </div>
+          )}
 
           {/* ── Payment Method Selector ──────────────────────── */}
           <div>
@@ -503,17 +815,33 @@ export default function CheckoutPage() {
 
           {/* Special Instructions */}
           <div>
-            <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, marginBottom: 'var(--space-2)' }}>
-              3. Delivery & Order Notes
-            </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+              <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, margin: 0 }}>
+                3. Delivery & Order Notes
+              </h2>
+              <span
+                style={{
+                  fontSize: 'var(--font-size-xs)',
+                  color: orderNotes.length > DELIVERY_NOTES_MAX_LENGTH ? 'var(--status-error-text)' : 'var(--text-muted)',
+                }}
+              >
+                {orderNotes.length}/{DELIVERY_NOTES_MAX_LENGTH}
+              </span>
+            </div>
             <textarea
               placeholder="e.g. Please call upon arrival at the gate, avoid ringing doorbell..."
               value={orderNotes}
               onChange={(e) => setOrderNotes(e.target.value)}
+              maxLength={DELIVERY_NOTES_MAX_LENGTH}
               rows={2}
               className="textarea"
               style={{ width: '100%' }}
             />
+            {notesValidation.errors.general && (
+              <div role="alert" style={{ marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)' }}>
+                {notesValidation.errors.general}
+              </div>
+            )}
           </div>
         </div>
 
@@ -569,15 +897,19 @@ export default function CheckoutPage() {
             size="lg"
             fullWidth
             loading={isSubmitting}
-            disabled={hasInvalidDeliveryAddresses || addressesLoading || isSubmitting}
+            disabled={hasInvalidDeliveryAddresses || hasInvalidPhoneForDelivery || hasInvalidDeliveryNotes || addressesLoading || isSubmitting}
             onClick={handlePlaceOrder}
-            style={hasInvalidDeliveryAddresses || addressesLoading ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+            style={hasInvalidDeliveryAddresses || hasInvalidPhoneForDelivery || hasInvalidDeliveryNotes || addressesLoading ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
           >
             {addressesLoading
               ? 'Loading Delivery Addresses...'
               : hasInvalidDeliveryAddresses
                 ? 'Complete Delivery Details'
-                : `Confirm & Place Order · ₱${displayedGrandTotal.toLocaleString()}`}
+                : hasInvalidPhoneForDelivery
+                  ? 'Add Contact Phone Number'
+                  : hasInvalidDeliveryNotes
+                    ? 'Shorten Delivery Notes'
+                    : `Confirm & Place Order · ₱${displayedGrandTotal.toLocaleString()}`}
           </Button>
 
           <div style={{
@@ -599,7 +931,7 @@ export default function CheckoutPage() {
         isOpen={formModalOpen}
         onClose={() => {
           setFormModalOpen(false);
-          setTargetRestaurantIdForNewAddress(null);
+          setTargetForNewAddress(null);
         }}
         onSave={handleModalSaveAddress}
         existingAddresses={addresses}

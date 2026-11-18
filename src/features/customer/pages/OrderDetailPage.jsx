@@ -38,6 +38,9 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState(null);
   const [orderLoading, setOrderLoading] = useState(true);
   const [orderError, setOrderError] = useState('');
+  const [tracking, setTracking] = useState(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingError, setTrackingError] = useState('');
 
   const mapBackendOrder = (raw) => ({
     id: String(raw.order_id),
@@ -81,10 +84,19 @@ export default function OrderDetailPage() {
           : null,
         items: (raw.items || []).map((it) => ({
           id: String(it.menu_item_id || it.order_item_id),
+          menuItemId: it.menu_item_id != null ? String(it.menu_item_id) : null,
           name: it.item_name,
           qty: Number(it.quantity),
           price: Number(it.unit_price),
           lineTotal: Number(it.line_total),
+          addOns: Array.isArray(it.add_ons)
+            ? it.add_ons.map((ao) => ({
+                id: ao.id ?? ao.add_on_option_id ?? null,
+                name: ao.name ?? ao.option_name ?? '',
+                price: Number(ao.price ?? ao.additional_price ?? 0),
+                groupName: ao.group_name ?? null,
+              }))
+            : [],
         })),
       },
     ],
@@ -94,6 +106,9 @@ export default function OrderDetailPage() {
     let active = true;
     setOrderLoading(true);
     setOrderError('');
+    setTracking(null);
+    setTrackingError('');
+    setTrackingLoading(false);
 
     (async () => {
       try {
@@ -118,16 +133,35 @@ export default function OrderDetailPage() {
           }
         }
 
-        const raw = await customerService.fetchOrderDetail(targetId);
+        if (active) setTrackingLoading(true);
+        const [rawResult, trackingResult] = await Promise.allSettled([
+          customerService.fetchOrderDetail(targetId),
+          customerService.getCustomerOrderTracking(targetId),
+        ]);
         if (!active) return;
-        setOrder(raw ? mapBackendOrder(raw) : null);
+
+        if (rawResult.status === 'rejected') {
+          throw rawResult.reason;
+        }
+
+        setOrder(rawResult.value ? mapBackendOrder(rawResult.value) : null);
+
+        if (trackingResult.status === 'fulfilled') {
+          setTracking(trackingResult.value ?? null);
+        } else {
+          setTracking(null);
+          setTrackingError(trackingResult.reason?.message || 'Unable to load live tracking details.');
+        }
       } catch (err) {
         if (active) {
           setOrder(null);
           setOrderError(err?.status === 404 ? 'Order not found.' : (err?.message || 'Unable to load order details.'));
         }
       } finally {
-        if (active) setOrderLoading(false);
+        if (active) {
+          setOrderLoading(false);
+          setTrackingLoading(false);
+        }
       }
     })();
 
@@ -285,7 +319,7 @@ export default function OrderDetailPage() {
 
       (subOrder.items || []).forEach((item) => {
         addItem({
-          id: `${restaurantId}-${item.name}`,
+          id: item.menuItemId || item.id,
           name: item.name,
           price: Number(item.price || 0),
           quantity: Number(item.qty || item.quantity || 1),
@@ -587,7 +621,7 @@ export default function OrderDetailPage() {
                       </div>
                     </div>
                     <span className="customer-track-item-price">
-                      {formatPeso((item.price || 0) * (item.qty || item.quantity || 1))}
+                      {formatPeso(item.lineTotal ?? ((item.price || 0) * (item.qty || item.quantity || 1)))}
                     </span>
                   </li>
                 ))}
@@ -636,7 +670,7 @@ export default function OrderDetailPage() {
           </div>
         </aside>
 
-        {/* Right Column: Order Fulfillment & Destination Details (No fake rider/ETA/map) */}
+        {/* Right Column: Order Fulfillment & Live Tracking Details */}
         <div className="customer-track-map-column">
           <div className="customer-track-checkpoints" aria-label="Order fulfillment details">
             <div className="customer-track-checkpoint is-pickup is-current">
@@ -644,23 +678,29 @@ export default function OrderDetailPage() {
                 <span>Restaurant</span>
                 <em>{formatOrderStatusText(subStatus, fulfillment)}</em>
               </div>
-              <strong>{activeSub?.restaurantName}</strong>
-              <small>Reference: {order.orderReference || `#${order.id}`}</small>
+              <strong>{tracking?.pickup?.restaurant_name || activeSub?.restaurantName}</strong>
+              {tracking?.pickup?.address && (
+                <small>{tracking.pickup.address}</small>
+              )}
+              <small>Reference: {tracking?.order_reference || order.orderReference || `#${order.id}`}</small>
             </div>
 
             {fulfillment === 'delivery' ? (
               <div className="customer-track-checkpoint is-dropoff">
                 <div className="customer-track-checkpoint__top">
                   <span>Delivery Destination</span>
-                  <em>{formatOrderStatusText(subStatus, fulfillment)}</em>
+                  <em>{tracking?.delivery?.status ? formatOrderStatusText(tracking.delivery.status, fulfillment) : formatOrderStatusText(subStatus, fulfillment)}</em>
                 </div>
-                <strong>{activeSub?.deliveryAddress?.recipientName || 'Delivery Address'}</strong>
-                <small>{customerDeliveryAddress || 'Address on file'}</small>
-                {order.riderFirstName && (
-                  <small>Assigned rider: <strong>{order.riderFirstName}</strong></small>
+                <strong>{tracking?.dropoff?.recipient_name || activeSub?.deliveryAddress?.recipientName || 'Delivery Address'}</strong>
+                <small>{tracking?.dropoff?.address || customerDeliveryAddress || 'Address on file'}</small>
+                {(tracking?.rider?.name || order.riderFirstName) && (
+                  <small>
+                    Assigned rider: <strong>{tracking?.rider?.name || order.riderFirstName}</strong>
+                    {tracking?.rider?.vehicle_type ? ` (${tracking.rider.vehicle_type}${tracking.rider.plate_number ? ` · ${tracking.rider.plate_number}` : ''})` : ''}
+                  </small>
                 )}
-                {activeSub?.deliveryAddress?.notes && (
-                  <small>Notes: {activeSub.deliveryAddress.notes}</small>
+                {(tracking?.dropoff?.notes || activeSub?.deliveryAddress?.notes) && (
+                  <small>Notes: {tracking?.dropoff?.notes || activeSub.deliveryAddress.notes}</small>
                 )}
               </div>
             ) : (
@@ -677,6 +717,44 @@ export default function OrderDetailPage() {
                       ? 'Ready for pickup at the restaurant counter.'
                       : 'We will update this page as your order progresses.'}
                 </small>
+              </div>
+            )}
+
+            {fulfillment === 'delivery' && (
+              <div className="customer-track-checkpoint" aria-live="polite">
+                <div className="customer-track-checkpoint__top">
+                  <span>Live Rider Tracking</span>
+                  <em>
+                    {trackingLoading
+                      ? 'Loading...'
+                      : trackingError
+                        ? 'Unavailable'
+                        : tracking?.rider_location
+                          ? (tracking.rider_location.is_stale ? 'Last known GPS' : 'Live GPS active')
+                          : 'Waiting for GPS'}
+                  </em>
+                </div>
+                {trackingLoading ? (
+                  <small>Fetching latest delivery tracking...</small>
+                ) : trackingError ? (
+                  <small role="alert">{trackingError}</small>
+                ) : tracking?.rider_location ? (
+                  <>
+                    <strong>
+                      {tracking.rider_location.latitude.toFixed(5)}, {tracking.rider_location.longitude.toFixed(5)}
+                    </strong>
+                    <small>
+                      Updated {formatDateTimeManila(tracking.rider_location.recorded_at)}
+                      {tracking.rider_location.is_stale ? ' (signal may be delayed)' : ''}
+                    </small>
+                  </>
+                ) : (
+                  <small>
+                    {tracking?.delivery
+                      ? 'Rider GPS coordinates will appear here once the rider starts sharing live location.'
+                      : 'No delivery rider has been assigned yet.'}
+                  </small>
+                )}
               </div>
             )}
           </div>

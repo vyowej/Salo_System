@@ -1,8 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useAuth } from '../../../hooks/useAuth';
 import useAddresses from '../../../hooks/useAddresses';
+import accountService from '../../../services/accountService';
 import { Input } from '../../../components/forms';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
@@ -11,7 +12,15 @@ import AddressFormModal from '../components/AddressFormModal';
 import './ProfilePage.css';
 
 /* ─── Validation ─────────────────────────────────────────── */
-const phonePattern = /^(\+63|0)\d{10,11}$/;
+const phonePattern = /^(\+63|0)9\d{9}$/;
+const usernamePattern = /^[a-zA-Z0-9._-]+$/;
+const middleInitialPattern = /^[a-zA-Z]$/;
+
+function extractFieldError(errors, key) {
+  const val = errors?.[key];
+  if (Array.isArray(val)) return val[0] || '';
+  return typeof val === 'string' ? val : '';
+}
 
 /* ─── Sidebar navigation config ─────────────────────────── */
 const NAV_GROUPS = [
@@ -48,18 +57,45 @@ export default function ProfilePage() {
   const navigate = useNavigate();
 
   /* ── Personal info state ── */
-  const [formData, setFormData] = useState({
-    name:     user?.name     || '',
-    username: user?.username || '',
-    email:    user?.email    || '',
-    phone:    user?.phone    || '',
-  });
-  const [saved,  setSaved]  = useState(false);
-  const [errors, setErrors] = useState({});
+  const [formData, setFormData] = useState(() => ({
+    first_name:     user?.first_name     || '',
+    middle_initial: user?.middle_initial || '',
+    last_name:      user?.last_name      || '',
+    username:       user?.username       || '',
+    phone_number:   user?.phone_number   ?? user?.phone ?? '',
+    date_of_birth:  user?.date_of_birth  || '',
+  }));
+  const [saving,       setSaving]       = useState(false);
+  const [saved,        setSaved]        = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [errors,       setErrors]       = useState({});
+
+  useEffect(() => {
+    if (!user) return;
+    setFormData({
+      first_name:     user.first_name     || '',
+      middle_initial: user.middle_initial || '',
+      last_name:      user.last_name      || '',
+      username:       user.username       || '',
+      phone_number:   user.phone_number   ?? user.phone ?? '',
+      date_of_birth:  user.date_of_birth  || '',
+    });
+  }, [
+    user,
+    user?.first_name,
+    user?.middle_initial,
+    user?.last_name,
+    user?.username,
+    user?.phone_number,
+    user?.phone,
+    user?.date_of_birth,
+  ]);
 
   /* ── Security state ── */
   const [passwords, setPasswords] = useState({ old: '', newPw: '', confirm: '' });
   const [pwErrors,  setPwErrors]  = useState({});
+  const [pwError,   setPwError]   = useState('');
+  const [pwSaving,  setPwSaving]  = useState(false);
   const [pwSaved,   setPwSaved]   = useState(false);
   const [twoFactor,    setTwoFactor]    = useState(false);
   const [loginAlerts,  setLoginAlerts]  = useState(true);
@@ -88,31 +124,74 @@ export default function ProfilePage() {
   /* ── Validation for personal info ── */
   const validateForm = () => {
     const nextErrors = {};
-    if (!formData.name.trim())
-      nextErrors.name = 'Full name is required.';
-    if (!formData.username.trim())
+    const trimmedFirst = formData.first_name.trim();
+    const trimmedMiddle = formData.middle_initial.trim();
+    const trimmedLast = formData.last_name.trim();
+    const trimmedUsername = formData.username.trim();
+    const cleanedPhone = formData.phone_number.replace(/[\s\-()]+/g, '');
+
+    if (!trimmedFirst)
+      nextErrors.first_name = 'First name is required.';
+    if (trimmedMiddle && !middleInitialPattern.test(trimmedMiddle))
+      nextErrors.middle_initial = 'Middle initial must be a single letter.';
+    if (!trimmedLast)
+      nextErrors.last_name = 'Last name is required.';
+    if (!trimmedUsername)
       nextErrors.username = 'Username is required.';
-    if (!formData.email.trim())
-      nextErrors.email = 'Email address is required.';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
-      nextErrors.email = 'Please enter a valid email address.';
-    if (formData.phone && !phonePattern.test(formData.phone.replace(/\s+/g, '')))
-      nextErrors.phone = 'Use a valid Philippine mobile number format.';
+    else if (trimmedUsername.length < 3 || trimmedUsername.length > 50 || !usernamePattern.test(trimmedUsername))
+      nextErrors.username = 'Username must be 3–50 characters using letters, numbers, dots, underscores, or hyphens.';
+    if (cleanedPhone && !phonePattern.test(cleanedPhone))
+      nextErrors.phone_number = 'Use a valid Philippine mobile number format (e.g. 09171234567).';
+    if (formData.date_of_birth) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      if (formData.date_of_birth >= todayStr)
+        nextErrors.date_of_birth = 'Date of birth must be in the past.';
+    }
+
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handlePersonalSubmit = (e) => {
+  const handlePersonalSubmit = async (e) => {
     e.preventDefault();
+    setSaved(false);
+    setProfileError('');
     if (!validateForm()) return;
-    updateUser(formData);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+
+    setSaving(true);
+    try {
+      const updatedUser = await accountService.updateProfile({
+        first_name:     formData.first_name.trim(),
+        middle_initial: formData.middle_initial.trim() || null,
+        last_name:      formData.last_name.trim(),
+        username:       formData.username.trim(),
+        phone_number:   formData.phone_number.trim() || null,
+        date_of_birth:  formData.date_of_birth || null,
+      });
+      updateUser(updatedUser);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      if (err?.errors) {
+        const mapped = {};
+        for (const field of ['first_name', 'middle_initial', 'last_name', 'username', 'phone_number', 'date_of_birth']) {
+          const msg = extractFieldError(err.errors, field);
+          if (msg) mapped[field] = msg;
+        }
+        if (Object.keys(mapped).length > 0) setErrors(mapped);
+      }
+      setProfileError(err?.message || 'Unable to update profile.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  /* ── Password change (placeholder validation) ── */
-  const handlePasswordSubmit = (e) => {
+  /* ── Password change ── */
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault();
+    setPwSaved(false);
+    setPwError('');
+
     const nextErrors = {};
     if (!passwords.old)    nextErrors.old    = 'Current password is required.';
     if (!passwords.newPw)  nextErrors.newPw  = 'New password is required.';
@@ -122,10 +201,32 @@ export default function ProfilePage() {
       nextErrors.confirm = 'Passwords do not match.';
     setPwErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
-    // Real implementation would call an API here
-    setPwSaved(true);
-    setPasswords({ old: '', newPw: '', confirm: '' });
-    setTimeout(() => setPwSaved(false), 3000);
+
+    setPwSaving(true);
+    try {
+      await accountService.updatePassword({
+        current_password:      passwords.old,
+        password:              passwords.newPw,
+        password_confirmation: passwords.confirm,
+      });
+      setPwSaved(true);
+      setPasswords({ old: '', newPw: '', confirm: '' });
+      setTimeout(() => setPwSaved(false), 3000);
+    } catch (err) {
+      if (err?.errors) {
+        const mapped = {};
+        const curMsg = extractFieldError(err.errors, 'current_password');
+        const pwMsg = extractFieldError(err.errors, 'password');
+        const confMsg = extractFieldError(err.errors, 'password_confirmation');
+        if (curMsg) mapped.old = curMsg;
+        if (pwMsg) mapped.newPw = pwMsg;
+        if (confMsg) mapped.confirm = confMsg;
+        if (Object.keys(mapped).length > 0) setPwErrors(mapped);
+      }
+      setPwError(err?.message || 'Unable to update password.');
+    } finally {
+      setPwSaving(false);
+    }
   };
 
   /* ── Notification toggle helper ── */
@@ -147,38 +248,89 @@ export default function ProfilePage() {
           <p className="profile-section-header__label">Account</p>
           <h2 className="profile-section-header__title">Personal Information</h2>
           <p className="profile-section-header__subtitle">
-            Update your name, username, email, and phone number.
+            Update your personal details, username, and phone number.
           </p>
         </div>
-        <Button variant="primary" size="sm" onClick={handlePersonalSubmit}>
+        <Button variant="primary" size="sm" loading={saving} onClick={handlePersonalSubmit}>
           Save Changes
         </Button>
       </div>
 
+      {profileError && (
+        <div className="profile-alert profile-alert--error" role="alert">
+          {profileError}
+        </div>
+      )}
+
       {saved && (
-        <div className="profile-alert profile-alert--success">
+        <div className="profile-alert profile-alert--success" role="status">
           ✓ Your profile has been updated successfully.
         </div>
       )}
 
       <form onSubmit={handlePersonalSubmit} noValidate>
         <div className="profile-section-body">
-          {/* Full name */}
+          {/* First name */}
           <div className="profile-field-row">
             <div className="profile-field-row__label">
-              <span className="profile-field-row__label-text">Full Name</span>
+              <span className="profile-field-row__label-text">First Name</span>
               <span className="profile-field-row__label-hint">
-                Your display name across the platform.
+                Your given name.
               </span>
             </div>
             <div className="profile-field-row__control">
               <Input
-                id="name"
+                id="first_name"
                 type="text"
-                placeholder="e.g. Juan dela Cruz"
-                value={formData.name}
-                onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))}
-                error={errors.name}
+                placeholder="e.g. Juan"
+                value={formData.first_name}
+                onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))}
+                error={errors.first_name}
+              />
+            </div>
+          </div>
+
+          <div className="profile-field-divider" />
+
+          {/* Middle initial */}
+          <div className="profile-field-row">
+            <div className="profile-field-row__label">
+              <span className="profile-field-row__label-text">Middle Initial</span>
+              <span className="profile-field-row__label-hint">
+                Optional single letter.
+              </span>
+            </div>
+            <div className="profile-field-row__control">
+              <Input
+                id="middle_initial"
+                type="text"
+                maxLength={1}
+                placeholder="e.g. D"
+                value={formData.middle_initial}
+                onChange={(e) => setFormData((f) => ({ ...f, middle_initial: e.target.value }))}
+                error={errors.middle_initial}
+              />
+            </div>
+          </div>
+
+          <div className="profile-field-divider" />
+
+          {/* Last name */}
+          <div className="profile-field-row">
+            <div className="profile-field-row__label">
+              <span className="profile-field-row__label-text">Last Name</span>
+              <span className="profile-field-row__label-hint">
+                Your family name.
+              </span>
+            </div>
+            <div className="profile-field-row__control">
+              <Input
+                id="last_name"
+                type="text"
+                placeholder="e.g. dela Cruz"
+                value={formData.last_name}
+                onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))}
+                error={errors.last_name}
               />
             </div>
           </div>
@@ -212,17 +364,15 @@ export default function ProfilePage() {
             <div className="profile-field-row__label">
               <span className="profile-field-row__label-text">Email Address</span>
               <span className="profile-field-row__label-hint">
-                Used for order receipts and login.
+                Email changes are managed separately.
               </span>
             </div>
             <div className="profile-field-row__control">
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
-                value={formData.email}
-                onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))}
-                error={errors.email}
+                value={user?.email || ''}
+                readOnly
               />
             </div>
           </div>
@@ -239,12 +389,33 @@ export default function ProfilePage() {
             </div>
             <div className="profile-field-row__control">
               <Input
-                id="phone"
+                id="phone_number"
                 type="tel"
                 placeholder="e.g. 09171234567"
-                value={formData.phone}
-                onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))}
-                error={errors.phone}
+                value={formData.phone_number}
+                onChange={(e) => setFormData((f) => ({ ...f, phone_number: e.target.value }))}
+                error={errors.phone_number}
+              />
+            </div>
+          </div>
+
+          <div className="profile-field-divider" />
+
+          {/* Date of birth */}
+          <div className="profile-field-row">
+            <div className="profile-field-row__label">
+              <span className="profile-field-row__label-text">Date of Birth</span>
+              <span className="profile-field-row__label-hint">
+                Optional.
+              </span>
+            </div>
+            <div className="profile-field-row__control">
+              <Input
+                id="date_of_birth"
+                type="date"
+                value={formData.date_of_birth}
+                onChange={(e) => setFormData((f) => ({ ...f, date_of_birth: e.target.value }))}
+                error={errors.date_of_birth}
               />
             </div>
           </div>
@@ -268,8 +439,14 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {pwError && (
+          <div className="profile-alert profile-alert--error" role="alert">
+            {pwError}
+          </div>
+        )}
+
         {pwSaved && (
-          <div className="profile-alert profile-alert--success">
+          <div className="profile-alert profile-alert--success" role="status">
             ✓ Password changed successfully.
           </div>
         )}
@@ -330,7 +507,7 @@ export default function ProfilePage() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Button type="submit" variant="primary" size="sm">
+              <Button type="submit" variant="primary" size="sm" loading={pwSaving}>
                 Update Password
               </Button>
             </div>

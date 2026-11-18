@@ -1,3 +1,5 @@
+import { getNotificationRoute } from './notificationUtils';
+
 export function formatPeso(amount) {
   const num = Number(amount || 0);
   if (!Number.isFinite(num)) return '₱0';
@@ -35,8 +37,5 @@ export function formatShortOrderId(id) {
 
 export function getNotificationTarget(notification) {
   if (notification?.href) return notification.href;
-  if (notification?.type === 'order') return '/customer/orders?tab=upcoming';
-  if (notification?.type === 'reservation') return '/customer/reservations';
-  if (notification?.type === 'invitation') return '/customer/invitations';
-  return '/customer';
+  return getNotificationRoute(notification);
 }

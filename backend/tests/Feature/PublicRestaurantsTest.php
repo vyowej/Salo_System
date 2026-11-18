@@ -392,6 +392,33 @@ class PublicRestaurantsTest extends TestCase
             ->assertJsonPath('success', false);
     }
 
+    public function test_restaurant_details_formats_public_image_urls_and_handles_missing_images(): void
+    {
+        [, , , $addressId] = $this->createLocationFixture();
+
+        $withImagesId = $this->createRestaurant($addressId, 'Image Kitchen', 'active', [
+            'logo_image' => 'restaurants/10/logo.png',
+            'cover_image' => 'restaurants/10/cover.jpg',
+        ]);
+
+        $missingImagesId = $this->createRestaurant($addressId, 'No Image Kitchen', 'active', [
+            'logo_image' => null,
+            'cover_image' => '   ',
+        ]);
+
+        $appUrl = rtrim((string) config('app.url', 'http://localhost:8000'), '/');
+
+        $this->getJson("/api/restaurants/{$withImagesId}")
+            ->assertStatus(200)
+            ->assertJsonPath('data.restaurant.logo_path', "{$appUrl}/storage/restaurants/10/logo.png")
+            ->assertJsonPath('data.restaurant.cover_path', "{$appUrl}/storage/restaurants/10/cover.jpg");
+
+        $this->getJson("/api/restaurants/{$missingImagesId}")
+            ->assertStatus(200)
+            ->assertJsonPath('data.restaurant.logo_path', null)
+            ->assertJsonPath('data.restaurant.cover_path', null);
+    }
+
     private function createRestaurant(int $addressId, string $name, string $status, array $overrides = []): int
     {
         return DB::table('restaurants')->insertGetId(array_merge([

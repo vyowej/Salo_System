@@ -2,6 +2,7 @@
 
 namespace App\Features\Orders\Services;
 
+use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
 use App\Support\AuditLogService;
@@ -30,6 +31,7 @@ class RestaurantOrderService
 
     public function __construct(
         private readonly AuditLogService $auditLogService,
+        private readonly NotificationService $notificationService,
     ) {}
 
     public function requireActiveAuthorizedRestaurant(User $user, ?int $restaurantId = null): object
@@ -386,6 +388,8 @@ class RestaurantOrderService
                 reason: $cleanReason,
                 request: $request,
             );
+
+            $this->notifyCustomerForOrderTransition($order, $nextStatus, $cleanReason);
         });
 
         return $this->getOrderDetail($user, $orderId, $targetId);
@@ -402,6 +406,57 @@ class RestaurantOrderService
             ->lockForUpdate()
             ->select(['p.payment_id', 'p.payment_status'])
             ->first();
+    }
+
+    private function notifyCustomerForOrderTransition(object $order, string $nextStatus, ?string $reason): void
+    {
+        $ref = (string) $order->order_reference;
+        $restaurantName = (string) $order->restaurant_name;
+
+        [$type, $title, $body] = match ($nextStatus) {
+            'accepted' => [
+                'order_accepted',
+                "Order {$ref} accepted",
+                "{$restaurantName} accepted your order.",
+            ],
+            'rejected' => [
+                'order_rejected',
+                "Order {$ref} rejected",
+                "{$restaurantName} rejected your order. Reason: {$reason}",
+            ],
+            'preparing' => [
+                'order_preparing',
+                "Order {$ref} is being prepared",
+                "{$restaurantName} is now preparing your order.",
+            ],
+            'ready' => [
+                'order_ready',
+                $order->order_type === 'pickup'
+                    ? "Order {$ref} is ready for pickup"
+                    : "Order {$ref} is ready for dispatch",
+                $order->order_type === 'pickup'
+                    ? "Your order from {$restaurantName} is ready for pickup."
+                    : "Your order from {$restaurantName} is ready and waiting for a rider.",
+            ],
+            'completed' => [
+                'order_completed',
+                "Order {$ref} completed",
+                "Your pickup order from {$restaurantName} is completed.",
+            ],
+            default => [null, null, null],
+        };
+
+        if ($type !== null) {
+            $this->notificationService->notifyUser(
+                userId: (int) $order->customer_id,
+                workspace: 'customer',
+                type: $type,
+                title: $title,
+                body: $body,
+                relatedEntityType: 'order',
+                relatedEntityId: (int) $order->order_id,
+            );
+        }
     }
 
     /**

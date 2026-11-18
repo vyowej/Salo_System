@@ -244,6 +244,12 @@
   color: var(--status-success-text, #15803d);
 }
 
+.profile-alert--error {
+  background: var(--status-danger-bg, rgba(239, 68, 68, 0.08));
+  border: 1px solid var(--status-danger-border, rgba(239, 68, 68, 0.25));
+  color: var(--status-danger-text, #b91c1c);
+}
+
 /* Section body */
 .profile-section-body {
   padding: var(--space-6);

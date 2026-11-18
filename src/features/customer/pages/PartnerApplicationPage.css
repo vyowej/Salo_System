@@ -154,6 +154,11 @@
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
+.partner-status-box.rejected {
+  background: var(--status-danger-bg, rgba(239, 68, 68, 0.08));
+  border: 1px solid var(--status-danger-border, rgba(239, 68, 68, 0.25));
+}
+
 @media (max-width: 840px) {
   .partner-cards-grid {
     grid-template-columns: 1fr;

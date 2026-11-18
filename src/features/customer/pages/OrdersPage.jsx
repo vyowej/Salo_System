@@ -12,6 +12,7 @@ import {
   formatOrderStatusText,
   formatPaymentStatusLabel,
 } from '../utils/orderTimeline';
+import { mapOrderItemsForReorder, resolveReorderItems } from '../utils/reorderOrder';
 import './OrdersPage.css';
 
 const TABS = [
@@ -72,6 +73,8 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reorderingOrderId, setReorderingOrderId] = useState(null);
+  const [reorderError, setReorderError] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const rawTab = searchParams.get('tab');
@@ -114,7 +117,7 @@ export default function OrdersPage() {
               status: o.order_status,
               rejectionReason: o.rejection_reason ?? null,
               deliveryFee: Number(o.delivery_fee ?? 0),
-              items: [],
+              items: mapOrderItemsForReorder(o.items),
             },
           ],
         }));
@@ -159,36 +162,88 @@ export default function OrdersPage() {
   const paginatedOrders = filteredOrders.slice(0, visibleCount);
   const hasMore = filteredOrders.length > visibleCount;
 
-  const handleReorder = (order) => {
-    const defaultAddress = customerService.getDefaultAddress();
+  const handleReorder = async (order) => {
+    if (reorderingOrderId) return;
+    setReorderError('');
+    setReorderingOrderId(order.id);
 
-    (order.subOrders || []).forEach((subOrder) => {
-      const restaurantId = subOrder.restaurantId;
-      const fulfillment = subOrder.fulfillment || 'delivery';
+    try {
+      const defaultAddress = customerService.getDefaultAddress();
+      let detailItems = null;
+      let totalAdded = 0;
+      const skippedAll = [];
+      let unavailableReason = '';
 
-      setRestaurantFulfillment(restaurantId, fulfillment);
-      if (fulfillment === 'delivery' && defaultAddress) {
-        setRestaurantAddress(restaurantId, defaultAddress);
+      for (const subOrder of order.subOrders || []) {
+        const restaurantId = subOrder.restaurantId;
+        const fulfillment = subOrder.fulfillment || 'delivery';
+
+        let orderItems = subOrder.items || [];
+        if (orderItems.length === 0) {
+          if (detailItems === null) {
+            const detail = await customerService.fetchOrderDetail(order.id);
+            detailItems = mapOrderItemsForReorder(detail?.items);
+          }
+          orderItems = detailItems;
+        }
+
+        if (orderItems.length === 0) {
+          continue;
+        }
+
+        let restaurant = null;
+        try {
+          restaurant = await customerService.getRestaurantById(restaurantId);
+        } catch {
+          restaurant = null;
+        }
+
+        const resolved = resolveReorderItems(orderItems, restaurant);
+        if (resolved.unavailableReason) {
+          unavailableReason = resolved.unavailableReason;
+        }
+        if (resolved.skippedItems.length > 0) {
+          skippedAll.push(...resolved.skippedItems);
+        }
+
+        if (resolved.cartItems.length === 0) {
+          continue;
+        }
+
+        setRestaurantFulfillment(restaurantId, fulfillment);
+        if (fulfillment === 'delivery' && defaultAddress) {
+          setRestaurantAddress(restaurantId, defaultAddress);
+        }
+
+        resolved.cartItems.forEach((cartItem) => {
+          addItem({
+            ...cartItem,
+            deliveryFee: subOrder.deliveryFee || 49,
+          });
+          totalAdded += 1;
+        });
       }
 
-      (subOrder.items || []).forEach((item) => {
-        addItem({
-          id: `${restaurantId}-${item.name}`,
-          name: item.name,
-          price: Number(item.price || 0),
-          quantity: Number(item.qty || item.quantity || 1),
-          restaurantId,
-          restaurantName: subOrder.restaurantName,
-          image: 'R',
-          deliveryFee: subOrder.deliveryFee || 49,
-          selectedAddOns: Array.isArray(item.addOns)
-            ? item.addOns.map((addOn) => (typeof addOn === 'string' ? { name: addOn, price: 0 } : addOn))
-            : [],
-        });
-      });
-    });
+      if (totalAdded === 0) {
+        setReorderError(
+          unavailableReason ||
+            (skippedAll.length > 0
+              ? `None of the items from this order are currently available (${skippedAll.join(', ')}).`
+              : 'No items from this order could be added to your cart.'),
+        );
+        return;
+      }
 
-    navigate('/customer/cart');
+      navigate('/customer/cart', {
+        state: skippedAll.length > 0
+          ? { reorderWarning: `Some unavailable items were skipped: ${skippedAll.join(', ')}.` }
+          : undefined,
+      });
+    } catch (err) {
+      setReorderError(err?.message || 'Unable to reorder right now. Please try again.');
+    } finally {
+      setReorderingOrderId(null);
+    }
   };
 
   return (
@@ -230,6 +285,22 @@ export default function OrdersPage() {
         />
       ) : (
         <>
+          {reorderError && (
+            <div
+              role="alert"
+              style={{
+                marginBottom: '12px',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                background: 'var(--status-error-bg, rgba(239, 68, 68, 0.08))',
+                border: '1px solid var(--status-error-border, rgba(239, 68, 68, 0.25))',
+                color: 'var(--status-error-text, #b91c1c)',
+                fontSize: 'var(--font-size-sm)',
+              }}
+            >
+              {reorderError}
+            </div>
+          )}
           <div className="customer-orders-list">
             {paginatedOrders.map((order) => {
               const bucket = getOrderBucket(order.overallStatus);
@@ -342,6 +413,7 @@ export default function OrdersPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          loading={reorderingOrderId === order.id}
                           onClick={(event) => {
                             event.stopPropagation();
                             handleReorder(order);

@@ -31,6 +31,8 @@ class CheckoutRequest extends FormRequest
             'groups.*.items' => ['required', 'array', 'min:1', 'max:50'],
             'groups.*.items.*.menu_item_id' => ['required', 'integer', 'min:1'],
             'groups.*.items.*.quantity' => ['required', 'integer', 'min:1', "max:{$maxQty}"],
+            'groups.*.items.*.add_on_option_ids' => ['sometimes', 'array', 'max:50'],
+            'groups.*.items.*.add_on_option_ids.*' => ['integer', 'min:1'],
         ];
     }
 

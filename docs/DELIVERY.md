@@ -6,7 +6,7 @@
   - Admin only (`auth` + `role:admin`).
   - Allowed **only** when `riders.rider_status = 'approved'` (`409 Conflict` for any other status).
   - Blocks an admin from activating their own rider record (`403 Forbidden`).
-  - Sets `rider_status = 'active'` and writes `admin_rider_activated` to `audit_logs`.
+  - Sets `rider_status = 'active'`, writes `admin_rider_activated` to `audit_logs`, and sends an in-app `rider_activated` notification (`rider` workspace) in the same transaction (see [NOTIFICATIONS.md](./NOTIFICATIONS.md)).
   - `PATCH /api/admin/riders/{id}/status` is restricted to `inactive` and `suspended` and can no longer set `active`.
 - **Workspace Access:**
   - Approved riders (`rider_status = 'approved'`) may enter the rider dashboard and profile and see an **"Awaiting activation"** state.

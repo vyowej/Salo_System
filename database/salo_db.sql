@@ -270,8 +270,10 @@ CREATE TABLE restaurant_staff (
     user_id              BIGINT UNSIGNED NOT NULL,
     invited_by           BIGINT UNSIGNED NULL COMMENT 'Owner who sent the invitation',
     staff_position       VARCHAR(100)    NOT NULL COMMENT 'Manager, Reservation Staff, Order Staff, etc.',
-    staff_status         ENUM('invited','active','inactive','declined') NOT NULL DEFAULT 'invited',
+    invitation_note      VARCHAR(500)    NULL DEFAULT NULL,
+    staff_status         ENUM('invited','active','inactive','declined','cancelled','expired') NOT NULL DEFAULT 'invited',
     invited_at           TIMESTAMP       NULL,
+    expires_at           TIMESTAMP       NULL DEFAULT NULL,
     responded_at         TIMESTAMP       NULL,
     joined_at            TIMESTAMP       NULL,
     created_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -280,6 +282,7 @@ CREATE TABLE restaurant_staff (
     UNIQUE KEY uk_restaurant_staff (restaurant_id, user_id),
     KEY idx_restaurant_staff_user (user_id),
     KEY idx_restaurant_staff_invited_by (invited_by),
+    KEY idx_restaurant_staff_status_expires (staff_status, expires_at),
     CONSTRAINT fk_restaurant_staff_restaurant FOREIGN KEY (restaurant_id) REFERENCES restaurants (restaurant_id) ON DELETE CASCADE ON UPDATE RESTRICT,
     CONSTRAINT fk_restaurant_staff_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE ON UPDATE RESTRICT,
     CONSTRAINT fk_restaurant_staff_invited_by FOREIGN KEY (invited_by) REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE RESTRICT
@@ -1384,7 +1387,28 @@ CREATE TABLE rider_locations (
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Total tables: 43
+-- ----------------------------------------------------------------------------
+-- 44. NOTIFICATIONS (In-app account notifications tagged by workspace)
+-- ----------------------------------------------------------------------------
+CREATE TABLE notifications (
+    notification_id      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id              BIGINT UNSIGNED NOT NULL,
+    workspace            ENUM('customer','restaurant','rider','admin') NOT NULL,
+    type                 VARCHAR(80)     NOT NULL COMMENT 'Stable notification event code',
+    title                VARCHAR(160)    NOT NULL,
+    body                 TEXT            NOT NULL,
+    related_entity_type  VARCHAR(50)     NULL COMMENT 'Deep-link target type (order, staff_invitation, etc.)',
+    related_entity_id    BIGINT UNSIGNED NULL COMMENT 'Deep-link target primary key',
+    read_at              TIMESTAMP       NULL DEFAULT NULL,
+    created_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (notification_id),
+    KEY idx_notifications_user_read_created (user_id, read_at, created_at),
+    KEY idx_notifications_user_workspace_read_created (user_id, workspace, read_at, created_at),
+    KEY idx_notifications_entity (related_entity_type, related_entity_id),
+    CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Total tables: 44
 -- ============================================================================
 -- Location hierarchy:
 --   provinces → cities → barangays → addresses  (Philippines only)

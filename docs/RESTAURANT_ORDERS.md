@@ -38,7 +38,7 @@ and that the target restaurant has `restaurant_status = 'active'` (non-active re
 The backend exposes `order_handler_positions` (from `config('salo.orders.handler_positions')`) and `can_handle_orders` in the auth payload so the frontend derives order UI visibility and action permissions from the same single config source without hardcoding a duplicate list.
 
 > [!NOTE]
-> **Future Team and Staff rule:** When the Team and Staff management feature is built, only the restaurant owner may assign the `Manager` position, and staff position names must come from a fixed list (not arbitrary free-text input).
+> **Team and Staff:** Staff invitations are implemented under `/api/restaurant/staff/invitations` and `/api/account/staff-invitations` with `staff_position` validated against `config('salo.staff.positions')` (see [NOTIFICATIONS.md](./NOTIFICATIONS.md)). Order-handling access remains governed by `config('salo.orders.handler_positions')`.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |

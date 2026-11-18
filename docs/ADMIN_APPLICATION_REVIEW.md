@@ -67,4 +67,4 @@ Verify the target database (`DB_DATABASE` in `backend/.env` or `--env=testing` f
 - **Admin MFA:** Multi-factor authentication for admin actions is not yet implemented (future work).
 - **Required-document checklist lock:** Currently manual admin judgment; no programmatic block if an optional document is unverified.
 - **Review SLAs, auto-expiry, & commission assignment:** Manual decisions only; no auto-approval, timers, or commission configuration during review.
-- **Applicant notifications:** Applicants see updated statuses on their status pages; no email/SMS/push notification provider is wired for review decisions.
+- **Applicant & Admin notifications:** In-app notifications are recorded inside the review transaction (see [NOTIFICATIONS.md](./NOTIFICATIONS.md)). Email/SMS/push providers remain future work.

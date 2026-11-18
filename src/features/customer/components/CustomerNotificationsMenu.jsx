@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Popover from '../../../components/common/Popover';
-import { getNotificationTarget } from '../../../utils/format';
-import customerService from '../../../services/customerService';
+import { useWorkspaceNotifications } from '../../../hooks/useWorkspaceNotifications';
+import { formatDateTimeManila } from '../../../utils/format';
+import { getNotificationRoute } from '../../../utils/notificationUtils';
 import './CustomerNotificationsMenu.css';
 
-function renderTypeIcon(type) {
-  switch (type) {
+function renderTypeIcon(category) {
+  switch (category) {
     case 'order':
       return (
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -30,11 +31,14 @@ function renderTypeIcon(type) {
           <polyline points="22,6 12,13 2,6" />
         </svg>
       );
-    case 'promo':
+    case 'application':
+    case 'rider':
       return (
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
-          <line x1="7" y1="7" x2="7.01" y2="7" />
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
         </svg>
       );
     default:
@@ -48,29 +52,37 @@ function renderTypeIcon(type) {
   }
 }
 
-
-
 export default function CustomerNotificationsMenu() {
   const navigate = useNavigate();
   const bellRef = useRef(null);
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState(() => customerService.getNotifications());
 
-  useEffect(() => {
-    const sync = () => setNotifications(customerService.getNotifications());
-    sync();
-    window.addEventListener('salo:notificationsUpdated', sync);
-    return () => {
-      window.removeEventListener('salo:notificationsUpdated', sync);
-    };
-  }, []);
+  const {
+    items,
+    workspaceUnreadCount,
+    loading,
+    error,
+    markingAll,
+    refresh,
+    markAsRead,
+    markAllAsRead,
+  } = useWorkspaceNotifications({
+    workspace: 'customer',
+    perPage: 8,
+  });
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
-  const latestEight = notifications.slice(0, 8);
+  const latestEight = items.slice(0, 8);
 
-  const handleItemClick = (item) => {
+  const handleItemClick = async (item) => {
     setOpen(false);
-    navigate(getNotificationTarget(item));
+    if (!item.is_read) {
+      try {
+        await markAsRead(item.id);
+      } catch {
+        // Navigation still proceeds if mark-read fails transiently.
+      }
+    }
+    navigate(getNotificationRoute(item));
   };
 
   return (
@@ -79,7 +91,7 @@ export default function CustomerNotificationsMenu() {
         ref={bellRef}
         type="button"
         className="topbar-btn"
-        aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ''}`}
+        aria-label={`Notifications${workspaceUnreadCount ? ` (${workspaceUnreadCount} unread)` : ''}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         title="Notifications"
@@ -89,9 +101,9 @@ export default function CustomerNotificationsMenu() {
           <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 01-3.46 0" />
         </svg>
-        {unreadCount > 0 && (
+        {workspaceUnreadCount > 0 && (
           <span className="topbar-notification-dot" aria-hidden="true">
-            {unreadCount > 9 ? '9+' : unreadCount}
+            {workspaceUnreadCount > 9 ? '9+' : workspaceUnreadCount}
           </span>
         )}
       </button>
@@ -108,10 +120,10 @@ export default function CustomerNotificationsMenu() {
             <button
               type="button"
               className="customer-notif-mark-all"
-              disabled={unreadCount === 0}
-              onClick={() => customerService.markAllNotificationsRead()}
+              disabled={workspaceUnreadCount === 0 || markingAll}
+              onClick={() => markAllAsRead()}
             >
-              Mark all as read
+              {markingAll ? 'Marking…' : 'Mark all as read'}
             </button>
           </>
         )}
@@ -125,7 +137,20 @@ export default function CustomerNotificationsMenu() {
           </Link>
         )}
       >
-        {latestEight.length === 0 ? (
+        {loading && latestEight.length === 0 ? (
+          <div className="customer-notif-empty">Loading notifications…</div>
+        ) : error ? (
+          <div className="customer-notif-empty">
+            <p style={{ margin: '0 0 8px' }}>{error.message || 'Unable to load notifications.'}</p>
+            <button
+              type="button"
+              className="customer-notif-mark-all"
+              onClick={() => refresh()}
+            >
+              Retry
+            </button>
+          </div>
+        ) : latestEight.length === 0 ? (
           <div className="customer-notif-empty">You&apos;re all caught up</div>
         ) : (
           <div className="customer-notif-list">
@@ -133,17 +158,17 @@ export default function CustomerNotificationsMenu() {
               <button
                 key={item.id}
                 type="button"
-                className={`customer-notif-item ${item.read ? '' : 'unread'}`.trim()}
+                className={`customer-notif-item ${item.is_read ? '' : 'unread'}`.trim()}
                 onClick={() => handleItemClick(item)}
               >
-                <span className="customer-notif-icon">{renderTypeIcon(item.type)}</span>
+                <span className="customer-notif-icon">{renderTypeIcon(item.category)}</span>
                 <span className="customer-notif-copy">
                   <span className="customer-notif-title-row">
                     <span className="customer-notif-title">{item.title}</span>
-                    {!item.read && <span className="customer-notif-dot" aria-label="Unread" />}
+                    {!item.is_read && <span className="customer-notif-dot" aria-label="Unread" />}
                   </span>
-                  <p className="customer-notif-desc">{item.description}</p>
-                  <span className="customer-notif-time">{item.time}</span>
+                  <p className="customer-notif-desc">{item.body}</p>
+                  <span className="customer-notif-time">{formatDateTimeManila(item.created_at)}</span>
                 </span>
               </button>
             ))}

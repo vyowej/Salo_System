@@ -61,7 +61,7 @@ export default function OwnerInventoryPage() {
       setCategories(normalizeMenuCategories({
         categories: ownerService.getMenuCategories(restaurantId),
       }));
-      setSettings(ownerService.getInventorySettings(restaurantId));
+      setSettings(ownerService.getInventoryConfig(restaurantId));
       if (historyItem) setHistory(ownerService.getInventoryMovements(restaurantId, historyItem));
     } catch (loadError) {
       setError(loadError.message || INVENTORY_MENU_DISPLAY.errors.load);

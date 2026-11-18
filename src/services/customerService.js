@@ -8,6 +8,7 @@
 import apiClient from './apiClient.js';
 import publicRestaurantService from './publicRestaurantService.js';
 import addressService from './addressService.js';
+import locationApiService from './locationApiService.js';
 
 export const customerService = {
   // Restaurants (public API)
@@ -97,6 +98,10 @@ export const customerService = {
   async fetchOrderDetail(orderId) {
     const res = await apiClient.get(`/customer/orders/${orderId}`);
     return res?.data?.order ?? null;
+  },
+
+  async getCustomerOrderTracking(orderId) {
+    return locationApiService.getCustomerOrderTracking(orderId);
   },
 
   async cancelOrder(orderId, reason = '') {

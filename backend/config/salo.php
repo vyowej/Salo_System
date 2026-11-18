@@ -32,4 +32,17 @@ return [
             'Order Staff',
         ],
     ],
+
+    'staff' => [
+        'invitation_expiry_days' => max(1, (int) env('SALO_STAFF_INVITATION_EXPIRY_DAYS', 7)),
+        'positions' => [
+            'Manager',
+            'Order Handler',
+            'Order Staff',
+            'Reservation Handler',
+            'Reservation Staff',
+            'Inventory Manager',
+            'Menu Manager',
+        ],
+    ],
 ];

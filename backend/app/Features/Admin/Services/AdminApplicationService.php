@@ -2,6 +2,7 @@
 
 namespace App\Features\Admin\Services;
 
+use App\Features\Notifications\Services\NotificationService;
 use App\Features\Restaurants\Services\RestaurantApplicationService;
 use App\Features\Riders\Services\RiderApplicationService;
 use App\Models\User;
@@ -33,6 +34,7 @@ class AdminApplicationService
         private readonly RiderApplicationService $riderApplicationService,
         private readonly AuditLogService $auditLogService,
         private readonly FileStorageService $fileStorageService,
+        private readonly NotificationService $notificationService,
     ) {}
 
     /**
@@ -365,6 +367,19 @@ class AdminApplicationService
                 reason: (string) $data['reason'],
                 request: $request,
             );
+
+            $docName = trim((string) $data['document_name']);
+            $reqReason = trim((string) $data['reason']);
+            $label = $type === 'rider' ? 'rider' : 'restaurant';
+            $this->notificationService->notifyUser(
+                userId: (int) $app->applicant_user_id,
+                workspace: 'customer',
+                type: "{$type}_application_additional_documents_required",
+                title: 'Additional documents required',
+                body: "Your {$label} application ({$app->reference_number}) requires: {$docName}. Reason: {$reqReason}",
+                relatedEntityType: $table,
+                relatedEntityId: $applicationId,
+            );
         });
 
         return $this->getApplicationDetail($type, $applicationId);
@@ -463,9 +478,70 @@ class AdminApplicationService
                 reason: $cleanNote,
                 request: $request,
             );
+
+            $this->notifyApplicantForDecision($type, $table, $applicationId, $app, $nextStatus, $cleanNote);
         });
 
         return $this->getApplicationDetail($type, $applicationId);
+    }
+
+    private function notifyApplicantForDecision(
+        string $type,
+        string $table,
+        int $applicationId,
+        object $app,
+        string $nextStatus,
+        ?string $note,
+    ): void {
+        $label = $type === 'rider' ? 'rider' : 'restaurant';
+        $ref = (string) $app->reference_number;
+
+        [$workspace, $notifType, $title, $body] = match ($nextStatus) {
+            'under_review' => [
+                'customer',
+                "{$type}_application_under_review",
+                ucfirst($label) . ' application under review',
+                "Your {$label} application ({$ref}) is now under review.",
+            ],
+            'additional_documents_required' => [
+                'customer',
+                "{$type}_application_additional_documents_required",
+                'Additional documents required',
+                "Your {$label} application ({$ref}) requires additional documents: {$note}",
+            ],
+            'approved' => $type === 'restaurant'
+                ? [
+                    'restaurant',
+                    'restaurant_application_approved',
+                    'Restaurant application approved',
+                    "Your restaurant application ({$ref}) is approved. Your restaurant workspace is ready.",
+                ]
+                : [
+                    'rider',
+                    'rider_application_approved',
+                    'Rider application approved',
+                    "Your rider application ({$ref}) is approved. Awaiting admin activation before you can go online.",
+                ],
+            'rejected' => [
+                'customer',
+                "{$type}_application_rejected",
+                ucfirst($label) . ' application rejected',
+                "Your {$label} application ({$ref}) was rejected. Reason: {$note}",
+            ],
+            default => [null, null, null, null],
+        };
+
+        if ($workspace !== null && $notifType !== null) {
+            $this->notificationService->notifyUser(
+                userId: (int) $app->applicant_user_id,
+                workspace: $workspace,
+                type: $notifType,
+                title: $title,
+                body: $body,
+                relatedEntityType: $table,
+                relatedEntityId: $applicationId,
+            );
+        }
     }
 
     private function assertNotSelfReview(object $app, User $admin): void

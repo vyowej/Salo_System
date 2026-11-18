@@ -1,6 +1,7 @@
 <?php
 
 use App\Features\Account\Controllers\AccountController;
+use App\Features\Account\Controllers\AccountStaffInvitationController;
 use App\Features\Admin\Controllers\AdminApplicationController;
 use App\Features\Admin\Controllers\AdminManagementController;
 use App\Features\Applications\Controllers\ApplicationDocumentController;
@@ -11,12 +12,14 @@ use App\Features\Locations\Controllers\CustomerAddressController;
 use App\Features\Locations\Controllers\LocationLookupController;
 use App\Features\Locations\Controllers\RestaurantLocationController;
 use App\Features\Locations\Controllers\TrackingController;
+use App\Features\Notifications\Controllers\NotificationController;
 use App\Features\Orders\Controllers\CustomerOrderController;
 use App\Features\Orders\Controllers\RestaurantOrderController;
 use App\Features\Restaurants\Controllers\OwnerMenuController;
 use App\Features\Restaurants\Controllers\OwnerProfileController;
 use App\Features\Restaurants\Controllers\RestaurantApplicationController;
 use App\Features\Restaurants\Controllers\RestaurantController;
+use App\Features\Restaurants\Controllers\StaffInvitationController;
 use App\Features\Riders\Controllers\RiderApplicationController;
 use App\Features\Riders\Controllers\RiderController;
 use App\Features\Riders\Controllers\RiderDeliveryController;
@@ -64,6 +67,17 @@ Route::prefix('account')->middleware('auth')->group(function (): void {
     Route::patch('/profile', [AccountController::class, 'updateProfile']);
     Route::put('/password', [AccountController::class, 'updatePassword']);
     Route::get('/applications', [AccountController::class, 'applications']);
+
+    Route::get('/staff-invitations', [AccountStaffInvitationController::class, 'index']);
+    Route::post('/staff-invitations/{id}/accept', [AccountStaffInvitationController::class, 'accept'])->whereNumber('id');
+    Route::post('/staff-invitations/{id}/decline', [AccountStaffInvitationController::class, 'decline'])->whereNumber('id');
+});
+
+Route::prefix('notifications')->middleware(['auth', 'throttle:120,1'])->group(function (): void {
+    Route::get('/', [NotificationController::class, 'index']);
+    Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/read-all', [NotificationController::class, 'markAllRead']);
+    Route::post('/{id}/read', [NotificationController::class, 'markRead'])->whereNumber('id');
 });
 
 Route::prefix('otp')->middleware('auth')->group(function (): void {
@@ -137,6 +151,10 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::patch('/menu/items/{itemId}', [OwnerMenuController::class, 'updateItem'])->whereNumber('itemId');
         Route::patch('/menu/items/{itemId}/availability', [OwnerMenuController::class, 'updateItemAvailability'])->whereNumber('itemId');
         Route::delete('/menu/items/{itemId}', [OwnerMenuController::class, 'destroyItem'])->whereNumber('itemId');
+
+        Route::get('/staff', [StaffInvitationController::class, 'index']);
+        Route::post('/staff/invitations', [StaffInvitationController::class, 'storeInvitation'])->middleware('throttle:20,1');
+        Route::post('/staff/invitations/{id}/cancel', [StaffInvitationController::class, 'cancelInvitation'])->whereNumber('id');
     });
 
     Route::middleware('role:owner,staff')->group(function (): void {

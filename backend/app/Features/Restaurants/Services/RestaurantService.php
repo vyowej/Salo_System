@@ -260,8 +260,8 @@ class RestaurantService
             'name' => $row->restaurant_name,
             'business_type' => $row->business_type,
             'description' => $row->description,
-            'logo_path' => $row->logo_image,
-            'cover_path' => $row->cover_image,
+            'logo_path' => $this->fileStorageService->publicUrl($row->logo_image),
+            'cover_path' => $this->fileStorageService->publicUrl($row->cover_image),
             'categories' => $categories,
             'address' => [
                 'full' => implode(', ', $publicAddressParts),

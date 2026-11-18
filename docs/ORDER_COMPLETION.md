@@ -18,6 +18,7 @@ Out of scope for Step 9a (delivery dispatch, rider assignment, `out_for_delivery
 - **Concurrency & Timestamps:** Runs inside `DB::transaction()` with `lockForUpdate()` on `orders` and the linked `payments` row, setting `orders.order_status = 'completed'` and `orders.completed_at = $now` using a single `now()` timestamp.
 - **Cash Payment Update:** Updates the linked `payments` row (via `payment_allocations.order_id`) **only** when `payment_method = 'cash'` and `payment_status = 'pending'`, setting `payment_status = 'paid'` and `paid_at = $now` in the same transaction. Payments with any other status or method are never touched.
 - **Audit Log:** Records `restaurant_order_completed` in `audit_logs` with `actor_user_id`, `old_values` (`order_status`, and `payment_status` if updated), and `new_values`.
+- **Notification:** Sends an in-app `order_completed` notification to the customer (`customer` workspace) inside the same transaction (see [NOTIFICATIONS.md](./NOTIFICATIONS.md)).
 
 ---
 

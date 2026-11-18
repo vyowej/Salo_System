@@ -1,66 +1,77 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { hasAdminPermission } from '../constants';
-import useAdminSession from './useAdminSession';
+import { useMemo } from 'react';
+import { useWorkspaceNotifications } from '../../../hooks/useWorkspaceNotifications';
+import { getNotificationRoute } from '../../../utils/notificationUtils';
 import AdminNotificationsContext from './adminNotificationsStore';
 import {
-  getAdminNotifications,
   getOpenSupportCount,
   getPendingApplicationsCount,
 } from '../services/notificationsService';
 
+function getDateBucketManila(createdAt) {
+  if (!createdAt) return 'Earlier';
+  const dt = new Date(createdAt);
+  if (Number.isNaN(dt.getTime())) return 'Earlier';
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' });
+  const todayKey = fmt.format(new Date());
+  const yestKey = fmt.format(new Date(Date.now() - 86400000));
+  const itemKey = fmt.format(dt);
+  if (itemKey === todayKey) return 'Today';
+  if (itemKey === yestKey) return 'Yesterday';
+  return 'Earlier';
+}
+
 export function AdminNotificationsProvider({ children }) {
-  const { currentAdmin } = useAdminSession();
-  const [readIds, setReadIds] = useState(() => new Set());
-  const [revision, setRevision] = useState(0);
+  const {
+    items,
+    workspaceUnreadCount,
+    loading,
+    error,
+    markingAll,
+    refresh,
+    markAsRead,
+    markAllAsRead,
+  } = useWorkspaceNotifications({
+    workspace: 'admin',
+    perPage: 8,
+  });
 
-  useEffect(() => {
-    function handleUpdate() {
-      setRevision((value) => value + 1);
-    }
-    window.addEventListener('salo-admin-data-updated', handleUpdate);
-    return () => window.removeEventListener('salo-admin-data-updated', handleUpdate);
-  }, []);
-
-  const allNotifications = useMemo(() => {
-    void revision;
-    const raw = getAdminNotifications();
-    return raw
-      .filter((item) => hasAdminPermission(currentAdmin.role, item.module, 'view'))
-      .map((item) => ({
-        ...item,
-        read: readIds.has(item.id),
-      }));
-  }, [currentAdmin.role, readIds, revision]);
-
-  const unreadCount = useMemo(
-    () => allNotifications.filter((item) => !item.read).length,
-    [allNotifications],
+  const notifications = useMemo(
+    () => items.map((item) => ({
+      ...item,
+      text: item.body ? `${item.title}: ${item.body}` : item.title,
+      time: item.created_at,
+      groupLabel: getDateBucketManila(item.created_at),
+      href: getNotificationRoute(item),
+    })),
+    [items],
   );
 
-  const pendingApplicationsCount = useMemo(() => { void revision; return getPendingApplicationsCount(); }, [revision]);
-  const openSupportCount = useMemo(() => { void revision; return getOpenSupportCount(); }, [revision]);
-
-  const markAsRead = useCallback((id) => {
-    setReadIds((prev) => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
-  }, []);
-
-  const markAllAsRead = useCallback(() => {
-    setReadIds(new Set(allNotifications.map((item) => item.id)));
-  }, [allNotifications]);
+  const pendingApplicationsCount = useMemo(() => getPendingApplicationsCount(), []);
+  const openSupportCount = useMemo(() => getOpenSupportCount(), []);
 
   const value = useMemo(() => ({
-    notifications: allNotifications,
-    unreadCount,
+    notifications,
+    unreadCount: workspaceUnreadCount,
+    loading,
+    error,
+    markingAll,
+    refresh,
     markAsRead,
     markAllAsRead,
     pendingApplicationsCount,
     openSupportCount,
-  }), [allNotifications, unreadCount, markAsRead, markAllAsRead, pendingApplicationsCount, openSupportCount]);
+  }), [
+    notifications,
+    workspaceUnreadCount,
+    loading,
+    error,
+    markingAll,
+    refresh,
+    markAsRead,
+    markAllAsRead,
+    pendingApplicationsCount,
+    openSupportCount,
+  ]);
 
   return (
     <AdminNotificationsContext.Provider value={value}>

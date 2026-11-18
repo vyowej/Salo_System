@@ -7,10 +7,13 @@ import { buildProfileMenuItems, ROLE_META } from '../../../config/navigationConf
 import { hasAdminPermission } from '../constants';
 import { useAdminNotifications } from '../contexts/useAdminNotifications';
 import { useAdminSearch } from '../contexts/useAdminSearch';
-import { formatRelativeTime } from '../services/notificationsService';
+import { formatDateTimeManila } from '../../../utils/format';
+import { getNotificationRoute } from '../../../utils/notificationUtils';
 
 const NOTIFICATION_ICONS = {
+  application: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
   applications: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+  order: 'M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
   disputes: 'M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
   support: 'M4 4h16v12H8l-4 4V4zm4 5h8m-8 3h5',
   finance: 'M12 2v20m5-15H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
@@ -29,6 +32,10 @@ export default function AdminTopbar({
   const {
     notifications,
     unreadCount,
+    loading,
+    error,
+    markingAll,
+    refresh,
     markAsRead,
     markAllAsRead,
     pendingApplicationsCount,
@@ -193,15 +200,29 @@ export default function AdminTopbar({
               <button
                 type="button"
                 className="admin-topbar-popover__action"
-                onClick={markAllAsRead}
+                disabled={markingAll}
+                onClick={() => markAllAsRead()}
               >
-                Mark all as read
+                {markingAll ? 'Marking…' : 'Mark all as read'}
               </button>
             )}
           </div>
 
           <div className="admin-notif-popover__list">
-            {groupedNotifications.length === 0 ? (
+            {loading && groupedNotifications.length === 0 ? (
+              <p className="admin-notif-popover__empty">Loading notifications…</p>
+            ) : error ? (
+              <div className="admin-notif-popover__empty">
+                <p style={{ margin: '0 0 8px' }}>{error.message || 'Unable to load notifications.'}</p>
+                <button
+                  type="button"
+                  className="admin-topbar-popover__action"
+                  onClick={() => refresh()}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : groupedNotifications.length === 0 ? (
               <p className="admin-notif-popover__empty">No notifications right now.</p>
             ) : (
               groupedNotifications.map((group) => (
@@ -210,21 +231,32 @@ export default function AdminTopbar({
                   {group.items.map((item) => (
                     <Link
                       key={item.id}
-                      to={item.href}
-                      className={`admin-notif-item ${item.read ? 'is-read' : ''}`}
-                      onClick={() => {
-                        markAsRead(item.id);
+                      to={getNotificationRoute(item)}
+                      className={`admin-notif-item ${item.is_read ? 'is-read' : ''}`}
+                      onClick={async (event) => {
+                        event.preventDefault();
                         setNotifOpen(false);
+                        if (!item.is_read) {
+                          try {
+                            await markAsRead(item.id);
+                          } catch {
+                            // Proceed with navigation even if mark-read fails transiently.
+                          }
+                        }
+                        navigate(getNotificationRoute(item));
                       }}
                     >
                       <span className="admin-notif-item__icon" aria-hidden="true">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d={NOTIFICATION_ICONS[item.type] || NOTIFICATION_ICONS.system} />
+                          <path d={NOTIFICATION_ICONS[item.category] || NOTIFICATION_ICONS[item.type] || NOTIFICATION_ICONS.system} />
                         </svg>
                       </span>
                       <span className="admin-notif-item__body">
-                        <span className="admin-notif-item__text">{item.text}</span>
-                        <span className="admin-notif-item__time">{formatRelativeTime(item.time)}</span>
+                        <span className="admin-notif-item__text">{item.title || item.text}</span>
+                        {item.body && (
+                          <span className="admin-notif-item__time" style={{ display: 'block' }}>{item.body}</span>
+                        )}
+                        <span className="admin-notif-item__time">{formatDateTimeManila(item.created_at || item.time)}</span>
                       </span>
                     </Link>
                   ))}

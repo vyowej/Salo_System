@@ -2,6 +2,7 @@
 
 namespace App\Features\Riders\Services;
 
+use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
 use App\Support\AuditLogService;
@@ -17,6 +18,7 @@ class RiderDeliveryService
     public function __construct(
         private readonly RiderService $riderService,
         private readonly AuditLogService $auditLogService,
+        private readonly NotificationService $notificationService,
     ) {}
 
     public function requireActiveRider(User $user): object
@@ -325,6 +327,17 @@ class RiderDeliveryService
                 newValues: ['delivery_status' => 'picked_up', 'order_status' => 'out_for_delivery'],
                 request: $request,
             );
+
+            $riderFirstName = trim((string) ($user->first_name ?? '')) ?: 'Your rider';
+            $this->notificationService->notifyUser(
+                userId: (int) $order->customer_id,
+                workspace: 'customer',
+                type: 'order_out_for_delivery',
+                title: "Order {$order->order_reference} is out for delivery",
+                body: "{$riderFirstName} picked up your order from {$order->restaurant_name} and is on the way.",
+                relatedEntityType: 'order',
+                relatedEntityId: $orderId,
+            );
         });
 
         $row = $this->baseAssignedDeliveryQuery($riderId)->where('d.order_id', $orderId)->first();
@@ -430,6 +443,17 @@ class RiderDeliveryService
                 oldValues: $oldAudit,
                 newValues: $newAudit,
                 request: $request,
+            );
+
+            $riderFirstName = trim((string) ($user->first_name ?? '')) ?: 'Your rider';
+            $this->notificationService->notifyUser(
+                userId: (int) $order->customer_id,
+                workspace: 'customer',
+                type: 'order_delivered',
+                title: "Order {$order->order_reference} delivered",
+                body: "Your order from {$order->restaurant_name} has been delivered by {$riderFirstName}.",
+                relatedEntityType: 'order',
+                relatedEntityId: $orderId,
             );
         });
 

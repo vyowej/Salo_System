@@ -16,6 +16,7 @@ import { buildProfileMenuItems, ROLE_META } from '../config/navigationConfig';
 import { MOBILE_PRIMARY_NAV_KEYS } from '../features/rider/constants/riderConstants';
 import riderService from '../services/riderService';
 import RoleOnboardingModal from '../components/onboarding/RoleOnboardingModal';
+import RiderNotificationsMenu from '../features/rider/components/RiderNotificationsMenu';
 import { useRoleOnboarding } from '../hooks/useRoleOnboarding';
 import '../components/navigation/NavigationShell.css';
 import './RiderLayout.css';
@@ -131,7 +132,6 @@ export default function RiderLayout({ children }) {
 
   const primaryNavItems = items.filter((item) => MOBILE_PRIMARY_NAV_KEYS.includes(item.id));
   const moreNavItems = items.filter((item) => !MOBILE_PRIMARY_NAV_KEYS.includes(item.id));
-  const unreadNotifications = Number(dashboard?.unread_notifications || 0);
 
   const displayName = user?.name || dashboard?.rider?.name || user?.username || 'Rider';
   const displayEmail = user?.email || dashboard?.rider?.email || '';
@@ -156,9 +156,7 @@ export default function RiderLayout({ children }) {
         <TopBar
           mobileMenuOpen={mobileOpen}
           onMenuToggle={() => setMobileOpen((value) => !value)}
-          showNotifications
-          notificationCount={unreadNotifications}
-          notificationsHref="/rider/notifications"
+          notificationsSlot={<RiderNotificationsMenu />}
           roleLabel={ROLE_META.rider.label}
           roleTone={ROLE_META.rider.tone}
           showThemeToggle

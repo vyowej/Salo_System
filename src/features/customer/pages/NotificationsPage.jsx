@@ -1,24 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import Button from '../../../components/common/Button';
 import { StateView } from '../../../components/feedback';
-import { getNotificationTarget } from '../../../utils/format';
-import customerService from '../../../services/customerService';
+import { useWorkspaceNotifications } from '../../../hooks/useWorkspaceNotifications';
+import { formatDateTimeManila } from '../../../utils/format';
+import { getNotificationRoute } from '../../../utils/notificationUtils';
 import './NotificationsPage.css';
 
-const TYPE_LABELS = {
-  order: 'Order update',
-  reservation: 'Reservation',
-  invitation: 'Invitation',
-  promo: 'Promotion',
-  account: 'Account',
-  system: 'System',
-};
-
 function getDateBucket(notification) {
-  if (notification.createdAt) {
-    const dt = new Date(notification.createdAt);
+  const created = notification?.created_at;
+  if (created) {
+    const dt = new Date(created);
     if (!Number.isNaN(dt.getTime())) {
       const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' });
       const todayKey = fmt.format(new Date());
@@ -29,53 +22,56 @@ function getDateBucket(notification) {
       return 'Earlier';
     }
   }
-  const timeText = String(notification.time || '').toLowerCase();
-  if (timeText.includes('today') || timeText.includes('minute') || timeText.includes('hour')) return 'Today';
-  if (timeText.includes('yesterday')) return 'Yesterday';
   return 'Earlier';
 }
 
 export default function NotificationsPage() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    const sync = () => {
-      try {
-        setNotifications(customerService.getNotifications());
-      } catch {
-        setNotifications([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    sync();
-    window.addEventListener('salo:notificationsUpdated', sync);
-    return () => {
-      window.removeEventListener('salo:notificationsUpdated', sync);
-    };
-  }, []);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
-  const visible = useMemo(
-    () => (filter === 'unread' ? notifications.filter((n) => !n.read) : notifications),
-    [notifications, filter],
-  );
+  const {
+    items: notifications,
+    pagination,
+    workspaceUnreadCount,
+    loading,
+    error,
+    markingAll,
+    refresh,
+    markAsRead,
+    markAllAsRead,
+  } = useWorkspaceNotifications({
+    workspace: 'customer',
+    unreadOnly: filter === 'unread',
+    page,
+    perPage: 20,
+  });
 
   const grouped = useMemo(() => {
     const buckets = { Today: [], Yesterday: [], Earlier: [] };
-    visible.forEach((item) => {
+    notifications.forEach((item) => {
       buckets[getDateBucket(item)].push(item);
     });
     return ['Today', 'Yesterday', 'Earlier']
       .filter((key) => buckets[key].length > 0)
       .map((key) => ({ label: key, items: buckets[key] }));
-  }, [visible]);
+  }, [notifications]);
 
-  const handleCardClick = (notification) => {
-    navigate(getNotificationTarget(notification));
+  const handleFilterChange = (nextFilter) => {
+    if (nextFilter === filter) return;
+    setFilter(nextFilter);
+    setPage(1);
+  };
+
+  const handleCardClick = async (notification) => {
+    if (!notification.is_read) {
+      try {
+        await markAsRead(notification.id);
+      } catch {
+        // Proceed with navigation even if mark-read fails transiently.
+      }
+    }
+    navigate(getNotificationRoute(notification));
   };
 
   return (
@@ -88,41 +84,53 @@ export default function NotificationsPage() {
               role="tab"
               aria-selected={filter === 'all'}
               className={`customer-notifications-tab ${filter === 'all' ? 'active' : ''}`}
-              onClick={() => setFilter('all')}
+              onClick={() => handleFilterChange('all')}
             >
-              All ({notifications.length})
+              All{filter === 'all' ? ` (${pagination.total})` : ''}
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={filter === 'unread'}
               className={`customer-notifications-tab ${filter === 'unread' ? 'active' : ''}`}
-              onClick={() => setFilter('unread')}
+              onClick={() => handleFilterChange('unread')}
             >
-              Unread ({unreadCount})
+              Unread ({workspaceUnreadCount})
             </button>
           </div>
 
-          {notifications.length > 0 && (
+          {workspaceUnreadCount > 0 && (
             <div className="customer-notifications-actions">
               <Button
                 variant="outline"
                 size="sm"
-                disabled
+                disabled={markingAll}
+                onClick={() => markAllAsRead()}
               >
-                Mark all as read
+                {markingAll ? 'Marking…' : 'Mark all as read'}
               </Button>
             </div>
           )}
         </div>
 
-        {loading ? (
+        {loading && notifications.length === 0 ? (
           <StateView state="loading" title="Loading notifications..." />
-        ) : visible.length === 0 ? (
+        ) : error ? (
+          <StateView
+            state="error"
+            title="Unable to load notifications"
+            description={error.message || 'Please check your connection and try again.'}
+            action={(
+              <Button variant="primary" size="sm" onClick={() => refresh()}>
+                Retry
+              </Button>
+            )}
+          />
+        ) : notifications.length === 0 ? (
           <StateView
             state="empty"
             title={filter === 'unread' ? 'No unread notifications' : "You're all caught up"}
-            description="New order updates, reservation alerts, invitations, and promos will appear here."
+            description="New order updates, staff invitations, and application updates will appear here."
             action={(
               <Link to="/customer" style={{ textDecoration: 'none' }}>
                 <Button variant="primary" size="sm">Back to explore</Button>
@@ -130,33 +138,61 @@ export default function NotificationsPage() {
             )}
           />
         ) : (
-          grouped.map((group) => (
-            <section className="customer-notifications-group" key={group.label}>
-              <h2 className="customer-notifications-group-title">{group.label}</h2>
-              {group.items.map((notification) => (
-                <article
-                  key={notification.id}
-                  className={`customer-notifications-card ${notification.read ? '' : 'unread'}`.trim()}
-                  onClick={() => handleCardClick(notification)}
-                >
-                  <div className="customer-notifications-card-main">
-                    <div className="customer-notifications-card-meta">
-                      <span className="customer-notifications-type">
-                        {TYPE_LABELS[notification.type] || 'Notice'}
-                      </span>
-                      {!notification.read && <span className="customer-notifications-dot" aria-label="Unread" />}
+          <>
+            {grouped.map((group) => (
+              <section className="customer-notifications-group" key={group.label}>
+                <h2 className="customer-notifications-group-title">{group.label}</h2>
+                {group.items.map((notification) => (
+                  <article
+                    key={notification.id}
+                    className={`customer-notifications-card ${notification.is_read ? '' : 'unread'}`.trim()}
+                    onClick={() => handleCardClick(notification)}
+                  >
+                    <div className="customer-notifications-card-main">
+                      <div className="customer-notifications-card-meta">
+                        <span className="customer-notifications-type">
+                          {notification.categoryLabel}
+                        </span>
+                        {!notification.is_read && <span className="customer-notifications-dot" aria-label="Unread" />}
+                      </div>
+                      <h3>{notification.title}</h3>
+                      <p>{notification.body}</p>
                     </div>
-                    <h3>{notification.title}</h3>
-                    <p>{notification.description}</p>
-                  </div>
 
-                  <div className="customer-notifications-card-side">
-                    <span className="customer-notifications-time">{notification.time}</span>
-                  </div>
-                </article>
-              ))}
-            </section>
-          ))
+                    <div className="customer-notifications-card-side">
+                      <span className="customer-notifications-time">
+                        {formatDateTimeManila(notification.created_at)}
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </section>
+            ))}
+
+            {pagination.last_page > 1 && (
+              <div className="customer-notifications-toolbar" style={{ marginTop: 16 }}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.current_page <= 1 || loading}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <span className="customer-notifications-time">
+                  Page {pagination.current_page} of {pagination.last_page}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.current_page >= pagination.last_page || loading}
+                  onClick={() => setPage((p) => Math.min(pagination.last_page, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </CustomerLayout>

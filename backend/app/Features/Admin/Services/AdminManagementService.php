@@ -2,6 +2,7 @@
 
 namespace App\Features\Admin\Services;
 
+use App\Features\Notifications\Services\NotificationService;
 use App\Models\User;
 use App\Support\AuditLogService;
 use Illuminate\Http\Request;
@@ -12,6 +13,7 @@ class AdminManagementService
 {
     public function __construct(
         private readonly AuditLogService $auditLogService,
+        private readonly NotificationService $notificationService,
     ) {}
 
     /**
@@ -407,6 +409,16 @@ class AdminManagementService
                 oldValues: ['rider_status' => 'approved'],
                 newValues: ['rider_status' => 'active'],
                 request: $request,
+            );
+
+            $this->notificationService->notifyUser(
+                userId: (int) $rider->user_id,
+                workspace: 'rider',
+                type: 'rider_activated',
+                title: 'Rider account activated',
+                body: 'Your rider account has been activated. You can now go online and accept deliveries.',
+                relatedEntityType: 'rider',
+                relatedEntityId: $riderId,
             );
         });
 

@@ -144,8 +144,8 @@ export const locationApiService = {
   },
 
   async getCustomerOrderTracking(orderId) {
-    const res = await apiClient.get(`/customer/orders/${orderId}/tracking`);
-    return res?.data;
+    const res = await apiClient.get(`/customer/orders/${encodeURIComponent(orderId)}/tracking`);
+    return res?.data ?? null;
   },
 
   async getAdminOrderTracking(orderId) {
