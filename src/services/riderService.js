@@ -1,4 +1,5 @@
-import apiClient from './apiClient';
+import apiClient from './apiClient.js';
+import locationApiService from './locationApiService.js';
 
 export const riderService = {
   async getDashboard() {
@@ -19,6 +20,10 @@ export const riderService = {
   async updateAvailability(status) {
     const response = await apiClient.patch('/rider/availability', { status });
     return response?.data?.availability ?? null;
+  },
+
+  async postRiderLocation(payload) {
+    return locationApiService.postRiderLocation(payload);
   },
 
   async getAvailableDeliveries({ page = 1, perPage = 15 } = {}) {

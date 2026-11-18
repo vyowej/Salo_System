@@ -17,6 +17,7 @@ import { MOBILE_PRIMARY_NAV_KEYS } from '../features/rider/constants/riderConsta
 import riderService from '../services/riderService';
 import RoleOnboardingModal from '../components/onboarding/RoleOnboardingModal';
 import RiderNotificationsMenu from '../features/rider/components/RiderNotificationsMenu';
+import useRiderGpsTracker from '../features/rider/hooks/useRiderGpsTracker';
 import { useRoleOnboarding } from '../hooks/useRoleOnboarding';
 import '../components/navigation/NavigationShell.css';
 import './RiderLayout.css';
@@ -98,6 +99,12 @@ export default function RiderLayout({ children }) {
 
   const activePath = location.pathname;
   const riderStatus = user?.rider_profile?.rider_status ?? dashboard?.rider?.rider_status ?? null;
+  const shouldTrackGps = riderStatus === 'active' && (availability === 'online' || Boolean(activeDelivery));
+
+  useRiderGpsTracker({
+    enabled: shouldTrackGps,
+    deliveryId: activeDelivery?.delivery_id ?? null,
+  });
   const isOperationalRoute = [
     '/rider/go-online',
     '/rider/deliveries',

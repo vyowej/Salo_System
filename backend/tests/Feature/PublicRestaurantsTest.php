@@ -20,6 +20,9 @@ class PublicRestaurantsTest extends TestCase
 
     public function test_only_active_restaurants_appear_in_list_and_non_active_return_404(): void
     {
+        // Isolate from persistent QA active restaurants inside the test transaction (rolled back on tearDown).
+        DB::table('restaurants')->where('restaurant_status', 'active')->update(['restaurant_status' => 'inactive']);
+
         [, , , $addressId] = $this->createLocationFixture();
 
         $activeId = $this->createRestaurant($addressId, 'Active Kitchen', 'active');
@@ -199,6 +202,9 @@ class PublicRestaurantsTest extends TestCase
 
     public function test_pagination_search_category_filter_and_like_wildcard_escaping(): void
     {
+        // Isolate from persistent QA active restaurants inside the test transaction (rolled back on tearDown).
+        DB::table('restaurants')->where('restaurant_status', 'active')->update(['restaurant_status' => 'inactive']);
+
         [, , , $addressId] = $this->createLocationFixture();
 
         $catFilipino = DB::table('restaurant_categories')->insertGetId([

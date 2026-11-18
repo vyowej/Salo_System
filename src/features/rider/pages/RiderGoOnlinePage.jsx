@@ -5,8 +5,52 @@ import { Card, CardBody } from '../../../components/common/Card';
 import { StateView as GlobalStateView } from '../../../components/feedback';
 import PageHeader from '../components/PageHeader';
 import riderService from '../../../services/riderService';
-import locationApiService from '../../../services/locationApiService';
 import './RiderGoOnlinePage.css';
+
+function getCurrentPositionAsync(options = { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }) {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      reject(new Error('Geolocation is not supported by your browser. Location access is required to go online.'));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve(position),
+      (geoError) => {
+        if (geoError?.code === 1) {
+          reject(new Error('Location permission was denied. Please allow location access to go online.'));
+          return;
+        }
+        if (geoError?.code === 3) {
+          reject(new Error('Location request timed out. Please check your GPS signal and try again.'));
+          return;
+        }
+        reject(new Error('Unable to determine your current GPS location. Please try again.'));
+      },
+      options,
+    );
+  });
+}
+
+function buildRiderLocationPayload(coords) {
+  const latitude = Number(coords?.latitude);
+  const longitude = Number(coords?.longitude);
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw new Error('Received invalid GPS coordinates. Please try again.');
+  }
+
+  const payload = { latitude, longitude };
+  if (Number.isFinite(coords?.accuracy) && coords.accuracy >= 0) {
+    payload.accuracy_meters = coords.accuracy;
+  }
+  if (Number.isFinite(coords?.heading) && coords.heading >= 0 && coords.heading <= 360) {
+    payload.heading = coords.heading;
+  }
+  if (Number.isFinite(coords?.speed) && coords.speed >= 0) {
+    payload.speed_mps = coords.speed;
+  }
+  return payload;
+}
 
 export default function RiderGoOnlinePage() {
   const [dashboard, setDashboard] = useState(null);
@@ -45,26 +89,20 @@ export default function RiderGoOnlinePage() {
     setError(null);
     setNotice('');
     try {
-      await riderService.updateAvailability(nextStatus);
-      if (nextStatus === 'online' && typeof navigator !== 'undefined' && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            try {
-              await locationApiService.recordRiderLocation({
-                latitude: pos.coords.latitude,
-                longitude: pos.coords.longitude,
-                accuracy: pos.coords.accuracy,
-              });
-            } catch {
-              // Ignore optional location ping failure
-            }
-          },
-          () => {},
-        );
+      if (nextStatus === 'online') {
+        const position = await getCurrentPositionAsync();
+        const locationPayload = buildRiderLocationPayload(position?.coords);
+        await riderService.postRiderLocation(locationPayload);
       }
+
+      await riderService.updateAvailability(nextStatus);
       await load();
       window.dispatchEvent(new Event('salo:riderUpdated'));
-      setNotice(`Status updated to ${nextStatus}.`);
+      setNotice(
+        nextStatus === 'online'
+          ? 'Status updated to online and GPS location recorded.'
+          : 'Status updated to offline.',
+      );
     } catch (err) {
       setError(err?.message || 'Unable to update availability.');
     } finally {

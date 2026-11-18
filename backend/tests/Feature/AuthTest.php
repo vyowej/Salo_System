@@ -642,6 +642,9 @@ class AuthTest extends TestCase
 
     public function test_bootstrap_admin_command_creates_first_admin_and_refuses_second_run(): void
     {
+        // Isolate from persistent QA admin records inside the test transaction (rolled back on tearDown).
+        DB::table('users')->where('user_role', 'admin')->update(['user_role' => 'customer']);
+
         $this->artisan('salo:bootstrap-admin')
             ->expectsQuestion('First name', 'System')
             ->expectsQuestion('Last name', 'Administrator')
