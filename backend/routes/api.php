@@ -4,6 +4,7 @@ use App\Features\Account\Controllers\AccountController;
 use App\Features\Account\Controllers\AccountStaffInvitationController;
 use App\Features\Admin\Controllers\AdminApplicationController;
 use App\Features\Admin\Controllers\AdminManagementController;
+use App\Features\Admin\Controllers\AdminOrderController;
 use App\Features\Applications\Controllers\ApplicationDocumentController;
 use App\Features\Auth\Controllers\AuthController;
 use App\Features\Auth\Controllers\OtpController;
@@ -200,6 +201,7 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::post('/service-areas', [AdminServiceAreaController::class, 'store']);
     Route::patch('/service-areas/{id}', [AdminServiceAreaController::class, 'update'])->whereNumber('id');
     Route::get('/locations/overview', [AdminServiceAreaController::class, 'locationsOverview']);
+    Route::get('/orders', [AdminOrderController::class, 'index']);
     Route::get('/orders/{id}/tracking', [TrackingController::class, 'adminOrderTracking'])->whereNumber('id');
 });
 

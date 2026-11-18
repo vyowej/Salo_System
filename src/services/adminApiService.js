@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import locationApiService from './locationApiService';
 
 function toQueryString(params = {}) {
   const sp = new URLSearchParams();
@@ -100,6 +101,15 @@ export const adminApiService = {
   async getAuditLogs(params = {}) {
     const response = await apiClient.get(`/admin/audit-logs${toQueryString(params)}`);
     return response?.data ?? { items: [], meta: {} };
+  },
+
+  async getOrders(params = {}) {
+    const response = await apiClient.get(`/admin/orders${toQueryString(params)}`);
+    return response?.data ?? { items: [], meta: {} };
+  },
+
+  async getOrderTracking(orderId) {
+    return locationApiService.getAdminOrderTracking(orderId);
   },
 };
 
