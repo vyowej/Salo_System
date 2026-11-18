@@ -47,4 +47,23 @@ class CustomerOrderController extends Controller
             message: 'Order details retrieved.',
         );
     }
+
+    public function cancel(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $order = $this->customerOrderService->cancelOrder(
+            user: $request->user(),
+            orderId: $id,
+            reason: isset($validated['reason']) ? (string) $validated['reason'] : null,
+            request: $request,
+        );
+
+        return ApiResponse::success(
+            data: ['order' => $order],
+            message: 'Order cancelled.',
+        );
+    }
 }

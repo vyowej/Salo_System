@@ -99,6 +99,7 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
     Route::post('/checkout', [CustomerOrderController::class, 'checkout']);
     Route::get('/orders', [CustomerOrderController::class, 'index']);
     Route::get('/orders/{id}', [CustomerOrderController::class, 'show'])->whereNumber('id');
+    Route::post('/orders/{id}/cancel', [CustomerOrderController::class, 'cancel'])->whereNumber('id');
 });
 
 Route::prefix('restaurant')->middleware('auth')->group(function (): void {
@@ -142,6 +143,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::post('/orders/{id}/reject', [RestaurantOrderController::class, 'reject'])->whereNumber('id');
         Route::post('/orders/{id}/prepare', [RestaurantOrderController::class, 'prepare'])->whereNumber('id');
         Route::post('/orders/{id}/ready', [RestaurantOrderController::class, 'ready'])->whereNumber('id');
+        Route::post('/orders/{id}/complete', [RestaurantOrderController::class, 'complete'])->whereNumber('id');
     });
 });
 

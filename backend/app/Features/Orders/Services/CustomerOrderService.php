@@ -2,15 +2,20 @@
 
 namespace App\Features\Orders\Services;
 
+use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
+use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class CustomerOrderService
 {
     public function __construct(
         private readonly FileStorageService $fileStorageService,
+        private readonly AuditLogService $auditLogService,
     ) {}
 
     /**
@@ -41,6 +46,10 @@ class CustomerOrderService
                 'o.total_amount',
                 'o.delivery_address_text',
                 'o.accepted_at',
+                'o.completed_at',
+                'o.cancelled_at',
+                'o.cancelled_by',
+                'o.cancellation_reason',
                 'o.rejection_reason',
                 'o.rejected_at',
                 'o.placed_at',
@@ -92,10 +101,15 @@ class CustomerOrderService
                 'total_quantity' => (int) ($counts->total_qty ?? 0),
                 'payment_method' => $payment?->payment_method === 'cash' ? 'cod' : ($payment?->payment_method ?? 'cod'),
                 'payment_status' => $payment?->payment_status ?? 'pending',
-                'accepted_at' => $row->accepted_at,
+                'paid_at' => OrderTimestampFormatter::toManilaIso($payment?->paid_at),
+                'accepted_at' => OrderTimestampFormatter::toManilaIso($row->accepted_at),
+                'completed_at' => OrderTimestampFormatter::toManilaIso($row->completed_at),
+                'cancelled_at' => OrderTimestampFormatter::toManilaIso($row->cancelled_at),
+                'cancelled_by' => $row->cancelled_by,
+                'cancellation_reason' => $row->cancellation_reason,
                 'rejection_reason' => $row->rejection_reason,
-                'rejected_at' => $row->rejected_at,
-                'placed_at' => $row->placed_at,
+                'rejected_at' => OrderTimestampFormatter::toManilaIso($row->rejected_at),
+                'placed_at' => OrderTimestampFormatter::toManilaIso($row->placed_at),
             ];
         })->all();
 
@@ -184,13 +198,100 @@ class CustomerOrderService
                 'method' => $payment?->payment_method === 'cash' ? 'cod' : ($payment?->payment_method ?? 'cod'),
                 'status' => $payment?->payment_status ?? 'pending',
                 'amount' => $payment ? (float) $payment->amount : (float) $row->total_amount,
+                'paid_at' => OrderTimestampFormatter::toManilaIso($payment?->paid_at),
             ],
             'items' => $items,
-            'accepted_at' => $row->accepted_at,
+            'accepted_at' => OrderTimestampFormatter::toManilaIso($row->accepted_at),
+            'completed_at' => OrderTimestampFormatter::toManilaIso($row->completed_at),
+            'cancelled_at' => OrderTimestampFormatter::toManilaIso($row->cancelled_at),
+            'cancelled_by' => $row->cancelled_by,
+            'cancellation_reason' => $row->cancellation_reason,
             'rejection_reason' => $row->rejection_reason,
-            'rejected_at' => $row->rejected_at,
-            'placed_at' => $row->placed_at,
+            'rejected_at' => OrderTimestampFormatter::toManilaIso($row->rejected_at),
+            'placed_at' => OrderTimestampFormatter::toManilaIso($row->placed_at),
         ];
+    }
+
+    /**
+     * Cancel a customer's own pending order and cancel its pending COD payment.
+     *
+     * @return array<string, mixed>
+     */
+    public function cancelOrder(User $user, int $orderId, ?string $reason, Request $request): array
+    {
+        $cleanReason = $reason !== null && trim($reason) !== ''
+            ? mb_substr(trim($reason), 0, 255)
+            : null;
+
+        DB::transaction(function () use ($user, $orderId, $cleanReason, $request): void {
+            $order = DB::table('orders')
+                ->where('order_id', $orderId)
+                ->where('customer_id', $user->user_id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $order) {
+                throw new NotFoundHttpException('Order not found.');
+            }
+
+            $currentStatus = (string) $order->order_status;
+            if ($currentStatus !== 'pending') {
+                throw new ConflictHttpException(
+                    "Only pending orders can be cancelled (current status: {$currentStatus})."
+                );
+            }
+
+            $now = now();
+            DB::table('orders')
+                ->where('order_id', $orderId)
+                ->update([
+                    'order_status' => 'cancelled',
+                    'cancelled_at' => $now,
+                    'cancelled_by' => 'customer',
+                    'cancellation_reason' => $cleanReason,
+                    'updated_at' => $now,
+                ]);
+
+            $oldAuditValues = ['order_status' => $currentStatus];
+            $newAuditValues = ['order_status' => 'cancelled'];
+
+            $codPayment = DB::table('payment_allocations as pa')
+                ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
+                ->where('pa.order_id', $orderId)
+                ->where('pa.allocation_type', 'order_payment')
+                ->where('p.payment_method', 'cash')
+                ->where('p.payment_status', 'pending')
+                ->lockForUpdate()
+                ->select(['p.payment_id', 'p.payment_status'])
+                ->first();
+
+            if ($codPayment) {
+                DB::table('payments')
+                    ->where('payment_id', $codPayment->payment_id)
+                    ->where('payment_method', 'cash')
+                    ->where('payment_status', 'pending')
+                    ->update([
+                        'payment_status' => 'cancelled',
+                        'updated_at' => $now,
+                    ]);
+
+                $oldAuditValues['payment_status'] = (string) $codPayment->payment_status;
+                $newAuditValues['payment_status'] = 'cancelled';
+            }
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: 'customer_order_cancelled',
+                entityType: 'orders',
+                entityId: $orderId,
+                oldValues: $oldAuditValues,
+                newValues: $newAuditValues,
+                reason: $cleanReason,
+                request: $request,
+            );
+        });
+
+        return $this->getOrderDetail($user, $orderId);
     }
 
     /**
@@ -213,6 +314,7 @@ class CustomerOrderService
                 'p.payment_method',
                 'p.payment_status',
                 'p.amount',
+                'p.paid_at',
             ])
             ->get()
             ->keyBy('order_id');

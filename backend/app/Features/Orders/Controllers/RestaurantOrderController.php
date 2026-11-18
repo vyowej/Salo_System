@@ -69,6 +69,11 @@ class RestaurantOrderController extends Controller
         return $this->handleTransition($request, $id, 'ready', 'Order marked as ready.');
     }
 
+    public function complete(Request $request, int $id): JsonResponse
+    {
+        return $this->handleTransition($request, $id, 'complete', 'Pickup order completed.');
+    }
+
     private function handleTransition(Request $request, int $id, string $action, string $message): JsonResponse
     {
         $order = $this->restaurantOrderService->transitionStatus(

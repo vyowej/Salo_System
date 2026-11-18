@@ -7,6 +7,11 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import { StateView } from '../../../components/feedback';
 import { formatDateTimeManila, formatPeso, formatShortOrderId } from '../../../utils/format';
+import {
+  buildOrderTimelineSteps,
+  formatOrderStatusText,
+  formatPaymentStatusLabel,
+} from '../utils/orderTimeline';
 import './OrdersPage.css';
 
 const TABS = [
@@ -19,22 +24,6 @@ const TABS = [
 const COMPLETED_STATUSES = new Set(['delivered', 'completed', 'picked up']);
 const CANCELLED_STATUSES = new Set(['cancelled', 'rejected', 'failed']);
 const PAGE_SIZE = 10;
-
-const STATUS_LABELS = {
-  pending: 'Pending',
-  accepted: 'Accepted',
-  preparing: 'Preparing',
-  ready: 'Ready',
-  rejected: 'Rejected',
-  out_for_delivery: 'Out for Delivery',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-};
-
-function formatStatusLabel(status) {
-  const key = String(status || '').trim().toLowerCase();
-  return STATUS_LABELS[key] || status || 'Pending';
-}
 
 function getOrderBucket(status) {
   const norm = String(status || '').trim().toLowerCase();
@@ -100,13 +89,20 @@ export default function OrdersPage() {
           id: String(o.order_id),
           orderReference: o.order_reference,
           overallStatus: o.order_status,
+          fulfillment: o.fulfillment,
           rejectionReason: o.rejection_reason ?? null,
+          cancellationReason: o.cancellation_reason ?? null,
           createdAt: o.placed_at,
+          acceptedAt: o.accepted_at ?? null,
+          completedAt: o.completed_at ?? null,
+          cancelledAt: o.cancelled_at ?? null,
+          rejectedAt: o.rejected_at ?? null,
           grandTotal: Number(o.total_amount ?? 0),
           totalAmount: Number(o.total_amount ?? 0),
           fulfillmentSummary: o.fulfillment === 'delivery' ? 'Delivery' : 'Pickup',
           paymentMethod: o.payment_method,
           paymentStatus: o.payment_status,
+          paidAt: o.paid_at ?? null,
           subOrders: [
             {
               restaurantId: String(o.restaurant_id),
@@ -255,7 +251,7 @@ export default function OrdersPage() {
                         size="sm"
                         icon={<StatusIcon bucket={bucket} />}
                       >
-                        {formatStatusLabel(order.overallStatus)}
+                        {formatOrderStatusText(order.overallStatus, order.fulfillment)}
                       </Badge>
                       {isCancelRequested && (
                         <span className="customer-order-card__warn-chip">
@@ -268,10 +264,39 @@ export default function OrdersPage() {
                     </p>
                   </div>
 
-                  {/* Row 2: date/time + payment method */}
+                  {/* Row 2: date/time + payment method & separate payment status */}
                   <p className="customer-order-card__meta">
-                    {formatDateTimeManila(order.createdAt)} · {order.paymentMethod || 'Cash on Delivery'}
+                    {formatDateTimeManila(order.createdAt)} · {order.fulfillmentSummary} · Payment: {formatPaymentStatusLabel(order.paymentStatus)}
                   </p>
+                  <div
+                    aria-label="Order status timeline"
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '6px 10px',
+                      margin: '6px 0 8px',
+                      fontSize: '11px',
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
+                    {buildOrderTimelineSteps(order).map((step, sIdx, arr) => (
+                      <span
+                        key={step.key}
+                        style={{
+                          fontWeight: step.current ? 700 : 500,
+                          color: step.variant === 'error'
+                            ? 'var(--status-error-text)'
+                            : step.reached
+                              ? 'var(--text-primary)'
+                              : 'var(--text-muted)',
+                        }}
+                      >
+                        {step.reached ? '✓ ' : ''}{step.label}
+                        {step.timestamp ? ` (${formatDateTimeManila(step.timestamp)})` : ''}
+                        {sIdx < arr.length - 1 ? ' →' : ''}
+                      </span>
+                    ))}
+                  </div>
                   {order.rejectionReason && (
                     <p style={{ margin: '4px 0 8px', fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)' }}>
                       Rejection reason: {order.rejectionReason}

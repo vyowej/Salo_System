@@ -9,6 +9,7 @@ All endpoints require `auth` middleware.
 | `POST` | `/api/customer/checkout` | Validate cart groups, compute totals on the backend, and create checkout + per-restaurant orders + COD payments in one transaction. |
 | `GET` | `/api/customer/orders` | Paginated list of the authenticated customer's orders (`page`, `per_page`, optional `status`), newest first. |
 | `GET` | `/api/customer/orders/{id}` | Order detail with item snapshots, fee, subtotal, total, address snapshot, payment status, and restaurant logo URL. Returns `404` if not owned by the user. |
+| `POST` | `/api/customer/orders/{id}/cancel` | Cancel the customer's own `pending` order (optional `reason`), set `cancelled_at` / `cancelled_by = 'customer'`, cancel its pending cash payment, and write an audit log. Returns `409` if not pending or `404` if not owned by the user. |
 
 ---
 
@@ -56,6 +57,6 @@ Client-sent prices or totals are ignored.
 - **Partial checkout handling:** Currently all-or-nothing; whether a user should be able to check out valid restaurant groups while skipping invalid ones is an open decision.
 - **Scheduled orders:** Not supported in Step 8a; orders require the restaurant to be open now.
 - **Open-hours enforcement:** Currently both `accepting_orders` and `operating_hours` (`AvailabilityService`) are enforced at checkout.
-- **Customer cancellation:** Out of scope for Step 8a.
-- **Owners ordering from their own restaurant:** Currently permitted like any customer; self-order restriction policy is undefined.
+- **Customer cancellation:** Implemented in Step 9a via `POST /api/customer/orders/{id}/cancel` for `pending` orders only (see [ORDER_COMPLETION.md](./ORDER_COMPLETION.md)).
+- **Self-order restriction:** Implemented in Step 8b follow-up — owners (`restaurant_owners`) and active staff (`restaurant_staff`) cannot check out from their own restaurant (see [RESTAURANT_ORDERS.md](./RESTAURANT_ORDERS.md)).
 - **Delivery fee formula:** Currently a flat configurable placeholder (`SALO_FLAT_DELIVERY_FEE=49.00`) per delivery sub-order; distance/zone-based fees are future work.

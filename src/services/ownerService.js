@@ -20,6 +20,7 @@ function normalizeRestaurantOrder(raw) {
     : (raw.delivery_notes ?? null);
   const paymentMethod = raw.payment?.method ?? raw.payment_method ?? 'cod';
   const paymentStatus = raw.payment?.status ?? raw.payment_status ?? 'pending';
+  const paidAt = raw.payment?.paid_at ?? raw.paid_at ?? null;
 
   return {
     id: raw.order_id ?? raw.id,
@@ -37,8 +38,13 @@ function normalizeRestaurantOrder(raw) {
     total: Number(raw.total_amount ?? raw.total ?? 0),
     paymentMethod,
     paymentStatus,
+    paidAt,
     rejectionReason: raw.rejection_reason ?? null,
     acceptedAt: raw.accepted_at ?? null,
+    completedAt: raw.completed_at ?? null,
+    cancelledAt: raw.cancelled_at ?? null,
+    cancelledBy: raw.cancelled_by ?? null,
+    cancellationReason: raw.cancellation_reason ?? null,
     rejectedAt: raw.rejected_at ?? null,
     createdAt: raw.placed_at ?? raw.created_at ?? null,
     items: Array.isArray(raw.items)
@@ -285,6 +291,12 @@ export const ownerService = {
   async readyOrder(orderId, restaurantId = null) {
     const qs = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
     const res = await apiClient.post(`/restaurant/orders/${encodeURIComponent(orderId)}/ready${qs}`, {});
+    return normalizeRestaurantOrder(res?.data?.order ?? null);
+  },
+
+  async completeOrder(orderId, restaurantId = null) {
+    const qs = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.post(`/restaurant/orders/${encodeURIComponent(orderId)}/complete${qs}`, {});
     return normalizeRestaurantOrder(res?.data?.order ?? null);
   },
 

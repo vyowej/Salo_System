@@ -3,45 +3,22 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
 import customerService from '../../../services/customerService';
-import locationApiService from '../../../services/locationApiService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
-import MapSlot from '../../../components/common/MapSlot';
-import { formatShortOrderId, formatPeso } from '../../../utils/format';
+import { formatDateTimeManila, formatShortOrderId, formatPeso } from '../../../utils/format';
+import {
+  buildOrderTimelineSteps,
+  canCustomerCancelOrder,
+  formatOrderStatusText,
+  formatPaymentStatusLabel,
+  normalizeOrderStatusKey,
+} from '../utils/orderTimeline';
 import './CustomerRecords.css';
-
-const DELIVERY_STEPS = ['Pending', 'Accepted', 'Preparing', 'Ready for Dispatch', 'Out for Delivery', 'Completed'];
-const PICKUP_STEPS = ['Pending', 'Accepted', 'Preparing', 'Ready for Pickup', 'Completed'];
-
-const DROPOFF_PREFERENCES = [
-  { id: 'meet', label: '🤝 Meet at door', note: 'Hand order directly to me at the entrance.' },
-  { id: 'lobby', label: '🏢 Leave at lobby / guard', note: 'Leave with building reception or security desk.' },
-  { id: 'silent', label: '🔕 Leave at door (No bell)', note: 'Place by the door and send a photo.' },
-];
-
-const QUICK_RIDER_MESSAGES = [
-  'Please leave at the lobby desk',
-  'I am waiting outside',
-  'Please call when you arrive',
-];
 
 function isUpcomingOrder(order) {
   const norm = String(order?.overallStatus || '').trim().toLowerCase();
   return !['delivered', 'completed', 'picked up', 'cancelled', 'rejected', 'failed'].includes(norm);
-}
-
-function formatBackendStatus(status, fulfillment) {
-  const key = String(status || '').trim().toLowerCase();
-  if (key === 'pending' || key === 'pending confirmation') return 'Pending';
-  if (key === 'accepted') return 'Accepted';
-  if (key === 'preparing') return 'Preparing';
-  if (key === 'ready') return fulfillment === 'pickup' ? 'Ready for Pickup' : 'Ready for Dispatch';
-  if (key === 'rejected') return 'Rejected';
-  if (key === 'out_for_delivery' || key === 'out for delivery') return 'Out for Delivery';
-  if (key === 'completed') return 'Completed';
-  if (key === 'cancelled') return 'Cancelled';
-  return status || 'Pending';
 }
 
 export default function OrderDetailPage() {
@@ -50,64 +27,71 @@ export default function OrderDetailPage() {
   const { addItem, setRestaurantFulfillment, setRestaurantAddress } = useCart();
 
   const [allOrders, setAllOrders] = useState([]);
-  const [restaurants, setRestaurants] = useState([]);
   const [selectedSubIdx, setSelectedSubIdx] = useState(0);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
-  const [cancelReason, setCancelReason] = useState('Change of mind');
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
-  const [dropoffPref, setDropoffPref] = useState('meet');
-  const [sentMessage, setSentMessage] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
   const [lookupQuery, setLookupQuery] = useState('');
-  const [liveTracking, setLiveTracking] = useState(null);
 
   const [order, setOrder] = useState(null);
   const [orderLoading, setOrderLoading] = useState(true);
   const [orderError, setOrderError] = useState('');
 
+  const mapBackendOrder = (raw) => ({
+    id: String(raw.order_id),
+    orderReference: raw.order_reference,
+    overallStatus: raw.order_status || 'pending',
+    fulfillment: raw.fulfillment || 'delivery',
+    rejectionReason: raw.rejection_reason ?? null,
+    cancellationReason: raw.cancellation_reason ?? null,
+    cancelledBy: raw.cancelled_by ?? null,
+    createdAt: raw.placed_at ?? null,
+    acceptedAt: raw.accepted_at ?? null,
+    completedAt: raw.completed_at ?? null,
+    cancelledAt: raw.cancelled_at ?? null,
+    rejectedAt: raw.rejected_at ?? null,
+    grandTotal: Number(raw.total_amount ?? 0),
+    totalAmount: Number(raw.total_amount ?? 0),
+    paymentMethod: raw.payment?.method || 'cod',
+    paymentStatus: raw.payment?.status || 'pending',
+    paidAt: raw.payment?.paid_at ?? null,
+    subOrders: [
+      {
+        restaurantId: String(raw.restaurant_id),
+        restaurantName: raw.restaurant_name,
+        restaurantLogoUrl: raw.restaurant_logo_url,
+        fulfillment: raw.fulfillment,
+        status: raw.order_status || 'pending',
+        rejectionReason: raw.rejection_reason ?? null,
+        cancellationReason: raw.cancellation_reason ?? null,
+        subtotal: Number(raw.subtotal_amount ?? 0),
+        deliveryFee: Number(raw.delivery_fee ?? 0),
+        total: Number(raw.total_amount ?? 0),
+        deliveryAddress: raw.delivery_address
+          ? {
+              recipientName: raw.delivery_address.recipient_name,
+              phone: raw.delivery_address.phone,
+              addressText: raw.delivery_address.address_text,
+              notes: raw.delivery_address.notes,
+            }
+          : null,
+        items: (raw.items || []).map((it) => ({
+          id: String(it.menu_item_id || it.order_item_id),
+          name: it.item_name,
+          qty: Number(it.quantity),
+          price: Number(it.unit_price),
+          lineTotal: Number(it.line_total),
+        })),
+      },
+    ],
+  });
+
   useEffect(() => {
     let active = true;
     setOrderLoading(true);
     setOrderError('');
-
-    const mapBackendOrder = (raw) => ({
-      id: String(raw.order_id),
-      orderReference: raw.order_reference,
-      overallStatus: raw.order_status || 'pending',
-      rejectionReason: raw.rejection_reason ?? null,
-      createdAt: raw.placed_at,
-      grandTotal: Number(raw.total_amount ?? 0),
-      paymentMethod: raw.payment?.method || 'cod',
-      paymentStatus: raw.payment?.status || 'pending',
-      subOrders: [
-        {
-          restaurantId: String(raw.restaurant_id),
-          restaurantName: raw.restaurant_name,
-          restaurantLogoUrl: raw.restaurant_logo_url,
-          fulfillment: raw.fulfillment,
-          status: raw.order_status || 'pending',
-          rejectionReason: raw.rejection_reason ?? null,
-          subtotal: Number(raw.subtotal_amount ?? 0),
-          deliveryFee: Number(raw.delivery_fee ?? 0),
-          total: Number(raw.total_amount ?? 0),
-          deliveryAddress: raw.delivery_address
-            ? {
-                recipientName: raw.delivery_address.recipient_name,
-                phone: raw.delivery_address.phone,
-                addressText: raw.delivery_address.address_text,
-                notes: raw.delivery_address.notes,
-              }
-            : null,
-          items: (raw.items || []).map((it) => ({
-            id: String(it.menu_item_id || it.order_item_id),
-            name: it.item_name,
-            qty: Number(it.quantity),
-            price: Number(it.unit_price),
-            lineTotal: Number(it.line_total),
-          })),
-        },
-      ],
-    });
 
     (async () => {
       try {
@@ -135,9 +119,6 @@ export default function OrderDetailPage() {
         const raw = await customerService.fetchOrderDetail(targetId);
         if (!active) return;
         setOrder(raw ? mapBackendOrder(raw) : null);
-
-        const rests = await customerService.getRestaurants().catch(() => []);
-        if (active) setRestaurants(rests);
       } catch (err) {
         if (active) {
           setOrder(null);
@@ -164,39 +145,8 @@ export default function OrderDetailPage() {
   const subOrders = order?.subOrders || [];
   const safeSubIdx = subOrders[selectedSubIdx] ? selectedSubIdx : 0;
   const activeSub = subOrders[safeSubIdx] || subOrders[0] || null;
-  const secondarySub = subOrders.length > 1 ? subOrders.find((_, idx) => idx !== safeSubIdx) : null;
 
-  const matchedRestaurant = useMemo(
-    () => restaurants.find((r) => r.id === activeSub?.restaurantId || r.name === activeSub?.restaurantName),
-    [restaurants, activeSub],
-  );
-
-  useEffect(() => {
-    const numericOrderId = Number(order?.backendOrderId || order?.order_id || (/^\d+$/.test(String(order?.id || '')) ? order.id : 0));
-    if (!numericOrderId || !isUpcomingOrder(order)) {
-      setLiveTracking(null);
-      return undefined;
-    }
-
-    let cancelled = false;
-    const fetchTracking = async () => {
-      try {
-        const data = await locationApiService.getCustomerOrderTracking(numericOrderId);
-        if (!cancelled && data) setLiveTracking(data);
-      } catch {
-        // Fallback gracefully to order snapshot coordinates if backend order is local demo
-      }
-    };
-
-    fetchTracking();
-    const timer = setInterval(fetchTracking, 10000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [order]);
-
-  // Standby / Direct Track My Order Map View when no upcoming orders exist
+  // Standby / Direct Track View when no upcoming orders exist
   if (!order && id === 'track') {
     const filteredLookupOrders = lookupQuery.trim()
       ? allOrders.filter(
@@ -208,176 +158,71 @@ export default function OrderDetailPage() {
         )
       : allOrders.slice(0, 3);
 
-    const previewKitchen = restaurants[0] || {
-      name: 'Dalisay Heritage Grill & Bistro',
-      address: '42 Scout Gandia St., Tomas Morato, Quezon City',
-      deliveryTime: '25–35 min',
-    };
-    const previewSecondaryKitchen = restaurants[1] || {
-      name: 'Manila Artisan Pizza & Pasta',
-      address: 'High Street South Block, BGC, Taguig City',
-    };
-    const customerAddressText = defaultAddress
-      ? `${defaultAddress.street}, ${defaultAddress.barangay}, ${defaultAddress.city}`
-      : 'Office · Taguig City (BGC)';
-
     return (
       <CustomerLayout>
-        <div className="customer-track-layout">
-          {/* Left Column: Customer Standby Tracker & Order Lookup */}
-          <aside className="customer-track-sidebar">
-            <div className="customer-track-panel">
-              <div className="customer-track-header">
-                <div className="customer-track-header__left">
-                  <Link to="/customer" className="customer-track-back-btn" aria-label="Back to home" title="Back to home">
-                    ←
-                  </Link>
-                  <div>
-                    <span className="customer-track-eyebrow">Customer Map Tracker</span>
-                    <h1 className="customer-track-title">Track My Order</h1>
-                  </div>
-                </div>
-                <Badge variant="default" size="sm" dot>
-                  Standby
-                </Badge>
-              </div>
-
-              <div className="customer-track-status-banner is-standby">
-                <strong>No upcoming orders in transit right now</strong>
-                <span>Your delivery zone map is ready. Place an order or look up a previous order below.</span>
-              </div>
-
-              {/* Delivery Pin & Drop-off Preference */}
-              <div className="customer-track-section">
-                <div className="customer-track-section__head">
-                  <span>Your Delivery Pin</span>
-                  <Link to="/customer/addresses" className="customer-track-inline-link">
-                    Change address
-                  </Link>
-                </div>
-                <div className="customer-track-route-card is-home">
-                  <span className="customer-track-route-icon" aria-hidden="true">🏠</span>
-                  <div>
-                    <strong>{defaultAddress?.label || 'Saved Delivery Address'}</strong>
-                    <p>{customerAddressText}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="customer-track-section">
-                <span className="customer-track-section__label">Default Drop-off Preference</span>
-                <div className="customer-track-pref-list">
-                  {DROPOFF_PREFERENCES.map((pref) => (
-                    <button
-                      key={pref.id}
-                      type="button"
-                      className={`customer-track-pref-btn ${dropoffPref === pref.id ? 'is-active' : ''}`}
-                      onClick={() => setDropoffPref(pref.id)}
-                    >
-                      <strong>{pref.label}</strong>
-                      <small>{pref.note}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Order Lookup */}
-              <div className="customer-track-section">
-                <span className="customer-track-section__label">Look Up an Order</span>
-                <input
-                  type="search"
-                  className="customer-track-lookup-input"
-                  placeholder="Enter Order ID (e.g. ORD-9821) or restaurant..."
-                  value={lookupQuery}
-                  onChange={(e) => setLookupQuery(e.target.value)}
-                />
-                {filteredLookupOrders.length > 0 ? (
-                  <div className="customer-track-lookup-list">
-                    {filteredLookupOrders.map((pastOrder) => (
-                      <button
-                        key={pastOrder.id}
-                        type="button"
-                        className="customer-track-lookup-item"
-                        onClick={() => navigate(`/customer/orders/${pastOrder.id}`)}
-                      >
-                        <div>
-                          <strong>{formatShortOrderId(pastOrder.id)}</strong>
-                          <span>{(pastOrder.subOrders || []).map((s) => s.restaurantName).join(', ')}</span>
-                        </div>
-                        <Badge variant="default" size="sm">
-                          {pastOrder.overallStatus}
-                        </Badge>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="customer-track-empty-note">
-                    No previous orders found. Start an order from any partner kitchen!
-                  </p>
-                )}
-              </div>
-
-              <div className="customer-track-actions">
-                <Button variant="primary" fullWidth onClick={() => navigate('/customer')}>
-                  Explore Kitchens & Order Now
-                </Button>
-                <Button variant="secondary" fullWidth onClick={() => navigate('/customer/orders')}>
-                  View Full Order History
-                </Button>
+        <div className="customer-track-panel" style={{ maxWidth: 680, margin: '24px auto' }}>
+          <div className="customer-track-header">
+            <div className="customer-track-header__left">
+              <Link to="/customer" className="customer-track-back-btn" aria-label="Back to home" title="Back to home">
+                ←
+              </Link>
+              <div>
+                <span className="customer-track-eyebrow">Customer Order Tracking</span>
+                <h1 className="customer-track-title">Track My Order</h1>
               </div>
             </div>
-          </aside>
+            <Badge variant="default" size="sm" dot>
+              Standby
+            </Badge>
+          </div>
 
-          {/* Right Column: Customer Delivery Coverage Map */}
-          <div className="customer-track-map-column">
-            <div className="customer-track-map-viewport">
-              <MapSlot
-                mode="customer"
-                stage="dropoff"
-                pickup={{
-                  title: previewKitchen.name,
-                  address: previewKitchen.address,
-                  lat: previewKitchen.location?.latitude ?? null,
-                  lng: previewKitchen.location?.longitude ?? null,
-                }}
-                secondaryPickup={{
-                  title: previewSecondaryKitchen.name,
-                  address: previewSecondaryKitchen.address,
-                  lat: previewSecondaryKitchen.location?.latitude ?? null,
-                  lng: previewSecondaryKitchen.location?.longitude ?? null,
-                }}
-                dropoff={{
-                  title: defaultAddress?.label || 'Your Address',
-                  address: customerAddressText,
-                  lat: defaultAddress?.lat ?? defaultAddress?.latitude ?? null,
-                  lng: defaultAddress?.lng ?? defaultAddress?.longitude ?? null,
-                }}
-                riderLocation={null}
-                customerStatusText="No active delivery in transit · Your pinned delivery address is ready"
-                metrics={{
-                  eta: previewKitchen.deliveryTime || '25–35 min',
-                }}
-              />
-            </div>
+          <div className="customer-track-status-banner is-standby">
+            <strong>No active orders right now</strong>
+            <span>Place an order or look up a previous order below.</span>
+          </div>
 
-            <div className="customer-track-checkpoints">
-              <div className="customer-track-checkpoint is-pickup">
-                <div className="customer-track-checkpoint__top">
-                  <span>Nearby Partner Kitchen</span>
-                  <em>Open Now</em>
-                </div>
-                <strong>{previewKitchen.name}</strong>
-                <small>{previewKitchen.address}</small>
+          <div className="customer-track-section">
+            <span className="customer-track-section__label">Look Up an Order</span>
+            <input
+              type="search"
+              className="customer-track-lookup-input"
+              placeholder="Enter Order ID or restaurant..."
+              value={lookupQuery}
+              onChange={(e) => setLookupQuery(e.target.value)}
+            />
+            {filteredLookupOrders.length > 0 ? (
+              <div className="customer-track-lookup-list">
+                {filteredLookupOrders.map((pastOrder) => (
+                  <button
+                    key={pastOrder.id}
+                    type="button"
+                    className="customer-track-lookup-item"
+                    onClick={() => navigate(`/customer/orders/${pastOrder.id}`)}
+                  >
+                    <div>
+                      <strong>{formatShortOrderId(pastOrder.id)}</strong>
+                      <span>{(pastOrder.subOrders || []).map((s) => s.restaurantName).join(', ')}</span>
+                    </div>
+                    <Badge variant="default" size="sm">
+                      {pastOrder.overallStatus}
+                    </Badge>
+                  </button>
+                ))}
               </div>
-              <div className="customer-track-checkpoint is-dropoff is-current">
-                <div className="customer-track-checkpoint__top">
-                  <span>Your Delivery Destination</span>
-                  <em>Pinned Address</em>
-                </div>
-                <strong>{defaultAddress?.label || 'Home / Office'}</strong>
-                <small>{customerAddressText}</small>
-              </div>
-            </div>
+            ) : (
+              <p className="customer-track-empty-note">
+                No previous orders found. Start an order from any partner kitchen!
+              </p>
+            )}
+          </div>
+
+          <div className="customer-track-actions">
+            <Button variant="primary" fullWidth onClick={() => navigate('/customer')}>
+              Explore Kitchens & Order Now
+            </Button>
+            <Button variant="secondary" fullWidth onClick={() => navigate('/customer/orders')}>
+              View Full Order History
+            </Button>
           </div>
         </div>
       </CustomerLayout>
@@ -408,8 +253,22 @@ export default function OrderDetailPage() {
     );
   }
 
-  const handleConfirmCancel = () => {
-    setCancelError('Order cancellation is not available yet. The customer order API is pending backend implementation.');
+  const handleConfirmCancel = async () => {
+    if (isCancelling || !order) return;
+    setIsCancelling(true);
+    setCancelError('');
+    try {
+      const updated = await customerService.cancelOrder(order.id, cancelReason);
+      if (updated) {
+        setOrder(mapBackendOrder(updated));
+      }
+      setCancelModalOpen(false);
+      setCancelReason('');
+    } catch (err) {
+      setCancelError(err?.message || 'Unable to cancel this order.');
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   const handleReorder = () => {
@@ -450,51 +309,40 @@ export default function OrderDetailPage() {
     window.setTimeout(() => setShareCopied(false), 2500);
   };
 
-  const handleQuickRiderMessage = (msg) => {
-    setSentMessage(msg);
-    window.setTimeout(() => setSentMessage(''), 3000);
-  };
-
-  const isCancellable = (order.subOrders || []).some(
-    (sub) =>
-      !['Completed', 'Cancelled', 'Rejected'].includes(sub.status) &&
-      sub.cancellationRequest?.status !== 'requested',
-  );
+  const isCancellable = canCustomerCancelOrder(order);
 
   const subStatus = activeSub?.status || order.overallStatus;
-  const normalizedStatusStep = formatBackendStatus(subStatus, activeSub?.fulfillment);
-  const isOutForDelivery = ['Out for Delivery', 'Ready for Dispatch', 'Completed'].includes(normalizedStatusStep);
-  const steps = activeSub?.fulfillment === 'pickup' ? PICKUP_STEPS : DELIVERY_STEPS;
-  const currentStepIdx = Math.max(steps.indexOf(normalizedStatusStep), 0);
+  const statusKey = normalizeOrderStatusKey(subStatus);
+  const fulfillment = String(activeSub?.fulfillment || order.fulfillment || 'delivery').toLowerCase();
+  const timelineSteps = buildOrderTimelineSteps({
+    ...order,
+    fulfillment,
+    overallStatus: subStatus,
+  });
 
-  const kitchenAddress =
-    matchedRestaurant?.address || '42 Scout Gandia St., Tomas Morato, Quezon City';
   const customerDeliveryAddress =
-    activeSub?.deliveryAddress ||
+    activeSub?.deliveryAddress?.addressText ||
     (defaultAddress
       ? `${defaultAddress.street}, ${defaultAddress.barangay}, ${defaultAddress.city}`
-      : 'Office · Taguig City (BGC)');
-
-  const riderInfo = activeSub?.rider || {
-    name: isOutForDelivery ? 'Kuya Juan Dela Cruz' : 'Rider assigned upon kitchen dispatch',
-    vehicle: isOutForDelivery ? 'Yamaha NMAX (Plate 123-NCR)' : 'Awaiting kitchen handoff',
-    phone: '09191234567',
-    eta: isOutForDelivery ? '12 min away' : matchedRestaurant?.deliveryTime || '25–35 min',
-  };
+      : null);
 
   const customerMapStatusText =
-    normalizedStatusStep === 'Out for Delivery'
-      ? `Rider is on the way with your order from ${activeSub?.restaurantName}`
-      : normalizedStatusStep === 'Ready for Dispatch' || normalizedStatusStep === 'Ready for Pickup'
-        ? `Your order from ${activeSub?.restaurantName} is ready`
-        : normalizedStatusStep === 'Preparing'
-          ? `${activeSub?.restaurantName} is preparing your fresh meal`
-          : normalizedStatusStep === 'Accepted'
-            ? `${activeSub?.restaurantName} accepted your order`
-            : normalizedStatusStep === 'Rejected'
+    statusKey === 'ready'
+      ? fulfillment === 'pickup'
+        ? `Your order from ${activeSub?.restaurantName} is ready for pickup`
+        : `Your order from ${activeSub?.restaurantName} is ready — waiting for rider`
+      : statusKey === 'preparing'
+        ? `${activeSub?.restaurantName} is preparing your meal`
+        : statusKey === 'accepted'
+          ? `${activeSub?.restaurantName} accepted your order`
+          : statusKey === 'completed'
+            ? fulfillment === 'pickup'
+              ? `Order picked up and completed at ${activeSub?.restaurantName}`
+              : 'Order completed'
+            : statusKey === 'rejected'
               ? `Order was rejected by ${activeSub?.restaurantName}`
-              : normalizedStatusStep === 'Completed'
-                ? `Order delivered to ${customerDeliveryAddress}`
+              : statusKey === 'cancelled'
+                ? 'Order cancelled'
                 : `Order received by ${activeSub?.restaurantName} · Awaiting restaurant confirmation`;
 
   return (
@@ -502,16 +350,16 @@ export default function OrderDetailPage() {
       {/* ── Cancel Order Confirmation Modal ─────────────── */}
       <Modal
         open={cancelModalOpen}
-        onClose={() => setCancelModalOpen(false)}
+        onClose={() => !isCancelling && setCancelModalOpen(false)}
         title="Cancel Order"
         size="sm"
         footer={
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-            <Button variant="ghost" size="sm" onClick={() => setCancelModalOpen(false)}>
+            <Button variant="ghost" size="sm" onClick={() => setCancelModalOpen(false)} disabled={isCancelling}>
               Keep Order
             </Button>
-            <Button variant="danger" size="sm" onClick={handleConfirmCancel}>
-              Submit Request
+            <Button variant="danger" size="sm" onClick={handleConfirmCancel} loading={isCancelling} disabled={isCancelling}>
+              Confirm Cancellation
             </Button>
           </div>
         }
@@ -525,24 +373,21 @@ export default function OrderDetailPage() {
               lineHeight: 1.5,
             }}
           >
-            Request cancellation for eligible restaurant sub-orders in Order <strong>#{order.id}</strong>. Each
-            restaurant reviews its own request; this does not immediately cancel the order.
+            Cancel pending Order <strong>{order.orderReference || `#${order.id}`}</strong>? Your pending Cash on Delivery payment will also be cancelled.
           </p>
 
           <label style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, display: 'block', marginBottom: 4 }}>
-            Reason for cancellation
+            Reason (optional)
           </label>
-          <select
+          <input
+            type="text"
             value={cancelReason}
             onChange={(e) => setCancelReason(e.target.value)}
-            className="select"
+            placeholder="e.g. Change of mind"
+            maxLength={255}
+            className="input"
             style={{ width: '100%', height: 38 }}
-          >
-            <option value="Change of mind">Change of mind</option>
-            <option value="Ordered by mistake">Ordered by mistake</option>
-            <option value="Need to change delivery address">Need to change delivery address</option>
-            <option value="Long waiting time">Long waiting time</option>
-          </select>
+          />
         </div>
       </Modal>
 
@@ -603,17 +448,15 @@ export default function OrderDetailPage() {
               </div>
               <Badge
                 variant={
-                  ['Completed'].includes(order.overallStatus)
+                  statusKey === 'completed'
                     ? 'success'
-                    : ['Cancelled', 'Rejected'].includes(order.overallStatus)
+                    : statusKey === 'cancelled' || statusKey === 'rejected'
                       ? 'error'
-                      : order.overallStatus === 'Cancellation Requested'
-                        ? 'warning'
-                        : 'primary'
+                      : 'primary'
                 }
                 dot
               >
-                {order.overallStatus}
+                {formatOrderStatusText(subStatus, fulfillment)}
               </Badge>
             </div>
 
@@ -642,21 +485,11 @@ export default function OrderDetailPage() {
             <div className="customer-track-status-banner">
               <strong>{customerMapStatusText}</strong>
               <span>
-                Placed {order.createdAt} · {order.paymentMethod || 'Cash on Delivery'}
+                Placed {formatDateTimeManila(order.createdAt)} · {fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}
               </span>
             </div>
 
-            {activeSub?.cancellationRequest && (
-              <div role="status" className="customer-order-detail-card__cancellation" style={{ marginBottom: 0 }}>
-                <strong>Cancellation request: {activeSub.cancellationRequest.status}</strong>
-                {activeSub.cancellationRequest.reason && <p>Customer reason: {activeSub.cancellationRequest.reason}</p>}
-                {activeSub.cancellationRequest.resolutionReason && (
-                  <p>Restaurant response: {activeSub.cancellationRequest.resolutionReason}</p>
-                )}
-              </div>
-            )}
-
-            {(normalizedStatusStep === 'Rejected' || activeSub?.rejectionReason || order.rejectionReason) && (
+            {(statusKey === 'rejected' || activeSub?.rejectionReason || order.rejectionReason) && (
               <div
                 className="customer-track-status-banner"
                 role="alert"
@@ -673,84 +506,51 @@ export default function OrderDetailPage() {
               </div>
             )}
 
-            {/* 6-Step Customer Progress Stepper */}
-            {!['Cancelled', 'Rejected'].includes(normalizedStatusStep) && (
-              <ol className="customer-track-steps" aria-label="Order progress">
-                {steps.map((step, sIdx) => {
-                  const isDone = sIdx < currentStepIdx;
-                  const isCurrent = sIdx === currentStepIdx;
-                  return (
-                    <li key={step} className={isDone ? 'is-done' : isCurrent ? 'is-current' : ''}>
-                      <span aria-hidden="true">{isDone ? '✓' : sIdx + 1}</span>
-                      <small>{step === 'Ready for Dispatch' ? 'Ready' : step === 'Out for Delivery' ? 'On Way' : step}</small>
-                    </li>
-                  );
-                })}
-              </ol>
+            {statusKey === 'cancelled' && (
+              <div
+                className="customer-track-status-banner"
+                role="status"
+                style={{
+                  background: 'var(--status-error-bg)',
+                  color: 'var(--status-error-text)',
+                  marginBottom: 14,
+                }}
+              >
+                <strong>Order Cancelled</strong>
+                <span>
+                  {order.cancellationReason
+                    ? `Reason: ${order.cancellationReason}`
+                    : 'This order was cancelled.'}
+                  {order.cancelledAt ? ` · ${formatDateTimeManila(order.cancelledAt)}` : ''}
+                </span>
+              </div>
             )}
 
-            {/* Assigned Rider & Customer Contact Controls */}
-            <div className="customer-track-rider-card">
-              <div className="customer-track-rider-top">
-                <div className="customer-track-rider-avatar" aria-hidden="true">
-                  🛵
-                </div>
-                <div className="customer-track-rider-info">
-                  <span className="customer-track-section__label">Assigned Delivery Rider</span>
-                  <strong>{riderInfo.name}</strong>
-                  <small>
-                    {riderInfo.vehicle} · <em className="customer-track-eta-highlight">{riderInfo.eta}</em>
-                  </small>
-                </div>
-                {riderInfo.phone && riderInfo.phone !== '-' && (
-                  <a
-                    href={`tel:${riderInfo.phone.replace(/[^+\d]/g, '')}`}
-                    className="customer-track-call-btn"
-                    title="Call rider"
-                  >
-                    📞 Call
-                  </a>
-                )}
-              </div>
-
-              <div className="customer-track-quick-msgs">
-                <span className="customer-track-quick-msgs__label">Quick note to rider:</span>
-                <div className="customer-track-quick-msgs__chips">
-                  {QUICK_RIDER_MESSAGES.map((msg) => (
-                    <button
-                      key={msg}
-                      type="button"
-                      className="customer-track-msg-chip"
-                      onClick={() => handleQuickRiderMessage(msg)}
-                    >
-                      💬 {msg}
-                    </button>
-                  ))}
-                </div>
-                {sentMessage && (
-                  <p className="customer-track-msg-feedback" role="status">
-                    ✓ Sent to rider: “{sentMessage}”
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Customer Drop-off Instructions Selector */}
-            <div className="customer-track-section">
-              <span className="customer-track-section__label">Drop-off Handoff Preference</span>
-              <div className="customer-track-pref-pills">
-                {DROPOFF_PREFERENCES.map((pref) => (
-                  <button
-                    key={pref.id}
-                    type="button"
-                    className={`customer-track-pref-pill ${dropoffPref === pref.id ? 'is-active' : ''}`}
-                    onClick={() => setDropoffPref(pref.id)}
-                  >
-                    {pref.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Status Timeline (real timestamps where available; Preparing & Ready shown without timestamps) */}
+            <ol className="customer-track-steps" aria-label="Order status timeline">
+              {timelineSteps.map((step, sIdx) => (
+                <li
+                  key={step.key}
+                  className={
+                    step.variant === 'error'
+                      ? 'is-current'
+                      : step.current
+                        ? 'is-current'
+                        : step.reached
+                          ? 'is-done'
+                          : ''
+                  }
+                >
+                  <span aria-hidden="true">{step.reached ? (step.variant === 'error' ? '✕' : '✓') : sIdx + 1}</span>
+                  <small>{step.label}</small>
+                  {step.timestamp && (
+                    <small style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)' }}>
+                      {formatDateTimeManila(step.timestamp)}
+                    </small>
+                  )}
+                </li>
+              ))}
+            </ol>
 
             {/* Order Items & Bill Summary */}
             <div className="customer-track-manifest">
@@ -792,10 +592,8 @@ export default function OrderDetailPage() {
                 <div className="customer-track-bill-row">
                   <span>Payment Status</span>
                   <strong>
-                    {normalizedStatusStep === 'Rejected' && String(order.paymentStatus || '').toLowerCase() === 'cancelled'
-                      ? 'Cancelled'
-                      : (String(order.paymentStatus || 'pending').charAt(0).toUpperCase()
-                        + String(order.paymentStatus || 'pending').slice(1))}
+                    {formatPaymentStatusLabel(order.paymentStatus)}
+                    {order.paidAt ? ` (${formatDateTimeManila(order.paidAt)})` : ''}
                   </strong>
                 </div>
                 <div className="customer-track-bill-row is-total">
@@ -816,74 +614,60 @@ export default function OrderDetailPage() {
                 </Button>
               </div>
               {isCancellable && (
-                <Button variant="danger-outline" size="sm" fullWidth onClick={() => setCancelModalOpen(true)}>
-                  Request Cancellation
+                <Button
+                  variant="danger-outline"
+                  size="sm"
+                  fullWidth
+                  disabled={isCancelling}
+                  onClick={() => setCancelModalOpen(true)}
+                >
+                  Cancel Order
                 </Button>
               )}
             </div>
           </div>
         </aside>
 
-        {/* Right Column: Interactive Customer Tracking Map & Checkpoints */}
+        {/* Right Column: Order Fulfillment & Destination Details (No fake rider/ETA/map) */}
         <div className="customer-track-map-column">
-          <div className="customer-track-map-viewport">
-            <MapSlot
-              mode="customer"
-              stage={isOutForDelivery ? 'dropoff' : 'pickup'}
-              pickup={{
-                title: liveTracking?.pickup?.restaurant_name || activeSub?.restaurantName || 'Kitchen',
-                address: liveTracking?.pickup?.address || kitchenAddress,
-                lat: liveTracking?.pickup?.latitude ?? matchedRestaurant?.location?.latitude ?? null,
-                lng: liveTracking?.pickup?.longitude ?? matchedRestaurant?.location?.longitude ?? null,
-              }}
-              secondaryPickup={
-                secondarySub
-                  ? {
-                      title: secondarySub.restaurantName,
-                      address: 'Partner Kitchen #2',
-                    }
-                  : null
-              }
-              dropoff={{
-                title: 'Your Address',
-                address: liveTracking?.dropoff?.address || customerDeliveryAddress,
-                lat: liveTracking?.dropoff?.latitude ?? activeSub?.deliveryCoordinates?.lat ?? defaultAddress?.lat ?? null,
-                lng: liveTracking?.dropoff?.longitude ?? activeSub?.deliveryCoordinates?.lng ?? defaultAddress?.lng ?? null,
-              }}
-              riderName={liveTracking?.rider?.name || (isOutForDelivery ? riderInfo.name : null)}
-              riderLocation={liveTracking?.rider_location || null}
-              lastUpdatedAt={liveTracking?.rider_location?.recorded_at || null}
-              isStale={Boolean(liveTracking?.rider_location?.is_stale)}
-              customerStatusText={
-                liveTracking?.rider_location
-                  ? customerMapStatusText
-                  : (liveTracking?.rider ? 'Rider assigned · Waiting for live GPS signal' : 'Awaiting rider assignment')
-              }
-              metrics={{
-                eta: riderInfo.eta || '',
-              }}
-            />
-          </div>
-
-          {/* Docked Customer Route Checkpoints Below Map */}
-          <div className="customer-track-checkpoints" aria-label="Order route checkpoints">
-            <div className={`customer-track-checkpoint is-pickup ${!isOutForDelivery ? 'is-current' : ''}`}>
+          <div className="customer-track-checkpoints" aria-label="Order fulfillment details">
+            <div className="customer-track-checkpoint is-pickup is-current">
               <div className="customer-track-checkpoint__top">
-                <span>Origin · Preparing Kitchen</span>
-                <em>{activeSub?.status || 'Preparing'}</em>
+                <span>Restaurant</span>
+                <em>{formatOrderStatusText(subStatus, fulfillment)}</em>
               </div>
               <strong>{activeSub?.restaurantName}</strong>
-              <small>{kitchenAddress}</small>
+              <small>Reference: {order.orderReference || `#${order.id}`}</small>
             </div>
 
-            <div className={`customer-track-checkpoint is-dropoff ${isOutForDelivery ? 'is-current' : ''}`}>
-              <div className="customer-track-checkpoint__top">
-                <span>Destination · Your Delivery Address</span>
-                <em>{DROPOFF_PREFERENCES.find((p) => p.id === dropoffPref)?.label || 'Meet at door'}</em>
+            {fulfillment === 'delivery' ? (
+              <div className="customer-track-checkpoint is-dropoff">
+                <div className="customer-track-checkpoint__top">
+                  <span>Delivery Destination</span>
+                  <em>{statusKey === 'ready' ? 'Waiting for rider' : formatOrderStatusText(subStatus, fulfillment)}</em>
+                </div>
+                <strong>{activeSub?.deliveryAddress?.recipientName || 'Delivery Address'}</strong>
+                <small>{customerDeliveryAddress || 'Address on file'}</small>
+                {activeSub?.deliveryAddress?.notes && (
+                  <small>Notes: {activeSub.deliveryAddress.notes}</small>
+                )}
               </div>
-              <strong>{defaultAddress?.label || 'Customer Drop-off'}</strong>
-              <small>{customerDeliveryAddress}</small>
-            </div>
+            ) : (
+              <div className="customer-track-checkpoint is-dropoff">
+                <div className="customer-track-checkpoint__top">
+                  <span>Fulfillment</span>
+                  <em>Self-pickup at restaurant</em>
+                </div>
+                <strong>Cash on Pickup ({formatPaymentStatusLabel(order.paymentStatus)})</strong>
+                <small>
+                  {statusKey === 'completed'
+                    ? 'Picked up and completed.'
+                    : statusKey === 'ready'
+                      ? 'Ready for pickup at the restaurant counter.'
+                      : 'We will update this page as your order progresses.'}
+                </small>
+              </div>
+            )}
           </div>
         </div>
       </div>

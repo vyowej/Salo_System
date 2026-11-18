@@ -99,6 +99,12 @@ export const customerService = {
     return res?.data?.order ?? null;
   },
 
+  async cancelOrder(orderId, reason = '') {
+    const payload = reason && String(reason).trim() ? { reason: String(reason).trim() } : {};
+    const res = await apiClient.post(`/customer/orders/${encodeURIComponent(orderId)}/cancel`, payload);
+    return res?.data?.order ?? null;
+  },
+
   getOrders() {
     return [];
   },

@@ -2,6 +2,7 @@
 
 namespace App\Features\Orders\Services;
 
+use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
 use App\Support\AuditLogService;
 use Illuminate\Http\Request;
@@ -16,6 +17,7 @@ class RestaurantOrderService
         'pending' => ['accepted', 'rejected'],
         'accepted' => ['preparing'],
         'preparing' => ['ready'],
+        'ready' => ['completed'],
     ];
 
     private const ACTION_TO_STATUS = [
@@ -23,6 +25,7 @@ class RestaurantOrderService
         'reject' => 'rejected',
         'prepare' => 'preparing',
         'ready' => 'ready',
+        'complete' => 'completed',
     ];
 
     public function __construct(
@@ -108,6 +111,10 @@ class RestaurantOrderService
                 'o.total_amount',
                 'o.rejection_reason',
                 'o.accepted_at',
+                'o.completed_at',
+                'o.cancelled_at',
+                'o.cancelled_by',
+                'o.cancellation_reason',
                 'o.rejected_at',
                 'o.placed_at',
                 'cu.phone_number as customer_phone',
@@ -161,10 +168,15 @@ class RestaurantOrderService
                 'total_amount' => (float) $row->total_amount,
                 'payment_method' => $payment?->payment_method === 'cash' ? 'cod' : ($payment?->payment_method ?? 'cod'),
                 'payment_status' => $payment?->payment_status ?? 'pending',
+                'paid_at' => OrderTimestampFormatter::toManilaIso($payment?->paid_at),
                 'rejection_reason' => $row->rejection_reason,
-                'accepted_at' => $row->accepted_at,
-                'rejected_at' => $row->rejected_at,
-                'placed_at' => $row->placed_at,
+                'accepted_at' => OrderTimestampFormatter::toManilaIso($row->accepted_at),
+                'completed_at' => OrderTimestampFormatter::toManilaIso($row->completed_at),
+                'cancelled_at' => OrderTimestampFormatter::toManilaIso($row->cancelled_at),
+                'cancelled_by' => $row->cancelled_by,
+                'cancellation_reason' => $row->cancellation_reason,
+                'rejected_at' => OrderTimestampFormatter::toManilaIso($row->rejected_at),
+                'placed_at' => OrderTimestampFormatter::toManilaIso($row->placed_at),
                 'items' => $items,
             ];
         })->all();
@@ -238,11 +250,16 @@ class RestaurantOrderService
                 'method' => $payment?->payment_method === 'cash' ? 'cod' : ($payment?->payment_method ?? 'cod'),
                 'status' => $payment?->payment_status ?? 'pending',
                 'amount' => $payment ? (float) $payment->amount : (float) $row->total_amount,
+                'paid_at' => OrderTimestampFormatter::toManilaIso($payment?->paid_at),
             ],
             'rejection_reason' => $row->rejection_reason,
-            'accepted_at' => $row->accepted_at,
-            'rejected_at' => $row->rejected_at,
-            'placed_at' => $row->placed_at,
+            'accepted_at' => OrderTimestampFormatter::toManilaIso($row->accepted_at),
+            'completed_at' => OrderTimestampFormatter::toManilaIso($row->completed_at),
+            'cancelled_at' => OrderTimestampFormatter::toManilaIso($row->cancelled_at),
+            'cancelled_by' => $row->cancelled_by,
+            'cancellation_reason' => $row->cancellation_reason,
+            'rejected_at' => OrderTimestampFormatter::toManilaIso($row->rejected_at),
+            'placed_at' => OrderTimestampFormatter::toManilaIso($row->placed_at),
             'items' => $items,
         ];
     }
@@ -293,6 +310,10 @@ class RestaurantOrderService
                 );
             }
 
+            if ($nextStatus === 'completed' && $order->order_type !== 'pickup') {
+                throw new ConflictHttpException('Only pickup orders can be completed by the restaurant.');
+            }
+
             $now = now();
             $updates = [
                 'order_status' => $nextStatus,
@@ -307,16 +328,7 @@ class RestaurantOrderService
                 $updates['rejection_reason'] = mb_substr((string) $cleanReason, 0, 255);
                 $updates['rejected_at'] = $now->format('Y-m-d H:i:s');
 
-                $codPayment = DB::table('payment_allocations as pa')
-                    ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
-                    ->where('pa.order_id', $orderId)
-                    ->where('pa.allocation_type', 'order_payment')
-                    ->where('p.payment_method', 'cash')
-                    ->where('p.payment_status', 'pending')
-                    ->lockForUpdate()
-                    ->select(['p.payment_id', 'p.payment_status'])
-                    ->first();
-
+                $codPayment = $this->findPendingCashPaymentForOrder($orderId);
                 if ($codPayment) {
                     DB::table('payments')
                         ->where('payment_id', $codPayment->payment_id)
@@ -329,6 +341,24 @@ class RestaurantOrderService
 
                     $oldAuditValues['payment_status'] = (string) $codPayment->payment_status;
                     $newAuditValues['payment_status'] = 'cancelled';
+                }
+            } elseif ($nextStatus === 'completed') {
+                $updates['completed_at'] = $now;
+
+                $codPayment = $this->findPendingCashPaymentForOrder($orderId);
+                if ($codPayment) {
+                    DB::table('payments')
+                        ->where('payment_id', $codPayment->payment_id)
+                        ->where('payment_method', 'cash')
+                        ->where('payment_status', 'pending')
+                        ->update([
+                            'payment_status' => 'paid',
+                            'paid_at' => $now,
+                            'updated_at' => $now,
+                        ]);
+
+                    $oldAuditValues['payment_status'] = (string) $codPayment->payment_status;
+                    $newAuditValues['payment_status'] = 'paid';
                 }
             }
 
@@ -349,6 +379,19 @@ class RestaurantOrderService
         return $this->getOrderDetail($user, $orderId, $targetId);
     }
 
+    private function findPendingCashPaymentForOrder(int $orderId): ?object
+    {
+        return DB::table('payment_allocations as pa')
+            ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
+            ->where('pa.order_id', $orderId)
+            ->where('pa.allocation_type', 'order_payment')
+            ->where('p.payment_method', 'cash')
+            ->where('p.payment_status', 'pending')
+            ->lockForUpdate()
+            ->select(['p.payment_id', 'p.payment_status'])
+            ->first();
+    }
+
     /**
      * @param  array<int, int>  $orderIds
      */
@@ -362,7 +405,7 @@ class RestaurantOrderService
             ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
             ->whereIn('pa.order_id', $orderIds)
             ->where('pa.allocation_type', 'order_payment')
-            ->select(['pa.order_id', 'p.payment_method', 'p.payment_status', 'p.amount'])
+            ->select(['pa.order_id', 'p.payment_method', 'p.payment_status', 'p.amount', 'p.paid_at'])
             ->get()
             ->keyBy('order_id');
     }

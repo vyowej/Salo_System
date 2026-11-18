@@ -171,9 +171,11 @@ test('OwnerOrdersPage and customer order pages are wired to real statuses and re
   assert.ok(ownerOrdersSrc.includes('disabled={saving}'));
 
   assert.ok(ordersSrc.includes('rejectionReason'));
-  assert.ok(ordersSrc.includes('formatStatusLabel'));
+  assert.ok(ordersSrc.includes('formatOrderStatusText'));
+  assert.ok(ordersSrc.includes('buildOrderTimelineSteps'));
   assert.ok(orderDetailSrc.includes('rejectionReason'));
-  assert.ok(orderDetailSrc.includes('formatBackendStatus'));
+  assert.ok(orderDetailSrc.includes('formatOrderStatusText'));
+  assert.ok(orderDetailSrc.includes('buildOrderTimelineSteps'));
   assert.ok(orderDetailSrc.includes('Payment Status'));
 });
 
@@ -202,6 +204,128 @@ test('permissionMap derives staff order permissions from backend order_handler_p
     assert.ok(ORDER_HANDLER_PERMISSIONS.includes('orders.view'));
     assert.ok(ORDER_HANDLER_PERMISSIONS.includes('orders.accept'));
   } finally {
+    await server.close();
+  }
+});
+
+test('Step 9a orderTimeline, complete/cancel service methods, and UI pages match Step 9a rules', async () => {
+  const server = await createServer({
+    configFile: false,
+    root: ROOT_DIR,
+    server: { middlewareMode: true },
+    appType: 'custom',
+    logLevel: 'silent',
+  });
+
+  const previousFetch = globalThis.fetch;
+
+  try {
+    const {
+      buildOrderTimelineSteps,
+      canCustomerCancelOrder,
+      formatOrderStatusText,
+      formatPaymentStatusLabel,
+    } = await server.ssrLoadModule('/src/features/customer/utils/orderTimeline.js');
+    const { clearCsrfCache } = await server.ssrLoadModule('/src/services/apiClient.js');
+    const { ownerService } = await server.ssrLoadModule('/src/services/ownerService.js');
+    const { customerService } = await server.ssrLoadModule('/src/services/customerService.js');
+
+    // Pickup timeline includes Completed and Ready for pickup; Preparing/Ready have null timestamps
+    const pickupSteps = buildOrderTimelineSteps({
+      fulfillment: 'pickup',
+      overallStatus: 'completed',
+      createdAt: '2026-11-18T11:00:00+08:00',
+      acceptedAt: '2026-11-18T11:05:00+08:00',
+      completedAt: '2026-11-18T11:20:00+08:00',
+    });
+    assert.deepEqual(pickupSteps.map((s) => s.label), ['Pending', 'Accepted', 'Preparing', 'Ready for pickup', 'Completed']);
+    assert.equal(pickupSteps[2].timestamp, null);
+    assert.equal(pickupSteps[3].timestamp, null);
+    assert.equal(pickupSteps[4].timestamp, '2026-11-18T11:20:00+08:00');
+
+    // Delivery timeline stops at Ready and shows waiting-for-rider wording
+    const deliverySteps = buildOrderTimelineSteps({
+      fulfillment: 'delivery',
+      overallStatus: 'ready',
+      createdAt: '2026-11-18T11:00:00+08:00',
+      acceptedAt: '2026-11-18T11:05:00+08:00',
+    });
+    assert.deepEqual(deliverySteps.map((s) => s.label), ['Pending', 'Accepted', 'Preparing', 'Ready']);
+    assert.equal(formatOrderStatusText('ready', 'delivery'), 'Ready — waiting for rider');
+    assert.equal(formatOrderStatusText('ready', 'pickup'), 'Ready for pickup');
+
+    // Rejected & Cancelled terminal timelines
+    const rejectedSteps = buildOrderTimelineSteps({ overallStatus: 'rejected', rejectedAt: '2026-11-18T11:06:00+08:00' });
+    assert.deepEqual(rejectedSteps.map((s) => s.label), ['Pending', 'Rejected']);
+    const cancelledSteps = buildOrderTimelineSteps({ overallStatus: 'cancelled', cancelledAt: '2026-11-18T11:02:00+08:00' });
+    assert.deepEqual(cancelledSteps.map((s) => s.label), ['Pending', 'Cancelled']);
+
+    // Cancel button only for pending
+    assert.equal(canCustomerCancelOrder({ overallStatus: 'pending' }), true);
+    assert.equal(canCustomerCancelOrder({ overallStatus: 'accepted' }), false);
+    assert.equal(canCustomerCancelOrder({ overallStatus: 'completed' }), false);
+    assert.equal(canCustomerCancelOrder({ overallStatus: 'cancelled' }), false);
+    assert.equal(formatPaymentStatusLabel('paid'), 'Paid');
+    assert.equal(formatPaymentStatusLabel('cancelled'), 'Cancelled');
+
+    // API client calls for completeOrder and cancelOrder
+    clearCsrfCache();
+    globalThis.fetch = async (url) => {
+      if (url.endsWith('/auth/csrf')) {
+        return new Response(JSON.stringify({ success: true, data: { csrf_token: 's9a-csrf' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/restaurant/orders/77/complete')) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: { order: { order_id: 77, order_status: 'completed', payment: { status: 'paid' } } },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/customer/orders/77/cancel')) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: { order: { order_id: 77, order_status: 'cancelled', payment: { status: 'cancelled' } } },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('{}', { status: 404 });
+    };
+
+    const completed = await ownerService.completeOrder(77);
+    assert.equal(completed.status, 'completed');
+    assert.equal(completed.paymentStatus, 'paid');
+
+    const cancelled = await customerService.cancelOrder(77, 'Changed mind');
+    assert.equal(cancelled.order_status, 'cancelled');
+    assert.equal(cancelled.payment.status, 'cancelled');
+
+    const [ownerOrdersSrc, orderDetailSrc] = await Promise.all([
+      fs.readFile(new URL('../features/restaurant/pages/OwnerOrdersPage.jsx', import.meta.url), 'utf8'),
+      fs.readFile(new URL('../features/customer/pages/OrderDetailPage.jsx', import.meta.url), 'utf8'),
+    ]);
+
+    // OwnerOrdersPage Complete button only on ready + pickup with cash confirmation dialog
+    assert.ok(ownerOrdersSrc.includes("statusKey === 'ready' && isPickup"));
+    assert.ok(ownerOrdersSrc.includes('Mark as Picked Up / Completed'));
+    assert.ok(ownerOrdersSrc.includes('cash received from the customer?'));
+    assert.ok(ownerOrdersSrc.includes('completeOrder'));
+
+    // OrderDetailPage has no fake rider/ETA/map content and wires real cancelOrder
+    assert.equal(orderDetailSrc.includes('Kuya Juan'), false);
+    assert.equal(orderDetailSrc.includes('25–35 min'), false);
+    assert.equal(orderDetailSrc.includes('MapSlot'), false);
+    assert.equal(orderDetailSrc.includes('QUICK_RIDER_MESSAGES'), false);
+    assert.ok(orderDetailSrc.includes('canCustomerCancelOrder'));
+    assert.ok(orderDetailSrc.includes('cancelOrder'));
+  } finally {
+    globalThis.fetch = previousFetch;
     await server.close();
   }
 });

@@ -14,7 +14,9 @@ const TABS = [
   { id: 'accepted', label: 'Accepted' },
   { id: 'preparing', label: 'Preparing' },
   { id: 'ready', label: 'Ready' },
+  { id: 'completed', label: 'Completed' },
   { id: 'rejected', label: 'Rejected' },
+  { id: 'cancelled', label: 'Cancelled' },
 ];
 
 const STATUS_VARIANTS = {
@@ -185,6 +187,8 @@ export default function OwnerOrdersPage() {
         updated = await ownerService.prepareOrder(order.id, selectedRestaurantId);
       } else if (type === 'ready') {
         updated = await ownerService.readyOrder(order.id, selectedRestaurantId);
+      } else if (type === 'complete') {
+        updated = await ownerService.completeOrder(order.id, selectedRestaurantId);
       }
 
       if (updated) {
@@ -371,9 +375,13 @@ export default function OwnerOrdersPage() {
                       <Button variant="primary" size="sm" disabled={saving} onClick={() => showActionDialog(order, { type: 'ready', label: 'Mark Ready' })}>
                         Mark Ready
                       </Button>
+                    ) : statusKey === 'ready' && isPickup && access.canAccess(['orders.preparation.update', 'orders.pickup.manage'], 'any') ? (
+                      <Button variant="primary" size="sm" disabled={saving} onClick={() => showActionDialog(order, { type: 'complete', label: 'Mark as Picked Up / Completed' })}>
+                        Mark as Picked Up / Completed
+                      </Button>
                     ) : statusKey === 'ready' ? (
                       <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', margin: 0 }}>
-                        Order is ready for {isPickup ? 'customer pickup' : 'rider dispatch'}.
+                        {isPickup ? 'Order is ready for customer pickup.' : 'Order is ready for rider dispatch.'}
                       </p>
                     ) : null}
                   </div>
@@ -411,6 +419,11 @@ export default function OwnerOrdersPage() {
         </div>
       }>
         <p>Order {pendingAction?.order?.orderReference || `#${pendingAction?.order?.id}`}</p>
+        {pendingAction?.type === 'complete' && (
+          <p style={{ fontWeight: 600 }}>
+            Confirm {formatPeso(orderAmount(pendingAction.order))} cash received from the customer?
+          </p>
+        )}
         {pendingAction?.type === 'reject' && <p>Rejection completes this restaurant’s rejection only. Other restaurant sub-orders, if any, remain unchanged.</p>}
         {needsReason && (
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>

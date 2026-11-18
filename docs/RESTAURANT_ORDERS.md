@@ -48,22 +48,26 @@ The backend exposes `order_handler_positions` (from `config('salo.orders.handler
 | `POST` | `/api/restaurant/orders/{id}/reject` | Transition `pending` -> `rejected` (requires `reason`; HTTP `422` if missing) |
 | `POST` | `/api/restaurant/orders/{id}/prepare` | Transition `accepted` -> `preparing` |
 | `POST` | `/api/restaurant/orders/{id}/ready` | Transition `preparing` -> `ready` |
+| `POST` | `/api/restaurant/orders/{id}/complete` | Transition `ready` (`pickup` only) -> `completed` and mark pending cash payment `paid` |
 
 ---
 
 ## 4. Enforced Status Transition Table
 
-| Current `order_status` | Allowed Next Status | Action Endpoint |
+| Current `order_status` | Allowed Next Status | Actor & Endpoint / Rule |
 | --- | --- | --- |
-| `pending` | `accepted` | `POST /accept` |
-| `pending` | `rejected` | `POST /reject` |
-| `accepted` | `preparing` | `POST /prepare` |
-| `preparing` | `ready` | `POST /ready` |
-| `ready` | *(Out of scope for Step 8b)* | — |
+| `pending` | `accepted` | Restaurant (`POST /api/restaurant/orders/{id}/accept`) |
+| `pending` | `rejected` | Restaurant (`POST /api/restaurant/orders/{id}/reject`, reason required) |
+| `pending` | `cancelled` | Customer (`POST /api/customer/orders/{id}/cancel`, optional reason) |
+| `accepted` | `preparing` | Restaurant (`POST /api/restaurant/orders/{id}/prepare`) |
+| `preparing` | `ready` | Restaurant (`POST /api/restaurant/orders/{id}/ready`) |
+| `ready` | `completed` | Restaurant (`POST /api/restaurant/orders/{id}/complete`, `pickup` orders only; `delivery` returns `409`) |
+| `completed` | *(Terminal)* | — |
 | `rejected` | *(Terminal)* | — |
+| `cancelled` | *(Terminal)* | — |
 
-- Any transition outside this table (including double-accept or acting on a rejected order) returns HTTP `409 Conflict`.
-- `Out for Delivery`, `Completed`, rider assignment, and customer cancellation remain out of scope for Step 8b.
+- Any transition outside this table (including double-accept, acting on a `cancelled` or `rejected` order, or calling `/complete` on a `delivery` order) returns HTTP `409 Conflict`.
+- `Out for Delivery` and rider delivery completion remain out of scope (deferred to Step 9b). See [ORDER_COMPLETION.md](./ORDER_COMPLETION.md) for pickup completion and customer cancellation details.
 
 ---
 
