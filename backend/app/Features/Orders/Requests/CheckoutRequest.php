@@ -27,6 +27,7 @@ class CheckoutRequest extends FormRequest
             'groups.*.fulfillment' => ['required', 'string', Rule::in(['delivery', 'pickup'])],
             'groups.*.address_id' => ['nullable', 'integer', 'min:1'],
             'groups.*.delivery_notes' => ['nullable', 'string', 'max:500'],
+            'groups.*.expected_total' => ['nullable', 'numeric', 'min:0'],
             'groups.*.items' => ['required', 'array', 'min:1', 'max:50'],
             'groups.*.items.*.menu_item_id' => ['required', 'integer', 'min:1'],
             'groups.*.items.*.quantity' => ['required', 'integer', 'min:1', "max:{$maxQty}"],

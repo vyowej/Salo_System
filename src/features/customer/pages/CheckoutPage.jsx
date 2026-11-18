@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
@@ -7,6 +7,11 @@ import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import AddressFormModal from '../components/AddressFormModal';
+import {
+  buildCheckoutPayload,
+  findAddressBySelectionId,
+  validateGroupDeliveryAddress,
+} from '../utils/checkoutAddressValidation';
 
 const PAYMENT_METHODS = [
   { id: 'cod', name: 'Cash on Delivery (COD)', desc: 'Pay with cash upon arrival of each delivery', icon: '💵', enabled: true },
@@ -24,12 +29,14 @@ function createIdempotencyKey() {
 
 export default function CheckoutPage() {
   const { restaurantGroups, itemsSubtotal, totalDeliveryFees, grandTotal, setRestaurantAddress, clearCart } = useCart();
-  const { addresses, addAddress } = useAddresses();
+  const { addresses, loading: addressesLoading, addAddress } = useAddresses();
 
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [orderNotes, setOrderNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [priceReviewNotice, setPriceReviewNotice] = useState('');
+  const [serverGroupTotals, setServerGroupTotals] = useState({});
   const [groupErrors, setGroupErrors] = useState({});
   const [confirmedCheckout, setConfirmedCheckout] = useState(null);
   const [formModalOpen, setFormModalOpen] = useState(false);
@@ -40,11 +47,17 @@ export default function CheckoutPage() {
     const saved = await addAddress(newAddrPayload);
     if (targetRestaurantIdForNewAddress && saved) {
       setRestaurantAddress(targetRestaurantIdForNewAddress, saved);
+      setGroupErrors({});
+      setError(null);
     }
   };
-  const hasMissingDeliveryAddresses = restaurantGroups.some(
-    (group) => group.fulfillment === 'delivery' && !group.deliveryAddress
+
+  const groupValidations = useMemo(
+    () => restaurantGroups.map((group) => validateGroupDeliveryAddress(group, addresses, addressesLoading)),
+    [restaurantGroups, addresses, addressesLoading]
   );
+
+  const hasInvalidDeliveryAddresses = groupValidations.some((v) => !v.isValid);
 
   if (confirmedCheckout) {
     return (
@@ -107,40 +120,73 @@ export default function CheckoutPage() {
     );
   }
 
+  const hasServerTotals = Object.keys(serverGroupTotals).length > 0;
+  const displayedItemsSubtotal = hasServerTotals
+    ? restaurantGroups.reduce(
+        (sum, group) =>
+          sum + (serverGroupTotals[String(group.restaurantId)]?.subtotalAmount ?? Number(group.subtotal || 0)),
+        0
+      )
+    : itemsSubtotal;
+  const displayedDeliveryFees = hasServerTotals
+    ? restaurantGroups.reduce(
+        (sum, group) =>
+          sum + (serverGroupTotals[String(group.restaurantId)]?.deliveryFee ?? Number(group.deliveryFee || 0)),
+        0
+      )
+    : totalDeliveryFees;
+  const displayedGrandTotal = hasServerTotals
+    ? displayedItemsSubtotal + displayedDeliveryFees
+    : grandTotal;
+
   const handlePlaceOrder = async () => {
-    if (isSubmitting) return;
-    if (hasMissingDeliveryAddresses) {
-      setError('Each delivery sub-order must have a saved delivery address before checkout can continue.');
+    if (isSubmitting || addressesLoading) return;
+    if (hasInvalidDeliveryAddresses) {
+      setError(
+        addresses.length === 0
+          ? 'Please add a saved delivery address before placing your order.'
+          : 'Each delivery sub-order must have a valid saved delivery address before checkout can continue.'
+      );
       return;
     }
 
     setIsSubmitting(true);
     setError(null);
+    setPriceReviewNotice('');
     setGroupErrors({});
 
     try {
-      const payload = {
-        payment_method: 'cod',
-        idempotency_key: idempotencyKeyRef.current,
-        groups: restaurantGroups.map((group) => ({
-          restaurant_id: Number(group.restaurantId),
-          fulfillment: group.fulfillment === 'pickup' ? 'pickup' : 'delivery',
-          address_id: group.fulfillment === 'delivery' && group.deliveryAddress?.id
-            ? Number(group.deliveryAddress.id)
-            : null,
-          delivery_notes: orderNotes.trim() || group.deliveryAddress?.notes || null,
-          items: group.items.map((item) => ({
-            menu_item_id: Number(item.id),
-            quantity: Number(item.quantity),
-          })),
-        })),
-      };
+      const expectedTotalsByRestaurant = Object.fromEntries(
+        Object.entries(serverGroupTotals).map(([rid, info]) => [rid, info.totalAmount])
+      );
+      const payload = buildCheckoutPayload({
+        restaurantGroups,
+        orderNotes,
+        idempotencyKey: idempotencyKeyRef.current,
+        expectedTotalsByRestaurant,
+      });
 
       const checkout = await customerService.placeCheckoutOrder(payload);
       clearCart();
+      setServerGroupTotals({});
       idempotencyKeyRef.current = createIdempotencyKey();
       setConfirmedCheckout(checkout);
     } catch (err) {
+      if (err?.status === 409 && Array.isArray(err?.data?.data?.groups)) {
+        const nextTotals = {};
+        err.data.data.groups.forEach((g) => {
+          nextTotals[String(g.restaurant_id)] = {
+            subtotalAmount: Number(g.subtotal_amount),
+            deliveryFee: Number(g.delivery_fee),
+            totalAmount: Number(g.total_amount),
+          };
+        });
+        setServerGroupTotals(nextTotals);
+        setPriceReviewNotice('Prices changed, please review');
+        setError(null);
+        return;
+      }
+
       const nextGroupErrors = {};
       if (err?.errors && typeof err.errors === 'object') {
         Object.entries(err.errors).forEach(([key, msgs]) => {
@@ -168,6 +214,24 @@ export default function CheckoutPage() {
         </Link>
       </div>
 
+      {priceReviewNotice && (
+        <div
+          role="alert"
+          style={{
+            padding: 'var(--space-3) var(--space-4)',
+            background: 'var(--status-warning-bg)',
+            color: 'var(--status-warning-text)',
+            border: '1px solid var(--status-warning-border, rgba(245, 158, 11, 0.4))',
+            borderRadius: 'var(--radius-md)',
+            fontSize: 'var(--font-size-sm)',
+            fontWeight: 600,
+            marginBottom: 'var(--space-5)',
+          }}
+        >
+          {priceReviewNotice}
+        </div>
+      )}
+
       {error && (
         <div style={{
           padding: 'var(--space-3) var(--space-4)',
@@ -181,7 +245,7 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      {hasMissingDeliveryAddresses && (
+      {hasInvalidDeliveryAddresses && (
         <div style={{
           padding: 'var(--space-3) var(--space-4)',
           background: 'var(--status-warning-bg)',
@@ -191,7 +255,9 @@ export default function CheckoutPage() {
           fontSize: 'var(--font-size-sm)',
           marginBottom: 'var(--space-5)',
         }}>
-          One or more delivery sub-orders still need a selected address before you can place the order.
+          {addresses.length === 0
+            ? 'No saved delivery addresses found. Please add a delivery address to place your order.'
+            : 'One or more delivery sub-orders need a valid selected address before you can place the order.'}
         </div>
       )}
 
@@ -209,7 +275,18 @@ export default function CheckoutPage() {
             </h2>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              {restaurantGroups.map((group, idx) => (
+              {restaurantGroups.map((group, idx) => {
+                const validation = groupValidations[idx] || { isValid: true, error: null };
+                const selectedValue =
+                  group.deliveryAddress?.id != null && findAddressBySelectionId(addresses, group.deliveryAddress.id)
+                    ? String(group.deliveryAddress.id)
+                    : '';
+                const combinedGroupErrors = [
+                  ...(validation.error ? [validation.error] : []),
+                  ...((groupErrors[idx] || []).filter((msg) => msg !== validation.error)),
+                ];
+
+                return (
                 <div
                   key={group.restaurantId}
                   style={{
@@ -247,15 +324,29 @@ export default function CheckoutPage() {
                           Delivery Destination
                         </span>
                         <select
-                          value={group.deliveryAddress?.id || ''}
+                          value={selectedValue}
                           onChange={(e) => {
-                            if (e.target.value === '__add_new__') {
+                            const val = e.target.value;
+                            if (val === '__add_new__') {
                               setTargetRestaurantIdForNewAddress(group.restaurantId);
                               setFormModalOpen(true);
                               return;
                             }
-                            const matched = addresses.find((a) => a.id === e.target.value);
-                            if (matched) setRestaurantAddress(group.restaurantId, matched);
+                            if (!val) {
+                              setRestaurantAddress(group.restaurantId, null);
+                              return;
+                            }
+                            const matched = findAddressBySelectionId(addresses, val);
+                            if (matched) {
+                              setRestaurantAddress(group.restaurantId, matched);
+                              setGroupErrors((prev) => {
+                                if (!prev[idx]) return prev;
+                                const next = { ...prev };
+                                delete next[idx];
+                                return next;
+                              });
+                              setError(null);
+                            }
                           }}
                           style={{
                             padding: '4px 8px',
@@ -270,8 +361,9 @@ export default function CheckoutPage() {
                           }}
                           aria-label={`Change delivery address for ${group.restaurantName}`}
                         >
+                          <option value="">-- Select delivery address --</option>
                           {addresses.map((addr) => (
-                            <option key={addr.id} value={addr.id}>
+                            <option key={addr.id} value={String(addr.id)}>
                               {addr.label}: {addr.street}, {addr.city}
                             </option>
                           ))}
@@ -310,9 +402,24 @@ export default function CheckoutPage() {
                           )}
                         </div>
                       ) : (
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--salo-error)' }}>
-                          No delivery address selected. Please choose or add an address.
-                        </p>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                          <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                            {addresses.length === 0
+                              ? 'You have no saved delivery addresses yet.'
+                              : 'Choose a saved delivery address from the dropdown above.'}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setTargetRestaurantIdForNewAddress(group.restaurantId);
+                              setFormModalOpen(true);
+                            }}
+                          >
+                            + Add Address
+                          </Button>
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -324,15 +431,25 @@ export default function CheckoutPage() {
                   <div style={{ marginTop: 'var(--space-2)', fontSize: 11, color: 'var(--text-muted)' }}>
                     {group.items.map((i) => `${i.quantity}x ${i.name}`).join(' · ')}
                   </div>
-                  {groupErrors[idx]?.length > 0 && (
+                  {serverGroupTotals[String(group.restaurantId)] && (
+                    <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--font-size-xs)', color: 'var(--text-primary)', fontWeight: 600 }}>
+                      Updated Sub-Order Total: ₱{serverGroupTotals[String(group.restaurantId)].totalAmount.toLocaleString()}
+                      {' '}(Subtotal ₱{serverGroupTotals[String(group.restaurantId)].subtotalAmount.toLocaleString()}
+                      {group.fulfillment === 'delivery'
+                        ? ` + Delivery ₱${serverGroupTotals[String(group.restaurantId)].deliveryFee.toLocaleString()}`
+                        : ''})
+                    </div>
+                  )}
+                  {combinedGroupErrors.length > 0 && (
                     <div role="alert" style={{ marginTop: 'var(--space-2)', padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--status-error-bg)', color: 'var(--status-error-text)', fontSize: 'var(--font-size-xs)' }}>
-                      {groupErrors[idx].map((msg, mIdx) => (
+                      {combinedGroupErrors.map((msg, mIdx) => (
                         <div key={mIdx}>{msg}</div>
                       ))}
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -417,12 +534,12 @@ export default function CheckoutPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-6)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-secondary)' }}>Total Food Subtotal</span>
-              <span style={{ fontWeight: 600 }}>₱{itemsSubtotal.toLocaleString()}</span>
+              <span style={{ fontWeight: 600 }}>₱{displayedItemsSubtotal.toLocaleString()}</span>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-secondary)' }}>Combined Delivery Fees</span>
-              <span style={{ fontWeight: 600 }}>₱{totalDeliveryFees.toLocaleString()}</span>
+              <span style={{ fontWeight: 600 }}>₱{displayedDeliveryFees.toLocaleString()}</span>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
@@ -440,7 +557,7 @@ export default function CheckoutPage() {
               color: 'var(--text-primary)',
             }}>
               <span>Estimated Total</span>
-              <span style={{ color: 'var(--accent)' }}>₱{grandTotal.toLocaleString()}</span>
+              <span style={{ color: 'var(--accent)' }}>₱{displayedGrandTotal.toLocaleString()}</span>
             </div>
             <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
               Estimated total — final prices and delivery fees are confirmed by the server on checkout.
@@ -452,11 +569,15 @@ export default function CheckoutPage() {
             size="lg"
             fullWidth
             loading={isSubmitting}
-            disabled={hasMissingDeliveryAddresses || isSubmitting}
+            disabled={hasInvalidDeliveryAddresses || addressesLoading || isSubmitting}
             onClick={handlePlaceOrder}
-            style={hasMissingDeliveryAddresses ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+            style={hasInvalidDeliveryAddresses || addressesLoading ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
           >
-            {hasMissingDeliveryAddresses ? 'Complete Delivery Details' : `Confirm & Place Order · ₱${grandTotal.toLocaleString()}`}
+            {addressesLoading
+              ? 'Loading Delivery Addresses...'
+              : hasInvalidDeliveryAddresses
+                ? 'Complete Delivery Details'
+                : `Confirm & Place Order · ₱${displayedGrandTotal.toLocaleString()}`}
           </Button>
 
           <div style={{

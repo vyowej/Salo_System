@@ -120,7 +120,7 @@ test('customerService calls checkout and order endpoints and surfaces per-group 
   }
 });
 
-test('CheckoutPage enforces COD-only, estimated total note, per-group errors, and removes pending stub', async () => {
+test('CheckoutPage enforces COD-only, estimated total note, per-group errors, expected_total 409 review, and removes pending stub', async () => {
   const checkoutSrc = await fs.readFile(
     new URL('../features/customer/pages/CheckoutPage.jsx', import.meta.url),
     'utf8',
@@ -130,4 +130,95 @@ test('CheckoutPage enforces COD-only, estimated total note, per-group errors, an
   assert.ok(checkoutSrc.includes('Estimated Total'));
   assert.ok(checkoutSrc.includes('groupErrors[idx]'));
   assert.ok(checkoutSrc.includes('Coming soon'));
+  assert.ok(checkoutSrc.includes('Prices changed, please review'));
+  assert.ok(checkoutSrc.includes('err?.status === 409'));
+  assert.ok(checkoutSrc.includes('expectedTotalsByRestaurant'));
+});
+
+test('buildCheckoutPayload includes expected_total and customerService surfaces 409 group totals', async () => {
+  const server = await createServer({
+    configFile: false,
+    root: ROOT_DIR,
+    server: { middlewareMode: true },
+    appType: 'custom',
+    logLevel: 'silent',
+  });
+
+  const previousFetch = globalThis.fetch;
+
+  try {
+    const { buildCheckoutPayload } = await server.ssrLoadModule('/src/features/customer/utils/checkoutAddressValidation.js');
+    const { clearCsrfCache } = await server.ssrLoadModule('/src/services/apiClient.js');
+    const { customerService } = await server.ssrLoadModule('/src/services/customerService.js');
+
+    const payload = buildCheckoutPayload({
+      restaurantGroups: [
+        {
+          restaurantId: 5,
+          fulfillment: 'delivery',
+          deliveryAddress: { id: 10, addressId: 99 },
+          subtotal: 200,
+          deliveryFee: 49,
+          items: [{ id: 1, quantity: 2, price: 100 }],
+        },
+      ],
+      idempotencyKey: 'key-409-test',
+    });
+    assert.equal(payload.groups[0].expected_total, 249);
+
+    const updatedPayload = buildCheckoutPayload({
+      restaurantGroups: [
+        {
+          restaurantId: 5,
+          fulfillment: 'delivery',
+          deliveryAddress: { id: 10, addressId: 99 },
+          subtotal: 200,
+          deliveryFee: 49,
+          items: [{ id: 1, quantity: 2, price: 100 }],
+        },
+      ],
+      idempotencyKey: 'key-409-test',
+      expectedTotalsByRestaurant: { 5: 279 },
+    });
+    assert.equal(updatedPayload.groups[0].expected_total, 279);
+
+    clearCsrfCache();
+    globalThis.fetch = async (url) => {
+      if (url.endsWith('/auth/csrf')) {
+        return new Response(JSON.stringify({ success: true, data: { csrf_token: 'cust-csrf' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/customer/checkout')) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            message: 'Prices or fees changed. Please review the updated totals.',
+            data: {
+              groups: [
+                {
+                  restaurant_id: 5,
+                  restaurant_name: 'Test Resto',
+                  subtotal_amount: 230,
+                  delivery_fee: 49,
+                  total_amount: 279,
+                },
+              ],
+            },
+          }),
+          { status: 409, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('{}', { status: 404 });
+    };
+
+    await assert.rejects(
+      () => customerService.placeCheckoutOrder(payload),
+      (err) => err.status === 409 && err.data?.data?.groups?.[0]?.total_amount === 279,
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    await server.close();
+  }
 });

@@ -10,6 +10,50 @@ function notAvailable(feature) {
  * Category A endpoints (setup-status, location, coverage) are wired to Laravel.
  * Category B endpoints return empty lists on reads and explicit unavailable errors on writes.
  */
+function normalizeRestaurantOrder(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const deliveryAddr = raw.delivery_address && typeof raw.delivery_address === 'object'
+    ? raw.delivery_address.address_text
+    : (raw.delivery_address_text ?? raw.delivery_address ?? null);
+  const deliveryNotes = raw.delivery_address && typeof raw.delivery_address === 'object'
+    ? raw.delivery_address.notes
+    : (raw.delivery_notes ?? null);
+  const paymentMethod = raw.payment?.method ?? raw.payment_method ?? 'cod';
+  const paymentStatus = raw.payment?.status ?? raw.payment_status ?? 'pending';
+
+  return {
+    id: raw.order_id ?? raw.id,
+    orderReference: raw.order_reference ?? null,
+    restaurantId: raw.restaurant_id ?? null,
+    fulfillment: raw.fulfillment ?? 'delivery',
+    status: String(raw.order_status ?? raw.status ?? 'pending').toLowerCase(),
+    customerName: raw.customer_name ?? 'Customer',
+    customerPhone: raw.customer_phone ?? null,
+    deliveryAddress: deliveryAddr,
+    deliveryRecipientName: raw.delivery_address?.recipient_name ?? null,
+    deliveryInstructions: deliveryNotes,
+    subtotal: Number(raw.subtotal_amount ?? raw.subtotal ?? 0),
+    deliveryFee: Number(raw.delivery_fee ?? 0),
+    total: Number(raw.total_amount ?? raw.total ?? 0),
+    paymentMethod,
+    paymentStatus,
+    rejectionReason: raw.rejection_reason ?? null,
+    acceptedAt: raw.accepted_at ?? null,
+    rejectedAt: raw.rejected_at ?? null,
+    createdAt: raw.placed_at ?? raw.created_at ?? null,
+    items: Array.isArray(raw.items)
+      ? raw.items.map((item) => ({
+          id: item.order_item_id ?? item.menu_item_id ?? item.id,
+          menuItemId: item.menu_item_id ?? null,
+          name: item.item_name ?? item.name ?? 'Menu Item',
+          price: Number(item.unit_price ?? item.price ?? 0),
+          quantity: Number(item.quantity ?? item.qty ?? 0),
+          lineTotal: Number(item.line_total ?? 0),
+        }))
+      : [],
+  };
+}
+
 export const ownerService = {
   async getSetupStatus(restaurantId) {
     const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
@@ -197,12 +241,51 @@ export const ownerService = {
     return undefined;
   },
 
-  getOrders() {
-    return [];
+  async fetchRestaurantOrders({ status = '', page = 1, perPage = 15, restaurantId = null } = {}) {
+    const params = new URLSearchParams();
+    if (status && status !== 'all' && status !== 'action') {
+      params.set('status', status);
+    }
+    if (page) params.set('page', String(page));
+    if (perPage) params.set('per_page', String(perPage));
+    if (restaurantId) params.set('restaurant_id', String(restaurantId));
+    const qs = params.toString();
+    const res = await apiClient.get(`/restaurant/orders${qs ? `?${qs}` : ''}`);
+    const payload = res?.data ?? {};
+    return {
+      orders: Array.isArray(payload.orders) ? payload.orders.map(normalizeRestaurantOrder).filter(Boolean) : [],
+      pagination: payload.pagination ?? { current_page: 1, last_page: 1, per_page: perPage, total: 0 },
+    };
   },
 
-  updateOrderStatus() {
-    notAvailable('Updating order status');
+  async fetchRestaurantOrderDetail(orderId, restaurantId = null) {
+    const qs = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.get(`/restaurant/orders/${encodeURIComponent(orderId)}${qs}`);
+    return normalizeRestaurantOrder(res?.data?.order ?? null);
+  },
+
+  async acceptOrder(orderId, restaurantId = null) {
+    const qs = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.post(`/restaurant/orders/${encodeURIComponent(orderId)}/accept${qs}`, {});
+    return normalizeRestaurantOrder(res?.data?.order ?? null);
+  },
+
+  async rejectOrder(orderId, reason, restaurantId = null) {
+    const qs = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.post(`/restaurant/orders/${encodeURIComponent(orderId)}/reject${qs}`, { reason });
+    return normalizeRestaurantOrder(res?.data?.order ?? null);
+  },
+
+  async prepareOrder(orderId, restaurantId = null) {
+    const qs = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.post(`/restaurant/orders/${encodeURIComponent(orderId)}/prepare${qs}`, {});
+    return normalizeRestaurantOrder(res?.data?.order ?? null);
+  },
+
+  async readyOrder(orderId, restaurantId = null) {
+    const qs = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.post(`/restaurant/orders/${encodeURIComponent(orderId)}/ready${qs}`, {});
+    return normalizeRestaurantOrder(res?.data?.order ?? null);
   },
 
   resolveOrderCancellation() {

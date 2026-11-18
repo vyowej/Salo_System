@@ -1,0 +1,369 @@
+<?php
+
+namespace App\Features\Orders\Services;
+
+use App\Models\User;
+use App\Support\AuditLogService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
+class RestaurantOrderService
+{
+    private const ALLOWED_TRANSITIONS = [
+        'pending' => ['accepted', 'rejected'],
+        'accepted' => ['preparing'],
+        'preparing' => ['ready'],
+    ];
+
+    private const ACTION_TO_STATUS = [
+        'accept' => 'accepted',
+        'reject' => 'rejected',
+        'prepare' => 'preparing',
+        'ready' => 'ready',
+    ];
+
+    public function __construct(
+        private readonly AuditLogService $auditLogService,
+    ) {}
+
+    public function requireActiveAuthorizedRestaurant(User $user, ?int $restaurantId = null): object
+    {
+        $ownerQuery = DB::table('restaurant_owners as ro')
+            ->join('restaurants as r', 'r.restaurant_id', '=', 'ro.restaurant_id')
+            ->where('ro.user_id', $user->user_id);
+
+        if ($restaurantId !== null) {
+            $ownerQuery->where('ro.restaurant_id', $restaurantId);
+        } else {
+            $ownerQuery->orderBy('ro.restaurant_id');
+        }
+
+        $restaurant = $ownerQuery->select('r.*')->first();
+
+        if (! $restaurant) {
+            $staffQuery = DB::table('restaurant_staff as rs')
+                ->join('restaurants as r', 'r.restaurant_id', '=', 'rs.restaurant_id')
+                ->where('rs.user_id', $user->user_id)
+                ->where('rs.staff_status', 'active');
+
+            if ($restaurantId !== null) {
+                $staffQuery->where('rs.restaurant_id', $restaurantId);
+            } else {
+                $staffQuery->orderBy('rs.restaurant_id');
+            }
+
+            $staffRows = $staffQuery->select(['r.*', 'rs.staff_position'])->get();
+            $restaurant = $staffRows->first(
+                fn (object $row): bool => User::isOrderHandlerPosition($row->staff_position)
+            );
+        }
+
+        if (! $restaurant) {
+            abort(403, 'Forbidden: you are not authorized to manage orders for this restaurant.');
+        }
+
+        if ($restaurant->restaurant_status !== 'active') {
+            abort(
+                403,
+                "Restaurant order handling is only available for active restaurants (current status: {$restaurant->restaurant_status})."
+            );
+        }
+
+        return $restaurant;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function listOrders(User $user, array $filters = []): array
+    {
+        $restaurantId = isset($filters['restaurant_id']) && is_numeric($filters['restaurant_id'])
+            ? (int) $filters['restaurant_id']
+            : null;
+        $restaurant = $this->requireActiveAuthorizedRestaurant($user, $restaurantId);
+        $targetId = (int) $restaurant->restaurant_id;
+
+        $perPage = max(1, min(50, (int) ($filters['per_page'] ?? 15)));
+        $page = max(1, (int) ($filters['page'] ?? 1));
+        $status = trim((string) ($filters['status'] ?? ''));
+
+        $query = DB::table('orders as o')
+            ->leftJoin('users as cu', 'cu.user_id', '=', 'o.customer_id')
+            ->where('o.restaurant_id', $targetId)
+            ->select([
+                'o.order_id',
+                'o.order_reference',
+                'o.order_type',
+                'o.order_status',
+                'o.customer_name',
+                'o.delivery_phone',
+                'o.delivery_address_text',
+                'o.delivery_notes',
+                'o.subtotal_amount',
+                'o.delivery_fee',
+                'o.total_amount',
+                'o.rejection_reason',
+                'o.accepted_at',
+                'o.rejected_at',
+                'o.placed_at',
+                'cu.phone_number as customer_phone',
+            ]);
+
+        if ($status !== '' && $status !== 'all') {
+            $query->where('o.order_status', $status);
+        }
+
+        $paginator = $query
+            ->orderByDesc('o.placed_at')
+            ->orderByDesc('o.order_id')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        $rows = collect($paginator->items());
+        $orderIds = $rows->pluck('order_id')->map(fn ($id) => (int) $id)->all();
+
+        $itemsByOrder = $orderIds === []
+            ? collect()
+            : DB::table('order_items')
+                ->whereIn('order_id', $orderIds)
+                ->orderBy('order_item_id')
+                ->get(['order_item_id', 'order_id', 'menu_item_id', 'item_name', 'unit_price', 'quantity', 'line_total'])
+                ->groupBy('order_id');
+
+        $paymentsByOrder = $this->loadPaymentsByOrder($orderIds);
+
+        $orders = $rows->map(function (object $row) use ($itemsByOrder, $paymentsByOrder): array {
+            $orderId = (int) $row->order_id;
+            $payment = $paymentsByOrder->get($orderId);
+            $items = $itemsByOrder->get($orderId, collect())->map(fn ($it) => [
+                'order_item_id' => (int) $it->order_item_id,
+                'menu_item_id' => $it->menu_item_id !== null ? (int) $it->menu_item_id : null,
+                'item_name' => $it->item_name,
+                'unit_price' => (float) $it->unit_price,
+                'quantity' => (int) $it->quantity,
+                'line_total' => (float) $it->line_total,
+            ])->values()->all();
+
+            return [
+                'order_id' => $orderId,
+                'order_reference' => $row->order_reference,
+                'fulfillment' => $row->order_type,
+                'order_status' => $row->order_status,
+                'customer_name' => $row->customer_name,
+                'customer_phone' => $row->delivery_phone ?: $row->customer_phone,
+                'delivery_address_text' => $row->delivery_address_text,
+                'delivery_notes' => $row->delivery_notes,
+                'subtotal_amount' => (float) $row->subtotal_amount,
+                'delivery_fee' => (float) $row->delivery_fee,
+                'total_amount' => (float) $row->total_amount,
+                'payment_method' => $payment?->payment_method === 'cash' ? 'cod' : ($payment?->payment_method ?? 'cod'),
+                'payment_status' => $payment?->payment_status ?? 'pending',
+                'rejection_reason' => $row->rejection_reason,
+                'accepted_at' => $row->accepted_at,
+                'rejected_at' => $row->rejected_at,
+                'placed_at' => $row->placed_at,
+                'items' => $items,
+            ];
+        })->all();
+
+        return [
+            'restaurant_id' => $targetId,
+            'orders' => $orders,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getOrderDetail(User $user, int $orderId, ?int $restaurantId = null): array
+    {
+        $restaurant = $this->requireActiveAuthorizedRestaurant($user, $restaurantId);
+        $targetId = (int) $restaurant->restaurant_id;
+
+        $row = DB::table('orders as o')
+            ->leftJoin('users as cu', 'cu.user_id', '=', 'o.customer_id')
+            ->where('o.order_id', $orderId)
+            ->where('o.restaurant_id', $targetId)
+            ->select(['o.*', 'cu.phone_number as customer_phone'])
+            ->first();
+
+        if (! $row) {
+            throw new NotFoundHttpException('Order not found.');
+        }
+
+        $items = DB::table('order_items')
+            ->where('order_id', $orderId)
+            ->orderBy('order_item_id')
+            ->get(['order_item_id', 'menu_item_id', 'item_name', 'unit_price', 'quantity', 'line_total'])
+            ->map(fn ($it) => [
+                'order_item_id' => (int) $it->order_item_id,
+                'menu_item_id' => $it->menu_item_id !== null ? (int) $it->menu_item_id : null,
+                'item_name' => $it->item_name,
+                'unit_price' => (float) $it->unit_price,
+                'quantity' => (int) $it->quantity,
+                'line_total' => (float) $it->line_total,
+            ])
+            ->values()
+            ->all();
+
+        $payment = $this->loadPaymentsByOrder([$orderId])->get($orderId);
+
+        return [
+            'order_id' => (int) $row->order_id,
+            'order_reference' => $row->order_reference,
+            'restaurant_id' => (int) $row->restaurant_id,
+            'fulfillment' => $row->order_type,
+            'order_status' => $row->order_status,
+            'customer_name' => $row->customer_name,
+            'customer_phone' => $row->delivery_phone ?: $row->customer_phone,
+            'delivery_address' => $row->order_type === 'delivery' ? [
+                'recipient_name' => $row->delivery_recipient_name,
+                'phone' => $row->delivery_phone,
+                'address_text' => $row->delivery_address_text,
+                'notes' => $row->delivery_notes,
+            ] : null,
+            'subtotal_amount' => (float) $row->subtotal_amount,
+            'delivery_fee' => (float) $row->delivery_fee,
+            'total_amount' => (float) $row->total_amount,
+            'payment' => [
+                'method' => $payment?->payment_method === 'cash' ? 'cod' : ($payment?->payment_method ?? 'cod'),
+                'status' => $payment?->payment_status ?? 'pending',
+                'amount' => $payment ? (float) $payment->amount : (float) $row->total_amount,
+            ],
+            'rejection_reason' => $row->rejection_reason,
+            'accepted_at' => $row->accepted_at,
+            'rejected_at' => $row->rejected_at,
+            'placed_at' => $row->placed_at,
+            'items' => $items,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function transitionStatus(
+        User $user,
+        int $orderId,
+        string $action,
+        ?string $reason,
+        ?int $restaurantId,
+        Request $request,
+    ): array {
+        $nextStatus = self::ACTION_TO_STATUS[$action] ?? null;
+        if ($nextStatus === null) {
+            throw ValidationException::withMessages(['action' => ['Unsupported order action.']]);
+        }
+
+        $cleanReason = $reason !== null ? trim($reason) : null;
+        if ($nextStatus === 'rejected' && ($cleanReason === null || $cleanReason === '')) {
+            throw ValidationException::withMessages([
+                'reason' => ['A rejection reason is required when rejecting an order.'],
+            ]);
+        }
+
+        $restaurant = $this->requireActiveAuthorizedRestaurant($user, $restaurantId);
+        $targetId = (int) $restaurant->restaurant_id;
+
+        DB::transaction(function () use ($orderId, $targetId, $nextStatus, $cleanReason, $user, $request): void {
+            $order = DB::table('orders')
+                ->where('order_id', $orderId)
+                ->where('restaurant_id', $targetId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $order) {
+                throw new NotFoundHttpException('Order not found.');
+            }
+
+            $currentStatus = (string) $order->order_status;
+            $allowedNext = self::ALLOWED_TRANSITIONS[$currentStatus] ?? [];
+
+            if (! in_array($nextStatus, $allowedNext, true)) {
+                throw new ConflictHttpException(
+                    "Invalid order status transition from '{$currentStatus}' to '{$nextStatus}'."
+                );
+            }
+
+            $now = now();
+            $updates = [
+                'order_status' => $nextStatus,
+                'updated_at' => $now,
+            ];
+            $oldAuditValues = ['order_status' => $currentStatus];
+            $newAuditValues = ['order_status' => $nextStatus];
+
+            if ($nextStatus === 'accepted') {
+                $updates['accepted_at'] = $now;
+            } elseif ($nextStatus === 'rejected') {
+                $updates['rejection_reason'] = mb_substr((string) $cleanReason, 0, 255);
+                $updates['rejected_at'] = $now->format('Y-m-d H:i:s');
+
+                $codPayment = DB::table('payment_allocations as pa')
+                    ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
+                    ->where('pa.order_id', $orderId)
+                    ->where('pa.allocation_type', 'order_payment')
+                    ->where('p.payment_method', 'cash')
+                    ->where('p.payment_status', 'pending')
+                    ->lockForUpdate()
+                    ->select(['p.payment_id', 'p.payment_status'])
+                    ->first();
+
+                if ($codPayment) {
+                    DB::table('payments')
+                        ->where('payment_id', $codPayment->payment_id)
+                        ->where('payment_method', 'cash')
+                        ->where('payment_status', 'pending')
+                        ->update([
+                            'payment_status' => 'cancelled',
+                            'updated_at' => $now,
+                        ]);
+
+                    $oldAuditValues['payment_status'] = (string) $codPayment->payment_status;
+                    $newAuditValues['payment_status'] = 'cancelled';
+                }
+            }
+
+            DB::table('orders')->where('order_id', $orderId)->update($updates);
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: "restaurant_order_{$nextStatus}",
+                entityType: 'orders',
+                entityId: $orderId,
+                oldValues: $oldAuditValues,
+                newValues: $newAuditValues,
+                reason: $cleanReason,
+                request: $request,
+            );
+        });
+
+        return $this->getOrderDetail($user, $orderId, $targetId);
+    }
+
+    /**
+     * @param  array<int, int>  $orderIds
+     */
+    private function loadPaymentsByOrder(array $orderIds)
+    {
+        if ($orderIds === []) {
+            return collect();
+        }
+
+        return DB::table('payment_allocations as pa')
+            ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
+            ->whereIn('pa.order_id', $orderIds)
+            ->where('pa.allocation_type', 'order_payment')
+            ->select(['pa.order_id', 'p.payment_method', 'p.payment_status', 'p.amount'])
+            ->get()
+            ->keyBy('order_id');
+    }
+}

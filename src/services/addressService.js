@@ -9,6 +9,7 @@ import locationApiService from './locationApiService.js';
 export const ADDRESSES_CHANGED_EVENT = 'salo_addresses_changed';
 
 let cachedAddresses = [];
+let hasLoadedAddresses = false;
 
 function notifySubscribers() {
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
@@ -71,11 +72,16 @@ export function toBackendAddressPayload(data = {}) {
 
 function setCachedAddresses(list) {
   cachedAddresses = Array.isArray(list) ? list.map(mapBackendAddress).filter(Boolean) : [];
+  hasLoadedAddresses = true;
   notifySubscribers();
   return cachedAddresses;
 }
 
 export const addressService = {
+  isLoaded() {
+    return hasLoadedAddresses;
+  },
+
   getAddresses() {
     return cachedAddresses;
   },
@@ -87,6 +93,7 @@ export const addressService = {
 
   clearCache() {
     cachedAddresses = [];
+    hasLoadedAddresses = false;
     notifySubscribers();
   },
 

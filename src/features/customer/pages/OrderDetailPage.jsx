@@ -31,6 +31,19 @@ function isUpcomingOrder(order) {
   return !['delivered', 'completed', 'picked up', 'cancelled', 'rejected', 'failed'].includes(norm);
 }
 
+function formatBackendStatus(status, fulfillment) {
+  const key = String(status || '').trim().toLowerCase();
+  if (key === 'pending' || key === 'pending confirmation') return 'Pending';
+  if (key === 'accepted') return 'Accepted';
+  if (key === 'preparing') return 'Preparing';
+  if (key === 'ready') return fulfillment === 'pickup' ? 'Ready for Pickup' : 'Ready for Dispatch';
+  if (key === 'rejected') return 'Rejected';
+  if (key === 'out_for_delivery' || key === 'out for delivery') return 'Out for Delivery';
+  if (key === 'completed') return 'Completed';
+  if (key === 'cancelled') return 'Cancelled';
+  return status || 'Pending';
+}
+
 export default function OrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -61,6 +74,7 @@ export default function OrderDetailPage() {
       id: String(raw.order_id),
       orderReference: raw.order_reference,
       overallStatus: raw.order_status || 'pending',
+      rejectionReason: raw.rejection_reason ?? null,
       createdAt: raw.placed_at,
       grandTotal: Number(raw.total_amount ?? 0),
       paymentMethod: raw.payment?.method || 'cod',
@@ -72,6 +86,7 @@ export default function OrderDetailPage() {
           restaurantLogoUrl: raw.restaurant_logo_url,
           fulfillment: raw.fulfillment,
           status: raw.order_status || 'pending',
+          rejectionReason: raw.rejection_reason ?? null,
           subtotal: Number(raw.subtotal_amount ?? 0),
           deliveryFee: Number(raw.delivery_fee ?? 0),
           total: Number(raw.total_amount ?? 0),
@@ -447,9 +462,9 @@ export default function OrderDetailPage() {
   );
 
   const subStatus = activeSub?.status || order.overallStatus;
-  const isOutForDelivery = ['Out for Delivery', 'Ready for Dispatch', 'Completed'].includes(subStatus);
+  const normalizedStatusStep = formatBackendStatus(subStatus, activeSub?.fulfillment);
+  const isOutForDelivery = ['Out for Delivery', 'Ready for Dispatch', 'Completed'].includes(normalizedStatusStep);
   const steps = activeSub?.fulfillment === 'pickup' ? PICKUP_STEPS : DELIVERY_STEPS;
-  const normalizedStatusStep = subStatus === 'Pending Confirmation' ? 'Pending' : subStatus;
   const currentStepIdx = Math.max(steps.indexOf(normalizedStatusStep), 0);
 
   const kitchenAddress =
@@ -468,13 +483,19 @@ export default function OrderDetailPage() {
   };
 
   const customerMapStatusText =
-    subStatus === 'Out for Delivery'
+    normalizedStatusStep === 'Out for Delivery'
       ? `Rider is on the way with your order from ${activeSub?.restaurantName}`
-      : subStatus === 'Preparing'
-        ? `${activeSub?.restaurantName} is preparing your fresh meal`
-        : subStatus === 'Completed'
-          ? `Order delivered to ${customerDeliveryAddress}`
-          : `Order received by ${activeSub?.restaurantName} · Awaiting kitchen prep`;
+      : normalizedStatusStep === 'Ready for Dispatch' || normalizedStatusStep === 'Ready for Pickup'
+        ? `Your order from ${activeSub?.restaurantName} is ready`
+        : normalizedStatusStep === 'Preparing'
+          ? `${activeSub?.restaurantName} is preparing your fresh meal`
+          : normalizedStatusStep === 'Accepted'
+            ? `${activeSub?.restaurantName} accepted your order`
+            : normalizedStatusStep === 'Rejected'
+              ? `Order was rejected by ${activeSub?.restaurantName}`
+              : normalizedStatusStep === 'Completed'
+                ? `Order delivered to ${customerDeliveryAddress}`
+                : `Order received by ${activeSub?.restaurantName} · Awaiting restaurant confirmation`;
 
   return (
     <CustomerLayout>
@@ -635,8 +656,25 @@ export default function OrderDetailPage() {
               </div>
             )}
 
+            {(normalizedStatusStep === 'Rejected' || activeSub?.rejectionReason || order.rejectionReason) && (
+              <div
+                className="customer-track-status-banner"
+                role="alert"
+                style={{
+                  background: 'var(--status-error-bg)',
+                  color: 'var(--status-error-text)',
+                  marginBottom: 14,
+                }}
+              >
+                <strong>Order Rejected by Restaurant</strong>
+                <span>
+                  {activeSub?.rejectionReason || order.rejectionReason || 'The restaurant could not fulfill this order.'}
+                </span>
+              </div>
+            )}
+
             {/* 6-Step Customer Progress Stepper */}
-            {!['Cancelled', 'Rejected'].includes(subStatus) && (
+            {!['Cancelled', 'Rejected'].includes(normalizedStatusStep) && (
               <ol className="customer-track-steps" aria-label="Order progress">
                 {steps.map((step, sIdx) => {
                   const isDone = sIdx < currentStepIdx;
@@ -751,9 +789,18 @@ export default function OrderDetailPage() {
                   <span>Kitchen Subtotal + Delivery Fee</span>
                   <strong>{formatPeso((activeSub?.subtotal || 0) + (activeSub?.deliveryFee || 0))}</strong>
                 </div>
+                <div className="customer-track-bill-row">
+                  <span>Payment Status</span>
+                  <strong>
+                    {normalizedStatusStep === 'Rejected' && String(order.paymentStatus || '').toLowerCase() === 'cancelled'
+                      ? 'Cancelled'
+                      : (String(order.paymentStatus || 'pending').charAt(0).toUpperCase()
+                        + String(order.paymentStatus || 'pending').slice(1))}
+                  </strong>
+                </div>
                 <div className="customer-track-bill-row is-total">
                   <span>Total Order ({order.paymentMethod || 'COD'})</span>
-                  <strong>{formatPeso(order.totalAmount)}</strong>
+                  <strong>{formatPeso(order.grandTotal ?? order.totalAmount)}</strong>
                 </div>
               </div>
             </div>

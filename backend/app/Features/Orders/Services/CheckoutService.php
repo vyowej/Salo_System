@@ -6,6 +6,8 @@ use App\Features\Locations\Services\ServiceAreaValidationService;
 use App\Features\Restaurants\Services\AvailabilityService;
 use App\Models\User;
 use App\Support\AuditLogService;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -62,6 +64,20 @@ class CheckoutService
             if (! $restaurant || $restaurant->restaurant_status !== 'active') {
                 $groupErrors["groups.{$gIdx}.restaurant_id"][] = 'This restaurant is currently unavailable for ordering.';
                 continue;
+            }
+
+            $isOwnerOrStaff = DB::table('restaurant_owners')
+                ->where('restaurant_id', $restaurantId)
+                ->where('user_id', $user->user_id)
+                ->exists()
+                || DB::table('restaurant_staff')
+                    ->where('restaurant_id', $restaurantId)
+                    ->where('user_id', $user->user_id)
+                    ->where('staff_status', 'active')
+                    ->exists();
+
+            if ($isOwnerOrStaff) {
+                $groupErrors["groups.{$gIdx}.restaurant_id"][] = "You cannot place an order from {$restaurant->restaurant_name} because you own or work at it.";
             }
 
             if ((int) $restaurant->accepting_orders !== 1) {
@@ -230,6 +246,9 @@ class CheckoutService
                 'subtotal_cents' => $subtotalCents,
                 'delivery_fee_cents' => $feeCents,
                 'total_cents' => $totalCents,
+                'expected_total' => array_key_exists('expected_total', $group) && $group['expected_total'] !== null
+                    ? (string) $group['expected_total']
+                    : null,
             ];
         }
 
@@ -237,10 +256,36 @@ class CheckoutService
             throw ValidationException::withMessages($groupErrors);
         }
 
+        $totalMismatch = false;
+        $computedGroupsSummary = [];
+        foreach ($preparedGroups as $group) {
+            $computedGroupsSummary[] = [
+                'restaurant_id' => (int) $group['restaurant']->restaurant_id,
+                'restaurant_name' => $group['restaurant']->restaurant_name,
+                'subtotal_amount' => (float) $this->fromCents($group['subtotal_cents']),
+                'delivery_fee' => (float) $this->fromCents($group['delivery_fee_cents']),
+                'total_amount' => (float) $this->fromCents($group['total_cents']),
+            ];
+            if ($group['expected_total'] !== null && $this->toCents($group['expected_total']) !== $group['total_cents']) {
+                $totalMismatch = true;
+            }
+        }
+
+        if ($totalMismatch) {
+            throw new HttpResponseException(
+                response()->json([
+                    'success' => false,
+                    'message' => 'Prices or fees changed. Please review the updated totals.',
+                    'data' => ['groups' => $computedGroupsSummary],
+                ], 409)
+            );
+        }
+
         $checkoutTotalCents = array_sum(array_column($preparedGroups, 'total_cents'));
         $customerName = trim("{$user->first_name} {$user->last_name}") ?: $user->username;
 
-        $checkoutId = DB::transaction(function () use ($user, $idempotencyKey, $checkoutTotalCents, $preparedGroups, $customerName, $request): int {
+        try {
+            $checkoutId = DB::transaction(function () use ($user, $idempotencyKey, $checkoutTotalCents, $preparedGroups, $customerName, $request): int {
             $now = now();
 
             $checkoutId = (int) DB::table('checkouts')->insertGetId([
@@ -351,6 +396,21 @@ class CheckoutService
 
             return $checkoutId;
         });
+        } catch (QueryException $e) {
+            $sqlState = $e->errorInfo[0] ?? null;
+            $driverCode = (int) ($e->errorInfo[1] ?? 0);
+            if ($sqlState === '23000' && $driverCode === 1062) {
+                $duplicate = DB::table('checkouts')->where('idempotency_key', $idempotencyKey)->first();
+                if ($duplicate) {
+                    if ((int) $duplicate->customer_id !== (int) $user->user_id) {
+                        throw new ConflictHttpException('Idempotency key is already in use.');
+                    }
+
+                    return $this->formatCheckoutResult($user, $duplicate);
+                }
+            }
+            throw $e;
+        }
 
         $checkout = DB::table('checkouts')->where('checkout_id', $checkoutId)->first();
 

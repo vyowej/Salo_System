@@ -12,6 +12,7 @@ use App\Features\Locations\Controllers\LocationLookupController;
 use App\Features\Locations\Controllers\RestaurantLocationController;
 use App\Features\Locations\Controllers\TrackingController;
 use App\Features\Orders\Controllers\CustomerOrderController;
+use App\Features\Orders\Controllers\RestaurantOrderController;
 use App\Features\Restaurants\Controllers\OwnerMenuController;
 use App\Features\Restaurants\Controllers\OwnerProfileController;
 use App\Features\Restaurants\Controllers\RestaurantApplicationController;
@@ -134,6 +135,13 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::get('/location', [RestaurantLocationController::class, 'show']);
         Route::patch('/location', [RestaurantLocationController::class, 'updateLocation']);
         Route::put('/coverage', [RestaurantLocationController::class, 'updateCoverage']);
+
+        Route::get('/orders', [RestaurantOrderController::class, 'index']);
+        Route::get('/orders/{id}', [RestaurantOrderController::class, 'show'])->whereNumber('id');
+        Route::post('/orders/{id}/accept', [RestaurantOrderController::class, 'accept'])->whereNumber('id');
+        Route::post('/orders/{id}/reject', [RestaurantOrderController::class, 'reject'])->whereNumber('id');
+        Route::post('/orders/{id}/prepare', [RestaurantOrderController::class, 'prepare'])->whereNumber('id');
+        Route::post('/orders/{id}/ready', [RestaurantOrderController::class, 'ready'])->whereNumber('id');
     });
 });
 

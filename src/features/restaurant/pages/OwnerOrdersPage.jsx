@@ -10,31 +10,33 @@ import { useRestaurantAccess } from '../access/useRestaurantAccess';
 const TABS = [
   { id: 'all', label: 'All Orders' },
   { id: 'action', label: 'Needs Action' },
-  { id: 'Pending', label: 'New' },
-  { id: 'Accepted', label: 'Accepted' },
-  { id: 'Preparing', label: 'Preparing' },
-  { id: 'Ready for Pickup', label: 'Ready for Pickup' },
-  { id: 'Ready for Dispatch', label: 'Ready for Dispatch' },
-  { id: 'Out for Delivery', label: 'Out for Delivery' },
-  { id: 'Completed', label: 'Completed' },
-  { id: 'Rejected', label: 'Rejected' },
-  { id: 'Cancelled', label: 'Cancelled' },
-  { id: 'cancellation', label: 'Cancellation Requests' },
-  { id: 'scheduled', label: 'Scheduled' },
-  { id: 'priority', label: 'Priority' },
+  { id: 'pending', label: 'Pending' },
+  { id: 'accepted', label: 'Accepted' },
+  { id: 'preparing', label: 'Preparing' },
+  { id: 'ready', label: 'Ready' },
+  { id: 'rejected', label: 'Rejected' },
 ];
 
 const STATUS_VARIANTS = {
-  Pending: 'warning',
-  'Pending Confirmation': 'warning',
-  Accepted: 'info',
-  Preparing: 'primary',
-  'Ready for Pickup': 'success',
-  'Ready for Dispatch': 'success',
-  'Out for Delivery': 'info',
-  Completed: 'success',
-  Rejected: 'error',
-  Cancelled: 'default',
+  pending: 'warning',
+  accepted: 'info',
+  preparing: 'primary',
+  ready: 'success',
+  rejected: 'error',
+  out_for_delivery: 'info',
+  completed: 'success',
+  cancelled: 'default',
+};
+
+const STATUS_LABELS = {
+  pending: 'Pending',
+  accepted: 'Accepted',
+  preparing: 'Preparing',
+  ready: 'Ready',
+  rejected: 'Rejected',
+  out_for_delivery: 'Out for Delivery',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
 };
 
 const controlStyle = {
@@ -73,40 +75,47 @@ function orderAmount(order) {
 }
 
 function matchesActionFilter(order) {
-  return ['Pending', 'Pending Confirmation'].includes(order.status)
-    || order.cancellationRequest?.status === 'requested';
+  return String(order.status || '').toLowerCase() === 'pending';
 }
 
 export default function OwnerOrdersPage() {
   const access = useRestaurantAccess();
   const { selectedRestaurantId } = access;
-  const canViewCustomer = access.canAccess(['orders.customer.view']);
   const [orders, setOrders] = useState([]);
+  const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, per_page: 15, total: 0 });
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState('action');
+  const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [fulfillmentFilter, setFulfillmentFilter] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
   const [actionReason, setActionReason] = useState('');
-  const [pickupConfirmed, setPickupConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const reload = useCallback(() => {
+  const reload = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      setOrders(ownerService.getOrders(selectedRestaurantId, {
-        canViewCustomer,
-      }));
+      const apiStatus = filter === 'action' ? 'pending' : (filter === 'all' ? '' : filter);
+      const result = await ownerService.fetchRestaurantOrders({
+        status: apiStatus,
+        page,
+        perPage: 15,
+        restaurantId: selectedRestaurantId,
+      });
+      setOrders(Array.isArray(result.orders) ? result.orders : []);
+      if (result.pagination) {
+        setPagination(result.pagination);
+      }
     } catch (loadError) {
       setError(loadError.message || 'Unable to load restaurant orders.');
     } finally {
       setLoading(false);
     }
-  }, [canViewCustomer, selectedRestaurantId]);
+  }, [filter, page, selectedRestaurantId]);
 
   useEffect(() => {
     reload();
@@ -117,10 +126,7 @@ export default function OwnerOrdersPage() {
     return orders.filter((order) => {
       const tabMatches = filter === 'all'
         || (filter === 'action' && matchesActionFilter(order))
-        || (filter === 'cancellation' && order.cancellationRequest?.status === 'requested')
-        || (filter === 'scheduled' && order.isScheduled)
-        || (filter === 'priority' && order.priority)
-        || order.status === filter;
+        || String(order.status || '').toLowerCase() === filter;
       const customerSearch = access.canAccess(['orders.customer.view'])
         ? `${order.customerName || ''} ${order.customerPhone || ''} `
         : '';
@@ -131,41 +137,62 @@ export default function OwnerOrdersPage() {
     });
   }, [access, dateFilter, filter, fulfillmentFilter, orders, query]);
 
+  async function toggleExpand(order) {
+    const nextId = expandedId === order.id ? null : order.id;
+    setExpandedId(nextId);
+    if (nextId !== null) {
+      try {
+        const detail = await ownerService.fetchRestaurantOrderDetail(order.id, selectedRestaurantId);
+        if (detail) {
+          setOrders((prev) => prev.map((entry) => (entry.id === detail.id ? detail : entry)));
+        }
+      } catch {
+        // Keep list summary visible if detail refresh fails.
+      }
+    }
+  }
+
   function showActionDialog(order, action) {
     setPendingAction({ order, ...action });
     setActionReason('');
-    setPickupConfirmed(false);
+    setError('');
   }
 
   async function submitAction() {
-    if (!pendingAction) return;
-    const { order, type, status } = pendingAction;
+    if (!pendingAction || saving) return;
+    const { order, type } = pendingAction;
     const permission = type === 'accept' ? 'orders.accept'
-      : type === 'reject' || type === 'resolve-cancellation' ? 'orders.reject'
-        : type === 'complete-pickup' ? 'orders.pickup.manage'
-          : 'orders.preparation.update';
+      : type === 'reject' ? 'orders.reject'
+        : 'orders.preparation.update';
     if (!access.canAccess([permission])) {
       setError('You do not have permission to perform this order action.');
       return;
     }
-    if ((type === 'reject' || type === 'resolve-cancellation' && status === 'reject') && !actionReason.trim()) {
-      setError('Enter a reason before submitting this action.');
-      return;
-    }
-    if (type === 'complete-pickup' && !pickupConfirmed) {
-      setError('Confirm that the customer pickup was handed over before completing this order.');
+    if (type === 'reject' && !actionReason.trim()) {
+      setError('Enter a rejection reason before submitting.');
       return;
     }
 
     setSaving(true);
     setError('');
     try {
-      if (type === 'resolve-cancellation') {
-        ownerService.resolveOrderCancellation(order.id, status, selectedRestaurantId, actionReason);
-      } else {
-        ownerService.updateOrderStatus(order.id, status, selectedRestaurantId, { reason: actionReason });
+      let updated = null;
+      if (type === 'accept') {
+        updated = await ownerService.acceptOrder(order.id, selectedRestaurantId);
+      } else if (type === 'reject') {
+        updated = await ownerService.rejectOrder(order.id, actionReason.trim(), selectedRestaurantId);
+      } else if (type === 'prepare') {
+        updated = await ownerService.prepareOrder(order.id, selectedRestaurantId);
+      } else if (type === 'ready') {
+        updated = await ownerService.readyOrder(order.id, selectedRestaurantId);
+      }
+
+      if (updated) {
+        setOrders((prev) => prev.map((entry) => (entry.id === updated.id ? updated : entry)));
       }
       setPendingAction(null);
+      setActionReason('');
+      await reload();
     } catch (actionError) {
       setError(actionError.message || 'Unable to update this order.');
     } finally {
@@ -180,9 +207,7 @@ export default function OwnerOrdersPage() {
   if (error && orders.length === 0) return <OwnerLayout><ErrorState description={error} onRetry={reload} /></OwnerLayout>;
 
   const actionRequiredCount = orders.filter(matchesActionFilter).length;
-  const cancellationRequestCount = orders.filter((order) => order.cancellationRequest?.status === 'requested').length;
-  const needsReason = pendingAction?.type === 'reject'
-    || pendingAction?.type === 'resolve-cancellation' && pendingAction.status === 'reject';
+  const needsReason = pendingAction?.type === 'reject';
 
   return (
     <OwnerLayout>
@@ -207,11 +232,10 @@ export default function OwnerOrdersPage() {
       <nav aria-label="Order status filters" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 'var(--space-5)' }}>
         {TABS.map((tab) => {
           const count = tab.id === 'action' ? actionRequiredCount
-            : tab.id === 'cancellation' ? cancellationRequestCount
-              : tab.id === 'all' ? orders.length
-                : null;
+            : tab.id === 'all' ? (pagination.total || orders.length)
+              : null;
           return (
-            <button key={tab.id} type="button" aria-pressed={filter === tab.id} onClick={() => setFilter(tab.id)} style={{
+            <button key={tab.id} type="button" aria-pressed={filter === tab.id} onClick={() => { setFilter(tab.id); setPage(1); }} style={{
               padding: '7px 12px', borderRadius: 'var(--radius-full)',
               border: filter === tab.id ? '1.5px solid var(--accent)' : '1px solid var(--border-primary)',
               background: filter === tab.id ? 'var(--accent)' : 'var(--surface-primary)',
@@ -237,16 +261,17 @@ export default function OwnerOrdersPage() {
             const customerCanView = access.canAccess(['orders.customer.view']);
             const isPickup = order.fulfillment === 'pickup';
             const cancellation = order.cancellationRequest;
+            const statusKey = String(order.status || '').toLowerCase();
             return (
               <article key={order.id} style={{ background: 'var(--surface-primary)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
-                <button type="button" aria-expanded={expanded} onClick={() => setExpandedId(expanded ? null : order.id)} style={{
+                <button type="button" aria-expanded={expanded} onClick={() => toggleExpand(order)} style={{
                   width: '100%', display: 'grid', gridTemplateColumns: 'minmax(130px, 1fr) minmax(160px, 2fr) minmax(90px, 1fr) auto',
                   alignItems: 'center', gap: 14, padding: '16px 18px', background: 'transparent', border: 0,
                   color: 'inherit', textAlign: 'left', cursor: 'pointer',
                 }}>
                   <span>
                     <strong style={{ fontFamily: 'monospace' }}>{order.orderReference || order.id}</strong>
-                    {order.orderReference && <small style={{ display: 'block', color: 'var(--text-muted)' }}>Sub-order {order.id}</small>}
+                    {order.orderReference && <small style={{ display: 'block', color: 'var(--text-muted)' }}>Sub-order #{order.id}</small>}
                     <small style={{ display: 'block', color: 'var(--text-muted)', marginTop: 3 }}>{formatDateTime(order.createdAt)}</small>
                   </span>
                   <span style={{ minWidth: 0 }}>
@@ -255,10 +280,7 @@ export default function OwnerOrdersPage() {
                   </span>
                   <span><strong>{formatPeso(orderAmount(order))}</strong></span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    {order.priority && <Badge variant="warning" size="sm">Priority</Badge>}
-                    {order.isScheduled && <Badge variant="info" size="sm">Scheduled</Badge>}
-                    {cancellation?.status === 'requested' && <Badge variant="warning" size="sm">Cancellation requested</Badge>}
-                    <Badge variant={STATUS_VARIANTS[order.status] || 'default'} dot size="sm">{order.status}</Badge>
+                    <Badge variant={STATUS_VARIANTS[statusKey] || 'default'} dot size="sm">{STATUS_LABELS[statusKey] || order.status}</Badge>
                   </span>
                 </button>
 
@@ -328,64 +350,71 @@ export default function OwnerOrdersPage() {
                       </div>
                     )}
 
-                    {order.status === 'Pending' || order.status === 'Pending Confirmation' ? (
+                    {statusKey === 'pending' ? (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        {access.canAccess(['orders.accept']) && <Button variant="primary" size="sm" onClick={() => showActionDialog(order, { type: 'accept', status: 'Accepted' })}>Accept order</Button>}
-                        {access.canAccess(['orders.reject']) && <Button variant="danger-outline" size="sm" onClick={() => showActionDialog(order, { type: 'reject', status: 'Rejected' })}>Reject order</Button>}
+                        {access.canAccess(['orders.accept']) && (
+                          <Button variant="primary" size="sm" disabled={saving} onClick={() => showActionDialog(order, { type: 'accept', label: 'Accept order' })}>
+                            Accept order
+                          </Button>
+                        )}
+                        {access.canAccess(['orders.reject']) && (
+                          <Button variant="danger-outline" size="sm" disabled={saving} onClick={() => showActionDialog(order, { type: 'reject', label: 'Reject order' })}>
+                            Reject order
+                          </Button>
+                        )}
                       </div>
-                    ) : order.status === 'Accepted' && access.canAccess(['orders.preparation.update']) ? (
-                      <Button variant="primary" size="sm" onClick={() => showActionDialog(order, { type: 'status', status: 'Preparing' })}>Start preparation</Button>
-                    ) : order.status === 'Preparing' && isPickup && access.canAccess(['orders.pickup.manage', 'orders.preparation.update'], 'any') ? (
-                      <Button variant="primary" size="sm" onClick={() => showActionDialog(order, { type: 'status', status: 'Ready for Pickup' })}>Mark ready for pickup</Button>
-                    ) : order.status === 'Preparing' && !isPickup && access.canAccess(['orders.preparation.update']) ? (
-                      <Button variant="primary" size="sm" onClick={() => showActionDialog(order, { type: 'status', status: 'Ready for Dispatch' })}>Mark ready for dispatch</Button>
-                    ) : order.status === 'Ready for Pickup' && isPickup && access.canAccess(['orders.pickup.manage']) ? (
-                      <Button variant="primary" size="sm" onClick={() => showActionDialog(order, { type: 'complete-pickup', status: 'Completed' })}>Confirm pickup and complete</Button>
+                    ) : statusKey === 'accepted' && access.canAccess(['orders.preparation.update']) ? (
+                      <Button variant="primary" size="sm" disabled={saving} onClick={() => showActionDialog(order, { type: 'prepare', label: 'Mark Preparing' })}>
+                        Mark Preparing
+                      </Button>
+                    ) : statusKey === 'preparing' && access.canAccess(['orders.preparation.update']) ? (
+                      <Button variant="primary" size="sm" disabled={saving} onClick={() => showActionDialog(order, { type: 'ready', label: 'Mark Ready' })}>
+                        Mark Ready
+                      </Button>
+                    ) : statusKey === 'ready' ? (
+                      <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', margin: 0 }}>
+                        Order is ready for {isPickup ? 'customer pickup' : 'rider dispatch'}.
+                      </p>
                     ) : null}
-
-                    {cancellation?.status === 'requested' && access.canAccess(['orders.reject']) && (
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-                        <Button variant="danger" size="sm" onClick={() => showActionDialog(order, { type: 'resolve-cancellation', status: 'approve' })}>Approve cancellation</Button>
-                        <Button variant="outline" size="sm" onClick={() => showActionDialog(order, { type: 'resolve-cancellation', status: 'reject' })}>Decline cancellation</Button>
-                      </div>
-                    )}
-                    {order.status === 'Out for Delivery' && <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)' }}>Delivery completion is handled by the delivery workflow, not restaurant order controls.</p>}
                   </div>
                 )}
               </article>
             );
           })}
+
+          {pagination.last_page > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                Page {pagination.current_page} of {pagination.last_page} ({pagination.total} orders)
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button variant="outline" size="sm" disabled={pagination.current_page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  Previous
+                </Button>
+                <Button variant="outline" size="sm" disabled={pagination.current_page >= pagination.last_page || loading} onClick={() => setPage((p) => p + 1)}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       <Modal open={Boolean(pendingAction)} onClose={() => !saving && setPendingAction(null)} title={
-        pendingAction?.type === 'reject' ? 'Reject order'
-          : pendingAction?.type === 'resolve-cancellation' ? `${pendingAction.status === 'approve' ? 'Approve' : 'Decline'} cancellation request`
-            : pendingAction?.type === 'complete-pickup' ? 'Confirm customer pickup'
-              : `Update order to ${pendingAction?.status || ''}`
+        pendingAction?.type === 'reject' ? 'Reject order' : (pendingAction?.label || 'Update order')
       } size="sm" footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, width: '100%' }}>
           <Button variant="ghost" onClick={() => setPendingAction(null)} disabled={saving}>Keep order unchanged</Button>
-          <Button variant={needsReason ? 'danger' : 'primary'} onClick={submitAction} loading={saving}>
-            {pendingAction?.type === 'reject' ? 'Submit rejection'
-              : pendingAction?.type === 'resolve-cancellation' ? (pendingAction.status === 'approve' ? 'Approve cancellation' : 'Decline request')
-                : pendingAction?.type === 'complete-pickup' ? 'Confirm handover'
-                  : 'Confirm update'}
+          <Button variant={needsReason ? 'danger' : 'primary'} onClick={submitAction} loading={saving} disabled={saving}>
+            {pendingAction?.type === 'reject' ? 'Submit rejection' : 'Confirm update'}
           </Button>
         </div>
       }>
-        <p>Order {pendingAction?.order?.orderReference || pendingAction?.order?.id}</p>
+        <p>Order {pendingAction?.order?.orderReference || `#${pendingAction?.order?.id}`}</p>
         {pendingAction?.type === 'reject' && <p>Rejection completes this restaurant’s rejection only. Other restaurant sub-orders, if any, remain unchanged.</p>}
-        {pendingAction?.type === 'resolve-cancellation' && pendingAction.status === 'approve' && <p>This will cancel only this restaurant’s sub-order. Other restaurants’ sub-orders remain unchanged.</p>}
-        {pendingAction?.type === 'complete-pickup' && (
-          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: '14px 0' }}>
-            <input type="checkbox" checked={pickupConfirmed} onChange={(event) => setPickupConfirmed(event.target.checked)} />
-            <span>I confirm the pickup handover was completed.</span>
-          </label>
-        )}
         {needsReason && (
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
-            <span>{pendingAction?.type === 'reject' ? 'Rejection reason' : 'Reason for declining the cancellation request'}</span>
+            <span>Rejection reason (required)</span>
             <textarea required rows={3} value={actionReason} onChange={(event) => setActionReason(event.target.value)} style={{ ...controlStyle, resize: 'vertical' }} />
           </label>
         )}

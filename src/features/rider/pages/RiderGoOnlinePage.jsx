@@ -32,9 +32,15 @@ export default function RiderGoOnlinePage() {
     load();
   }, [load]);
 
+  const isRiderOnline = (avail) => (
+    typeof avail === 'string'
+      ? avail === 'online'
+      : Boolean(avail?.is_online || avail?.status === 'online')
+  );
+
   const handleToggle = async () => {
     if (saving) return;
-    const nextStatus = dashboard?.availability === 'online' ? 'offline' : 'online';
+    const nextStatus = isRiderOnline(dashboard?.availability) ? 'offline' : 'online';
     setSaving(true);
     setError(null);
     setNotice('');
@@ -84,7 +90,7 @@ export default function RiderGoOnlinePage() {
     );
   }
 
-  const isOnline = dashboard?.availability === 'online';
+  const isOnline = isRiderOnline(dashboard?.availability);
 
   return (
     <div className="rider-page-shell">

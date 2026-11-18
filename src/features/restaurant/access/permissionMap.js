@@ -63,6 +63,27 @@ export const OWNER_NAV_ITEMS = Object.freeze([
   { id: 'settings', label: 'Settings', href: '/owner/settings', section: 'Management', icon: 'settings', anyOf: ['business.profile.edit'] },
 ]);
 
+export const ORDER_HANDLER_PERMISSIONS = Object.freeze([
+  'orders.view',
+  'orders.accept',
+  'orders.reject',
+  'orders.preparation.update',
+  'orders.customer.view',
+]);
+
+export function canStaffPositionHandleOrders(position, orderHandlerPositions = [], canHandleOrdersFlag = null) {
+  if (typeof canHandleOrdersFlag === 'boolean') {
+    return canHandleOrdersFlag;
+  }
+  const normalized = String(position || '').trim().toLowerCase();
+  if (!normalized || !Array.isArray(orderHandlerPositions)) {
+    return false;
+  }
+  return orderHandlerPositions.some(
+    (allowed) => String(allowed || '').trim().toLowerCase() === normalized,
+  );
+}
+
 export function isOwnerMembership(membership) {
   return membership?.status === 'approved';
 }

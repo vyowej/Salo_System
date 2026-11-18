@@ -20,6 +20,22 @@ const COMPLETED_STATUSES = new Set(['delivered', 'completed', 'picked up']);
 const CANCELLED_STATUSES = new Set(['cancelled', 'rejected', 'failed']);
 const PAGE_SIZE = 10;
 
+const STATUS_LABELS = {
+  pending: 'Pending',
+  accepted: 'Accepted',
+  preparing: 'Preparing',
+  ready: 'Ready',
+  rejected: 'Rejected',
+  out_for_delivery: 'Out for Delivery',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+function formatStatusLabel(status) {
+  const key = String(status || '').trim().toLowerCase();
+  return STATUS_LABELS[key] || status || 'Pending';
+}
+
 function getOrderBucket(status) {
   const norm = String(status || '').trim().toLowerCase();
   if (COMPLETED_STATUSES.has(norm)) return 'completed';
@@ -84,8 +100,10 @@ export default function OrdersPage() {
           id: String(o.order_id),
           orderReference: o.order_reference,
           overallStatus: o.order_status,
+          rejectionReason: o.rejection_reason ?? null,
           createdAt: o.placed_at,
           grandTotal: Number(o.total_amount ?? 0),
+          totalAmount: Number(o.total_amount ?? 0),
           fulfillmentSummary: o.fulfillment === 'delivery' ? 'Delivery' : 'Pickup',
           paymentMethod: o.payment_method,
           paymentStatus: o.payment_status,
@@ -95,6 +113,8 @@ export default function OrdersPage() {
               restaurantName: o.restaurant_name,
               restaurantLogoUrl: o.restaurant_logo_url,
               fulfillment: o.fulfillment,
+              status: o.order_status,
+              rejectionReason: o.rejection_reason ?? null,
               deliveryFee: Number(o.delivery_fee ?? 0),
               items: [],
             },
@@ -235,7 +255,7 @@ export default function OrdersPage() {
                         size="sm"
                         icon={<StatusIcon bucket={bucket} />}
                       >
-                        {order.overallStatus}
+                        {formatStatusLabel(order.overallStatus)}
                       </Badge>
                       {isCancelRequested && (
                         <span className="customer-order-card__warn-chip">
@@ -252,6 +272,11 @@ export default function OrdersPage() {
                   <p className="customer-order-card__meta">
                     {formatDateTimeManila(order.createdAt)} · {order.paymentMethod || 'Cash on Delivery'}
                   </p>
+                  {order.rejectionReason && (
+                    <p style={{ margin: '4px 0 8px', fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)' }}>
+                      Rejection reason: {order.rejectionReason}
+                    </p>
+                  )}
 
                   {/* Row 3: sub-order chips + inline actions */}
                   <div className="customer-order-card__row3">

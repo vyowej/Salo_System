@@ -384,4 +384,116 @@ class CheckoutOrderTest extends TestCase
             ->assertJsonCount(0, 'data.orders');
         $this->actingAs($buyerB)->getJson("/api/customer/orders/{$orderId}")->assertStatus(404);
     }
+
+    public function test_expected_total_mismatch_returns_409_and_writes_nothing(): void
+    {
+        $buyer = $this->createUser('expmis');
+        $rest = $this->createOpenRestaurant('Mismatch Kitchen');
+        $item = $this->createMenuItem($rest, 'Lechon Kawali', '200.00');
+
+        $beforeCheckouts = DB::table('checkouts')->count();
+        $beforeOrders = DB::table('orders')->count();
+
+        $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-mismatch-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'pickup',
+                'expected_total' => 150.00,
+                'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(409)
+            ->assertJsonPath('data.groups.0.total_amount', 200);
+
+        $this->assertSame($beforeCheckouts, DB::table('checkouts')->count());
+        $this->assertSame($beforeOrders, DB::table('orders')->count());
+    }
+
+    public function test_self_order_is_blocked_for_owner_and_active_staff(): void
+    {
+        $owner = $this->createUser('selfown');
+        $staff = $this->createUser('selfstaff');
+        $rest = $this->createOpenRestaurant('Self Order Kitchen');
+        $item = $this->createMenuItem($rest, 'Lechon Kawali', '200.00');
+
+        DB::table('restaurant_owners')->insert([
+            'restaurant_id' => $rest,
+            'user_id' => $owner->user_id,
+            'joined_at' => now(),
+        ]);
+
+        DB::table('restaurant_staff')->insert([
+            'restaurant_id' => $rest,
+            'user_id' => $staff->user_id,
+            'staff_position' => 'Order Staff',
+            'staff_status' => 'active',
+            'joined_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($owner)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-self-own-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'pickup',
+                'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.restaurant_id']);
+
+        $this->actingAs($staff)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-self-staff-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'pickup',
+                'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.restaurant_id']);
+    }
+
+    public function test_duplicate_idempotency_key_returns_original_for_same_user_and_409_for_other_user(): void
+    {
+        $buyer = $this->createUser('idem1');
+        $otherBuyer = $this->createUser('idem2');
+        $rest = $this->createOpenRestaurant('Idem Kitchen');
+        $item = $this->createMenuItem($rest, 'Lechon Kawali', '200.00');
+        $sharedKey = 'idem-shared-'.random_int(10000, 99999);
+
+        $first = $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => $sharedKey,
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'pickup',
+                'expected_total' => 200.00,
+                'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(201);
+
+        $sameUserRepeat = $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => $sharedKey,
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'pickup',
+                'expected_total' => 200.00,
+                'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(201);
+
+        $this->assertSame($first->json('data.checkout.checkout_id'), $sameUserRepeat->json('data.checkout.checkout_id'));
+
+        $this->actingAs($otherBuyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => $sharedKey,
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'pickup',
+                'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+            ]],
+        ])->assertStatus(409);
+    }
 }

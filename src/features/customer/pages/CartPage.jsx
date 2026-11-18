@@ -6,6 +6,7 @@ import useAddresses from '../../../hooks/useAddresses';
 import Button from '../../../components/common/Button';
 import RestaurantImage from '../components/RestaurantImage';
 import { checkAddressCoverage } from '../utils/deliveryCoverage';
+import { findAddressBySelectionId } from '../utils/checkoutAddressValidation';
 import './CartPage.css';
 
 export default function CartPage() {
@@ -118,7 +119,7 @@ export default function CartPage() {
       onSelect(null);
       return;
     }
-    const matched = savedAddresses.find((a) => a.id === value);
+    const matched = findAddressBySelectionId(savedAddresses, value);
     if (matched) {
       onSelect(matched);
     } else {
@@ -151,7 +152,7 @@ export default function CartPage() {
   };
 
   const confirmAllSameAddress = () => {
-    const chosen = savedAddresses.find((a) => a.id === allSameAddressModal.selectedAddressId) || savedAddresses[0];
+    const chosen = findAddressBySelectionId(savedAddresses, allSameAddressModal.selectedAddressId) || savedAddresses[0];
     if (chosen) {
       setAllRestaurantsAddress(chosen);
     }

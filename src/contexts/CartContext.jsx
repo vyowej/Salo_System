@@ -1,5 +1,7 @@
 import { createContext, useState, useEffect, useMemo, useCallback } from 'react';
 import customerService from '../services/customerService';
+import addressService, { ADDRESSES_CHANGED_EVENT } from '../services/addressService';
+import { findAddressBySelectionId } from '../features/customer/utils/checkoutAddressValidation';
 
 const CartContext = createContext(null);
 const CART_STORAGE_KEY = 'salo_multi_cart';
@@ -111,19 +113,48 @@ export function CartProvider({ children }) {
     }
   }, [itemAddresses]);
 
-  // Ensure default address is assigned to any restaurant sub-order & line item that lacks one
+  // Track reactive saved addresses from addressService
+  const [savedAddresses, setSavedAddresses] = useState(() => addressService.getAddresses());
+  const [defaultAddress, setDefaultAddress] = useState(() => addressService.getDefaultAddress());
+  const [addressesLoaded, setAddressesLoaded] = useState(() => addressService.isLoaded());
+
   useEffect(() => {
-    const defaultAddr = customerService.getDefaultAddress();
-    if (!defaultAddr || items.length === 0) return;
+    if (typeof window === 'undefined') return undefined;
+    const syncAddresses = () => {
+      setSavedAddresses(addressService.getAddresses());
+      setDefaultAddress(addressService.getDefaultAddress());
+      setAddressesLoaded(addressService.isLoaded());
+    };
+    window.addEventListener(ADDRESSES_CHANGED_EVENT, syncAddresses);
+    return () => window.removeEventListener(ADDRESSES_CHANGED_EVENT, syncAddresses);
+  }, []);
+
+  // Ensure default address is assigned into state for any new restaurant sub-order & line item,
+  // and reconcile stored selections when saved addresses load or change.
+  useEffect(() => {
+    if (items.length === 0) return;
 
     setRestaurantAddressesState((prev) => {
       let changed = false;
       const next = { ...prev };
       items.forEach((item) => {
         const rId = item.restaurantId || 'unknown-restaurant';
-        if (!next[rId]) {
-          next[rId] = defaultAddr;
-          changed = true;
+        if (!(rId in next) || next[rId] === undefined) {
+          if (defaultAddress) {
+            next[rId] = defaultAddress;
+            changed = true;
+          }
+          return;
+        }
+        if (next[rId] && addressesLoaded) {
+          const matched = findAddressBySelectionId(savedAddresses, next[rId].id);
+          if (!matched) {
+            next[rId] = null;
+            changed = true;
+          } else if (matched !== next[rId]) {
+            next[rId] = matched;
+            changed = true;
+          }
         }
       });
       return changed ? next : prev;
@@ -137,8 +168,20 @@ export function CartProvider({ children }) {
       items.forEach((item) => {
         const rId = item.restaurantId || 'unknown-restaurant';
         if (!(item.cartItemId in next)) {
-          next[item.cartItemId] = restaurantAddresses[rId] || defaultAddr;
-          changed = true;
+          const fallback = restaurantAddresses[rId] || defaultAddress;
+          if (fallback) {
+            next[item.cartItemId] = fallback;
+            changed = true;
+          }
+        } else if (next[item.cartItemId] && addressesLoaded) {
+          const matched = findAddressBySelectionId(savedAddresses, next[item.cartItemId].id);
+          if (!matched) {
+            next[item.cartItemId] = null;
+            changed = true;
+          } else if (matched !== next[item.cartItemId]) {
+            next[item.cartItemId] = matched;
+            changed = true;
+          }
         }
       });
 
@@ -151,7 +194,7 @@ export function CartProvider({ children }) {
 
       return changed ? next : prev;
     });
-  }, [items, restaurantAddresses]);
+  }, [items, restaurantAddresses, savedAddresses, defaultAddress, addressesLoaded]);
 
   const addItem = useCallback((item) => {
     // item: { id, name, price, quantity, restaurantId, restaurantName, image, selectedAddOns: [] }
@@ -182,14 +225,15 @@ export function CartProvider({ children }) {
       ];
     });
 
-    // Ensure restaurant and item have assigned addresses
+    // Ensure restaurant and item have assigned addresses when a default exists
     setRestaurantAddressesState((prev) => {
-      if (prev[rId]) return prev;
+      if (prev[rId] || !defaultAddr) return prev;
       return { ...prev, [rId]: defaultAddr };
     });
 
     setItemAddressesState((prev) => {
       const parentAddress = restaurantAddresses[rId] || defaultAddr;
+      if (!parentAddress) return prev;
       return { ...prev, [newCartItemId]: parentAddress };
     });
   }, [restaurantAddresses]);
@@ -310,7 +354,6 @@ export function CartProvider({ children }) {
 
   // Multi-restaurant group computation
   const restaurantGroups = useMemo(() => {
-    const defaultAddr = customerService.getDefaultAddress();
     const groupsMap = {};
 
     items.forEach((item) => {
@@ -318,7 +361,9 @@ export function CartProvider({ children }) {
       if (!groupsMap[rId]) {
         const mode = restaurantAddressModes[rId] || 'single';
         const baseDeliveryFee = item.deliveryFee ?? 49;
-        const groupAddress = restaurantAddresses[rId] || defaultAddr || null;
+        const groupAddress = rId in restaurantAddresses
+          ? (restaurantAddresses[rId] ?? null)
+          : (defaultAddress || null);
 
         groupsMap[rId] = {
           restaurantId: rId,
@@ -396,7 +441,7 @@ export function CartProvider({ children }) {
     });
 
     return Object.values(groupsMap);
-  }, [items, restaurantFulfillment, restaurantAddresses, restaurantAddressModes, itemAddresses]);
+  }, [items, restaurantFulfillment, restaurantAddresses, restaurantAddressModes, itemAddresses, defaultAddress]);
 
   // Overall totals
   const totalItemCount = useMemo(() => {

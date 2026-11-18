@@ -1,6 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
-import { buildRestaurantAccess, canAccessNavigationItem } from './permissionMap';
+import {
+  buildRestaurantAccess,
+  canAccessNavigationItem,
+  canStaffPositionHandleOrders,
+  ORDER_HANDLER_PERMISSIONS,
+} from './permissionMap';
 import RestaurantAccessContext from './restaurantAccessContext';
 
 export function resolveBackendAccessData(user) {
@@ -35,8 +40,23 @@ export function resolveBackendAccessData(user) {
     };
   });
 
+  const orderHandlerPositions = Array.isArray(user?.order_handler_positions)
+    ? user.order_handler_positions
+    : [];
+
   const staffMemberships = staffRows.map((st, idx) => {
     const restId = String(st.restaurant_id);
+    const canHandleOrders = canStaffPositionHandleOrders(
+      st.staff_position,
+      orderHandlerPositions,
+      st.can_handle_orders,
+    );
+    const explicitPermissions = Array.isArray(st.permissions) && st.permissions.length > 0
+      ? st.permissions
+      : [];
+    const permissions = canHandleOrders
+      ? Array.from(new Set([...explicitPermissions, ...ORDER_HANDLER_PERMISSIONS]))
+      : explicitPermissions.filter((perm) => !String(perm).startsWith('orders.'));
 
     if (st.restaurant_id && !restaurantMap.has(restId)) {
       restaurantMap.set(restId, {
@@ -56,9 +76,7 @@ export function resolveBackendAccessData(user) {
       status: st.staff_status || 'active',
       joinedAt: st.joined_at || null,
       position: st.staff_position || 'Staff',
-      permissions: Array.isArray(st.permissions) && st.permissions.length > 0
-        ? st.permissions
-        : ['orders.view', 'reservations.view', 'menu.view'],
+      permissions,
     };
   });
 

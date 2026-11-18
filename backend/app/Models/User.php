@@ -107,6 +107,7 @@ class User extends Authenticatable
                 'restaurant_name' => $row->restaurant_name,
                 'staff_position' => $row->staff_position,
                 'staff_status' => $row->staff_status,
+                'can_handle_orders' => self::isOrderHandlerPosition($row->staff_position),
                 'permissions' => null,
                 'joined_at' => $row->joined_at,
             ])
@@ -160,8 +161,24 @@ class User extends Authenticatable
             ],
             'restaurant_ownerships' => $ownerships,
             'restaurant_staff_assignments' => $staffAssignments,
+            'order_handler_positions' => array_values((array) config('salo.orders.handler_positions', [])),
             'rider_profile' => $riderProfile,
         ];
+    }
+
+    public static function isOrderHandlerPosition(?string $position): bool
+    {
+        $normalized = strtolower(trim((string) $position));
+        if ($normalized === '') {
+            return false;
+        }
+
+        $allowed = array_map(
+            static fn (mixed $item): string => strtolower(trim((string) $item)),
+            (array) config('salo.orders.handler_positions', []),
+        );
+
+        return in_array($normalized, $allowed, true);
     }
 
     public function hasDerivedRole(string $role): bool

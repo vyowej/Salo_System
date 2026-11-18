@@ -79,7 +79,10 @@ export default function RiderLayout({ children }) {
   }, []);
 
   const activeDelivery = dashboard?.active_delivery || null;
-  const availability = dashboard?.availability || 'offline';
+  const rawAvailability = dashboard?.availability;
+  const availability = typeof rawAvailability === 'string'
+    ? rawAvailability
+    : (rawAvailability?.status || (rawAvailability?.is_online ? 'online' : 'offline'));
   const statusPill = getStatusPill(availability, activeDelivery);
 
   const items = useMemo(

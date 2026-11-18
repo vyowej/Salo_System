@@ -40,6 +40,9 @@ class CustomerOrderService
                 'o.delivery_fee',
                 'o.total_amount',
                 'o.delivery_address_text',
+                'o.accepted_at',
+                'o.rejection_reason',
+                'o.rejected_at',
                 'o.placed_at',
                 'r.logo_image',
             ]);
@@ -89,6 +92,9 @@ class CustomerOrderService
                 'total_quantity' => (int) ($counts->total_qty ?? 0),
                 'payment_method' => $payment?->payment_method === 'cash' ? 'cod' : ($payment?->payment_method ?? 'cod'),
                 'payment_status' => $payment?->payment_status ?? 'pending',
+                'accepted_at' => $row->accepted_at,
+                'rejection_reason' => $row->rejection_reason,
+                'rejected_at' => $row->rejected_at,
                 'placed_at' => $row->placed_at,
             ];
         })->all();
@@ -180,6 +186,9 @@ class CustomerOrderService
                 'amount' => $payment ? (float) $payment->amount : (float) $row->total_amount,
             ],
             'items' => $items,
+            'accepted_at' => $row->accepted_at,
+            'rejection_reason' => $row->rejection_reason,
+            'rejected_at' => $row->rejected_at,
             'placed_at' => $row->placed_at,
         ];
     }

@@ -33,9 +33,15 @@ export default function RiderDashboardPage() {
     loadDashboard();
   }, [loadDashboard]);
 
+  const isRiderOnline = (avail) => (
+    typeof avail === 'string'
+      ? avail === 'online'
+      : Boolean(avail?.is_online || avail?.status === 'online')
+  );
+
   const handleToggleAvailability = async () => {
     if (toggling) return;
-    const nextStatus = dashboard?.availability === 'online' ? 'offline' : 'online';
+    const nextStatus = isRiderOnline(dashboard?.availability) ? 'offline' : 'online';
     setToggling(true);
     setError(null);
     try {
@@ -69,7 +75,7 @@ export default function RiderDashboardPage() {
 
   const rider = dashboard?.rider || {};
   const stats = dashboard?.stats || {};
-  const isOnline = dashboard?.availability === 'online';
+  const isOnline = isRiderOnline(dashboard?.availability);
   const activeDelivery = dashboard?.active_delivery || null;
   const displayName = user?.name || rider.name || user?.username || 'Rider';
 
