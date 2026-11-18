@@ -56,7 +56,6 @@ export default function AdminTopbar({
   const canViewSupport = hasAdminPermission(currentAdmin.role, 'support', 'view');
   const canViewSettings = hasAdminPermission(currentAdmin.role, 'settings', 'view');
   const canViewAdmins = hasAdminPermission(currentAdmin.role, 'administrators', 'view');
-  const canViewActivity = hasAdminPermission(currentAdmin.role, 'activity', 'view');
 
   const initials = useMemo(() => (
     (currentAdmin.name || 'A')
@@ -271,7 +270,7 @@ export default function AdminTopbar({
               className="admin-topbar-popover__view-all"
               onClick={() => {
                 setNotifOpen(false);
-                navigate(canViewActivity ? '/admin/activity' : (canViewSupport ? '/admin/support' : '/admin'));
+                navigate('/admin/notifications');
               }}
             >
               View all

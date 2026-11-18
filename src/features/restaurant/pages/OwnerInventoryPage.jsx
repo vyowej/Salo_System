@@ -50,21 +50,41 @@ export default function OwnerInventoryPage() {
 
   const can = (permission) => access.canAccess([permission]);
 
-  const loadInventory = useCallback(() => {
+  const loadInventory = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
+      const [rawItems, rawCategories] = await Promise.all([
+        ownerService.fetchMenuItems(restaurantId),
+        ownerService.fetchMenuCategories(restaurantId),
+      ]);
       setItems(ownerService.getInventoryItems(restaurantId));
-      setMenuItems(ownerService.getMenuItems(restaurantId)
-        .map(normalizeMenuItem)
-        .map(getMenuStockDisplay));
-      setCategories(normalizeMenuCategories({
-        categories: ownerService.getMenuCategories(restaurantId),
-      }));
+      setMenuItems(
+        (rawItems || [])
+          .map((item) =>
+            normalizeMenuItem({
+              ...item,
+              photo: item.photo_url ? { id: `item-${item.id}`, src: item.photo_url } : null,
+            }),
+          )
+          .map(getMenuStockDisplay),
+      );
+      setCategories(
+        normalizeMenuCategories({
+          categories: (rawCategories || []).map((cat) => ({
+            id: cat.id,
+            name: cat.name,
+            description: cat.description,
+            visible: cat.is_active !== false,
+            sortOrder: cat.sort_order ?? 0,
+            itemsCount: cat.items_count ?? 0,
+          })),
+        }),
+      );
       setSettings(ownerService.getInventoryConfig(restaurantId));
       if (historyItem) setHistory(ownerService.getInventoryMovements(restaurantId, historyItem));
     } catch (loadError) {
-      setError(loadError.message || INVENTORY_MENU_DISPLAY.errors.load);
+      setError(loadError?.message || INVENTORY_MENU_DISPLAY.errors.load);
     } finally {
       setLoading(false);
     }
@@ -86,14 +106,14 @@ export default function OwnerInventoryPage() {
   );
   const alertCounts = useMemo(() => getInventoryMenuAlertCounts(menuItems), [menuItems]);
 
-  const runAction = (action) => {
+  const runAction = async (action) => {
     setError('');
     setSaving(true);
     try {
-      action();
-      loadInventory();
+      await action();
+      await loadInventory();
     } catch (actionError) {
-      setError(actionError.message || INVENTORY_MENU_DISPLAY.errors.save);
+      setError(actionError?.message || INVENTORY_MENU_DISPLAY.errors.save);
     } finally {
       setSaving(false);
     }
@@ -197,9 +217,7 @@ export default function OwnerInventoryPage() {
     const nextAvailability = restoreAvailability
       ? 'available'
       : 'temporarily_unavailable';
-    runAction(() => {
-      ownerService.updateMenuItem(item.id, { availability: nextAvailability }, restaurantId);
-    });
+    runAction(() => ownerService.updateMenuItemAvailability(restaurantId, item.id, nextAvailability));
   };
 
   const openMenuEditor = (item) => {
@@ -259,7 +277,7 @@ export default function OwnerInventoryPage() {
                       aria-label={INVENTORY_MENU_DISPLAY.settings.fieldAriaLabel}
                       value={settings.deductionMode}
                       disabled={!can('inventory.adjustStock')}
-                      onChange={(event) => runAction(() => ownerService.setInventoryDeductionMode(event.target.value, restaurantId))}
+                      onChange={(event) => runAction(() => ownerService.updateInventoryConfig(restaurantId, { deductionMode: event.target.value }))}
                     >
                       {INVENTORY_MENU_DISPLAY.settings.modes.map((mode) => (
                         <option key={mode.value} value={mode.value}>{mode.label}</option>

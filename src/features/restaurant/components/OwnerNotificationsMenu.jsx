@@ -83,11 +83,11 @@ export default function OwnerNotificationsMenu() {
         )}
         footer={(
           <Link
-            to="/owner/orders"
+            to="/owner/notifications"
             style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' }}
             onClick={() => setOpen(false)}
           >
-            View orders
+            View all
           </Link>
         )}
       >

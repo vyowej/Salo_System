@@ -49,6 +49,7 @@ const OwnerProfilePage = lazy(() => import('./features/restaurant/pages/OwnerPro
 const OwnerTablesPage = lazy(() => import('./features/restaurant/pages/OwnerTablesPage'));
 const OwnerInventoryPage = lazy(() => import('./features/restaurant/pages/OwnerInventoryPage'));
 const TeamAndStaffPage = lazy(() => import('./features/restaurant/pages/TeamAndStaffPage'));
+const OwnerNotificationsPage = lazy(() => import('./features/restaurant/pages/OwnerNotificationsPage'));
 
 // Rider Module (Phase 5)
 import RiderLayout from './layouts/RiderLayout';
@@ -85,6 +86,7 @@ const AdminAdministratorsPage = lazy(() => import('./features/admin/pages/AdminA
 const AdminFeesPage = lazy(() => import('./features/admin/pages/AdminFeesPage'));
 const AdminFinancePage = lazy(() => import('./features/admin/pages/AdminFinancePage'));
 const AdminActivityPage = lazy(() => import('./features/admin/pages/AdminActivityPage'));
+const AdminNotificationsPage = lazy(() => import('./features/admin/pages/AdminNotificationsPage'));
 const AdminContentPage = lazy(() => import('./features/admin/pages/AdminContentPage'));
 const AdminDiscountsPage = lazy(() => import('./features/admin/pages/AdminDiscountsPage'));
 const AdminReportsPage = lazy(() => import('./features/admin/pages/AdminReportsPage'));
@@ -396,6 +398,7 @@ function AppShell() {
             <Route path="team" element={<RequireAccess itemId="team"><TeamAndStaffPage /></RequireAccess>} />
             <Route path="reports" element={<RequireAccess itemId="reports"><OwnerReportsPage /></RequireAccess>} />
             <Route path="activity" element={<RequireAccess itemId="activity"><OwnerActivityPage /></RequireAccess>} />
+            <Route path="notifications" element={<RequireAccess><OwnerNotificationsPage /></RequireAccess>} />
             <Route path="settings" element={<RequireAccess itemId="settings"><OwnerSettingsPage /></RequireAccess>} />
             <Route path="earnings" element={<RequireAccess itemId="reports"><Navigate to="/owner/reports" replace /></RequireAccess>} />
             <Route path="*" element={<RequireAccess><Navigate to="/owner" replace /></RequireAccess>} />
@@ -462,6 +465,7 @@ function AppShell() {
             <Route path="support" element={<AdminPermissionRoute module="support" topic="support"><AdminSupportPage /></AdminPermissionRoute>} />
             <Route path="content" element={<AdminPermissionRoute module="content" topic="content"><AdminContentPage /></AdminPermissionRoute>} />
             <Route path="activity" element={<AdminPermissionRoute module="activity" topic="activity"><AdminActivityPage /></AdminPermissionRoute>} />
+            <Route path="notifications" element={<AdminNotificationsPage />} />
             <Route path="settings" element={<AdminPermissionRoute module="settings" topic="settings"><AdminSettingsPage /></AdminPermissionRoute>} />
             <Route path="settings/security" element={<AdminPermissionRoute module="settings" topic="sessions"><AdminSecuritySettingsPage /></AdminPermissionRoute>} />
             <Route path="accounts/:id" element={<AdminPermissionRoute module="accounts" topic="accounts"><AdminRecordDetailPage entity="accounts" /></AdminPermissionRoute>} />

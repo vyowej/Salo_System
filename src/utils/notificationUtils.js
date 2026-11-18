@@ -179,3 +179,29 @@ export function normalizeUnreadCounts(raw) {
     by_workspace: counts,
   };
 }
+
+export function getNotificationDateBucketManila(createdAt) {
+  if (!createdAt) return 'Earlier';
+  const dt = new Date(createdAt);
+  if (Number.isNaN(dt.getTime())) return 'Earlier';
+
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' });
+  const todayKey = fmt.format(new Date());
+  const yestKey = fmt.format(new Date(Date.now() - 86400000));
+  const itemKey = fmt.format(dt);
+
+  if (itemKey === todayKey) return 'Today';
+  if (itemKey === yestKey) return 'Yesterday';
+  return 'Earlier';
+}
+
+export function groupNotificationsByDateManila(notifications) {
+  const buckets = { Today: [], Yesterday: [], Earlier: [] };
+  (Array.isArray(notifications) ? notifications : []).forEach((item) => {
+    buckets[getNotificationDateBucketManila(item?.created_at)].push(item);
+  });
+
+  return ['Today', 'Yesterday', 'Earlier']
+    .filter((key) => buckets[key].length > 0)
+    .map((key) => ({ label: key, items: buckets[key] }));
+}
