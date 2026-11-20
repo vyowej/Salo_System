@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from './useAuth';
-import locationApiService from '../services/locationApiService';
+import addressService from '../services/addressService';
 import riderService from '../services/riderService';
 import ownerService from '../services/ownerService';
 import restaurantService from '../services/restaurantService';
@@ -98,8 +98,8 @@ export function useRoleOnboarding(role, options = {}) {
     let cancelled = false;
     setCustomerAddressCheck((prev) => ({ ...prev, loading: true }));
 
-    locationApiService
-      .getCustomerAddresses()
+    addressService
+      .loadAddresses()
       .then((list) => {
         if (cancelled) return;
         const validList = Array.isArray(list) ? list : [];

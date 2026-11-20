@@ -21,7 +21,15 @@ class RequireRole
         }
 
         /** @var User|null $freshUser */
-        $freshUser = User::query()->find(Auth::guard('web')->id());
+        $freshUser = $request->attributes->get('_salo_fresh_user');
+        if (! $freshUser instanceof User || (int) $freshUser->user_id !== (int) Auth::guard('web')->id()) {
+            $freshUser = User::query()->find(Auth::guard('web')->id());
+            if ($freshUser instanceof User) {
+                $freshUser->clearRoleContextCache();
+                $request->attributes->set('_salo_fresh_user', $freshUser);
+                Auth::guard('web')->setUser($freshUser);
+            }
+        }
 
         if (! $freshUser || ! $freshUser->isActiveAccount()) {
             Auth::guard('web')->logout();

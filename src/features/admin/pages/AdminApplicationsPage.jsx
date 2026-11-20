@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
 import { DataTable, PageHeader, StatusBadge, showAdminToast } from '../components';
@@ -50,6 +50,7 @@ export default function AdminApplicationsPage() {
   const [riderApps, setRiderApps] = useState([]);
   const [restaurantMeta, setRestaurantMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [riderMeta, setRiderMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
+  const loadedTabsRef = useRef({ restaurant: false, rider: false });
 
   const canViewRestaurants = hasAdminPermission(currentAdmin.role, 'restaurants', 'view')
     || hasAdminPermission(currentAdmin.role, 'applications', 'view');
@@ -91,16 +92,29 @@ export default function AdminApplicationsPage() {
           per_page: 25,
         };
 
+        const shouldFetchRestaurant = Boolean(
+          canViewRestaurants && (activeType === 'restaurant' || !loadedTabsRef.current.restaurant),
+        );
+        const shouldFetchRider = Boolean(
+          canViewRiders && (activeType === 'rider' || !loadedTabsRef.current.rider),
+        );
+
         const [restRes, riderRes] = await Promise.all([
-          canViewRestaurants ? adminApiService.getApplications({ ...params, type: 'restaurant' }) : Promise.resolve({ items: [], meta: {} }),
-          canViewRiders ? adminApiService.getApplications({ ...params, type: 'rider' }) : Promise.resolve({ items: [], meta: {} }),
+          shouldFetchRestaurant ? adminApiService.getApplications({ ...params, type: 'restaurant' }) : Promise.resolve(null),
+          shouldFetchRider ? adminApiService.getApplications({ ...params, type: 'rider' }) : Promise.resolve(null),
         ]);
 
         if (!active) return;
-        setRestaurantApps((restRes.items || []).map((item) => mapListItem(item, 'restaurant')));
-        setRiderApps((riderRes.items || []).map((item) => mapListItem(item, 'rider')));
-        setRestaurantMeta(restRes.meta || { current_page: 1, last_page: 1, total: 0 });
-        setRiderMeta(riderRes.meta || { current_page: 1, last_page: 1, total: 0 });
+        if (restRes) {
+          loadedTabsRef.current.restaurant = true;
+          setRestaurantApps((restRes.items || []).map((item) => mapListItem(item, 'restaurant')));
+          setRestaurantMeta(restRes.meta || { current_page: 1, last_page: 1, total: 0 });
+        }
+        if (riderRes) {
+          loadedTabsRef.current.rider = true;
+          setRiderApps((riderRes.items || []).map((item) => mapListItem(item, 'rider')));
+          setRiderMeta(riderRes.meta || { current_page: 1, last_page: 1, total: 0 });
+        }
       } catch (err) {
         if (active) setError(err?.message || 'Failed to load applications from server.');
       } finally {
@@ -111,7 +125,7 @@ export default function AdminApplicationsPage() {
     return () => {
       active = false;
     };
-  }, [statusFilter, dateRange, globalQuery, page, revision, canViewRestaurants, canViewRiders]);
+  }, [activeType, statusFilter, dateRange, globalQuery, page, revision, canViewRestaurants, canViewRiders]);
 
   async function openApplicationDetail(kind, item) {
     try {

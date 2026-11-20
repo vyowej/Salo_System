@@ -63,3 +63,53 @@ test('customerService: unbacked Category B collections return honest empty array
   assert.deepEqual(customerService.getFavoriteRestaurants(), []);
   assert.deepEqual(customerService.getNotifications(), []);
 });
+
+test('addressService.fetchAddresses deduplicates concurrent in-flight requests and allows subsequent fresh calls', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCount = 0;
+
+  try {
+    globalThis.fetch = async (url) => {
+      if (String(url).endsWith('/customer/addresses')) {
+        fetchCount += 1;
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              addresses: [
+                {
+                  id: 1,
+                  address_id: 10,
+                  label: 'Home',
+                  is_default: true,
+                  province: 'Metro Manila',
+                  city: 'Quezon City',
+                  barangay: 'Bagumbayan',
+                  street: '123 Main St',
+                },
+              ],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('{}', { status: 404 });
+    };
+
+    addressService.clearCache();
+    const [resA, resB] = await Promise.all([
+      addressService.fetchAddresses(),
+      addressService.fetchAddresses(),
+    ]);
+
+    assert.equal(fetchCount, 1);
+    assert.equal(resA.length, 1);
+    assert.equal(resB.length, 1);
+
+    // Subsequent call after first settled triggers a new request
+    await addressService.fetchAddresses();
+    assert.equal(fetchCount, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

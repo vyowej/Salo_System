@@ -180,4 +180,89 @@ class AdminManagementTest extends TestCase
             'rider_status' => 'suspended',
         ]);
     }
+
+    public function test_admin_restaurants_primary_owner_tie_breaking_filter_totals_and_query_count(): void
+    {
+        $admin = User::create([
+            'username' => 'admin_tie_'.random_int(1000, 9999),
+            'first_name' => 'Tie',
+            'last_name' => 'Admin',
+            'email' => 'admintie_'.random_int(1000, 9999).'@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'admin',
+            'account_status' => 'active',
+        ]);
+
+        $laterOwner = User::create([
+            'username' => 'owner_later_'.random_int(1000, 9999),
+            'first_name' => 'Later',
+            'last_name' => 'Owner',
+            'email' => 'later_owner@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'active',
+        ]);
+
+        $primaryOwner = User::create([
+            'username' => 'owner_primary_'.random_int(1000, 9999),
+            'first_name' => 'Earliest',
+            'last_name' => 'Founder',
+            'email' => 'earliest_founder@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'active',
+        ]);
+
+        $tag = 'TieRest' . random_int(1000, 9999);
+        $addressId = app(\App\Support\AddressService::class)->createAddress([
+            'province' => 'Metro Manila',
+            'city' => 'Makati City',
+            'barangay' => 'Poblacion',
+            'street' => '88 Rockwell Dr',
+        ]);
+
+        $restId = DB::table('restaurants')->insertGetId([
+            'restaurant_name' => "{$tag} Bistro",
+            'registered_name' => "{$tag} Holdings Inc",
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'corporation',
+            'contact_phone' => '+639178887777',
+            'business_email' => 'bistro@example.com',
+            'address_id' => $addressId,
+            'offers_delivery' => 1,
+            'offers_pickup' => 1,
+            'offers_dine_in' => 1,
+            'restaurant_status' => 'active',
+            'created_at' => '2026-10-15 10:00:00',
+            'updated_at' => '2026-10-15 10:00:00',
+        ]);
+
+        // Insert later owner first, earliest owner second to verify ORDER BY joined_at ASC tie-breaking
+        DB::table('restaurant_owners')->insert([
+            [
+                'restaurant_id' => $restId,
+                'user_id' => $laterOwner->user_id,
+                'joined_at' => '2026-05-10 12:00:00',
+            ],
+            [
+                'restaurant_id' => $restId,
+                'user_id' => $primaryOwner->user_id,
+                'joined_at' => '2026-01-15 08:30:00',
+            ],
+        ]);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $res = $this->actingAs($admin)
+            ->getJson('/api/admin/restaurants?search=' . urlencode($tag) . '&status=active')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.restaurant_id', $restId)
+            ->assertJsonPath('data.items.0.owner_name', 'Earliest Founder')
+            ->assertJsonPath('data.items.0.owner_email', 'earliest_founder@example.com')
+            ->assertJsonPath('data.items.0.zone', 'Makati City');
+
+        $this->assertLessThanOrEqual(5, count(DB::getQueryLog()), 'GET /api/admin/restaurants must run at most 5 queries (no correlated subqueries or N+1).');
+    }
 }

@@ -86,6 +86,8 @@ export default function AdminTopbar({
   useEffect(() => {
     if (!notifOpen) return undefined;
 
+    refresh();
+
     const handleMouseDown = (event) => {
       if (notifRef.current && !notifRef.current.contains(event.target)) {
         setNotifOpen(false);
@@ -104,7 +106,7 @@ export default function AdminTopbar({
       document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [notifOpen]);
+  }, [notifOpen, refresh]);
 
   const groupedNotifications = useMemo(() => {
     const sliced = notifications.slice(0, 8);

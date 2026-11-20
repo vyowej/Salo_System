@@ -170,6 +170,120 @@ class AdminOrdersTest extends TestCase
         $this->actingAs($admin)->getJson('/api/admin/orders?date_from=2026-10-20&date_to=2026-10-01')->assertStatus(422);
     }
 
+    public function test_date_filter_asia_manila_midnight_boundaries_latest_payment_and_query_count(): void
+    {
+        [$admin, $fixtures] = $this->seedOrderFixtures();
+
+        $sampleOrder = DB::table('orders')->where('order_id', $fixtures['order1Id'])->first();
+        $tag = 'BndTest' . random_int(1000, 9999);
+
+        $insertOrderAt = function (string $placedAt, string $suffix) use ($sampleOrder, $tag): int {
+            return DB::table('orders')->insertGetId([
+                'checkout_id' => $sampleOrder->checkout_id,
+                'restaurant_id' => $sampleOrder->restaurant_id,
+                'customer_id' => $sampleOrder->customer_id,
+                'restaurant_name' => "Casa {$tag}",
+                'customer_name' => "Customer {$tag}",
+                'order_reference' => "SALO-BND-{$suffix}-" . random_int(1000, 9999),
+                'order_type' => 'delivery',
+                'order_status' => 'pending',
+                'subtotal_amount' => 100.00,
+                'delivery_fee' => 40.00,
+                'total_amount' => 140.00,
+                'placed_at' => $placedAt,
+            ]);
+        };
+
+        $beforeStartId = $insertOrderAt('2026-10-09 23:59:59', 'BEFORE');
+        $atStartId = $insertOrderAt('2026-10-10 00:00:00', 'START');
+        $atEndId = $insertOrderAt('2026-10-10 23:59:59', 'END');
+        $afterEndId = $insertOrderAt('2026-10-11 00:00:00', 'AFTER');
+
+        // Multi-payment allocation characterization: older failed payment + newer paid payment on $atStartId
+        $oldPayId = DB::table('payments')->insertGetId([
+            'checkout_id' => $sampleOrder->checkout_id,
+            'customer_id' => $sampleOrder->customer_id,
+            'payment_method' => 'card',
+            'payment_status' => 'failed',
+            'amount' => 140.00,
+        ]);
+        DB::table('payment_allocations')->insert([
+            'payment_id' => $oldPayId,
+            'order_id' => $atStartId,
+            'allocation_type' => 'order_payment',
+            'amount' => 140.00,
+        ]);
+
+        $newPayId = DB::table('payments')->insertGetId([
+            'checkout_id' => $sampleOrder->checkout_id,
+            'customer_id' => $sampleOrder->customer_id,
+            'payment_method' => 'cash',
+            'payment_status' => 'paid',
+            'amount' => 140.00,
+            'paid_at' => '2026-10-10 00:05:00',
+        ]);
+        DB::table('payment_allocations')->insert([
+            'payment_id' => $newPayId,
+            'order_id' => $atStartId,
+            'allocation_type' => 'order_payment',
+            'amount' => 140.00,
+        ]);
+
+        // Also attach an order_refund allocation with an even higher payment_id to prove only 'order_payment' is picked
+        $nonOrderPayId = DB::table('payments')->insertGetId([
+            'checkout_id' => $sampleOrder->checkout_id,
+            'customer_id' => $sampleOrder->customer_id,
+            'payment_method' => 'cash',
+            'payment_type' => 'refund',
+            'payment_status' => 'pending',
+            'refund_status' => 'requested',
+            'related_payment_id' => $newPayId,
+            'amount' => 40.00,
+        ]);
+        DB::table('payment_allocations')->insert([
+            'payment_id' => $nonOrderPayId,
+            'order_id' => $atStartId,
+            'allocation_type' => 'order_refund',
+            'amount' => 40.00,
+        ]);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $res = $this->actingAs($admin)
+            ->getJson('/api/admin/orders?date_from=2026-10-10&date_to=2026-10-10&search=' . urlencode($tag))
+            ->assertOk();
+
+        $queriesWithoutPaymentFilter = count(DB::getQueryLog());
+        $this->assertLessThanOrEqual(6, $queriesWithoutPaymentFilter, 'GET /api/admin/orders must execute at most 6 SQL queries.');
+
+        $returnedIds = collect($res->json('data.items'))->pluck('order_id')->all();
+        $this->assertSame([$atEndId, $atStartId], $returnedIds);
+        $this->assertNotContains($beforeStartId, $returnedIds);
+        $this->assertNotContains($afterEndId, $returnedIds);
+        $this->assertSame(2, $res->json('data.meta.total'));
+
+        // Latest order_payment allocation must win
+        $startItem = collect($res->json('data.items'))->firstWhere('order_id', $atStartId);
+        $this->assertSame('cod', $startItem['payment_method']);
+        $this->assertSame('paid', $startItem['payment_status']);
+        $this->assertSame('2026-10-10T00:05:00+08:00', $startItem['paid_at']);
+
+        // Filtering by payment_status=paid and payment_status=failed must preserve exact pagination totals
+        DB::flushQueryLog();
+        $paidRes = $this->actingAs($admin)
+            ->getJson('/api/admin/orders?payment_status=paid&search=' . urlencode($tag))
+            ->assertOk();
+        $this->assertLessThanOrEqual(6, count(DB::getQueryLog()));
+        $this->assertSame(1, $paidRes->json('data.meta.total'));
+        $this->assertSame($atStartId, $paidRes->json('data.items.0.order_id'));
+
+        $failedRes = $this->actingAs($admin)
+            ->getJson('/api/admin/orders?payment_status=failed&search=' . urlencode($tag))
+            ->assertOk();
+        $this->assertSame(0, $failedRes->json('data.meta.total'));
+    }
+
     /**
      * @return array{0:User,1:array<string,mixed>}
      */

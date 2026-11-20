@@ -6,6 +6,8 @@
 
 import apiClient from './apiClient.js';
 
+let inFlightCustomerAddressesPromise = null;
+
 const FALLBACK_PROVINCES = [
   'Metro Manila',
   'Misamis Oriental',
@@ -75,8 +77,20 @@ export const locationApiService = {
 
   // Customer Saved Addresses
   async getCustomerAddresses() {
-    const res = await apiClient.get('/customer/addresses');
-    return res?.data?.addresses || [];
+    if (inFlightCustomerAddressesPromise) {
+      return inFlightCustomerAddressesPromise;
+    }
+
+    inFlightCustomerAddressesPromise = (async () => {
+      try {
+        const res = await apiClient.get('/customer/addresses');
+        return res?.data?.addresses || [];
+      } finally {
+        inFlightCustomerAddressesPromise = null;
+      }
+    })();
+
+    return inFlightCustomerAddressesPromise;
   },
 
   async createCustomerAddress(payload) {

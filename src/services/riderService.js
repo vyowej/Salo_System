@@ -1,10 +1,24 @@
 import apiClient from './apiClient.js';
 import locationApiService from './locationApiService.js';
 
+let inFlightDashboardPromise = null;
+
 export const riderService = {
   async getDashboard() {
-    const response = await apiClient.get('/rider/dashboard');
-    return response?.data ?? null;
+    if (inFlightDashboardPromise) {
+      return inFlightDashboardPromise;
+    }
+
+    inFlightDashboardPromise = (async () => {
+      try {
+        const response = await apiClient.get('/rider/dashboard');
+        return response?.data ?? null;
+      } finally {
+        inFlightDashboardPromise = null;
+      }
+    })();
+
+    return inFlightDashboardPromise;
   },
 
   async getProfile() {

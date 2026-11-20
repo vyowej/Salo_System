@@ -729,4 +729,48 @@ class RestaurantOrderHandlingTest extends TestCase
             $this->assertMatchesRegularExpression($manilaIsoRegex, (string) $ts);
         }
     }
+
+    public function test_customer_and_restaurant_orders_list_status_filter_totals_and_query_counts(): void
+    {
+        $owner = $this->createUser('customer', 'perfownord');
+        $buyer = $this->createUser('customer', 'perfbuyord');
+        [$restId, $order1Id] = $this->createRestaurantWithOrder($owner, $buyer);
+        [$order2Id] = $this->createAdditionalOrderForRestaurant($restId, $buyer);
+        [$order3Id] = $this->createAdditionalOrderForRestaurant($restId, $buyer);
+
+        // Move order2Id to accepted and order3Id to cancelled
+        $this->actingAs($owner)->postJson("/api/restaurant/orders/{$order2Id}/accept", ['restaurant_id' => $restId])->assertOk();
+        $this->actingAs($buyer)->postJson("/api/customer/orders/{$order3Id}/cancel")->assertOk();
+
+        // Customer list unfiltered and filtered by status
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $custAll = $this->actingAs($buyer)->getJson('/api/customer/orders')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 3);
+        $this->assertLessThanOrEqual(6, count(DB::getQueryLog()), 'GET /api/customer/orders must execute at most 6 SQL queries.');
+        $this->assertCount(3, $custAll->json('data.orders'));
+
+        DB::flushQueryLog();
+        $this->actingAs($buyer)->getJson('/api/customer/orders?status=accepted')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 1)
+            ->assertJsonPath('data.orders.0.order_id', $order2Id);
+        $this->assertLessThanOrEqual(6, count(DB::getQueryLog()));
+
+        // Restaurant list unfiltered and filtered by status
+        DB::flushQueryLog();
+        $restAll = $this->actingAs($owner)->getJson("/api/restaurant/orders?restaurant_id={$restId}")
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 3);
+        $this->assertLessThanOrEqual(10, count(DB::getQueryLog()), 'GET /api/restaurant/orders must execute at most 10 SQL queries.');
+        $this->assertCount(3, $restAll->json('data.orders'));
+
+        DB::flushQueryLog();
+        $this->actingAs($owner)->getJson("/api/restaurant/orders?restaurant_id={$restId}&status=cancelled")
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 1)
+            ->assertJsonPath('data.orders.0.order_id', $order3Id);
+        $this->assertLessThanOrEqual(10, count(DB::getQueryLog()));
+    }
 }

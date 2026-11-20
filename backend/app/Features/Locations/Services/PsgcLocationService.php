@@ -273,7 +273,7 @@ class PsgcLocationService
         // Database cities for this province
         $dbCities = DB::table('cities')
             ->join('provinces', 'provinces.province_id', '=', 'cities.province_id')
-            ->whereRaw('LOWER(provinces.province_name) = ?', [mb_strtolower($provinceName)])
+            ->where('provinces.province_name', $provinceName)
             ->select('cities.city_name')
             ->get();
 
@@ -341,10 +341,10 @@ class PsgcLocationService
         $query = DB::table('barangays')
             ->join('cities', 'cities.city_id', '=', 'barangays.city_id')
             ->join('provinces', 'provinces.province_id', '=', 'cities.province_id')
-            ->whereRaw('LOWER(cities.city_name) = ?', [mb_strtolower($cityName)]);
+            ->where('cities.city_name', $cityName);
 
         if ($provinceName !== null && $provinceName !== '') {
-            $query->whereRaw('LOWER(provinces.province_name) = ?', [mb_strtolower($provinceName)]);
+            $query->where('provinces.province_name', $provinceName);
         }
 
         $dbBarangays = $query->select('barangays.barangay_name', 'provinces.province_name')->get();

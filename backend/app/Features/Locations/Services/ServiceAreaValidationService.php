@@ -17,7 +17,7 @@ class ServiceAreaValidationService
      *   reason: string
      * }
      */
-    public function checkPlatformSupport(string $province, string $city, ?string $barangay = null): array
+    public function checkPlatformSupport(string $province, string $city, ?string $barangay = null, ?iterable $preloadedActiveAreas = null): array
     {
         $cleanProvince = mb_strtolower(trim($province));
         $cleanCity = mb_strtolower(trim($city));
@@ -33,21 +33,31 @@ class ServiceAreaValidationService
             ];
         }
 
-        $activeAreas = DB::table('platform_service_areas as psa')
-            ->join('provinces as p', 'p.province_id', '=', 'psa.province_id')
-            ->leftJoin('cities as c', 'c.city_id', '=', 'psa.city_id')
-            ->leftJoin('barangays as b', 'b.barangay_id', '=', 'psa.barangay_id')
-            ->where('psa.is_active', 1)
-            ->whereRaw('LOWER(p.province_name) = ?', [$cleanProvince])
-            ->select([
-                'psa.platform_service_area_id',
-                'psa.area_level',
-                'psa.city_id',
-                'psa.barangay_id',
-                'c.city_name',
-                'b.barangay_name',
-            ])
-            ->get();
+        if ($preloadedActiveAreas !== null) {
+            $activeAreas = [];
+            foreach ($preloadedActiveAreas as $candidate) {
+                if (mb_strtolower((string) ($candidate->province_name ?? '')) === $cleanProvince) {
+                    $activeAreas[] = $candidate;
+                }
+            }
+        } else {
+            $activeAreas = DB::table('platform_service_areas as psa')
+                ->join('provinces as p', 'p.province_id', '=', 'psa.province_id')
+                ->leftJoin('cities as c', 'c.city_id', '=', 'psa.city_id')
+                ->leftJoin('barangays as b', 'b.barangay_id', '=', 'psa.barangay_id')
+                ->where('psa.is_active', 1)
+                ->where('p.province_name', $cleanProvince)
+                ->select([
+                    'psa.platform_service_area_id',
+                    'psa.area_level',
+                    'psa.city_id',
+                    'psa.barangay_id',
+                    'p.province_name',
+                    'c.city_name',
+                    'b.barangay_name',
+                ])
+                ->get();
+        }
 
         // 1. Exact barangay match
         if ($cleanBarangay !== '') {
@@ -107,6 +117,37 @@ class ServiceAreaValidationService
             'matched_area_id' => null,
             'reason' => "{$locationLabel} is currently outside SALO's active service areas.",
         ];
+    }
+
+    /**
+     * Load active platform service areas for a batch of province names in a single query.
+     *
+     * @param  list<string>  $provinceNames
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    public function loadActiveAreasForProvinces(array $provinceNames)
+    {
+        $uniqueProvinces = array_values(array_unique(array_filter(array_map('trim', $provinceNames))));
+        if ($uniqueProvinces === []) {
+            return collect();
+        }
+
+        return DB::table('platform_service_areas as psa')
+            ->join('provinces as p', 'p.province_id', '=', 'psa.province_id')
+            ->leftJoin('cities as c', 'c.city_id', '=', 'psa.city_id')
+            ->leftJoin('barangays as b', 'b.barangay_id', '=', 'psa.barangay_id')
+            ->where('psa.is_active', 1)
+            ->whereIn('p.province_name', $uniqueProvinces)
+            ->select([
+                'psa.platform_service_area_id',
+                'psa.area_level',
+                'psa.city_id',
+                'psa.barangay_id',
+                'p.province_name',
+                'c.city_name',
+                'b.barangay_name',
+            ])
+            ->get();
     }
 
     /**

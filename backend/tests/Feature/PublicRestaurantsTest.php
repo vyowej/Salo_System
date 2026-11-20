@@ -262,6 +262,14 @@ class PublicRestaurantsTest extends TestCase
             ->assertStatus(200)
             ->assertJsonCount(1, 'data.restaurants')
             ->assertJsonPath('data.restaurants.0.id', $r1);
+
+        // Mixed-case category filter after dropping LOWER(rc.category_name) + query count regression check (<= 6 queries)
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->getJson('/api/restaurants?category=fIlIpInO')
+            ->assertStatus(200)
+            ->assertJsonCount(2, 'data.restaurants');
+        $this->assertLessThanOrEqual(6, count(DB::getQueryLog()), 'GET /api/restaurants must execute at most 6 SQL queries.');
     }
 
     public function test_availability_handles_open_closed_multiple_periods_overnight_and_toggles(): void

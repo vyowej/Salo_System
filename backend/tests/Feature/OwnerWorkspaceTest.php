@@ -338,4 +338,70 @@ class OwnerWorkspaceTest extends TestCase
             'action' => 'owner_menu_item_updated',
         ]);
     }
+
+    public function test_menu_categories_mixed_case_duplicate_guard_items_sort_and_setup_status_query_counts(): void
+    {
+        $owner = $this->createUser('customer', 'perfown');
+        $restId = $this->createOwnedRestaurant($owner, 'active', 'Perf Menu Kitchen');
+
+        $catA = $this->actingAs($owner)->postJson('/api/restaurant/menu/categories', [
+            'restaurant_id' => $restId,
+            'category_name' => 'Main Dishes',
+        ])->assertStatus(201)->json('data.category');
+
+        // Mixed-case duplicate category name must still be rejected with 422 after dropping LOWER()
+        $this->actingAs($owner)->postJson('/api/restaurant/menu/categories', [
+            'restaurant_id' => $restId,
+            'category_name' => 'mAiN dIsHeS',
+        ])->assertStatus(422)->assertJsonValidationErrors(['category_name']);
+
+        $catB = $this->actingAs($owner)->postJson('/api/restaurant/menu/categories', [
+            'restaurant_id' => $restId,
+            'category_name' => 'Appetizers',
+        ])->assertStatus(201)->json('data.category');
+
+        // Updating catB to mixed-case duplicate of catA must also be rejected with 422
+        $this->actingAs($owner)->patchJson("/api/restaurant/menu/categories/{$catB['id']}", [
+            'restaurant_id' => $restId,
+            'category_name' => 'MAIN DISHES',
+        ])->assertStatus(422)->assertJsonValidationErrors(['category_name']);
+
+        // Reorder so catB (Appetizers) is sort_order 1 and catA (Main Dishes) is sort_order 2
+        $this->actingAs($owner)->putJson('/api/restaurant/menu/categories/reorder', [
+            'restaurant_id' => $restId,
+            'ordered_ids' => [$catB['id'], $catA['id']],
+        ])->assertOk();
+
+        $itemA = $this->actingAs($owner)->postJson('/api/restaurant/menu/items', [
+            'restaurant_id' => $restId,
+            'menu_category_id' => $catA['id'],
+            'item_name' => 'Kare-Kare',
+            'base_price' => '320.00',
+        ])->assertStatus(201)->json('data.item');
+
+        $itemB = $this->actingAs($owner)->postJson('/api/restaurant/menu/items', [
+            'restaurant_id' => $restId,
+            'menu_category_id' => $catB['id'],
+            'item_name' => 'Lumpia',
+            'base_price' => '120.00',
+        ])->assertStatus(201)->json('data.item');
+
+        // Verify GET /api/restaurant/menu/items preserves category sort_order -> item sort_order and <= 8 queries
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $itemsRes = $this->actingAs($owner)->getJson("/api/restaurant/menu/items?restaurant_id={$restId}")
+            ->assertOk();
+        $this->assertLessThanOrEqual(8, count(DB::getQueryLog()), 'GET /api/restaurant/menu/items must execute at most 8 queries.');
+        $this->assertSame([$itemB['id'], $itemA['id']], collect($itemsRes->json('data.items'))->pluck('id')->all());
+
+        // Verify GET /api/restaurant/setup-status combines 4 count checks into 1 query (<= 8 total queries)
+        DB::flushQueryLog();
+        $this->actingAs($owner)->getJson("/api/restaurant/setup-status?restaurant_id={$restId}")
+            ->assertOk()
+            ->assertJsonPath('data.setup_status.menu.categories_count', 2)
+            ->assertJsonPath('data.setup_status.menu.items_count', 2)
+            ->assertJsonPath('data.setup_status.menu.complete', true)
+            ->assertJsonPath('data.setup_status.operating_hours.complete', false);
+        $this->assertLessThanOrEqual(8, count(DB::getQueryLog()), 'GET /api/restaurant/setup-status must execute at most 8 queries.');
+    }
 }

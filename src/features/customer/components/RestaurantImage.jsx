@@ -34,6 +34,8 @@ export default function RestaurantImage({
         className={className}
         src={effectiveSrc}
         alt={alt}
+        loading="lazy"
+        decoding="async"
         onError={() => {
           if (src && effectiveSrc === src) {
             setImgFailed(true);

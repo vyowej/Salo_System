@@ -348,4 +348,179 @@ class LocationSystemTest extends TestCase
         $this->assertSame('Cached Test Province', $second[0]['name']);
         Http::assertSentCount(1);
     }
+
+    public function test_locations_overview_service_areas_mixed_case_and_query_counts(): void
+    {
+        $admin = $this->makeUser('admin');
+        $owner = $this->makeUser('customer');
+        $customer = $this->makeUser('customer');
+        $riderUser = $this->makeUser('customer');
+
+        // Create service area with boundary_geojson
+        $geojson = ['type' => 'Polygon', 'coordinates' => [[[124.63, 8.48], [124.64, 8.48], [124.64, 8.49], [124.63, 8.48]]]];
+        $this->actingAs($admin)->postJson('/api/admin/service-areas', [
+            'province' => 'Misamis Oriental',
+            'city' => 'Cagayan de Oro City',
+            'barangay' => 'Carmen',
+            'is_active' => true,
+            'center_latitude' => 8.4811,
+            'center_longitude' => 124.6369,
+            'boundary_geojson' => json_encode($geojson),
+            'reason' => 'Carmen polygon zone',
+        ])->assertStatus(201);
+
+        $this->actingAs($admin)->postJson('/api/admin/service-areas', [
+            'province' => 'Misamis Oriental',
+            'city' => 'Cagayan de Oro City',
+            'barangay' => 'Lapasan',
+            'is_active' => true,
+            'center_latitude' => 8.4850,
+            'center_longitude' => 124.6560,
+            'reason' => 'Lapasan zone',
+        ])->assertStatus(201);
+
+        // Mixed-case lookup in local fallback (testing skips external HTTP by default)
+        $this->getJson('/api/locations/cities?province=' . urlencode('mIsAmIs oRiEnTaL'))
+            ->assertOk()
+            ->assertJsonFragment(['name' => 'Cagayan de Oro City']);
+
+        $this->getJson('/api/locations/barangays?province=' . urlencode('mIsAmIs oRiEnTaL') . '&city=' . urlencode('cAgAyAn dE oRo cItY'))
+            ->assertOk()
+            ->assertJsonFragment(['name' => 'Carmen']);
+
+        // Mixed-case service area validation after LOWER() removal
+        $this->postJson('/api/locations/validate-service-area', [
+            'province' => 'mIsAmIs oRiEnTaL',
+            'city' => 'cAgAyAn dE oRo cItY',
+            'barangay' => 'cArMeN',
+        ])->assertOk()->assertJsonPath('data.supported', true);
+
+        // Create restaurant with 2 coverage areas and verify GET /api/restaurant/location query count
+        $restaurantId = $this->createRestaurantForOwner($owner, 'Misamis Oriental', 'Cagayan de Oro City', 'Carmen');
+        $this->actingAs($owner)->putJson('/api/restaurant/coverage', [
+            'restaurant_id' => $restaurantId,
+            'areas' => [
+                ['province' => 'Misamis Oriental', 'city' => 'Cagayan de Oro City', 'barangay' => 'Carmen'],
+                ['province' => 'Misamis Oriental', 'city' => 'Cagayan de Oro City', 'barangay' => 'Lapasan'],
+            ],
+        ])->assertOk();
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->actingAs($owner)->getJson("/api/restaurant/location?restaurant_id={$restaurantId}")
+            ->assertOk()
+            ->assertJsonPath('data.coverage.0.platform_active', true)
+            ->assertJsonPath('data.coverage.1.platform_active', true);
+        $this->assertLessThanOrEqual(12, count(DB::getQueryLog()), 'GET /api/restaurant/location must not run N+1 platform validation queries.');
+
+        // Create 2 customer addresses and verify GET /api/customer/addresses query count (<= 4)
+        $this->actingAs($customer)->postJson('/api/customer/addresses', [
+            'label' => 'Home',
+            'province' => 'Misamis Oriental',
+            'city' => 'Cagayan de Oro City',
+            'barangay' => 'Carmen',
+            'street' => '1st St',
+        ])->assertStatus(201);
+        $this->actingAs($customer)->postJson('/api/customer/addresses', [
+            'label' => 'Office',
+            'province' => 'Misamis Oriental',
+            'city' => 'Cagayan de Oro City',
+            'barangay' => 'Lapasan',
+            'street' => '2nd St',
+        ])->assertStatus(201);
+
+        DB::flushQueryLog();
+        $this->actingAs($customer)->getJson('/api/customer/addresses')
+            ->assertOk()
+            ->assertJsonCount(2, 'data.addresses')
+            ->assertJsonPath('data.addresses.0.is_service_area_supported', true)
+            ->assertJsonPath('data.addresses.1.is_service_area_supported', true);
+        $this->assertLessThanOrEqual(4, count(DB::getQueryLog()), 'GET /api/customer/addresses must execute at most 4 queries.');
+
+        // Verify GET /api/admin/service-areas and GET /api/locations/active-service-areas query counts & restaurant_count/boundary_geojson
+        DB::flushQueryLog();
+        $adminSaRes = $this->actingAs($admin)->getJson('/api/admin/service-areas')->assertOk();
+        $this->assertLessThanOrEqual(5, count(DB::getQueryLog()), 'GET /api/admin/service-areas must execute at most 5 queries.');
+        $carmenRow = collect($adminSaRes->json('data.service_areas'))->firstWhere('barangay', 'Carmen');
+        $this->assertNotNull($carmenRow);
+        $this->assertSame(1, $carmenRow['restaurant_count']);
+        $this->assertSame(json_encode($geojson), $carmenRow['boundary_geojson']);
+
+        DB::flushQueryLog();
+        $this->getJson('/api/locations/active-service-areas')->assertOk();
+        $this->assertLessThanOrEqual(4, count(DB::getQueryLog()), 'GET /api/locations/active-service-areas must execute at most 4 queries (no N+1).');
+
+        // Seed active delivery with 2 rider GPS points (older vs newer) and verify GET /api/admin/locations/overview
+        $cityId = DB::table('cities')->where('city_name', 'Cagayan de Oro City')->value('city_id');
+        $riderId = (int) DB::table('riders')->insertGetId([
+            'user_id' => $riderUser->user_id,
+            'vehicle_type' => 'bicycle',
+            'emergency_contact_name' => 'Contact',
+            'emergency_contact_relationship' => 'parent',
+            'emergency_contact_phone' => '09170000099',
+            'base_city_id' => $cityId,
+            'rider_status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $checkoutId = (int) DB::table('checkouts')->insertGetId([
+            'customer_id' => $customer->user_id,
+            'idempotency_key' => 'CHK-OVW-' . random_int(100000, 999999),
+            'total_amount' => 300.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $orderId = (int) DB::table('orders')->insertGetId([
+            'checkout_id' => $checkoutId,
+            'restaurant_id' => $restaurantId,
+            'customer_id' => $customer->user_id,
+            'restaurant_name' => 'Overview Kitchen',
+            'customer_name' => 'Overview Customer',
+            'order_reference' => 'ORD-OVW-' . random_int(100000, 999999),
+            'order_type' => 'delivery',
+            'order_status' => 'out_for_delivery',
+            'delivery_address_text' => 'Carmen, CDO',
+            'delivery_latitude' => 8.482000,
+            'delivery_longitude' => 124.638000,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $deliveryId = (int) DB::table('deliveries')->insertGetId([
+            'order_id' => $orderId,
+            'rider_id' => $riderId,
+            'delivery_status' => 'in_transit',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('rider_locations')->insert([
+            [
+                'rider_id' => $riderId,
+                'delivery_id' => $deliveryId,
+                'latitude' => 8.470000,
+                'longitude' => 124.620000,
+                'accuracy_meters' => 15.0,
+                'recorded_at' => '2026-10-10 10:00:00',
+            ],
+            [
+                'rider_id' => $riderId,
+                'delivery_id' => $deliveryId,
+                'latitude' => 8.481900,
+                'longitude' => 124.637900,
+                'accuracy_meters' => 5.5,
+                'recorded_at' => '2026-10-10 10:05:00',
+            ],
+        ]);
+
+        DB::flushQueryLog();
+        $overviewRes = $this->actingAs($admin)->getJson('/api/admin/locations/overview')->assertOk();
+        $this->assertLessThanOrEqual(8, count(DB::getQueryLog()), 'GET /api/admin/locations/overview must execute at most 8 queries.');
+
+        $activeDeliv = collect($overviewRes->json('data.active_deliveries'))->firstWhere('delivery_id', $deliveryId);
+        $this->assertNotNull($activeDeliv);
+        $this->assertSame(8.4819, $activeDeliv['rider_location']['latitude']);
+        $this->assertSame(124.6379, $activeDeliv['rider_location']['longitude']);
+        $this->assertSame(5.5, $activeDeliv['rider_location']['accuracy_meters']);
+        $this->assertSame('2026-10-10 10:05:00', $activeDeliv['rider_location']['recorded_at']);
+    }
 }

@@ -241,4 +241,55 @@ class StaffInvitationsTest extends TestCase
         $this->actingAs($invitee)->postJson("/api/account/staff-invitations/{$staffId}/accept")->assertStatus(409);
         $this->assertSame('expired', DB::table('restaurant_staff')->where('staff_id', $staffId)->value('staff_status'));
     }
+
+    public function test_mixed_case_email_and_username_lookup_and_conditional_expiry_update_query_count(): void
+    {
+        $owner = $this->createUser('customer', 'ownmc');
+        $inviteeByEmail = $this->createUser('customer', 'empmce');
+        $inviteeByUser = $this->createUser('customer', 'empmcu');
+        $this->createRestaurant($owner, 'active', 'Case Insensitive Bistro');
+
+        // Invite using uppercase email and uppercase username after dropping LOWER()
+        $this->actingAs($owner)->postJson('/api/restaurant/staff/invitations', [
+            'email' => strtoupper($inviteeByEmail->email),
+            'staff_position' => 'Order Handler',
+        ])->assertOk();
+
+        $this->actingAs($owner)->postJson('/api/restaurant/staff/invitations', [
+            'username' => strtoupper($inviteeByUser->username),
+            'staff_position' => 'Manager',
+        ])->assertOk();
+
+        // When no invitations are overdue, GET /api/account/staff-invitations and GET /api/restaurant/staff must NOT run an UPDATE query
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->actingAs($inviteeByEmail)->getJson('/api/account/staff-invitations')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.invitations')
+            ->assertJsonPath('data.invitations.0.status', 'pending');
+        $queries = DB::getQueryLog();
+        $this->assertLessThanOrEqual(3, count($queries), 'GET /api/account/staff-invitations must run at most 3 queries when no invitations are overdue.');
+        foreach ($queries as $q) {
+            $this->assertStringNotContainsStringIgnoringCase('update', $q['query']);
+        }
+
+        DB::flushQueryLog();
+        $this->actingAs($owner)->getJson('/api/restaurant/staff')
+            ->assertOk()
+            ->assertJsonCount(2, 'data.staff');
+        $ownerQueries = DB::getQueryLog();
+        $this->assertLessThanOrEqual(7, count($ownerQueries), 'GET /api/restaurant/staff must run at most 7 queries when no invitations are overdue.');
+        foreach ($ownerQueries as $q) {
+            $this->assertStringNotContainsStringIgnoringCase('update', $q['query']);
+        }
+
+        // Now mark inviteeByEmail's invitation overdue and verify GET /api/account/staff-invitations expires it on read
+        $staffId = (int) DB::table('restaurant_staff')->where('user_id', $inviteeByEmail->user_id)->value('staff_id');
+        DB::table('restaurant_staff')->where('staff_id', $staffId)->update(['expires_at' => now()->subSeconds(5)]);
+
+        $this->actingAs($inviteeByEmail)->getJson('/api/account/staff-invitations')
+            ->assertOk()
+            ->assertJsonPath('data.invitations.0.status', 'expired');
+        $this->assertSame('expired', DB::table('restaurant_staff')->where('staff_id', $staffId)->value('staff_status'));
+    }
 }

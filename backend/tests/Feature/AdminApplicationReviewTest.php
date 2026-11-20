@@ -276,4 +276,93 @@ class AdminApplicationReviewTest extends TestCase
 
         $this->getJson("/api/restaurants/{$restId}")->assertStatus(404);
     }
+
+    public function test_admin_applications_batch_document_counts_characterization_and_query_count(): void
+    {
+        $admin = $this->createUser('admin', 'batchadmin');
+        $owner1 = $this->createUser('customer', 'batchown1');
+        $owner2 = $this->createUser('customer', 'batchown2');
+
+        $app1 = $this->submitRestaurantApp($owner1, 'BatchDoc Kitchen One');
+        $app2 = $this->submitRestaurantApp($owner2, 'BatchDoc Kitchen Two');
+
+        $app1Id = (int) $app1['restaurant_application_id'];
+        $app2Id = (int) $app2['restaurant_application_id'];
+
+        // Add extra documents with mixed document_status to app1 (1 initial pending_review + 2 verified + 1 rejected = 4 total, 2 verified)
+        $uniq = random_int(10000, 99999);
+        DB::table('application_documents')->insert([
+            [
+                'restaurant_application_id' => $app1Id,
+                'document_code' => 'mayors_permit',
+                'file_path' => "applications/{$uniq}_perm1.pdf",
+                'original_filename' => 'perm1.pdf',
+                'mime_type' => 'application/pdf',
+                'file_size_bytes' => 1024,
+                'document_status' => 'verified',
+                'review_note' => null,
+                'uploaded_by' => $owner1->user_id,
+                'uploaded_at' => now(),
+                'reviewed_by' => $admin->user_id,
+                'reviewed_at' => now(),
+            ],
+            [
+                'restaurant_application_id' => $app1Id,
+                'document_code' => 'bir_2303',
+                'file_path' => "applications/{$uniq}_bir1.pdf",
+                'original_filename' => 'bir1.pdf',
+                'mime_type' => 'application/pdf',
+                'file_size_bytes' => 1024,
+                'document_status' => 'verified',
+                'review_note' => null,
+                'uploaded_by' => $owner1->user_id,
+                'uploaded_at' => now(),
+                'reviewed_by' => $admin->user_id,
+                'reviewed_at' => now(),
+            ],
+            [
+                'restaurant_application_id' => $app1Id,
+                'document_code' => 'government_id',
+                'file_path' => "applications/{$uniq}_id1.pdf",
+                'original_filename' => 'id1.pdf',
+                'mime_type' => 'application/pdf',
+                'file_size_bytes' => 1024,
+                'document_status' => 'rejected',
+                'review_note' => 'Blurry scan',
+                'uploaded_by' => $owner1->user_id,
+                'uploaded_at' => now(),
+                'reviewed_by' => $admin->user_id,
+                'reviewed_at' => now(),
+            ],
+        ]);
+
+        // Prime auth once, then measure query count for listing restaurant applications
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $res = $this->actingAs($admin)
+            ->getJson('/api/admin/applications?type=restaurant&search=' . urlencode('BatchDoc Kitchen'))
+            ->assertOk();
+
+        $this->assertLessThanOrEqual(5, count(DB::getQueryLog()), 'GET /api/admin/applications?type=restaurant must execute at most 5 queries.');
+
+        $items = collect($res->json('data.items'));
+        $item1 = $items->firstWhere('id', $app1Id);
+        $item2 = $items->firstWhere('id', $app2Id);
+
+        $this->assertNotNull($item1);
+        $this->assertSame(4, $item1['total_docs_count']);
+        $this->assertSame(2, $item1['verified_docs_count']);
+
+        $this->assertNotNull($item2);
+        $this->assertSame(1, $item2['total_docs_count']);
+        $this->assertSame(0, $item2['verified_docs_count']);
+
+        // Also verify rider applications list query count (<= 5 queries)
+        DB::flushQueryLog();
+        $this->actingAs($admin)
+            ->getJson('/api/admin/applications?type=rider')
+            ->assertOk();
+        $this->assertLessThanOrEqual(5, count(DB::getQueryLog()), 'GET /api/admin/applications?type=rider must execute at most 5 queries.');
+    }
 }

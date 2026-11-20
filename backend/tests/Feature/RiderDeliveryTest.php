@@ -615,4 +615,37 @@ class RiderDeliveryTest extends TestCase
             $this->assertMatchesRegularExpression($manilaIsoRegex, (string) $ts);
         }
     }
+
+    public function test_available_deliveries_batch_pickup_address_and_query_count_regression(): void
+    {
+        $owner1 = $this->createUser('customer', 'avlown1');
+        $owner2 = $this->createUser('customer', 'avlown2');
+        $buyer = $this->createUser('customer', 'avlbuy');
+        $rider = $this->createUser('customer', 'avlrid', 'Carlos');
+
+        $this->createRiderRecord($rider, 'active');
+        [$rest1Id, $order1Id] = $this->createReadyDeliveryOrder($owner1, $buyer);
+        [$rest2Id, $order2Id] = $this->createReadyDeliveryOrder($owner2, $buyer);
+
+        $this->actingAs($rider)->patchJson('/api/rider/availability', ['status' => 'online'])->assertOk();
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $res = $this->actingAs($rider)->getJson('/api/rider/deliveries/available')
+            ->assertOk();
+
+        $this->assertLessThanOrEqual(11, count(DB::getQueryLog()), 'GET /api/rider/deliveries/available must execute at most 11 SQL queries.');
+
+        $deliveries = collect($res->json('data.deliveries'));
+        $d1 = $deliveries->firstWhere('order_id', $order1Id);
+        $d2 = $deliveries->firstWhere('order_id', $order2Id);
+
+        $this->assertNotNull($d1);
+        $this->assertNotNull($d2);
+        $this->assertSame($rest1Id, $d1['restaurant_id']);
+        $this->assertNotEmpty($d1['pickup_address_text']);
+        $this->assertSame($rest2Id, $d2['restaurant_id']);
+        $this->assertNotEmpty($d2['pickup_address_text']);
+    }
 }

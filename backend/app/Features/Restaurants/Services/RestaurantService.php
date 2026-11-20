@@ -116,7 +116,7 @@ class RestaurantService
                 if (ctype_digit($category)) {
                     $catSub->where('rc.category_id', (int) $category);
                 } else {
-                    $catSub->whereRaw('LOWER(rc.category_name) = ?', [mb_strtolower($category)]);
+                    $catSub->where('rc.category_name', $category);
                 }
             });
         }
@@ -438,30 +438,28 @@ class RestaurantService
 
         $businessProfileComplete = $hasLogo && $hasCover && $hasInfo && $hasAddress;
 
-        $openPeriodsCount = (int) DB::table('operating_hours')
-            ->where('restaurant_id', $restaurant->restaurant_id)
-            ->where('is_closed', 0)
-            ->count();
+        $targetRestaurantId = (int) $restaurant->restaurant_id;
+        $countsRow = DB::selectOne(
+            'SELECT
+                (SELECT COUNT(*) FROM operating_hours WHERE restaurant_id = ? AND is_closed = 0) as open_periods_count,
+                (SELECT COUNT(*) FROM menu_categories WHERE restaurant_id = ? AND is_active = 1) as menu_categories_count,
+                (SELECT COUNT(*) FROM menu_items WHERE restaurant_id = ? AND availability_status != ?) as menu_items_count,
+                (SELECT COUNT(*) FROM restaurant_tables WHERE restaurant_id = ? AND is_active = 1) as tables_count',
+            [$targetRestaurantId, $targetRestaurantId, $targetRestaurantId, 'hidden', $targetRestaurantId]
+        );
+
+        $openPeriodsCount = (int) ($countsRow->open_periods_count ?? 0);
         $operatingHoursComplete = $openPeriodsCount > 0;
 
-        $menuCategoriesCount = (int) DB::table('menu_categories')
-            ->where('restaurant_id', $restaurant->restaurant_id)
-            ->where('is_active', 1)
-            ->count();
-        $menuItemsCount = (int) DB::table('menu_items')
-            ->where('restaurant_id', $restaurant->restaurant_id)
-            ->where('availability_status', '!=', 'hidden')
-            ->count();
+        $menuCategoriesCount = (int) ($countsRow->menu_categories_count ?? 0);
+        $menuItemsCount = (int) ($countsRow->menu_items_count ?? 0);
         $menuComplete = $menuCategoriesCount >= 1 && $menuItemsCount >= 1;
 
         $offersDineIn = (bool) $restaurant->offers_dine_in;
         $acceptsReservations = (bool) $restaurant->accepts_reservations;
         $tablesApplicable = $offersDineIn || $acceptsReservations;
 
-        $tablesCount = (int) DB::table('restaurant_tables')
-            ->where('restaurant_id', $restaurant->restaurant_id)
-            ->where('is_active', 1)
-            ->count();
+        $tablesCount = (int) ($countsRow->tables_count ?? 0);
         $tablesComplete = ! $tablesApplicable || $tablesCount >= 1;
 
         $acceptingOrders = (bool) $restaurant->accepting_orders;

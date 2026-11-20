@@ -62,7 +62,7 @@ class OwnerMenuService
 
         $exists = DB::table('menu_categories')
             ->where('restaurant_id', $targetId)
-            ->whereRaw('LOWER(category_name) = ?', [mb_strtolower($name)])
+            ->where('category_name', $name)
             ->exists();
 
         if ($exists) {
@@ -123,7 +123,7 @@ class OwnerMenuService
         $duplicate = DB::table('menu_categories')
             ->where('restaurant_id', $targetId)
             ->where('menu_category_id', '!=', $categoryId)
-            ->whereRaw('LOWER(category_name) = ?', [mb_strtolower($newName)])
+            ->where('category_name', $newName)
             ->exists();
 
         if ($duplicate) {
@@ -252,28 +252,47 @@ class OwnerMenuService
         $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
 
-        return DB::table('menu_items as mi')
-            ->join('menu_categories as mc', 'mc.menu_category_id', '=', 'mi.menu_category_id')
-            ->where('mi.restaurant_id', $targetId)
-            ->orderBy('mc.sort_order')
-            ->orderBy('mi.sort_order')
-            ->orderBy('mi.menu_item_id')
+        $categoriesById = DB::table('menu_categories')
+            ->where('restaurant_id', $targetId)
+            ->get(['menu_category_id', 'category_name', 'sort_order'])
+            ->keyBy('menu_category_id');
+
+        $items = DB::table('menu_items')
+            ->where('restaurant_id', $targetId)
             ->get([
-                'mi.menu_item_id',
-                'mi.restaurant_id',
-                'mi.menu_category_id',
-                'mi.item_name',
-                'mi.description',
-                'mi.photo_image',
-                'mi.base_price',
-                'mi.availability_status',
-                'mi.approval_status',
-                'mi.sort_order',
-                'mc.category_name',
+                'menu_item_id',
+                'restaurant_id',
+                'menu_category_id',
+                'item_name',
+                'description',
+                'photo_image',
+                'base_price',
+                'availability_status',
+                'approval_status',
+                'sort_order',
             ])
-            ->map(fn ($row) => $this->formatItem($row))
-            ->values()
+            ->filter(static fn (object $row): bool => $categoriesById->has($row->menu_category_id))
+            ->map(function (object $row) use ($categoriesById): object {
+                $cat = $categoriesById->get($row->menu_category_id);
+                $row->category_name = $cat->category_name;
+                $row->category_sort_order = (int) $cat->sort_order;
+
+                return $row;
+            })
             ->all();
+
+        usort($items, static function (object $a, object $b): int {
+            if ($a->category_sort_order !== $b->category_sort_order) {
+                return $a->category_sort_order <=> $b->category_sort_order;
+            }
+            if ((int) $a->sort_order !== (int) $b->sort_order) {
+                return (int) $a->sort_order <=> (int) $b->sort_order;
+            }
+
+            return (int) $a->menu_item_id <=> (int) $b->menu_item_id;
+        });
+
+        return array_values(array_map(fn (object $row): array => $this->formatItem($row), $items));
     }
 
     /**

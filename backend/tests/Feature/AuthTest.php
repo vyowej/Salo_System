@@ -552,6 +552,235 @@ class AuthTest extends TestCase
         $this->getJson('/api/test/role-check/staff')->assertStatus(403);
     }
 
+    public function test_role_changes_and_suspension_take_effect_on_next_request_without_leaking(): void
+    {
+        $user = User::create([
+            'username' => 'dynamic_role_user',
+            'first_name' => 'Dyn',
+            'last_name' => 'Amic',
+            'email' => 'dynamic@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'active',
+        ]);
+
+        [, $cityId, , $addressId] = $this->createLocationFixture();
+
+        $restaurantId = DB::table('restaurants')->insertGetId([
+            'restaurant_name' => 'Dynamic Resto',
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'sole_proprietorship',
+            'business_email' => 'dynamicresto@example.com',
+            'address_id' => $addressId,
+            'restaurant_status' => 'active',
+        ]);
+
+        $this->actingAs($user, 'web');
+
+        // Request 1: user is only a customer -> denied on owner, staff, rider, admin
+        $this->getJson('/api/auth/me')
+            ->assertStatus(200)
+            ->assertJsonPath('data.user.roles', ['customer']);
+        $this->getJson('/api/test/role-check/owner')->assertStatus(403);
+        $this->getJson('/api/test/role-check/staff')->assertStatus(403);
+        $this->getJson('/api/test/role-check/rider')->assertStatus(403);
+        $this->getJson('/api/test/role-check/admin')->assertStatus(403);
+
+        // Grant restaurant ownership -> must take effect immediately on the very next request
+        DB::table('restaurant_owners')->insert([
+            'restaurant_id' => $restaurantId,
+            'user_id' => $user->user_id,
+        ]);
+
+        $this->getJson('/api/test/role-check/owner')->assertStatus(200);
+        $this->getJson('/api/auth/me')
+            ->assertStatus(200)
+            ->assertJsonPath('data.user.roles', ['customer', 'owner']);
+
+        // Revoke ownership and grant staff + rider -> next request reflects new roles and revokes owner
+        DB::table('restaurant_owners')
+            ->where('user_id', $user->user_id)
+            ->delete();
+
+        DB::table('restaurant_staff')->insert([
+            'restaurant_id' => $restaurantId,
+            'user_id' => $user->user_id,
+            'staff_position' => 'Manager',
+            'staff_status' => 'active',
+            'joined_at' => now(),
+        ]);
+
+        DB::table('riders')->insert([
+            'user_id' => $user->user_id,
+            'vehicle_type' => 'bicycle',
+            'emergency_contact_name' => 'Emergency Contact',
+            'emergency_contact_relationship' => 'parent',
+            'emergency_contact_phone' => '09171234567',
+            'base_city_id' => $cityId,
+            'rider_status' => 'active',
+            'approved_at' => now(),
+        ]);
+
+        $this->getJson('/api/test/role-check/owner')->assertStatus(403);
+        $this->getJson('/api/test/role-check/staff')->assertStatus(200);
+        $this->getJson('/api/test/role-check/rider')->assertStatus(200);
+        $this->getJson('/api/auth/me')
+            ->assertStatus(200)
+            ->assertJsonPath('data.user.roles', ['customer', 'staff', 'rider']);
+
+        // Promote to admin -> next request permits admin
+        DB::table('users')
+            ->where('user_id', $user->user_id)
+            ->update(['user_role' => 'admin']);
+
+        $this->getJson('/api/test/role-check/admin')->assertStatus(200);
+
+        // Suspend account -> next request immediately returns 403 and logs out
+        DB::table('users')
+            ->where('user_id', $user->user_id)
+            ->update(['account_status' => 'suspended']);
+
+        $this->getJson('/api/test/role-check/admin')
+            ->assertStatus(403)
+            ->assertJsonPath('message', 'Account is not active.');
+    }
+
+    public function test_auth_me_and_role_guarded_endpoint_query_count_regression(): void
+    {
+        $user = User::create([
+            'username' => 'query_count_user',
+            'first_name' => 'Query',
+            'last_name' => 'Counter',
+            'email' => 'querycount@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'active',
+        ]);
+
+        [, , , $addressId] = $this->createLocationFixture();
+
+        $restaurantId = DB::table('restaurants')->insertGetId([
+            'restaurant_name' => 'Query Count Resto',
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'sole_proprietorship',
+            'business_email' => 'qcresto@example.com',
+            'address_id' => $addressId,
+            'restaurant_status' => 'active',
+        ]);
+
+        DB::table('restaurant_staff')->insert([
+            'restaurant_id' => $restaurantId,
+            'user_id' => $user->user_id,
+            'staff_position' => 'Manager',
+            'staff_status' => 'active',
+            'joined_at' => now(),
+        ]);
+
+        $this->actingAs($user, 'web');
+
+        // 1. /api/auth/me must fetch users at most once (EnsureAccountIsActive) and resolveRoleContext once (3 queries) = max 4 queries
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $this->getJson('/api/auth/me')
+            ->assertStatus(200)
+            ->assertJsonPath('data.user.roles', ['customer', 'staff']);
+        $meQueries = DB::getQueryLog();
+        $meUserQueries = array_filter($meQueries, static fn (array $q): bool => str_contains($q['query'], 'from `users`') || str_contains($q['query'], 'from "users"'));
+
+        $this->assertLessThanOrEqual(4, count($meQueries), 'Expected /api/auth/me to execute at most 4 queries.');
+        $this->assertCount(1, $meUserQueries, 'Expected /api/auth/me to query the users table only once.');
+
+        // 2. Role-guarded endpoint (role:owner,staff on /api/restaurant/inventory/config) must not re-query users in RequireRole or repeat resolveRoleContext
+        DB::flushQueryLog();
+        $this->getJson('/api/restaurant/inventory/config')
+            ->assertStatus(200)
+            ->assertJsonPath('success', true);
+        $guardedQueries = DB::getQueryLog();
+        $guardedUserQueries = array_filter($guardedQueries, static fn (array $q): bool => str_contains($q['query'], 'from `users`') || str_contains($q['query'], 'from "users"'));
+
+        $this->assertCount(1, $guardedUserQueries, 'Expected role-guarded endpoint to query the users table only once across EnsureAccountIsActive and RequireRole.');
+        $this->assertLessThanOrEqual(6, count($guardedQueries), 'Expected /api/restaurant/inventory/config to execute at most 6 queries.');
+        DB::disableQueryLog();
+    }
+
+    public function test_many_sequential_requests_with_role_oscillations_and_gc_never_return_stale_role(): void
+    {
+        $user = User::create([
+            'username' => 'sequential_oscillation_user',
+            'first_name' => 'Seq',
+            'last_name' => 'Test',
+            'email' => 'seqtest@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'active',
+        ]);
+
+        [, $cityId, , $addressId] = $this->createLocationFixture();
+
+        $restaurantId = DB::table('restaurants')->insertGetId([
+            'restaurant_name' => 'Oscillation Resto',
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'sole_proprietorship',
+            'business_email' => 'oscillation@example.com',
+            'address_id' => $addressId,
+            'restaurant_status' => 'active',
+        ]);
+
+        $this->actingAs($user, 'web');
+
+        for ($step = 1; $step <= 12; $step++) {
+            gc_collect_cycles();
+
+            $mode = $step % 4;
+            DB::table('restaurant_owners')->where('user_id', $user->user_id)->delete();
+            DB::table('restaurant_staff')->where('user_id', $user->user_id)->delete();
+            DB::table('riders')->where('user_id', $user->user_id)->delete();
+
+            if ($mode === 1) {
+                DB::table('restaurant_owners')->insert([
+                    'restaurant_id' => $restaurantId,
+                    'user_id' => $user->user_id,
+                ]);
+                $this->getJson('/api/test/role-check/owner')->assertStatus(200);
+                $this->getJson('/api/test/role-check/staff')->assertStatus(403);
+                $this->getJson('/api/test/role-check/rider')->assertStatus(403);
+                $this->getJson('/api/auth/me')->assertJsonPath('data.user.roles', ['customer', 'owner']);
+            } elseif ($mode === 2) {
+                DB::table('restaurant_staff')->insert([
+                    'restaurant_id' => $restaurantId,
+                    'user_id' => $user->user_id,
+                    'staff_position' => 'Manager',
+                    'staff_status' => 'active',
+                    'joined_at' => now(),
+                ]);
+                $this->getJson('/api/test/role-check/owner')->assertStatus(403);
+                $this->getJson('/api/test/role-check/staff')->assertStatus(200);
+                $this->getJson('/api/test/role-check/rider')->assertStatus(403);
+                $this->getJson('/api/auth/me')->assertJsonPath('data.user.roles', ['customer', 'staff']);
+            } elseif ($mode === 3) {
+                DB::table('riders')->insert([
+                    'user_id' => $user->user_id,
+                    'vehicle_type' => 'bicycle',
+                    'emergency_contact_name' => 'EC',
+                    'emergency_contact_relationship' => 'parent',
+                    'emergency_contact_phone' => '09171234567',
+                    'base_city_id' => $cityId,
+                    'rider_status' => 'active',
+                    'approved_at' => now(),
+                ]);
+                $this->getJson('/api/test/role-check/owner')->assertStatus(403);
+                $this->getJson('/api/test/role-check/staff')->assertStatus(403);
+                $this->getJson('/api/test/role-check/rider')->assertStatus(200);
+                $this->getJson('/api/auth/me')->assertJsonPath('data.user.roles', ['customer', 'rider']);
+            } else {
+                $this->getJson('/api/test/role-check/owner')->assertStatus(403);
+                $this->getJson('/api/test/role-check/staff')->assertStatus(403);
+                $this->getJson('/api/test/role-check/rider')->assertStatus(403);
+                $this->getJson('/api/auth/me')->assertJsonPath('data.user.roles', ['customer']);
+            }
+        }
+    }
+
     public function test_password_reset_token_hashed_single_use_and_expiry_rules(): void
     {
         Mail::fake();

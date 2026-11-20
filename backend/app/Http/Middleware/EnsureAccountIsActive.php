@@ -31,6 +31,8 @@ class EnsureAccountIsActive
                 );
             }
 
+            $freshUser->clearRoleContextCache();
+            $request->attributes->set('_salo_fresh_user', $freshUser);
             Auth::guard('web')->setUser($freshUser);
         }
 

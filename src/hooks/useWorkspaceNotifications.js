@@ -23,6 +23,7 @@ export function useWorkspaceNotifications({
   page = 1,
   perPage = 20,
   enabled = true,
+  fetchList = true,
 } = {}) {
   const [items, setItems] = useState([]);
   const [pagination, setPagination] = useState({
@@ -32,11 +33,12 @@ export function useWorkspaceNotifications({
     last_page: 1,
   });
   const [unreadCounts, setUnreadCounts] = useState(EMPTY_COUNTS);
-  const [loading, setLoading] = useState(Boolean(enabled));
+  const [loading, setLoading] = useState(Boolean(enabled && fetchList));
   const [error, setError] = useState(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [markingIds, setMarkingIds] = useState(() => new Set());
   const mountedRef = useRef(true);
+  const hasLoadedListRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -45,7 +47,7 @@ export function useWorkspaceNotifications({
     };
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ forceList = false } = {}) => {
     if (!enabled || !isValidWorkspace(workspace)) {
       if (mountedRef.current) {
         setItems([]);
@@ -54,34 +56,51 @@ export function useWorkspaceNotifications({
       return;
     }
 
+    const shouldLoadList = Boolean(fetchList || forceList || hasLoadedListRef.current);
+
     if (mountedRef.current) {
-      setLoading(true);
+      if (shouldLoadList) {
+        setLoading(true);
+      }
       setError(null);
     }
 
     try {
-      const [listResult, countsResult] = await Promise.all([
-        fetchNotifications({ workspace, unreadOnly, page, perPage }),
-        fetchUnreadCounts(),
-      ]);
+      if (shouldLoadList) {
+        const [listResult, countsResult] = await Promise.all([
+          fetchNotifications({ workspace, unreadOnly, page, perPage }),
+          fetchUnreadCounts(),
+        ]);
 
-      if (!mountedRef.current) return;
-      setItems(listResult.items);
-      setPagination(listResult.pagination);
-      setUnreadCounts(countsResult);
+        if (!mountedRef.current) return;
+        hasLoadedListRef.current = true;
+        setItems(listResult.items);
+        setPagination(listResult.pagination);
+        setUnreadCounts(countsResult);
+      } else {
+        const countsResult = await fetchUnreadCounts();
+        if (!mountedRef.current) return;
+        setUnreadCounts(countsResult);
+      }
     } catch (err) {
       if (!mountedRef.current) return;
-      setError(err instanceof Error ? err : new Error('Unable to load notifications.'));
+      if (shouldLoadList) {
+        setError(err instanceof Error ? err : new Error('Unable to load notifications.'));
+      }
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && shouldLoadList) {
         setLoading(false);
       }
     }
-  }, [enabled, workspace, unreadOnly, page, perPage]);
+  }, [enabled, fetchList, workspace, unreadOnly, page, perPage]);
 
   useEffect(() => {
+    hasLoadedListRef.current = false;
     setItems([]);
     setError(null);
+  }, [workspace, unreadOnly, page, perPage]);
+
+  useEffect(() => {
     load();
   }, [load]);
 
@@ -141,6 +160,8 @@ export function useWorkspaceNotifications({
     ? unreadCounts.by_workspace[workspace] || 0
     : 0;
 
+  const refresh = useCallback(() => load({ forceList: true }), [load]);
+
   return {
     items,
     pagination,
@@ -150,7 +171,7 @@ export function useWorkspaceNotifications({
     error,
     markingAll,
     markingIds,
-    refresh: load,
+    refresh,
     markAsRead,
     markAllAsRead,
   };

@@ -69,6 +69,7 @@ export default function CustomerNotificationsMenu() {
   } = useWorkspaceNotifications({
     workspace: 'customer',
     perPage: 8,
+    fetchList: open,
   });
 
   const latestEight = items.slice(0, 8);

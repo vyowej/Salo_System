@@ -50,7 +50,15 @@ class CustomerAddressService
             ])
             ->get();
 
-        return $rows->map(fn (object $row): array => $this->formatAddressRow($row))->all();
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $activeAreas = $this->serviceAreaValidation->loadActiveAreasForProvinces(
+            $rows->pluck('province_name')->map(static fn ($name): string => (string) $name)->all()
+        );
+
+        return $rows->map(fn (object $row): array => $this->formatAddressRow($row, $activeAreas))->all();
     }
 
     /**
@@ -260,12 +268,13 @@ class CustomerAddressService
         return $this->formatAddressRow($row);
     }
 
-    private function formatAddressRow(object $row): array
+    private function formatAddressRow(object $row, ?iterable $preloadedActiveAreas = null): array
     {
         $support = $this->serviceAreaValidation->checkPlatformSupport(
             (string) $row->province_name,
             (string) $row->city_name,
             (string) $row->barangay_name,
+            $preloadedActiveAreas,
         );
 
         return [

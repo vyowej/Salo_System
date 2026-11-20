@@ -36,7 +36,6 @@ class AdminServiceAreaService
                 'psa.is_active',
                 'psa.center_latitude',
                 'psa.center_longitude',
-                'psa.boundary_geojson',
                 'psa.notes',
                 'psa.created_at',
                 'psa.updated_at',
@@ -52,7 +51,24 @@ class AdminServiceAreaService
             $query->where('psa.is_active', 1);
         }
 
-        return $query->get()->map(fn (object $row): array => $this->formatRow($row))->all();
+        $rows = $query->get();
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $psaIds = $rows->pluck('platform_service_area_id')->map(static fn ($id): int => (int) $id)->all();
+        $boundariesById = DB::table('platform_service_areas')
+            ->whereIn('platform_service_area_id', $psaIds)
+            ->pluck('boundary_geojson', 'platform_service_area_id');
+
+        $restaurantCountsById = $this->computeRestaurantCountsForPlatformAreas($rows);
+
+        return $rows->map(function (object $row) use ($boundariesById, $restaurantCountsById): array {
+            $id = (int) $row->platform_service_area_id;
+            $row->boundary_geojson = $boundariesById[$id] ?? null;
+
+            return $this->formatRow($row, $restaurantCountsById[$id] ?? 0);
+        })->all();
     }
 
     /**
@@ -232,7 +248,7 @@ class AdminServiceAreaService
             ->all();
 
         // Only expose live rider locations for active deliveries
-        $activeDeliveries = DB::table('deliveries as d')
+        $activeDeliveryRows = DB::table('deliveries as d')
             ->join('orders as o', 'o.order_id', '=', 'd.order_id')
             ->join('restaurants as r', 'r.restaurant_id', '=', 'o.restaurant_id')
             ->join('addresses as ra', 'ra.address_id', '=', 'r.address_id')
@@ -255,13 +271,36 @@ class AdminServiceAreaService
                 'ru.last_name as rider_last_name',
             ])
             ->limit(100)
-            ->get()
-            ->map(function (object $row): array {
-                $latestGps = $row->rider_id
-                    ? DB::table('rider_locations')
-                        ->where('rider_id', $row->rider_id)
-                        ->orderByDesc('recorded_at')
-                        ->first()
+            ->get();
+
+        $activeRiderIds = $activeDeliveryRows
+            ->pluck('rider_id')
+            ->filter(static fn ($id): bool => $id !== null)
+            ->map(static fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $latestGpsByRider = [];
+        if ($activeRiderIds !== []) {
+            $gpsRows = DB::table('rider_locations')
+                ->whereIn('rider_id', $activeRiderIds)
+                ->orderByDesc('recorded_at')
+                ->orderByDesc('rider_location_id')
+                ->get();
+
+            foreach ($gpsRows as $gpsRow) {
+                $rId = (int) $gpsRow->rider_id;
+                if (! array_key_exists($rId, $latestGpsByRider)) {
+                    $latestGpsByRider[$rId] = $gpsRow;
+                }
+            }
+        }
+
+        $activeDeliveries = $activeDeliveryRows
+            ->map(function (object $row) use ($latestGpsByRider): array {
+                $latestGps = $row->rider_id !== null
+                    ? ($latestGpsByRider[(int) $row->rider_id] ?? null)
                     : null;
 
                 return [
@@ -326,9 +365,63 @@ class AdminServiceAreaService
         return $this->formatRow($row);
     }
 
-    private function formatRow(object $row): array
+    /**
+     * @param  \Illuminate\Support\Collection<int, object>  $platformRows
+     * @return array<int, int>
+     */
+    private function computeRestaurantCountsForPlatformAreas($platformRows): array
     {
-        $restaurantCount = DB::table('service_areas as sa')
+        $provinceIds = $platformRows
+            ->pluck('province_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($provinceIds === []) {
+            return [];
+        }
+
+        $serviceAreas = DB::table('service_areas as sa')
+            ->join('cities as c', 'c.city_id', '=', 'sa.city_id')
+            ->whereIn('c.province_id', $provinceIds)
+            ->select([
+                'sa.restaurant_id',
+                'sa.city_id',
+                'sa.barangay_id',
+                'c.province_id',
+            ])
+            ->get();
+
+        $counts = [];
+        foreach ($platformRows as $pRow) {
+            $pId = (int) $pRow->platform_service_area_id;
+            $provId = (int) $pRow->province_id;
+            $cityId = $pRow->city_id !== null ? (int) $pRow->city_id : null;
+            $brgyId = $pRow->barangay_id !== null ? (int) $pRow->barangay_id : null;
+
+            $distinctRestaurants = [];
+            foreach ($serviceAreas as $sa) {
+                if ((int) $sa->province_id !== $provId) {
+                    continue;
+                }
+                if ($cityId !== null && (int) $sa->city_id !== $cityId) {
+                    continue;
+                }
+                if ($brgyId !== null && $sa->barangay_id !== null && (int) $sa->barangay_id !== $brgyId) {
+                    continue;
+                }
+                $distinctRestaurants[(int) $sa->restaurant_id] = true;
+            }
+            $counts[$pId] = count($distinctRestaurants);
+        }
+
+        return $counts;
+    }
+
+    private function formatRow(object $row, ?int $precomputedRestaurantCount = null): array
+    {
+        $restaurantCount = $precomputedRestaurantCount ?? DB::table('service_areas as sa')
             ->join('cities as c', 'c.city_id', '=', 'sa.city_id')
             ->where('c.province_id', $row->province_id)
             ->when($row->city_id !== null, fn ($q) => $q->where('sa.city_id', $row->city_id))

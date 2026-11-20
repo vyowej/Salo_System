@@ -497,16 +497,34 @@ export function deriveBusinessSetupChecklist({
   };
 }
 
+const inFlightSetupStatus = new Map();
+
 export async function fetchRestaurantSetupStatus(restaurantId = null) {
   const { default: apiClient } = await import('./apiClient.js');
   const numericId = Number(restaurantId);
   const qs = Number.isFinite(numericId) && numericId > 0
     ? `?restaurant_id=${encodeURIComponent(numericId)}`
     : '';
-  const response = await apiClient.get(`/restaurant/setup-status${qs}`, {
-    skipAuthInvalidEvent: true,
-  });
-  return response?.data?.setup_status ?? null;
+  const endpoint = `/restaurant/setup-status${qs}`;
+
+  if (inFlightSetupStatus.has(endpoint)) {
+    return inFlightSetupStatus.get(endpoint);
+  }
+
+  const requestPromise = (async () => {
+    const response = await apiClient.get(endpoint, {
+      skipAuthInvalidEvent: true,
+    });
+    return response?.data?.setup_status ?? null;
+  })();
+
+  inFlightSetupStatus.set(endpoint, requestPromise);
+
+  try {
+    return await requestPromise;
+  } finally {
+    inFlightSetupStatus.delete(endpoint);
+  }
 }
 
 export const onboardingService = {

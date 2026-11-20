@@ -33,6 +33,7 @@ export function AdminNotificationsProvider({ children }) {
   } = useWorkspaceNotifications({
     workspace: 'admin',
     perPage: 8,
+    fetchList: false,
   });
 
   const notifications = useMemo(

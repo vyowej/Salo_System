@@ -46,7 +46,7 @@ class RestaurantLocationService
             ])
             ->first();
 
-        $coverage = DB::table('service_areas as sa')
+        $coverageRows = DB::table('service_areas as sa')
             ->join('cities as c', 'c.city_id', '=', 'sa.city_id')
             ->join('provinces as p', 'p.province_id', '=', 'c.province_id')
             ->leftJoin('barangays as b', 'b.barangay_id', '=', 'sa.barangay_id')
@@ -62,12 +62,19 @@ class RestaurantLocationService
                 'c.city_name',
                 'b.barangay_name',
             ])
-            ->get()
-            ->map(function (object $row): array {
+            ->get();
+
+        $activeAreas = $this->serviceAreaValidation->loadActiveAreasForProvinces(
+            $coverageRows->pluck('province_name')->map(static fn ($name): string => (string) $name)->all()
+        );
+
+        $coverage = $coverageRows
+            ->map(function (object $row) use ($activeAreas): array {
                 $platform = $this->serviceAreaValidation->checkPlatformSupport(
                     (string) $row->province_name,
                     (string) $row->city_name,
                     $row->barangay_name !== null ? (string) $row->barangay_name : null,
+                    $activeAreas,
                 );
 
                 return [

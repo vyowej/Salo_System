@@ -208,8 +208,6 @@ class AdminManagementService
                 'c.city_name as zone',
                 'ra.reference_number',
                 'ra.application_status',
-                DB::raw("(SELECT CONCAT(u2.first_name, ' ', u2.last_name) FROM restaurant_owners ro2 JOIN users u2 ON u2.user_id = ro2.user_id WHERE ro2.restaurant_id = rest.restaurant_id ORDER BY ro2.joined_at ASC LIMIT 1) as owner_name"),
-                DB::raw("(SELECT u2.email FROM restaurant_owners ro2 JOIN users u2 ON u2.user_id = ro2.user_id WHERE ro2.restaurant_id = rest.restaurant_id ORDER BY ro2.joined_at ASC LIMIT 1) as owner_email"),
             ]);
 
         if ($search !== '') {
@@ -227,9 +225,39 @@ class AdminManagementService
         }
 
         $paginator = $query->orderBy('rest.created_at', $sortDir)->paginate($perPage);
+        $items = $paginator->items();
+        $restaurantIds = array_map(static fn (object $row): int => (int) $row->restaurant_id, $items);
+
+        $ownersByRestaurant = [];
+        if ($restaurantIds !== []) {
+            $ownerRows = DB::table('restaurant_owners as ro2')
+                ->join('users as u2', 'u2.user_id', '=', 'ro2.user_id')
+                ->whereIn('ro2.restaurant_id', $restaurantIds)
+                ->orderBy('ro2.joined_at', 'asc')
+                ->orderBy('ro2.user_id', 'asc')
+                ->select([
+                    'ro2.restaurant_id',
+                    DB::raw("CONCAT(u2.first_name, ' ', u2.last_name) as owner_name"),
+                    'u2.email as owner_email',
+                ])
+                ->get();
+
+            foreach ($ownerRows as $oRow) {
+                $rId = (int) $oRow->restaurant_id;
+                if (! isset($ownersByRestaurant[$rId])) {
+                    $ownersByRestaurant[$rId] = $oRow;
+                }
+            }
+        }
+
+        foreach ($items as $item) {
+            $owner = $ownersByRestaurant[(int) $item->restaurant_id] ?? null;
+            $item->owner_name = $owner?->owner_name ?? null;
+            $item->owner_email = $owner?->owner_email ?? null;
+        }
 
         return [
-            'items' => $paginator->items(),
+            'items' => $items,
             'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),

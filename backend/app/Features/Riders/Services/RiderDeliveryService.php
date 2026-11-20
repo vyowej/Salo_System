@@ -57,12 +57,7 @@ class RiderDeliveryService
         $perPage = max(1, min(50, (int) ($filters['per_page'] ?? 15)));
         $page = max(1, (int) ($filters['page'] ?? 1));
 
-        $query = DB::table('orders as o')
-            ->join('restaurants as r', 'r.restaurant_id', '=', 'o.restaurant_id')
-            ->leftJoin('addresses as ra', 'ra.address_id', '=', 'r.address_id')
-            ->leftJoin('barangays as rb', 'rb.barangay_id', '=', 'ra.barangay_id')
-            ->leftJoin('cities as rc', 'rc.city_id', '=', 'rb.city_id')
-            ->leftJoin('provinces as rp', 'rp.province_id', '=', 'rc.province_id')
+        $baseQuery = DB::table('orders as o')
             ->leftJoin('deliveries as d', 'd.order_id', '=', 'o.order_id')
             ->where('o.order_status', 'ready')
             ->where('o.order_type', 'delivery')
@@ -72,27 +67,48 @@ class RiderDeliveryService
                         $unassigned->whereNull('d.rider_id')
                             ->whereIn('d.delivery_status', ['pending_assignment', 'offered']);
                     });
-            })
+            });
+
+        $total = (int) (clone $baseQuery)->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+
+        $rows = $baseQuery
             ->select([
                 'o.order_id',
                 'o.order_reference',
                 'o.restaurant_id',
-                'r.restaurant_name',
+                'o.restaurant_name',
                 'o.delivery_fee',
                 'o.total_amount',
                 'o.delivery_address_text',
                 'o.placed_at',
-                'ra.street as pickup_street',
-                'rb.barangay_name as pickup_barangay',
-                'rc.city_name as pickup_city',
-                'rp.province_name as pickup_province',
             ])
             ->orderByDesc('o.placed_at')
-            ->orderByDesc('o.order_id');
+            ->orderByDesc('o.order_id')
+            ->forPage($page, $perPage)
+            ->get();
 
-        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
-        $rows = collect($paginator->items());
         $orderIds = $rows->pluck('order_id')->map(fn ($id) => (int) $id)->all();
+        $restaurantIds = $rows->pluck('restaurant_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+
+        $pickupAddressesByRestaurantId = $restaurantIds === []
+            ? collect()
+            : DB::table('restaurants as r')
+                ->leftJoin('addresses as ra', 'ra.address_id', '=', 'r.address_id')
+                ->leftJoin('barangays as rb', 'rb.barangay_id', '=', 'ra.barangay_id')
+                ->leftJoin('cities as rc', 'rc.city_id', '=', 'rb.city_id')
+                ->leftJoin('provinces as rp', 'rp.province_id', '=', 'rc.province_id')
+                ->whereIn('r.restaurant_id', $restaurantIds)
+                ->select([
+                    'r.restaurant_id',
+                    'r.restaurant_name as live_restaurant_name',
+                    'ra.street as pickup_street',
+                    'rb.barangay_name as pickup_barangay',
+                    'rc.city_name as pickup_city',
+                    'rp.province_name as pickup_province',
+                ])
+                ->get()
+                ->keyBy('restaurant_id');
 
         $itemCounts = $orderIds === []
             ? collect()
@@ -103,23 +119,25 @@ class RiderDeliveryService
                 ->get()
                 ->keyBy('order_id');
 
-        $deliveries = $rows->map(function (object $row) use ($itemCounts): array {
+        $deliveries = $rows->map(function (object $row) use ($itemCounts, $pickupAddressesByRestaurantId): array {
             $counts = $itemCounts->get((int) $row->order_id);
+            $pickupAddr = $pickupAddressesByRestaurantId->get((int) $row->restaurant_id);
+            $restaurantName = $pickupAddr?->live_restaurant_name ?? $row->restaurant_name;
 
             return [
                 'order_id' => (int) $row->order_id,
                 'order_reference' => $row->order_reference,
                 'restaurant_id' => (int) $row->restaurant_id,
-                'restaurant_name' => $row->restaurant_name,
+                'restaurant_name' => $restaurantName,
                 'item_count' => (int) ($counts->total_qty ?? $counts->line_count ?? 0),
                 'delivery_fee' => (float) $row->delivery_fee,
                 'order_total' => (float) $row->total_amount,
                 'pickup_address_text' => $this->formatAddressText(
-                    $row->pickup_street,
-                    $row->pickup_barangay,
-                    $row->pickup_city,
-                    $row->pickup_province,
-                    $row->restaurant_name,
+                    $pickupAddr?->pickup_street,
+                    $pickupAddr?->pickup_barangay,
+                    $pickupAddr?->pickup_city,
+                    $pickupAddr?->pickup_province,
+                    $restaurantName,
                 ),
                 'dropoff_address_text' => $row->delivery_address_text,
                 'placed_at' => OrderTimestampFormatter::toManilaIso($row->placed_at),
@@ -129,10 +147,10 @@ class RiderDeliveryService
         return [
             'deliveries' => $deliveries,
             'pagination' => [
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => $lastPage,
             ],
         ];
     }

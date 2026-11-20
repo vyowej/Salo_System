@@ -37,8 +37,16 @@ export function useAddresses() {
   }, [user]);
 
   useEffect(() => {
+    if (!user) {
+      addressService.clearCache();
+      return;
+    }
+    if (addressService.isLoaded()) {
+      syncFromCache();
+      return;
+    }
     refreshAddresses();
-  }, [refreshAddresses]);
+  }, [user, refreshAddresses, syncFromCache]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;

@@ -133,24 +133,36 @@ export default function OrderDetailPage() {
           }
         }
 
-        if (active) setTrackingLoading(true);
-        const [rawResult, trackingResult] = await Promise.allSettled([
-          customerService.fetchOrderDetail(targetId),
-          customerService.getCustomerOrderTracking(targetId),
-        ]);
+        const rawOrder = await customerService.fetchOrderDetail(targetId);
         if (!active) return;
 
-        if (rawResult.status === 'rejected') {
-          throw rawResult.reason;
-        }
+        const mappedOrder = rawOrder ? mapBackendOrder(rawOrder) : null;
+        setOrder(mappedOrder);
 
-        setOrder(rawResult.value ? mapBackendOrder(rawResult.value) : null);
+        const orderFulfillment = String(mappedOrder?.fulfillment || 'delivery').toLowerCase();
+        const orderStatusKey = normalizeOrderStatusKey(mappedOrder?.overallStatus);
+        const isTrackableDelivery =
+          Boolean(mappedOrder) &&
+          orderFulfillment === 'delivery' &&
+          !['pending', 'cancelled', 'rejected', 'failed'].includes(orderStatusKey);
 
-        if (trackingResult.status === 'fulfilled') {
-          setTracking(trackingResult.value ?? null);
-        } else {
-          setTracking(null);
-          setTrackingError(trackingResult.reason?.message || 'Unable to load live tracking details.');
+        if (isTrackableDelivery) {
+          setTrackingLoading(true);
+          try {
+            const trackingData = await customerService.getCustomerOrderTracking(targetId);
+            if (active) {
+              setTracking(trackingData ?? null);
+            }
+          } catch (trackErr) {
+            if (active) {
+              setTracking(null);
+              setTrackingError(trackErr?.message || 'Unable to load live tracking details.');
+            }
+          } finally {
+            if (active) {
+              setTrackingLoading(false);
+            }
+          }
         }
       } catch (err) {
         if (active) {

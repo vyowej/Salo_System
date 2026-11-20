@@ -22,6 +22,7 @@ export default function RiderNotificationsMenu() {
   } = useWorkspaceNotifications({
     workspace: 'rider',
     perPage: 8,
+    fetchList: open,
   });
 
   const latestEight = items.slice(0, 8);

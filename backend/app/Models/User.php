@@ -32,6 +32,29 @@ class User extends Authenticatable
 
     public $timestamps = true;
 
+    /**
+     * Per-request memoized role context keyed by the active Request object in a WeakMap.
+     *
+     * @var \WeakMap<object, array<string, mixed>>|null
+     */
+    private ?\WeakMap $roleContextByRequest = null;
+
+    public function clearRoleContextCache(): void
+    {
+        $this->roleContextByRequest = null;
+    }
+
+    private function currentRequestObject(): ?object
+    {
+        if (! app()->bound('request')) {
+            return null;
+        }
+
+        $req = app('request');
+
+        return is_object($req) ? $req : null;
+    }
+
     protected function casts(): array
     {
         return [
@@ -65,8 +88,24 @@ class User extends Authenticatable
      *
      * @return array<string, mixed>
      */
-    public function resolveRoleContext(): array
+    public function resolveRoleContext(bool $refresh = false): array
     {
+        $req = $this->currentRequestObject();
+        $userKey = '_salo_role_context_'.(int) $this->user_id;
+
+        if (! $refresh && $req !== null) {
+            if (isset($req->attributes) && is_object($req->attributes) && $req->attributes->has($userKey)) {
+                /** @var array<string, mixed> $cached */
+                $cached = $req->attributes->get($userKey);
+
+                return $cached;
+            }
+
+            if ($this->roleContextByRequest !== null && isset($this->roleContextByRequest[$req])) {
+                return $this->roleContextByRequest[$req];
+            }
+        }
+
         $ownerships = DB::table('restaurant_owners as ro')
             ->join('restaurants as r', 'r.restaurant_id', '=', 'ro.restaurant_id')
             ->where('ro.user_id', $this->user_id)
@@ -150,7 +189,7 @@ class User extends Authenticatable
             $roles[] = 'rider';
         }
 
-        return [
+        $context = [
             'roles' => $roles,
             'capabilities' => [
                 'is_customer' => true,
@@ -164,6 +203,18 @@ class User extends Authenticatable
             'order_handler_positions' => array_values((array) config('salo.orders.handler_positions', [])),
             'rider_profile' => $riderProfile,
         ];
+
+        if ($req !== null) {
+            if (isset($req->attributes) && is_object($req->attributes)) {
+                $req->attributes->set($userKey, $context);
+            }
+            if ($this->roleContextByRequest === null) {
+                $this->roleContextByRequest = new \WeakMap();
+            }
+            $this->roleContextByRequest[$req] = $context;
+        }
+
+        return $context;
     }
 
     public static function isOrderHandlerPosition(?string $position): bool
@@ -198,6 +249,14 @@ class User extends Authenticatable
             'restaurant_staff' => 'staff',
             default => strtolower(trim($role)),
         };
+
+        if ($normalized === 'customer') {
+            return true;
+        }
+
+        if ($normalized === 'admin') {
+            return $this->user_role === 'admin';
+        }
 
         $context = $this->resolveRoleContext();
 

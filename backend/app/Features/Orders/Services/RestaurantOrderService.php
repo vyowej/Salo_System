@@ -96,12 +96,21 @@ class RestaurantOrderService
         $page = max(1, (int) ($filters['page'] ?? 1));
         $status = trim((string) ($filters['status'] ?? ''));
 
-        $query = DB::table('orders as o')
+        $baseQuery = DB::table('orders as o')
+            ->where('o.restaurant_id', $targetId);
+
+        if ($status !== '' && $status !== 'all') {
+            $baseQuery->where('o.order_status', $status);
+        }
+
+        $total = (int) (clone $baseQuery)->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+
+        $rows = $baseQuery
             ->leftJoin('users as cu', 'cu.user_id', '=', 'o.customer_id')
             ->leftJoin('deliveries as d', 'd.order_id', '=', 'o.order_id')
             ->leftJoin('riders as rd', 'rd.rider_id', '=', 'd.rider_id')
             ->leftJoin('users as ru', 'ru.user_id', '=', 'rd.user_id')
-            ->where('o.restaurant_id', $targetId)
             ->select([
                 'o.order_id',
                 'o.order_reference',
@@ -125,18 +134,12 @@ class RestaurantOrderService
                 'd.delivered_at',
                 'ru.first_name as rider_first_name',
                 'cu.phone_number as customer_phone',
-            ]);
-
-        if ($status !== '' && $status !== 'all') {
-            $query->where('o.order_status', $status);
-        }
-
-        $paginator = $query
+            ])
             ->orderByDesc('o.placed_at')
             ->orderByDesc('o.order_id')
-            ->paginate($perPage, ['*'], 'page', $page);
+            ->forPage($page, $perPage)
+            ->get();
 
-        $rows = collect($paginator->items());
         $orderIds = $rows->pluck('order_id')->map(fn ($id) => (int) $id)->all();
 
         $itemsByOrder = $orderIds === []
@@ -194,10 +197,10 @@ class RestaurantOrderService
             'restaurant_id' => $targetId,
             'orders' => $orders,
             'pagination' => [
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => $lastPage,
             ],
         ];
     }

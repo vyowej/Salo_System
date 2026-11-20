@@ -63,7 +63,10 @@ class AuthController extends Controller
     {
         /** @var User $authUser */
         $authUser = $request->user();
-        $freshUser = User::query()->findOrFail($authUser->user_id);
+        $freshUser = $request->attributes->get('_salo_fresh_user');
+        if (! $freshUser instanceof User || (int) $freshUser->user_id !== (int) $authUser->user_id) {
+            $freshUser = User::query()->findOrFail($authUser->user_id);
+        }
 
         return ApiResponse::success(
             data: ['user' => $authService->formatUserPayload($freshUser)],

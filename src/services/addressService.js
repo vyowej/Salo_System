@@ -10,6 +10,7 @@ export const ADDRESSES_CHANGED_EVENT = 'salo_addresses_changed';
 
 let cachedAddresses = [];
 let hasLoadedAddresses = false;
+let inFlightFetchAddressesPromise = null;
 
 function notifySubscribers() {
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
@@ -98,8 +99,27 @@ export const addressService = {
   },
 
   async fetchAddresses() {
-    const rows = await locationApiService.getCustomerAddresses();
-    return setCachedAddresses(rows);
+    if (inFlightFetchAddressesPromise) {
+      return inFlightFetchAddressesPromise;
+    }
+
+    inFlightFetchAddressesPromise = (async () => {
+      try {
+        const rows = await locationApiService.getCustomerAddresses();
+        return setCachedAddresses(rows);
+      } finally {
+        inFlightFetchAddressesPromise = null;
+      }
+    })();
+
+    return inFlightFetchAddressesPromise;
+  },
+
+  async loadAddresses() {
+    if (hasLoadedAddresses) {
+      return cachedAddresses;
+    }
+    return this.fetchAddresses();
   },
 
   async addAddress(rawAddress) {

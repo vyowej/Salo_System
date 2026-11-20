@@ -98,11 +98,19 @@ class AdminApplicationService
             }
 
             $paginator = $query->orderBy('ra.submitted_at', $sortDir)->paginate($perPage);
-            $items = collect($paginator->items())->map(function ($row) {
-                $docCounts = DB::table('application_documents')
-                    ->where('rider_application_id', $row->id)
-                    ->selectRaw("COUNT(*) as total, SUM(CASE WHEN document_status = 'verified' THEN 1 ELSE 0 END) as verified")
-                    ->first();
+            $pageRows = collect($paginator->items());
+            $riderAppIds = $pageRows->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+            $docCountsByAppId = $riderAppIds === []
+                ? collect()
+                : DB::table('application_documents')
+                    ->whereIn('rider_application_id', $riderAppIds)
+                    ->selectRaw("rider_application_id, COUNT(*) as total, SUM(CASE WHEN document_status = 'verified' THEN 1 ELSE 0 END) as verified")
+                    ->groupBy('rider_application_id')
+                    ->get()
+                    ->keyBy('rider_application_id');
+
+            $items = $pageRows->map(function ($row) use ($docCountsByAppId) {
+                $docCounts = $docCountsByAppId->get((int) $row->id);
 
                 return [
                     'id' => (int) $row->id,
@@ -174,11 +182,19 @@ class AdminApplicationService
             }
 
             $paginator = $query->orderBy('ra.submitted_at', $sortDir)->paginate($perPage);
-            $items = collect($paginator->items())->map(function ($row) {
-                $docCounts = DB::table('application_documents')
-                    ->where('restaurant_application_id', $row->id)
-                    ->selectRaw("COUNT(*) as total, SUM(CASE WHEN document_status = 'verified' THEN 1 ELSE 0 END) as verified")
-                    ->first();
+            $pageRows = collect($paginator->items());
+            $restAppIds = $pageRows->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+            $docCountsByAppId = $restAppIds === []
+                ? collect()
+                : DB::table('application_documents')
+                    ->whereIn('restaurant_application_id', $restAppIds)
+                    ->selectRaw("restaurant_application_id, COUNT(*) as total, SUM(CASE WHEN document_status = 'verified' THEN 1 ELSE 0 END) as verified")
+                    ->groupBy('restaurant_application_id')
+                    ->get()
+                    ->keyBy('restaurant_application_id');
+
+            $items = $pageRows->map(function ($row) use ($docCountsByAppId) {
+                $docCounts = $docCountsByAppId->get((int) $row->id);
 
                 return [
                     'id' => (int) $row->id,

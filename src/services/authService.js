@@ -6,6 +6,13 @@
 import apiClient, { clearCsrfCache } from './apiClient';
 
 const ROLE_PRIORITY = ['admin', 'owner', 'rider', 'staff', 'customer'];
+let inFlightCurrentUserPromise = null;
+let currentUserRequestGeneration = 0;
+
+function invalidateInFlightCurrentUser() {
+  currentUserRequestGeneration += 1;
+  inFlightCurrentUserPromise = null;
+}
 
 export function getDefaultWorkspace(roles = []) {
   if (!Array.isArray(roles) || roles.length === 0) {
@@ -70,17 +77,20 @@ export function normalizeUser(rawUser, preferredWorkspace = null) {
 
 export const authService = {
   async login({ email, password }) {
+    invalidateInFlightCurrentUser();
     const response = await apiClient.post(
       '/auth/login',
       { email, password },
       { skipAuthInvalidEvent: true },
     );
 
+    invalidateInFlightCurrentUser();
     const user = normalizeUser(response?.data?.user);
     return { user };
   },
 
   async register(userData) {
+    invalidateInFlightCurrentUser();
     const payload = {
       username: userData.username,
       first_name: userData.first_name ?? userData.firstName,
@@ -95,14 +105,17 @@ export const authService = {
       skipAuthInvalidEvent: true,
     });
 
+    invalidateInFlightCurrentUser();
     const user = normalizeUser(response?.data?.user);
     return { user };
   },
 
   async logout() {
+    invalidateInFlightCurrentUser();
     try {
       await apiClient.post('/auth/logout', null, { skipAuthInvalidEvent: true });
     } finally {
+      invalidateInFlightCurrentUser();
       clearCsrfCache();
     }
   },
@@ -129,17 +142,32 @@ export const authService = {
   },
 
   async getCurrentUser() {
-    try {
-      const response = await apiClient.get('/auth/me', {
-        skipAuthInvalidEvent: true,
-      });
-      return normalizeUser(response?.data?.user);
-    } catch (error) {
-      if (error?.status === 401 || error?.status === 403) {
-        return null;
-      }
-      throw error;
+    if (inFlightCurrentUserPromise) {
+      return inFlightCurrentUserPromise;
     }
+
+    const generation = currentUserRequestGeneration;
+    let requestPromise = null;
+    requestPromise = (async () => {
+      try {
+        const response = await apiClient.get('/auth/me', {
+          skipAuthInvalidEvent: true,
+        });
+        return normalizeUser(response?.data?.user);
+      } catch (error) {
+        if (error?.status === 401 || error?.status === 403) {
+          return null;
+        }
+        throw error;
+      } finally {
+        if (inFlightCurrentUserPromise === requestPromise && currentUserRequestGeneration === generation) {
+          inFlightCurrentUserPromise = null;
+        }
+      }
+    })();
+
+    inFlightCurrentUserPromise = requestPromise;
+    return requestPromise;
   },
 };
 

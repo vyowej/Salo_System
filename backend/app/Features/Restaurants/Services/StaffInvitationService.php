@@ -189,10 +189,9 @@ class StaffInvitationService
     {
         $restaurant = $this->requireOwnedActiveRestaurant($owner, $restaurantId);
         $targetRestaurantId = (int) $restaurant->restaurant_id;
+        $now = now();
 
-        $this->expireOverdueInvitationsForRestaurant($targetRestaurantId);
-
-        $rows = DB::table('restaurant_staff as rs')
+        $rawRows = DB::table('restaurant_staff as rs')
             ->join('users as u', 'u.user_id', '=', 'rs.user_id')
             ->leftJoin('users as inv', 'inv.user_id', '=', 'rs.invited_by')
             ->where('rs.restaurant_id', $targetRestaurantId)
@@ -204,7 +203,27 @@ class StaffInvitationService
                 'u.username',
                 'inv.first_name as invited_by_first_name',
             ])
-            ->get()
+            ->get();
+
+        $expiredIds = [];
+        foreach ($rawRows as $row) {
+            if ($row->staff_status === 'invited' && $this->isExpired($row->expires_at, $now)) {
+                $expiredIds[] = (int) $row->staff_id;
+                $row->staff_status = 'expired';
+            }
+        }
+
+        if ($expiredIds !== []) {
+            DB::table('restaurant_staff')
+                ->whereIn('staff_id', $expiredIds)
+                ->where('staff_status', 'invited')
+                ->update([
+                    'staff_status' => 'expired',
+                    'updated_at' => $now,
+                ]);
+        }
+
+        $rows = $rawRows
             ->map(fn (object $row): array => [
                 'staff_id' => (int) $row->staff_id,
                 'restaurant_id' => (int) $row->restaurant_id,
@@ -314,9 +333,9 @@ class StaffInvitationService
      */
     public function listAccountInvitations(User $user): array
     {
-        $this->expireOverdueInvitationsForUser((int) $user->user_id);
+        $now = now();
 
-        return DB::table('restaurant_staff as rs')
+        $rawRows = DB::table('restaurant_staff as rs')
             ->join('restaurants as r', 'r.restaurant_id', '=', 'rs.restaurant_id')
             ->leftJoin('users as inv', 'inv.user_id', '=', 'rs.invited_by')
             ->where('rs.user_id', $user->user_id)
@@ -327,7 +346,27 @@ class StaffInvitationService
                 'r.restaurant_status',
                 'inv.first_name as invited_by_first_name',
             ])
-            ->get()
+            ->get();
+
+        $expiredIds = [];
+        foreach ($rawRows as $row) {
+            if ($row->staff_status === 'invited' && $this->isExpired($row->expires_at, $now)) {
+                $expiredIds[] = (int) $row->staff_id;
+                $row->staff_status = 'expired';
+            }
+        }
+
+        if ($expiredIds !== []) {
+            DB::table('restaurant_staff')
+                ->whereIn('staff_id', $expiredIds)
+                ->where('staff_status', 'invited')
+                ->update([
+                    'staff_status' => 'expired',
+                    'updated_at' => $now,
+                ]);
+        }
+
+        return $rawRows
             ->map(fn (object $row): array => [
                 'staff_id' => (int) $row->staff_id,
                 'restaurant_id' => (int) $row->restaurant_id,
@@ -564,18 +603,18 @@ class StaffInvitationService
             ->select(['user_id', 'username', 'email', 'first_name']);
 
         if ($email !== '') {
-            return $query->whereRaw('LOWER(email) = ?', [$email])->first();
+            return $query->where('email', $email)->first();
         }
 
         if ($username !== '') {
-            return $query->whereRaw('LOWER(username) = ?', [strtolower($username)])->first();
+            return $query->where('username', $username)->first();
         }
 
         if (str_contains($identifier, '@')) {
-            return $query->whereRaw('LOWER(email) = ?', [strtolower($identifier)])->first();
+            return $query->where('email', $identifier)->first();
         }
 
-        return $query->whereRaw('LOWER(username) = ?', [strtolower($identifier)])->first();
+        return $query->where('username', $identifier)->first();
     }
 
     private function expireOverdueInvitationsForRestaurant(int $restaurantId): void
