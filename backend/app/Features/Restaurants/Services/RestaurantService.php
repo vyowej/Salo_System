@@ -4,7 +4,9 @@ namespace App\Features\Restaurants\Services;
 
 use App\Models\User;
 use App\Support\FileStorageService;
+use App\Support\SqlLike;
 use Carbon\Carbon;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -63,34 +65,76 @@ class RestaurantService
         $perPage = max(1, min(50, (int) ($filters['per_page'] ?? 12)));
         $page = max(1, (int) ($filters['page'] ?? 1));
 
+        $query = $this->buildPublicRestaurantListQuery($filters);
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+        $rows = collect($paginator->items());
+        $ids = $rows->pluck('restaurant_id')->map(fn ($id) => (int) $id)->all();
+
+        $categoriesByRestaurant = $this->loadCategoriesForRestaurants($ids);
+        $hoursByRestaurant = $this->loadOperatingHoursForRestaurants($ids);
+        $closuresByRestaurant = $this->loadRelevantClosuresForRestaurants($ids);
+        $ratingsByRestaurant = $this->loadRatingSummariesForRestaurants($ids);
+
+        $items = $rows->map(fn (object $row): array => $this->formatPublicRestaurantListItem(
+            $row,
+            $categoriesByRestaurant,
+            $hoursByRestaurant,
+            $closuresByRestaurant,
+            $ratingsByRestaurant,
+        ))->all();
+
+        return [
+            'restaurants' => $items,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function buildPublicRestaurantListQuery(array $filters): Builder
+    {
         $query = DB::table('restaurants as r')
             ->join('addresses as a', 'a.address_id', '=', 'r.address_id')
             ->join('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
             ->join('cities as c', 'c.city_id', '=', 'b.city_id')
             ->where('r.restaurant_status', 'active')
             ->select([
-                'r.restaurant_id',
-                'r.restaurant_name',
-                'r.business_type',
-                'r.description',
-                'r.logo_image',
-                'r.cover_image',
-                'r.offers_delivery',
-                'r.offers_pickup',
-                'r.offers_dine_in',
-                'r.accepts_reservations',
-                'r.accepting_orders',
-                'r.accepting_reservations',
-                'r.created_at',
-                'b.barangay_name',
-                'c.city_name',
+                'r.restaurant_id', 'r.restaurant_name', 'r.business_type', 'r.description',
+                'r.logo_image', 'r.cover_image', 'r.offers_delivery', 'r.offers_pickup',
+                'r.offers_dine_in', 'r.accepts_reservations', 'r.accepting_orders',
+                'r.accepting_reservations', 'r.created_at', 'b.barangay_name', 'c.city_name',
             ]);
 
+        $this->applyPublicListSearchAndCategory($query, $filters);
+
+        foreach (['offers_delivery', 'offers_pickup', 'offers_dine_in'] as $flag) {
+            if (array_key_exists($flag, $filters) && $filters[$flag] !== null && $filters[$flag] !== '') {
+                $boolVal = filter_var($filters[$flag], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($boolVal !== null) {
+                    $query->where('r.'.$flag, $boolVal ? 1 : 0);
+                }
+            }
+        }
+
+        return (string) ($filters['sort'] ?? 'name') === 'newest'
+            ? $query->orderByDesc('r.created_at')->orderByDesc('r.restaurant_id')
+            : $query->orderBy('r.restaurant_name')->orderBy('r.restaurant_id');
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function applyPublicListSearchAndCategory(Builder $query, array $filters): void
+    {
         $search = trim((string) ($filters['search'] ?? ''));
         if ($search !== '') {
-            $escaped = $this->escapeLike($search);
-            $pattern = '%'.$escaped.'%';
-
+            $pattern = '%'.SqlLike::escape($search).'%';
             $query->where(function ($sub) use ($pattern): void {
                 $sub->where('r.restaurant_name', 'like', $pattern)
                     ->orWhereExists(function ($catSub) use ($pattern): void {
@@ -113,89 +157,55 @@ class RestaurantService
                     ->whereColumn('rcm.restaurant_id', 'r.restaurant_id')
                     ->where('rc.is_active', 1);
 
-                if (ctype_digit($category)) {
-                    $catSub->where('rc.category_id', (int) $category);
-                } else {
-                    $catSub->where('rc.category_name', $category);
-                }
+                ctype_digit($category)
+                    ? $catSub->where('rc.category_id', (int) $category)
+                    : $catSub->where('rc.category_name', $category);
             });
         }
+    }
 
-        foreach (['offers_delivery', 'offers_pickup', 'offers_dine_in'] as $flag) {
-            if (array_key_exists($flag, $filters) && $filters[$flag] !== null && $filters[$flag] !== '') {
-                $boolVal = filter_var($filters[$flag], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-                if ($boolVal !== null) {
-                    $query->where('r.'.$flag, $boolVal ? 1 : 0);
-                }
-            }
-        }
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatPublicRestaurantListItem(
+        object $row,
+        Collection $categoriesByRestaurant,
+        Collection $hoursByRestaurant,
+        Collection $closuresByRestaurant,
+        Collection $ratingsByRestaurant,
+    ): array {
+        $id = (int) $row->restaurant_id;
+        $availability = $this->availabilityService->compute(
+            $row,
+            $hoursByRestaurant->get($id, collect()),
+            $closuresByRestaurant->get($id, collect()),
+        );
 
-        $sort = (string) ($filters['sort'] ?? 'name');
-        if ($sort === 'newest') {
-            $query->orderByDesc('r.created_at')->orderByDesc('r.restaurant_id');
-        } else {
-            $query->orderBy('r.restaurant_name')->orderBy('r.restaurant_id');
-        }
-
-        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
-        $rows = collect($paginator->items());
-        $ids = $rows->pluck('restaurant_id')->map(fn ($id) => (int) $id)->all();
-
-        $categoriesByRestaurant = $this->loadCategoriesForRestaurants($ids);
-        $hoursByRestaurant = $this->loadOperatingHoursForRestaurants($ids);
-        $closuresByRestaurant = $this->loadRelevantClosuresForRestaurants($ids);
-        $ratingsByRestaurant = $this->loadRatingSummariesForRestaurants($ids);
-
-        $items = $rows->map(function (object $row) use (
-            $categoriesByRestaurant,
-            $hoursByRestaurant,
-            $closuresByRestaurant,
-            $ratingsByRestaurant
-        ): array {
-            $id = (int) $row->restaurant_id;
-            $categories = $categoriesByRestaurant->get($id, collect())->values()->all();
-            $availability = $this->availabilityService->compute(
-                $row,
-                $hoursByRestaurant->get($id, collect()),
-                $closuresByRestaurant->get($id, collect()),
-            );
-
-            $item = [
-                'id' => $id,
-                'name' => $row->restaurant_name,
-                'business_type' => $row->business_type,
-                'description' => $row->description,
-                'logo_path' => $this->fileStorageService->publicUrl($row->logo_image),
-                'cover_path' => $this->fileStorageService->publicUrl($row->cover_image),
-                'categories' => $categories,
-                'short_address' => implode(', ', array_filter([$row->barangay_name, $row->city_name])),
-                'offers' => [
-                    'delivery' => (bool) $row->offers_delivery,
-                    'pickup' => (bool) $row->offers_pickup,
-                    'dine_in' => (bool) $row->offers_dine_in,
-                    'reservations' => (bool) $row->accepts_reservations,
-                ],
-                'availability' => $availability,
-            ];
-
-            $ratingSummary = $ratingsByRestaurant->get($id);
-            if ($ratingSummary && (int) $ratingSummary->review_count > 0) {
-                $item['average_rating'] = round((float) $ratingSummary->average_rating, 1);
-                $item['review_count'] = (int) $ratingSummary->review_count;
-            }
-
-            return $item;
-        })->all();
-
-        return [
-            'restaurants' => $items,
-            'pagination' => [
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
+        $item = [
+            'id' => $id,
+            'name' => $row->restaurant_name,
+            'business_type' => $row->business_type,
+            'description' => $row->description,
+            'logo_path' => $this->fileStorageService->publicUrl($row->logo_image),
+            'cover_path' => $this->fileStorageService->publicUrl($row->cover_image),
+            'categories' => $categoriesByRestaurant->get($id, collect())->values()->all(),
+            'short_address' => implode(', ', array_filter([$row->barangay_name, $row->city_name])),
+            'offers' => [
+                'delivery' => (bool) $row->offers_delivery,
+                'pickup' => (bool) $row->offers_pickup,
+                'dine_in' => (bool) $row->offers_dine_in,
+                'reservations' => (bool) $row->accepts_reservations,
             ],
+            'availability' => $availability,
         ];
+
+        $ratingSummary = $ratingsByRestaurant->get($id);
+        if ($ratingSummary && (int) $ratingSummary->review_count > 0) {
+            $item['average_rating'] = round((float) $ratingSummary->average_rating, 1);
+            $item['review_count'] = (int) $ratingSummary->review_count;
+        }
+
+        return $item;
     }
 
     /**
@@ -244,8 +254,27 @@ class RestaurantService
         $closures = $this->loadRelevantClosuresForRestaurants([$restaurantId])->get($restaurantId, collect());
         $ratingSummary = $this->loadRatingSummariesForRestaurants([$restaurantId])->get($restaurantId);
 
-        $availability = $this->availabilityService->compute($row, $hours, $closures);
+        return $this->formatPublicRestaurantDetails(
+            $row,
+            $categories,
+            $hours,
+            $this->availabilityService->compute($row, $hours, $closures),
+            $ratingSummary,
+        );
+    }
 
+    /**
+     * @param  array<int, string>  $categories
+     * @param  array<string, mixed>  $availability
+     * @return array<string, mixed>
+     */
+    private function formatPublicRestaurantDetails(
+        object $row,
+        array $categories,
+        Collection $hours,
+        array $availability,
+        ?object $ratingSummary,
+    ): array {
         $publicAddressParts = array_filter([
             $row->building_name,
             $row->street,
@@ -347,9 +376,20 @@ class RestaurantService
         $itemIds = $items->pluck('menu_item_id')->map(fn ($id) => (int) $id)->all();
         $addOnGroupsByItem = $this->loadAddOnGroupsForItems($itemIds);
 
+        return [
+            'restaurant_id' => $restaurantId,
+            'categories' => $this->formatPublicMenuCategories($categories, $items, $addOnGroupsByItem),
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function formatPublicMenuCategories(Collection $categories, Collection $items, Collection $addOnGroupsByItem): array
+    {
         $itemsByCategory = $items->groupBy('menu_category_id');
 
-        $formattedCategories = $categories->map(function (object $category) use ($itemsByCategory, $addOnGroupsByItem): array {
+        return $categories->map(function (object $category) use ($itemsByCategory, $addOnGroupsByItem): array {
             $categoryItems = $itemsByCategory->get($category->menu_category_id, collect())
                 ->map(function (object $item) use ($addOnGroupsByItem): array {
                     $status = (string) $item->availability_status;
@@ -375,11 +415,6 @@ class RestaurantService
                 'items' => $categoryItems,
             ];
         })->values()->all();
-
-        return [
-            'restaurant_id' => $restaurantId,
-            'categories' => $formattedCategories,
-        ];
     }
 
     /**
@@ -389,54 +424,14 @@ class RestaurantService
      */
     public function getOwnerSetupStatus(User $user, ?int $restaurantId = null): array
     {
-        $query = DB::table('restaurants as r')
-            ->join('restaurant_owners as ro', 'ro.restaurant_id', '=', 'r.restaurant_id')
-            ->where('ro.user_id', $user->user_id)
-            ->select('r.*');
-
-        if ($restaurantId !== null) {
-            $query->where('r.restaurant_id', $restaurantId);
-        } else {
-            $query->whereIn('r.restaurant_status', ['approved', 'active'])
-                ->orderBy('r.restaurant_id');
-        }
-
-        $restaurant = $query->first();
-
-        if (! $restaurant) {
-            abort(403, 'You are not authorized to access this restaurant setup status.');
-        }
-
-        if (! in_array($restaurant->restaurant_status, ['approved', 'active'], true)) {
-            abort(403, 'Restaurant is not approved yet.');
-        }
-
+        $restaurant = $this->findSetupRestaurant($user, $restaurantId);
         $address = DB::table('addresses as a')
             ->join('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
             ->join('cities as c', 'c.city_id', '=', 'b.city_id')
             ->join('provinces as p', 'p.province_id', '=', 'c.province_id')
             ->where('a.address_id', $restaurant->address_id)
-            ->select([
-                'a.street',
-                'b.barangay_name',
-                'c.city_name',
-                'p.province_name',
-            ])
+            ->select(['a.street', 'b.barangay_name', 'c.city_name', 'p.province_name'])
             ->first();
-
-        $hasLogo = ! empty($restaurant->logo_image);
-        $hasCover = ! empty($restaurant->cover_image);
-        $hasInfo = ! empty($restaurant->restaurant_name)
-            && ! empty($restaurant->description)
-            && ! empty($restaurant->contact_phone)
-            && ! empty($restaurant->business_email);
-        $hasAddress = $address !== null
-            && ! empty($address->street)
-            && ! empty($address->barangay_name)
-            && ! empty($address->city_name)
-            && ! empty($address->province_name);
-
-        $businessProfileComplete = $hasLogo && $hasCover && $hasInfo && $hasAddress;
 
         $targetRestaurantId = (int) $restaurant->restaurant_id;
         $countsRow = DB::selectOne(
@@ -448,62 +443,79 @@ class RestaurantService
             [$targetRestaurantId, $targetRestaurantId, $targetRestaurantId, 'hidden', $targetRestaurantId]
         );
 
-        $openPeriodsCount = (int) ($countsRow->open_periods_count ?? 0);
-        $operatingHoursComplete = $openPeriodsCount > 0;
+        return $this->formatOwnerSetupStatus($restaurant, $address, $countsRow);
+    }
 
+    private function findSetupRestaurant(User $user, ?int $restaurantId): object
+    {
+        $query = DB::table('restaurants as r')
+            ->join('restaurant_owners as ro', 'ro.restaurant_id', '=', 'r.restaurant_id')
+            ->where('ro.user_id', $user->user_id)
+            ->select('r.*');
+
+        if ($restaurantId !== null) {
+            $query->where('r.restaurant_id', $restaurantId);
+        } else {
+            $query->whereIn('r.restaurant_status', ['approved', 'active'])->orderBy('r.restaurant_id');
+        }
+
+        $restaurant = $query->first();
+        if (! $restaurant) {
+            abort(403, 'You are not authorized to access this restaurant setup status.');
+        }
+
+        if (! in_array($restaurant->restaurant_status, ['approved', 'active'], true)) {
+            abort(403, 'Restaurant is not approved yet.');
+        }
+
+        return $restaurant;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatOwnerSetupStatus(object $restaurant, ?object $address, object $countsRow): array
+    {
+        $hasLogo = ! empty($restaurant->logo_image);
+        $hasCover = ! empty($restaurant->cover_image);
+        $hasInfo = ! empty($restaurant->restaurant_name) && ! empty($restaurant->description)
+            && ! empty($restaurant->contact_phone) && ! empty($restaurant->business_email);
+        $hasAddress = $address !== null && ! empty($address->street) && ! empty($address->barangay_name)
+            && ! empty($address->city_name) && ! empty($address->province_name);
+
+        $openPeriodsCount = (int) ($countsRow->open_periods_count ?? 0);
         $menuCategoriesCount = (int) ($countsRow->menu_categories_count ?? 0);
         $menuItemsCount = (int) ($countsRow->menu_items_count ?? 0);
-        $menuComplete = $menuCategoriesCount >= 1 && $menuItemsCount >= 1;
-
+        $tablesCount = (int) ($countsRow->tables_count ?? 0);
         $offersDineIn = (bool) $restaurant->offers_dine_in;
         $acceptsReservations = (bool) $restaurant->accepts_reservations;
         $tablesApplicable = $offersDineIn || $acceptsReservations;
-
-        $tablesCount = (int) ($countsRow->tables_count ?? 0);
-        $tablesComplete = ! $tablesApplicable || $tablesCount >= 1;
-
         $acceptingOrders = (bool) $restaurant->accepting_orders;
-        $acceptingReservations = $acceptsReservations ? (bool) $restaurant->accepting_reservations : null;
-        $availabilityTogglesComplete = $acceptingOrders && (! $acceptsReservations || (bool) $restaurant->accepting_reservations);
 
         return [
             'restaurant_id' => (int) $restaurant->restaurant_id,
             'restaurant_name' => $restaurant->restaurant_name,
             'restaurant_status' => $restaurant->restaurant_status,
             'business_profile' => [
-                'has_logo' => $hasLogo,
-                'has_cover' => $hasCover,
-                'has_info' => $hasInfo,
-                'has_address' => $hasAddress,
-                'complete' => $businessProfileComplete,
+                'has_logo' => $hasLogo, 'has_cover' => $hasCover, 'has_info' => $hasInfo,
+                'has_address' => $hasAddress, 'complete' => $hasLogo && $hasCover && $hasInfo && $hasAddress,
             ],
-            'operating_hours' => [
-                'open_periods_count' => $openPeriodsCount,
-                'complete' => $operatingHoursComplete,
-            ],
+            'operating_hours' => ['open_periods_count' => $openPeriodsCount, 'complete' => $openPeriodsCount > 0],
             'menu' => [
-                'categories_count' => $menuCategoriesCount,
-                'items_count' => $menuItemsCount,
-                'complete' => $menuComplete,
+                'categories_count' => $menuCategoriesCount, 'items_count' => $menuItemsCount,
+                'complete' => $menuCategoriesCount >= 1 && $menuItemsCount >= 1,
             ],
             'tables' => [
-                'applicable' => $tablesApplicable,
-                'offers_dine_in' => $offersDineIn,
-                'accepts_reservations' => $acceptsReservations,
-                'tables_count' => $tablesCount,
-                'complete' => $tablesComplete,
+                'applicable' => $tablesApplicable, 'offers_dine_in' => $offersDineIn,
+                'accepts_reservations' => $acceptsReservations, 'tables_count' => $tablesCount,
+                'complete' => ! $tablesApplicable || $tablesCount >= 1,
             ],
             'availability_toggles' => [
                 'accepting_orders' => $acceptingOrders,
-                'accepting_reservations' => $acceptingReservations,
-                'complete' => $availabilityTogglesComplete,
+                'accepting_reservations' => $acceptsReservations ? (bool) $restaurant->accepting_reservations : null,
+                'complete' => $acceptingOrders && (! $acceptsReservations || (bool) $restaurant->accepting_reservations),
             ],
         ];
-    }
-
-    private function escapeLike(string $value): string
-    {
-        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
     }
 
     /**
@@ -623,43 +635,40 @@ class RestaurantService
             ]);
 
         $groupIds = $groups->pluck('add_on_group_id')->map(fn ($id) => (int) $id)->all();
-
-        $optionsByGroup = $groupIds === []
-            ? collect()
-            : DB::table('add_on_options')
-                ->whereIn('add_on_group_id', $groupIds)
-                ->orderBy('sort_order')
-                ->orderBy('add_on_option_id')
-                ->get([
-                    'add_on_option_id',
-                    'add_on_group_id',
-                    'option_name',
-                    'additional_price',
-                    'is_available',
-                ])
-                ->groupBy('add_on_group_id');
+        $optionsByGroup = $this->loadAddOnOptionsByGroup($groupIds);
 
         return $groups->groupBy('menu_item_id')->map(function (Collection $itemGroups) use ($optionsByGroup): array {
-            return $itemGroups->map(function (object $group) use ($optionsByGroup): array {
-                $options = $optionsByGroup->get($group->add_on_group_id, collect())
-                    ->map(fn (object $opt): array => [
-                        'id' => (int) $opt->add_on_option_id,
-                        'name' => $opt->option_name,
-                        'additional_price' => (float) $opt->additional_price,
-                        'is_available' => (bool) $opt->is_available,
-                    ])
-                    ->values()
-                    ->all();
-
-                return [
-                    'id' => (int) $group->add_on_group_id,
-                    'name' => $group->group_name,
-                    'is_required' => (bool) $group->is_required,
-                    'minimum_selections' => (int) $group->minimum_selections,
-                    'maximum_selections' => (int) $group->maximum_selections,
-                    'options' => $options,
-                ];
-            })->values()->all();
+            return $itemGroups->map(fn (object $group): array => [
+                'id' => (int) $group->add_on_group_id,
+                'name' => $group->group_name,
+                'is_required' => (bool) $group->is_required,
+                'minimum_selections' => (int) $group->minimum_selections,
+                'maximum_selections' => (int) $group->maximum_selections,
+                'options' => $optionsByGroup->get($group->add_on_group_id, []),
+            ])->values()->all();
         });
+    }
+
+    /**
+     * @param  array<int, int>  $groupIds
+     */
+    private function loadAddOnOptionsByGroup(array $groupIds): Collection
+    {
+        if ($groupIds === []) {
+            return collect();
+        }
+
+        return DB::table('add_on_options')
+            ->whereIn('add_on_group_id', $groupIds)
+            ->orderBy('sort_order')
+            ->orderBy('add_on_option_id')
+            ->get(['add_on_option_id', 'add_on_group_id', 'option_name', 'additional_price', 'is_available'])
+            ->groupBy('add_on_group_id')
+            ->map(fn (Collection $opts): array => $opts->map(fn (object $opt): array => [
+                'id' => (int) $opt->add_on_option_id,
+                'name' => $opt->option_name,
+                'additional_price' => (float) $opt->additional_price,
+                'is_available' => (bool) $opt->is_available,
+            ])->values()->all());
     }
 }

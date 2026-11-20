@@ -5,6 +5,8 @@ namespace App\Features\Admin\Services;
 use App\Features\Notifications\Services\NotificationService;
 use App\Models\User;
 use App\Support\AuditLogService;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -22,37 +24,20 @@ class AdminManagementService
      */
     public function listUsers(array $filters): array
     {
-        $perPage = max(1, min(100, (int) ($filters['per_page'] ?? 15)));
+        $perPage = $this->resolvePerPage($filters);
         $search = trim((string) ($filters['search'] ?? ''));
         $role = trim((string) ($filters['role'] ?? ''));
         $status = trim((string) ($filters['status'] ?? ''));
-        $sortDir = strtolower((string) ($filters['direction'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
+        $sortDir = $this->resolveSortDirection($filters);
 
         $query = DB::table('users')
             ->select([
-                'user_id',
-                'username',
-                'first_name',
-                'middle_initial',
-                'last_name',
-                'email',
-                'phone_number',
-                'user_role',
-                'account_status',
-                'email_verified_at',
-                'created_at',
-                'updated_at',
+                'user_id', 'username', 'first_name', 'middle_initial', 'last_name',
+                'email', 'phone_number', 'user_role', 'account_status',
+                'email_verified_at', 'created_at', 'updated_at',
             ]);
 
-        if ($search !== '') {
-            $like = "%{$search}%";
-            $query->where(function ($q) use ($like): void {
-                $q->where('username', 'like', $like)
-                    ->orWhere('first_name', 'like', $like)
-                    ->orWhere('last_name', 'like', $like)
-                    ->orWhere('email', 'like', $like);
-            });
-        }
+        $this->applyLikeSearch($query, $search, ['username', 'first_name', 'last_name', 'email']);
 
         if ($role !== '' && $role !== 'all') {
             $query->where('user_role', $role);
@@ -64,15 +49,7 @@ class AdminManagementService
 
         $paginator = $query->orderBy('created_at', $sortDir)->paginate($perPage);
 
-        return [
-            'items' => $paginator->items(),
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'last_page' => $paginator->lastPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-            ],
-        ];
+        return $this->formatPaginatedResult($paginator);
     }
 
     /**
@@ -177,10 +154,10 @@ class AdminManagementService
      */
     public function listRestaurants(array $filters): array
     {
-        $perPage = max(1, min(100, (int) ($filters['per_page'] ?? 15)));
+        $perPage = $this->resolvePerPage($filters);
         $search = trim((string) ($filters['search'] ?? ''));
         $status = trim((string) ($filters['status'] ?? ''));
-        $sortDir = strtolower((string) ($filters['direction'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
+        $sortDir = $this->resolveSortDirection($filters);
 
         $query = DB::table('restaurants as rest')
             ->join('addresses as addr', 'addr.address_id', '=', 'rest.address_id')
@@ -188,37 +165,18 @@ class AdminManagementService
             ->join('cities as c', 'c.city_id', '=', 'brgy.city_id')
             ->leftJoin('restaurant_applications as ra', 'ra.restaurant_id', '=', 'rest.restaurant_id')
             ->select([
-                'rest.restaurant_id',
-                'rest.restaurant_name',
-                'rest.registered_name',
-                'rest.business_type',
-                'rest.ownership_structure',
-                'rest.contact_phone',
-                'rest.business_email',
-                'rest.logo_image',
-                'rest.cover_image',
-                'rest.offers_delivery',
-                'rest.offers_pickup',
-                'rest.offers_dine_in',
-                'rest.accepts_reservations',
-                'rest.restaurant_status',
-                'rest.created_at',
-                'addr.street',
-                'brgy.barangay_name',
-                'c.city_name as zone',
-                'ra.reference_number',
-                'ra.application_status',
+                'rest.restaurant_id', 'rest.restaurant_name', 'rest.registered_name',
+                'rest.business_type', 'rest.ownership_structure', 'rest.contact_phone',
+                'rest.business_email', 'rest.logo_image', 'rest.cover_image',
+                'rest.offers_delivery', 'rest.offers_pickup', 'rest.offers_dine_in',
+                'rest.accepts_reservations', 'rest.restaurant_status', 'rest.created_at',
+                'addr.street', 'brgy.barangay_name', 'c.city_name as zone',
+                'ra.reference_number', 'ra.application_status',
             ]);
 
-        if ($search !== '') {
-            $like = "%{$search}%";
-            $query->where(function ($q) use ($like): void {
-                $q->where('rest.restaurant_name', 'like', $like)
-                    ->orWhere('rest.business_email', 'like', $like)
-                    ->orWhere('c.city_name', 'like', $like)
-                    ->orWhere('ra.reference_number', 'like', $like);
-            });
-        }
+        $this->applyLikeSearch($query, $search, [
+            'rest.restaurant_name', 'rest.business_email', 'c.city_name', 'ra.reference_number',
+        ]);
 
         if ($status !== '' && $status !== 'all') {
             $query->where('rest.restaurant_status', $status);
@@ -226,45 +184,9 @@ class AdminManagementService
 
         $paginator = $query->orderBy('rest.created_at', $sortDir)->paginate($perPage);
         $items = $paginator->items();
-        $restaurantIds = array_map(static fn (object $row): int => (int) $row->restaurant_id, $items);
+        $this->attachPrimaryOwnersToRestaurants($items);
 
-        $ownersByRestaurant = [];
-        if ($restaurantIds !== []) {
-            $ownerRows = DB::table('restaurant_owners as ro2')
-                ->join('users as u2', 'u2.user_id', '=', 'ro2.user_id')
-                ->whereIn('ro2.restaurant_id', $restaurantIds)
-                ->orderBy('ro2.joined_at', 'asc')
-                ->orderBy('ro2.user_id', 'asc')
-                ->select([
-                    'ro2.restaurant_id',
-                    DB::raw("CONCAT(u2.first_name, ' ', u2.last_name) as owner_name"),
-                    'u2.email as owner_email',
-                ])
-                ->get();
-
-            foreach ($ownerRows as $oRow) {
-                $rId = (int) $oRow->restaurant_id;
-                if (! isset($ownersByRestaurant[$rId])) {
-                    $ownersByRestaurant[$rId] = $oRow;
-                }
-            }
-        }
-
-        foreach ($items as $item) {
-            $owner = $ownersByRestaurant[(int) $item->restaurant_id] ?? null;
-            $item->owner_name = $owner?->owner_name ?? null;
-            $item->owner_email = $owner?->owner_email ?? null;
-        }
-
-        return [
-            'items' => $items,
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'last_page' => $paginator->lastPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-            ],
-        ];
+        return $this->formatPaginatedResult($paginator, $items);
     }
 
     /**
@@ -302,47 +224,26 @@ class AdminManagementService
      */
     public function listRiders(array $filters): array
     {
-        $perPage = max(1, min(100, (int) ($filters['per_page'] ?? 15)));
+        $perPage = $this->resolvePerPage($filters);
         $search = trim((string) ($filters['search'] ?? ''));
         $status = trim((string) ($filters['status'] ?? ''));
-        $sortDir = strtolower((string) ($filters['direction'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
+        $sortDir = $this->resolveSortDirection($filters);
 
         $query = DB::table('riders as r')
             ->join('users as u', 'u.user_id', '=', 'r.user_id')
             ->join('cities as c', 'c.city_id', '=', 'r.base_city_id')
             ->select([
-                'r.rider_id',
-                'r.user_id',
-                'r.vehicle_type',
-                'r.vehicle_brand',
-                'r.vehicle_model',
-                'r.vehicle_color',
-                'r.plate_number',
-                'r.preferred_shifts',
-                'r.available_days',
-                'r.emergency_contact_name',
-                'r.emergency_contact_phone',
-                'r.rider_status',
-                'r.approved_at',
-                'r.created_at',
-                'u.first_name',
-                'u.last_name',
-                'u.username',
-                'u.email',
-                'u.phone_number',
-                'c.city_name as zone',
+                'r.rider_id', 'r.user_id', 'r.vehicle_type', 'r.vehicle_brand',
+                'r.vehicle_model', 'r.vehicle_color', 'r.plate_number',
+                'r.preferred_shifts', 'r.available_days', 'r.emergency_contact_name',
+                'r.emergency_contact_phone', 'r.rider_status', 'r.approved_at',
+                'r.created_at', 'u.first_name', 'u.last_name', 'u.username',
+                'u.email', 'u.phone_number', 'c.city_name as zone',
             ]);
 
-        if ($search !== '') {
-            $like = "%{$search}%";
-            $query->where(function ($q) use ($like): void {
-                $q->where('u.first_name', 'like', $like)
-                    ->orWhere('u.last_name', 'like', $like)
-                    ->orWhere('u.email', 'like', $like)
-                    ->orWhere('r.plate_number', 'like', $like)
-                    ->orWhere('c.city_name', 'like', $like);
-            });
-        }
+        $this->applyLikeSearch($query, $search, [
+            'u.first_name', 'u.last_name', 'u.email', 'r.plate_number', 'c.city_name',
+        ]);
 
         if ($status !== '' && $status !== 'all') {
             $query->where('r.rider_status', $status);
@@ -350,15 +251,7 @@ class AdminManagementService
 
         $paginator = $query->orderBy('r.created_at', $sortDir)->paginate($perPage);
 
-        return [
-            'items' => $paginator->items(),
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'last_page' => $paginator->lastPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-            ],
-        ];
+        return $this->formatPaginatedResult($paginator);
     }
 
     /**
@@ -459,38 +352,22 @@ class AdminManagementService
      */
     public function listAuditLogs(array $filters): array
     {
-        $perPage = max(1, min(100, (int) ($filters['per_page'] ?? 20)));
+        $perPage = $this->resolvePerPage($filters, 20);
         $search = trim((string) ($filters['search'] ?? ''));
         $entityType = trim((string) ($filters['entity_type'] ?? ''));
 
         $query = DB::table('audit_logs as al')
             ->leftJoin('users as u', 'u.user_id', '=', 'al.actor_user_id')
             ->select([
-                'al.log_id',
-                'al.actor_user_id',
-                'al.action',
-                'al.entity_type',
-                'al.entity_id',
-                'al.old_values',
-                'al.new_values',
-                'al.reason',
-                'al.ip_address',
-                'al.created_at',
-                'u.first_name',
-                'u.last_name',
+                'al.log_id', 'al.actor_user_id', 'al.action', 'al.entity_type',
+                'al.entity_id', 'al.old_values', 'al.new_values', 'al.reason',
+                'al.ip_address', 'al.created_at', 'u.first_name', 'u.last_name',
                 'u.email as actor_email',
             ]);
 
-        if ($search !== '') {
-            $like = "%{$search}%";
-            $query->where(function ($q) use ($like): void {
-                $q->where('al.action', 'like', $like)
-                    ->orWhere('al.entity_type', 'like', $like)
-                    ->orWhere('al.entity_id', 'like', $like)
-                    ->orWhere('al.reason', 'like', $like)
-                    ->orWhere('u.email', 'like', $like);
-            });
-        }
+        $this->applyLikeSearch($query, $search, [
+            'al.action', 'al.entity_type', 'al.entity_id', 'al.reason', 'u.email',
+        ]);
 
         if ($entityType !== '' && $entityType !== 'all') {
             $query->where('al.entity_type', $entityType);
@@ -498,8 +375,87 @@ class AdminManagementService
 
         $paginator = $query->orderByDesc('al.log_id')->paginate($perPage);
 
+        return $this->formatPaginatedResult($paginator);
+    }
+
+    /**
+     * @param  array<int, object>  $items
+     */
+    private function attachPrimaryOwnersToRestaurants(array $items): void
+    {
+        $restaurantIds = array_map(static fn (object $row): int => (int) $row->restaurant_id, $items);
+        if ($restaurantIds === []) {
+            return;
+        }
+
+        $ownerRows = DB::table('restaurant_owners as ro2')
+            ->join('users as u2', 'u2.user_id', '=', 'ro2.user_id')
+            ->whereIn('ro2.restaurant_id', $restaurantIds)
+            ->orderBy('ro2.joined_at', 'asc')
+            ->orderBy('ro2.user_id', 'asc')
+            ->select([
+                'ro2.restaurant_id',
+                DB::raw("CONCAT(u2.first_name, ' ', u2.last_name) as owner_name"),
+                'u2.email as owner_email',
+            ])
+            ->get();
+
+        $ownersByRestaurant = [];
+        foreach ($ownerRows as $oRow) {
+            $rId = (int) $oRow->restaurant_id;
+            if (! isset($ownersByRestaurant[$rId])) {
+                $ownersByRestaurant[$rId] = $oRow;
+            }
+        }
+
+        foreach ($items as $item) {
+            $owner = $ownersByRestaurant[(int) $item->restaurant_id] ?? null;
+            $item->owner_name = $owner?->owner_name ?? null;
+            $item->owner_email = $owner?->owner_email ?? null;
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $columns
+     */
+    private function applyLikeSearch(Builder $query, string $search, array $columns): void
+    {
+        if ($search === '') {
+            return;
+        }
+
+        $like = "%{$search}%";
+        $query->where(function ($q) use ($like, $columns): void {
+            foreach ($columns as $idx => $column) {
+                $idx === 0 ? $q->where($column, 'like', $like) : $q->orWhere($column, 'like', $like);
+            }
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function resolvePerPage(array $filters, int $default = 15): int
+    {
+        return max(1, min(100, (int) ($filters['per_page'] ?? $default)));
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function resolveSortDirection(array $filters): string
+    {
+        return strtolower((string) ($filters['direction'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
+    }
+
+    /**
+     * @param  array<int, mixed>|null  $items
+     * @return array<string, mixed>
+     */
+    private function formatPaginatedResult(LengthAwarePaginator $paginator, ?array $items = null): array
+    {
         return [
-            'items' => $paginator->items(),
+            'items' => $items ?? $paginator->items(),
             'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),

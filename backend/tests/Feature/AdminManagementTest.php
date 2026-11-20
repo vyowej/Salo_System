@@ -265,4 +265,76 @@ class AdminManagementTest extends TestCase
 
         $this->assertLessThanOrEqual(5, count(DB::getQueryLog()), 'GET /api/admin/restaurants must run at most 5 queries (no correlated subqueries or N+1).');
     }
+
+    public function test_admin_users_riders_and_audit_logs_listing_filters_sorting_and_pagination(): void
+    {
+        $tag = 'MgmtList' . random_int(1000, 9999);
+
+        $admin = User::create([
+            'username' => "adm_{$tag}",
+            'first_name' => 'Admin',
+            'last_name' => $tag,
+            'email' => "adm_{$tag}@example.com",
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'admin',
+            'account_status' => 'active',
+        ]);
+
+        $cust = User::create([
+            'username' => "cust_{$tag}",
+            'first_name' => 'Customer',
+            'last_name' => $tag,
+            'email' => "cust_{$tag}@example.com",
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'suspended',
+        ]);
+
+        // 1. listUsers: search + role + status + pagination meta
+        $this->actingAs($admin)
+            ->getJson('/api/admin/users?search=' . urlencode($tag) . '&role=customer&status=suspended&direction=asc&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.meta.per_page', 10)
+            ->assertJsonPath('data.items.0.user_id', $cust->user_id)
+            ->assertJsonPath('data.items.0.account_status', 'suspended');
+
+        // 2. listRiders: search by plate_number + status + direction
+        $cityId = DB::table('cities')->where('city_name', 'Quezon City')->value('city_id')
+            ?? DB::table('cities')->value('city_id');
+        $plate = 'PLT-' . random_int(1000, 9999);
+        $riderId = (int) DB::table('riders')->insertGetId([
+            'user_id' => $cust->user_id,
+            'vehicle_type' => 'bicycle',
+            'plate_number' => $plate,
+            'emergency_contact_name' => 'Emergency',
+            'emergency_contact_relationship' => 'parent',
+            'emergency_contact_phone' => '09170000111',
+            'base_city_id' => $cityId,
+            'rider_status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/admin/riders?search=' . urlencode($plate) . '&status=pending&direction=asc')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.rider_id', $riderId)
+            ->assertJsonPath('data.items.0.plate_number', $plate);
+
+        // 3. listAuditLogs: default per_page=20, entity_type + search + actor_email
+        $this->actingAs($admin)->patchJson("/api/admin/users/{$cust->user_id}", [
+            'account_status' => 'active',
+            'reason' => "Reactivated {$tag}",
+        ])->assertOk();
+
+        $this->actingAs($admin)
+            ->getJson('/api/admin/audit-logs?entity_type=users&search=' . urlencode($tag))
+            ->assertOk()
+            ->assertJsonPath('data.meta.per_page', 20)
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.action', 'admin_user_updated')
+            ->assertJsonPath('data.items.0.actor_email', $admin->email);
+    }
 }

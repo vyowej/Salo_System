@@ -6,6 +6,8 @@ use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
 use App\Support\AuditLogService;
+use App\Support\Money;
+use App\Support\WorkspaceAccessResolver;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,20 +21,12 @@ class RiderDeliveryService
         private readonly RiderService $riderService,
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
+        private readonly WorkspaceAccessResolver $workspaceAccessResolver,
     ) {}
 
     public function requireActiveRider(User $user): object
     {
-        if (! $user->isActiveAccount()) {
-            abort(403, 'Forbidden: account is not active.');
-        }
-
-        $rider = DB::table('riders')->where('user_id', $user->user_id)->first();
-        if (! $rider || $rider->rider_status !== 'active') {
-            abort(403, 'Forbidden: an active rider account is required.');
-        }
-
-        return $rider;
+        return $this->workspaceAccessResolver->requireActiveRider($user);
     }
 
     /**
@@ -415,8 +409,8 @@ class RiderDeliveryService
                     ]);
                 }
 
-                $expectedCents = $this->toCents((string) $payment->amount);
-                $receivedCents = $this->toCents((string) $collectedAmount);
+                $expectedCents = Money::parseStrictCents((string) $payment->amount);
+                $receivedCents = Money::parseStrictCents((string) $collectedAmount);
                 if ($receivedCents <= 0 || $receivedCents !== $expectedCents) {
                     throw ValidationException::withMessages([
                         'collected_amount' => [
@@ -651,18 +645,6 @@ class RiderDeliveryService
         ], static fn (?string $p): bool => $p !== null && $p !== ''));
 
         return $parts !== [] ? implode(', ', $parts) : $fallback;
-    }
-
-    private function toCents(string $decimal): int
-    {
-        $clean = trim($decimal);
-        if (! preg_match('/^\d+(?:\.\d{1,2})?$/', $clean)) {
-            return -1;
-        }
-        [$whole, $frac] = array_pad(explode('.', $clean, 2), 2, '');
-        $frac = str_pad(substr($frac, 0, 2), 2, '0');
-
-        return ((int) $whole * 100) + (int) $frac;
     }
 
     private function isDuplicateKeyException(QueryException $e): bool

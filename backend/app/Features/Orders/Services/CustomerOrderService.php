@@ -3,6 +3,7 @@
 namespace App\Features\Orders\Services;
 
 use App\Features\Notifications\Services\NotificationService;
+use App\Features\Orders\Support\OrderPaymentSnapshotLoader;
 use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
 use App\Support\AuditLogService;
@@ -87,7 +88,7 @@ class CustomerOrderService
                 ->get()
                 ->keyBy('order_id');
 
-        $paymentsByOrder = $this->loadPaymentsByOrder($orderIds);
+        $paymentsByOrder = OrderPaymentSnapshotLoader::loadByOrderIds($orderIds);
 
         $orders = $rows->map(function (object $row) use ($itemCounts, $paymentsByOrder): array {
             $orderId = (int) $row->order_id;
@@ -215,7 +216,7 @@ class CustomerOrderService
             ->values()
             ->all();
 
-        $payment = $this->loadPaymentsByOrder([$orderId])->get($orderId);
+        $payment = OrderPaymentSnapshotLoader::loadByOrderIds([$orderId])->get($orderId);
 
         return [
             'order_id' => (int) $row->order_id,
@@ -363,31 +364,5 @@ class CustomerOrderService
         });
 
         return $this->getOrderDetail($user, $orderId);
-    }
-
-    /**
-     * @param  array<int, int>  $orderIds
-     */
-    private function loadPaymentsByOrder(array $orderIds)
-    {
-        if ($orderIds === []) {
-            return collect();
-        }
-
-        return DB::table('payment_allocations as pa')
-            ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
-            ->whereIn('pa.order_id', $orderIds)
-            ->where('pa.allocation_type', 'order_payment')
-            ->select([
-                'pa.order_id',
-                'p.payment_id',
-                'p.payment_reference',
-                'p.payment_method',
-                'p.payment_status',
-                'p.amount',
-                'p.paid_at',
-            ])
-            ->get()
-            ->keyBy('order_id');
     }
 }

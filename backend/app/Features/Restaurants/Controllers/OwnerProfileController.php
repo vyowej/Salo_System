@@ -2,6 +2,10 @@
 
 namespace App\Features\Restaurants\Controllers;
 
+use App\Features\Restaurants\Requests\UpdateOwnerAcceptingStatusRequest;
+use App\Features\Restaurants\Requests\UpdateOwnerMediaRequest;
+use App\Features\Restaurants\Requests\UpdateOwnerOperatingHoursRequest;
+use App\Features\Restaurants\Requests\UpdateOwnerProfileRequest;
 use App\Features\Restaurants\Services\OwnerProfileService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
@@ -24,18 +28,10 @@ class OwnerProfileController extends Controller
         );
     }
 
-    public function update(Request $request): JsonResponse
+    public function update(UpdateOwnerProfileRequest $request): JsonResponse
     {
         $restaurantId = $this->resolveRestaurantId($request);
-
-        $validated = $request->validate([
-            'restaurant_id' => ['nullable', 'integer'],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'contact_phone' => ['sometimes', 'required', 'string', 'max:30'],
-            'business_email' => ['sometimes', 'required', 'string', 'email', 'max:255'],
-            'offers_delivery' => ['sometimes', 'boolean'],
-            'offers_pickup' => ['sometimes', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
         return ApiResponse::success(
             data: ['profile' => $this->ownerProfileService->updateProfile($request->user(), $validated, $restaurantId, $request)],
@@ -43,19 +39,10 @@ class OwnerProfileController extends Controller
         );
     }
 
-    public function updateMedia(Request $request): JsonResponse
+    public function updateMedia(UpdateOwnerMediaRequest $request): JsonResponse
     {
         $restaurantId = $this->resolveRestaurantId($request);
-        $maxKb = max(256, (int) config('salo.uploads.max_size_kb', 5120));
-        $imgMimes = implode(',', (array) config('salo.uploads.allowed_image_types', ['jpg', 'jpeg', 'png', 'webp']));
-
-        $validated = $request->validate([
-            'restaurant_id' => ['nullable', 'integer'],
-            'logo_image' => ['nullable', 'file', "mimes:{$imgMimes}", "max:{$maxKb}"],
-            'cover_image' => ['nullable', 'file', "mimes:{$imgMimes}", "max:{$maxKb}"],
-            'remove_logo' => ['nullable', 'boolean'],
-            'remove_cover' => ['nullable', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
         return ApiResponse::success(
             data: [
@@ -73,15 +60,10 @@ class OwnerProfileController extends Controller
         );
     }
 
-    public function updateAcceptingStatus(Request $request): JsonResponse
+    public function updateAcceptingStatus(UpdateOwnerAcceptingStatusRequest $request): JsonResponse
     {
         $restaurantId = $this->resolveRestaurantId($request);
-
-        $validated = $request->validate([
-            'restaurant_id' => ['nullable', 'integer'],
-            'accepting_orders' => ['sometimes', 'boolean'],
-            'accepting_reservations' => ['sometimes', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
         return ApiResponse::success(
             data: ['profile' => $this->ownerProfileService->updateAcceptingStatus($request->user(), $validated, $restaurantId, $request)],
@@ -99,19 +81,10 @@ class OwnerProfileController extends Controller
         );
     }
 
-    public function updateOperatingHours(Request $request): JsonResponse
+    public function updateOperatingHours(UpdateOwnerOperatingHoursRequest $request): JsonResponse
     {
         $restaurantId = $this->resolveRestaurantId($request);
-
-        $validated = $request->validate([
-            'restaurant_id' => ['nullable', 'integer'],
-            'operating_hours' => ['required', 'array', 'min:1', 'max:35'],
-            'operating_hours.*.day_of_week' => ['required', 'integer', 'between:0,6'],
-            'operating_hours.*.opening_time' => ['nullable', 'string'],
-            'operating_hours.*.closing_time' => ['nullable', 'string'],
-            'operating_hours.*.closes_next_day' => ['nullable', 'boolean'],
-            'operating_hours.*.is_closed' => ['nullable', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
         return ApiResponse::success(
             data: $this->ownerProfileService->updateOperatingHours(

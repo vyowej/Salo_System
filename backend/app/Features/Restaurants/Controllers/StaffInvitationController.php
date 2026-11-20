@@ -2,6 +2,7 @@
 
 namespace App\Features\Restaurants\Controllers;
 
+use App\Features\Restaurants\Requests\StoreStaffInvitationRequest;
 use App\Features\Restaurants\Services\StaffInvitationService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
@@ -24,16 +25,9 @@ class StaffInvitationController extends Controller
         return ApiResponse::success($data, 'Restaurant staff loaded.');
     }
 
-    public function storeInvitation(Request $request): JsonResponse
+    public function storeInvitation(StoreStaffInvitationRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'restaurant_id' => ['nullable', 'integer', 'min:1'],
-            'username' => ['nullable', 'string', 'max:50'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'identifier' => ['nullable', 'string', 'max:255'],
-            'staff_position' => ['required', 'string', 'max:100'],
-            'note' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $data = $this->staffInvitationService->sendInvitation($request->user(), $validated, $request);
 

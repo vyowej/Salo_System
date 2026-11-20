@@ -365,4 +365,146 @@ class AdminApplicationReviewTest extends TestCase
             ->assertOk();
         $this->assertLessThanOrEqual(5, count(DB::getQueryLog()), 'GET /api/admin/applications?type=rider must execute at most 5 queries.');
     }
+
+    public function test_rider_applications_listing_filters_sorting_date_range_and_batch_doc_counts(): void
+    {
+        $admin = $this->createUser('admin', 'ridlistadm');
+        $riderUser1 = $this->createUser('customer', 'ridlist1');
+        $riderUser2 = $this->createUser('customer', 'ridlist2');
+
+        $cityId = DB::table('cities')->where('city_name', 'Quezon City')->value('city_id')
+            ?? DB::table('cities')->value('city_id');
+        $addressId = app(\App\Support\AddressService::class)->createAddress([
+            'province' => 'Metro Manila',
+            'city' => 'Quezon City',
+            'barangay' => 'Diliman',
+            'street' => '77 Rider Test St',
+        ]);
+
+        $rider1Id = (int) DB::table('riders')->insertGetId([
+            'user_id' => $riderUser1->user_id,
+            'vehicle_type' => 'bicycle',
+            'emergency_contact_name' => 'Contact 1',
+            'emergency_contact_relationship' => 'parent',
+            'emergency_contact_phone' => '09170000101',
+            'base_city_id' => $cityId,
+            'rider_status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $rider2Id = (int) DB::table('riders')->insertGetId([
+            'user_id' => $riderUser2->user_id,
+            'vehicle_type' => 'walking',
+            'emergency_contact_name' => 'Contact 2',
+            'emergency_contact_relationship' => 'sibling',
+            'emergency_contact_phone' => '09170000102',
+            'base_city_id' => $cityId,
+            'rider_status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $tag = 'RidList' . random_int(1000, 9999);
+        $app1Id = (int) DB::table('rider_applications')->insertGetId([
+            'reference_number' => "SALO-RDR-{$tag}-1",
+            'applicant_user_id' => $riderUser1->user_id,
+            'rider_id' => $rider1Id,
+            'application_status' => 'submitted',
+            'legal_first_name' => "{$tag}Alpha",
+            'legal_last_name' => 'Courier',
+            'date_of_birth' => '1995-05-05',
+            'contact_phone' => '09170000101',
+            'contact_email' => $riderUser1->email,
+            'contact_email_verified_at' => now(),
+            'residence_address_id' => $addressId,
+            'gov_id_type' => 'philid',
+            'gov_id_number_encrypted' => 'enc-stub-1234',
+            'gov_id_is_permanent' => 1,
+            'declarations_accepted_at' => now(),
+            'terms_version' => '2026-01',
+            'submitted_at' => now()->subDays(2),
+        ]);
+
+        $app2Id = (int) DB::table('rider_applications')->insertGetId([
+            'reference_number' => "SALO-RDR-{$tag}-2",
+            'applicant_user_id' => $riderUser2->user_id,
+            'rider_id' => $rider2Id,
+            'application_status' => 'under_review',
+            'legal_first_name' => "{$tag}Beta",
+            'legal_last_name' => 'Walker',
+            'date_of_birth' => '1996-06-06',
+            'contact_phone' => '09170000102',
+            'contact_email' => $riderUser2->email,
+            'contact_email_verified_at' => now(),
+            'residence_address_id' => $addressId,
+            'gov_id_type' => 'philid',
+            'gov_id_number_encrypted' => 'enc-stub-1234',
+            'gov_id_is_permanent' => 1,
+            'declarations_accepted_at' => now(),
+            'terms_version' => '2026-01',
+            'submitted_at' => now()->subDays(15),
+        ]);
+
+        $uniq = random_int(10000, 99999);
+        DB::table('application_documents')->insert([
+            [
+                'rider_application_id' => $app1Id,
+                'document_code' => 'government_id_front',
+                'file_path' => "applications/{$uniq}_rid_front.jpg",
+                'original_filename' => 'front.jpg',
+                'mime_type' => 'image/jpeg',
+                'file_size_bytes' => 1024,
+                'document_status' => 'verified',
+                'uploaded_by' => $riderUser1->user_id,
+                'uploaded_at' => now(),
+                'reviewed_by' => $admin->user_id,
+                'reviewed_at' => now(),
+            ],
+            [
+                'rider_application_id' => $app1Id,
+                'document_code' => 'selfie',
+                'file_path' => "applications/{$uniq}_rid_selfie.jpg",
+                'original_filename' => 'selfie.jpg',
+                'mime_type' => 'image/jpeg',
+                'file_size_bytes' => 1024,
+                'document_status' => 'pending_review',
+                'uploaded_by' => $riderUser1->user_id,
+                'uploaded_at' => now(),
+                'reviewed_by' => null,
+                'reviewed_at' => null,
+            ],
+        ]);
+
+        // 1. Default desc order + batch document counts + query count <= 5
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $descRes = $this->actingAs($admin)
+            ->getJson('/api/admin/applications?type=rider&search=' . urlencode($tag))
+            ->assertOk();
+        $this->assertLessThanOrEqual(5, count(DB::getQueryLog()));
+        $this->assertSame([$app1Id, $app2Id], collect($descRes->json('data.items'))->pluck('id')->all());
+        $this->assertSame(2, $descRes->json('data.items.0.total_docs_count'));
+        $this->assertSame(1, $descRes->json('data.items.0.verified_docs_count'));
+        $this->assertSame('bicycle', $descRes->json('data.items.0.vehicle_type'));
+
+        // 2. Asc order
+        $ascRes = $this->actingAs($admin)
+            ->getJson('/api/admin/applications?type=rider&direction=asc&search=' . urlencode($tag))
+            ->assertOk();
+        $this->assertSame([$app2Id, $app1Id], collect($ascRes->json('data.items'))->pluck('id')->all());
+
+        // 3. Status filter + 7d date_range filter
+        $this->actingAs($admin)
+            ->getJson('/api/admin/applications?type=rider&status=under_review&search=' . urlencode($tag))
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', $app2Id);
+
+        $this->actingAs($admin)
+            ->getJson('/api/admin/applications?type=rider&date_range=7d&search=' . urlencode($tag))
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', $app1Id);
+    }
 }

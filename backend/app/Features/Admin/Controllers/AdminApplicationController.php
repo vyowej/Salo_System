@@ -2,12 +2,14 @@
 
 namespace App\Features\Admin\Controllers;
 
+use App\Features\Admin\Requests\DecideApplicationRequest;
+use App\Features\Admin\Requests\RequestApplicationDocumentRequest;
+use App\Features\Admin\Requests\ReviewApplicationDocumentRequest;
 use App\Features\Admin\Services\AdminApplicationService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class AdminApplicationController extends Controller
 {
@@ -41,14 +43,9 @@ class AdminApplicationController extends Controller
         );
     }
 
-    public function reviewDocument(Request $request, string $type, int $id, int $documentId): JsonResponse
+    public function reviewDocument(ReviewApplicationDocumentRequest $request, string $type, int $id, int $documentId): JsonResponse
     {
-        abort_unless(in_array($type, ['restaurant', 'rider'], true), 404, 'Invalid application type.');
-
-        $validated = $request->validate([
-            'status' => ['required', 'string', Rule::in(['verified', 'rejected'])],
-            'review_note' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $application = $this->adminApplicationService->reviewDocument(
             type: $type,
@@ -66,16 +63,9 @@ class AdminApplicationController extends Controller
         );
     }
 
-    public function requestDocument(Request $request, string $type, int $id): JsonResponse
+    public function requestDocument(RequestApplicationDocumentRequest $request, string $type, int $id): JsonResponse
     {
-        abort_unless(in_array($type, ['restaurant', 'rider'], true), 404, 'Invalid application type.');
-
-        $validated = $request->validate([
-            'document_name' => ['required', 'string', 'max:150'],
-            'reason' => ['required', 'string', 'max:1000'],
-            'instructions' => ['nullable', 'string', 'max:1000'],
-            'due_date' => ['nullable', 'date', 'after_or_equal:today'],
-        ]);
+        $validated = $request->validated();
 
         $application = $this->adminApplicationService->requestDocument(
             type: $type,
@@ -92,14 +82,9 @@ class AdminApplicationController extends Controller
         );
     }
 
-    public function decide(Request $request, string $type, int $id): JsonResponse
+    public function decide(DecideApplicationRequest $request, string $type, int $id): JsonResponse
     {
-        abort_unless(in_array($type, ['restaurant', 'rider'], true), 404, 'Invalid application type.');
-
-        $validated = $request->validate([
-            'decision' => ['required', 'string', Rule::in(['under_review', 'additional_documents_required', 'approve', 'reject'])],
-            'note' => ['nullable', 'string', 'max:2000'],
-        ]);
+        $validated = $request->validated();
 
         $application = $this->adminApplicationService->decideApplication(
             type: $type,

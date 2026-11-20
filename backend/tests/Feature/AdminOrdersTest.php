@@ -284,6 +284,43 @@ class AdminOrdersTest extends TestCase
         $this->assertSame(0, $failedRes->json('data.meta.total'));
     }
 
+    public function test_orders_direction_asc_and_unpaid_order_without_allocation_defaults(): void
+    {
+        [$admin, $fixtures] = $this->seedOrderFixtures();
+
+        // seedOrderFixtures creates order3Id without a payment_allocation and with placed_at = 2026-10-25 18:00:00
+        DB::table('deliveries')->insert([
+            'order_id' => $fixtures['order1Id'],
+            'delivery_status' => 'in_transit',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // 1. Asc ordering on AdminTest fixtures: order1 -> order2 -> order3
+        $ascRes = $this->actingAs($admin)
+            ->getJson('/api/admin/orders?direction=asc&search=' . urlencode('AdminTest'))
+            ->assertOk();
+
+        $this->assertSame(
+            [$fixtures['order1Id'], $fixtures['order2Id'], $fixtures['order3Id']],
+            collect($ascRes->json('data.items'))->pluck('order_id')->all(),
+        );
+        $this->assertSame('in_transit', $ascRes->json('data.items.0.delivery_status'));
+
+        // 2. Order without payment_allocation defaults to payment_method=cod, payment_status=pending, paid_at=null, and matches payment_status=pending filter
+        $pendingRes = $this->actingAs($admin)
+            ->getJson('/api/admin/orders?payment_status=pending&search=' . urlencode($fixtures['ref3']))
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1);
+
+        $order3 = $pendingRes->json('data.items.0');
+        $this->assertSame($fixtures['order3Id'], $order3['order_id']);
+        $this->assertSame('cod', $order3['payment_method']);
+        $this->assertSame('pending', $order3['payment_status']);
+        $this->assertNull($order3['paid_at']);
+        $this->assertNull($order3['delivery_status']);
+    }
+
     /**
      * @return array{0:User,1:array<string,mixed>}
      */

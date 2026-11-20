@@ -523,4 +523,105 @@ class LocationSystemTest extends TestCase
         $this->assertSame(5.5, $activeDeliv['rider_location']['accuracy_meters']);
         $this->assertSame('2026-10-10 10:05:00', $activeDeliv['rider_location']['recorded_at']);
     }
+
+    public function test_locations_overview_restaurants_and_active_deliveries_without_gps_shape(): void
+    {
+        $admin = $this->makeUser('admin');
+        $customer = $this->makeUser('customer');
+        $tag = 'OvwShape' . random_int(1000, 9999);
+
+        $addrApprovedId = app(\App\Support\AddressService::class)->createAddress([
+            'province' => 'Misamis Oriental',
+            'city' => 'Cagayan de Oro City',
+            'barangay' => 'Carmen',
+            'street' => '88 Hayes St',
+            'latitude' => 8.481000,
+            'longitude' => 124.636000,
+        ]);
+
+        $addrPendingId = app(\App\Support\AddressService::class)->createAddress([
+            'province' => 'Misamis Oriental',
+            'city' => 'Cagayan de Oro City',
+            'barangay' => 'Lapasan',
+            'street' => '99 Pending St',
+        ]);
+
+        $approvedRestId = (int) DB::table('restaurants')->insertGetId([
+            'restaurant_name' => "{$tag} Approved",
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'sole_proprietorship',
+            'business_email' => "appr_{$tag}@example.com",
+            'address_id' => $addrApprovedId,
+            'restaurant_status' => 'approved',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $pendingRestId = (int) DB::table('restaurants')->insertGetId([
+            'restaurant_name' => "{$tag} Pending",
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'sole_proprietorship',
+            'business_email' => "pend_{$tag}@example.com",
+            'address_id' => $addrPendingId,
+            'restaurant_status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $checkoutId = (int) DB::table('checkouts')->insertGetId([
+            'customer_id' => $customer->user_id,
+            'idempotency_key' => "CHK-{$tag}-" . random_int(100, 999),
+            'total_amount' => 250.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $orderId = (int) DB::table('orders')->insertGetId([
+            'checkout_id' => $checkoutId,
+            'restaurant_id' => $approvedRestId,
+            'customer_id' => $customer->user_id,
+            'restaurant_name' => "{$tag} Approved",
+            'customer_name' => 'Shape Customer',
+            'order_reference' => "ORD-{$tag}-" . random_int(100, 999),
+            'order_type' => 'delivery',
+            'order_status' => 'ready',
+            'delivery_address_text' => 'Carmen, CDO',
+            'delivery_latitude' => 8.482000,
+            'delivery_longitude' => 124.638000,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $acceptedDeliveryId = (int) DB::table('deliveries')->insertGetId([
+            'order_id' => $orderId,
+            'rider_id' => null,
+            'delivery_status' => 'accepted',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $res = $this->actingAs($admin)->getJson('/api/admin/locations/overview')
+            ->assertOk()
+            ->assertJsonStructure([
+                'data' => ['service_areas', 'restaurants', 'active_deliveries'],
+            ]);
+        $this->assertLessThanOrEqual(8, count(DB::getQueryLog()));
+
+        $restaurants = collect($res->json('data.restaurants'));
+        $apprRow = $restaurants->firstWhere('restaurant_id', $approvedRestId);
+        $this->assertNotNull($apprRow);
+        $this->assertSame('approved', $apprRow['status']);
+        $this->assertSame('88 Hayes St, Brgy. Carmen, Cagayan de Oro City, Misamis Oriental', $apprRow['address']);
+        $this->assertSame(8.481, $apprRow['latitude']);
+        $this->assertSame(124.636, $apprRow['longitude']);
+        $this->assertNull($restaurants->firstWhere('restaurant_id', $pendingRestId));
+
+        $delivRow = collect($res->json('data.active_deliveries'))->firstWhere('delivery_id', $acceptedDeliveryId);
+        $this->assertNotNull($delivRow);
+        $this->assertSame('accepted', $delivRow['delivery_status']);
+        $this->assertNull($delivRow['rider_name']);
+        $this->assertNull($delivRow['rider_location']);
+    }
 }

@@ -218,22 +218,28 @@ class AdminServiceAreaService
      */
     public function getLocationsOverview(): array
     {
-        $restaurants = DB::table('restaurants as r')
+        return [
+            'service_areas' => $this->list(),
+            'restaurants' => $this->loadOverviewRestaurants(),
+            'active_deliveries' => $this->loadOverviewActiveDeliveries(),
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadOverviewRestaurants(): array
+    {
+        return DB::table('restaurants as r')
             ->join('addresses as a', 'a.address_id', '=', 'r.address_id')
             ->join('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
             ->join('cities as c', 'c.city_id', '=', 'b.city_id')
             ->join('provinces as p', 'p.province_id', '=', 'c.province_id')
             ->whereIn('r.restaurant_status', ['approved', 'active'])
             ->select([
-                'r.restaurant_id',
-                'r.restaurant_name',
-                'r.restaurant_status',
-                'a.street',
-                'a.latitude',
-                'a.longitude',
-                'b.barangay_name',
-                'c.city_name',
-                'p.province_name',
+                'r.restaurant_id', 'r.restaurant_name', 'r.restaurant_status',
+                'a.street', 'a.latitude', 'a.longitude',
+                'b.barangay_name', 'c.city_name', 'p.province_name',
             ])
             ->limit(200)
             ->get()
@@ -246,7 +252,13 @@ class AdminServiceAreaService
                 'longitude' => $r->longitude !== null ? (float) $r->longitude : null,
             ])
             ->all();
+    }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadOverviewActiveDeliveries(): array
+    {
         // Only expose live rider locations for active deliveries
         $activeDeliveryRows = DB::table('deliveries as d')
             ->join('orders as o', 'o.order_id', '=', 'd.order_id')
@@ -256,19 +268,11 @@ class AdminServiceAreaService
             ->leftJoin('users as ru', 'ru.user_id', '=', 'ri.user_id')
             ->whereIn('d.delivery_status', ['accepted', 'picked_up', 'in_transit'])
             ->select([
-                'd.delivery_id',
-                'd.order_id',
-                'd.rider_id',
-                'd.delivery_status',
-                'o.order_reference',
-                'o.delivery_address_text',
-                'o.delivery_latitude',
-                'o.delivery_longitude',
-                'r.restaurant_name',
-                'ra.latitude as pickup_latitude',
-                'ra.longitude as pickup_longitude',
-                'ru.first_name as rider_first_name',
-                'ru.last_name as rider_last_name',
+                'd.delivery_id', 'd.order_id', 'd.rider_id', 'd.delivery_status',
+                'o.order_reference', 'o.delivery_address_text', 'o.delivery_latitude',
+                'o.delivery_longitude', 'r.restaurant_name',
+                'ra.latitude as pickup_latitude', 'ra.longitude as pickup_longitude',
+                'ru.first_name as rider_first_name', 'ru.last_name as rider_last_name',
             ])
             ->limit(100)
             ->get();
@@ -281,54 +285,66 @@ class AdminServiceAreaService
             ->values()
             ->all();
 
-        $latestGpsByRider = [];
-        if ($activeRiderIds !== []) {
-            $gpsRows = DB::table('rider_locations')
-                ->whereIn('rider_id', $activeRiderIds)
-                ->orderByDesc('recorded_at')
-                ->orderByDesc('rider_location_id')
-                ->get();
+        $latestGpsByRider = $this->loadLatestGpsByRider($activeRiderIds);
 
-            foreach ($gpsRows as $gpsRow) {
-                $rId = (int) $gpsRow->rider_id;
-                if (! array_key_exists($rId, $latestGpsByRider)) {
-                    $latestGpsByRider[$rId] = $gpsRow;
-                }
+        return $activeDeliveryRows
+            ->map(fn (object $row): array => $this->formatOverviewDeliveryRow(
+                $row,
+                $row->rider_id !== null ? ($latestGpsByRider[(int) $row->rider_id] ?? null) : null,
+            ))
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int>  $activeRiderIds
+     * @return array<int, object>
+     */
+    private function loadLatestGpsByRider(array $activeRiderIds): array
+    {
+        if ($activeRiderIds === []) {
+            return [];
+        }
+
+        $gpsRows = DB::table('rider_locations')
+            ->whereIn('rider_id', $activeRiderIds)
+            ->orderByDesc('recorded_at')
+            ->orderByDesc('rider_location_id')
+            ->get();
+
+        $latestGpsByRider = [];
+        foreach ($gpsRows as $gpsRow) {
+            $rId = (int) $gpsRow->rider_id;
+            if (! array_key_exists($rId, $latestGpsByRider)) {
+                $latestGpsByRider[$rId] = $gpsRow;
             }
         }
 
-        $activeDeliveries = $activeDeliveryRows
-            ->map(function (object $row) use ($latestGpsByRider): array {
-                $latestGps = $row->rider_id !== null
-                    ? ($latestGpsByRider[(int) $row->rider_id] ?? null)
-                    : null;
+        return $latestGpsByRider;
+    }
 
-                return [
-                    'delivery_id' => (int) $row->delivery_id,
-                    'order_id' => (int) $row->order_id,
-                    'order_reference' => $row->order_reference,
-                    'delivery_status' => $row->delivery_status,
-                    'restaurant_name' => $row->restaurant_name,
-                    'pickup_latitude' => $row->pickup_latitude !== null ? (float) $row->pickup_latitude : null,
-                    'pickup_longitude' => $row->pickup_longitude !== null ? (float) $row->pickup_longitude : null,
-                    'delivery_address' => $row->delivery_address_text,
-                    'delivery_latitude' => $row->delivery_latitude !== null ? (float) $row->delivery_latitude : null,
-                    'delivery_longitude' => $row->delivery_longitude !== null ? (float) $row->delivery_longitude : null,
-                    'rider_name' => trim(($row->rider_first_name ?? '') . ' ' . ($row->rider_last_name ?? '')) ?: null,
-                    'rider_location' => $latestGps ? [
-                        'latitude' => (float) $latestGps->latitude,
-                        'longitude' => (float) $latestGps->longitude,
-                        'accuracy_meters' => $latestGps->accuracy_meters !== null ? (float) $latestGps->accuracy_meters : null,
-                        'recorded_at' => $latestGps->recorded_at,
-                    ] : null,
-                ];
-            })
-            ->all();
-
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatOverviewDeliveryRow(object $row, ?object $latestGps): array
+    {
         return [
-            'service_areas' => $this->list(),
-            'restaurants' => $restaurants,
-            'active_deliveries' => $activeDeliveries,
+            'delivery_id' => (int) $row->delivery_id,
+            'order_id' => (int) $row->order_id,
+            'order_reference' => $row->order_reference,
+            'delivery_status' => $row->delivery_status,
+            'restaurant_name' => $row->restaurant_name,
+            'pickup_latitude' => $row->pickup_latitude !== null ? (float) $row->pickup_latitude : null,
+            'pickup_longitude' => $row->pickup_longitude !== null ? (float) $row->pickup_longitude : null,
+            'delivery_address' => $row->delivery_address_text,
+            'delivery_latitude' => $row->delivery_latitude !== null ? (float) $row->delivery_latitude : null,
+            'delivery_longitude' => $row->delivery_longitude !== null ? (float) $row->delivery_longitude : null,
+            'rider_name' => trim(($row->rider_first_name ?? '') . ' ' . ($row->rider_last_name ?? '')) ?: null,
+            'rider_location' => $latestGps ? [
+                'latitude' => (float) $latestGps->latitude,
+                'longitude' => (float) $latestGps->longitude,
+                'accuracy_meters' => $latestGps->accuracy_meters !== null ? (float) $latestGps->accuracy_meters : null,
+                'recorded_at' => $latestGps->recorded_at,
+            ] : null,
         ];
     }
 

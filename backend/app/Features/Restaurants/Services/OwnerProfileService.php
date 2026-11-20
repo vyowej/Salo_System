@@ -5,6 +5,7 @@ namespace App\Features\Restaurants\Services;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use App\Support\WorkspaceAccessResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,7 @@ class OwnerProfileService
     public function __construct(
         private readonly FileStorageService $fileStorageService,
         private readonly AuditLogService $auditLogService,
+        private readonly WorkspaceAccessResolver $workspaceAccessResolver,
     ) {}
 
     /**
@@ -22,30 +24,7 @@ class OwnerProfileService
      */
     public function requireActiveOwnedRestaurant(User $user, ?int $restaurantId = null): object
     {
-        $query = DB::table('restaurant_owners as ro')
-            ->join('restaurants as r', 'r.restaurant_id', '=', 'ro.restaurant_id')
-            ->where('ro.user_id', $user->user_id);
-
-        if ($restaurantId !== null) {
-            $query->where('ro.restaurant_id', $restaurantId);
-        } else {
-            $query->orderBy('ro.restaurant_id');
-        }
-
-        $restaurant = $query->select('r.*')->first();
-
-        if (! $restaurant) {
-            abort(403, 'Forbidden: you do not own this restaurant.');
-        }
-
-        if ($restaurant->restaurant_status !== 'active') {
-            abort(
-                403,
-                "Restaurant workspace is only available for active, approved restaurants (current status: {$restaurant->restaurant_status})."
-            );
-        }
-
-        return $restaurant;
+        return $this->workspaceAccessResolver->requireActiveOwnedRestaurant($user, $restaurantId);
     }
 
     /**
@@ -80,7 +59,19 @@ class OwnerProfileService
             ]);
         }
 
-        $updates = [
+        $updates = $this->buildProfileUpdates($validated, $restaurant, $offersDelivery, $offersPickup);
+        $this->persistProfileUpdate($targetId, $restaurant, $updates, $user, $request);
+
+        return $this->formatProfile(DB::table('restaurants')->where('restaurant_id', $targetId)->first());
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function buildProfileUpdates(array $validated, object $restaurant, bool $offersDelivery, bool $offersPickup): array
+    {
+        return [
             'description' => array_key_exists('description', $validated)
                 ? ($validated['description'] !== null ? trim((string) $validated['description']) : null)
                 : $restaurant->description,
@@ -94,7 +85,13 @@ class OwnerProfileService
             'offers_pickup' => $offersPickup ? 1 : 0,
             'updated_at' => now(),
         ];
+    }
 
+    /**
+     * @param  array<string, mixed>  $updates
+     */
+    private function persistProfileUpdate(int $targetId, object $restaurant, array $updates, User $user, Request $request): void
+    {
         $oldValues = [
             'description' => $restaurant->description,
             'contact_phone' => $restaurant->contact_phone,
@@ -102,7 +99,6 @@ class OwnerProfileService
             'offers_delivery' => (bool) $restaurant->offers_delivery,
             'offers_pickup' => (bool) $restaurant->offers_pickup,
         ];
-
         $newValues = [
             'description' => $updates['description'],
             'contact_phone' => $updates['contact_phone'],
@@ -113,7 +109,6 @@ class OwnerProfileService
 
         DB::transaction(function () use ($targetId, $updates, $user, $oldValues, $newValues, $request): void {
             DB::table('restaurants')->where('restaurant_id', $targetId)->update($updates);
-
             $this->auditLogService->record(
                 actorUserId: (int) $user->user_id,
                 action: 'owner_profile_updated',
@@ -124,10 +119,6 @@ class OwnerProfileService
                 request: $request,
             );
         });
-
-        $fresh = DB::table('restaurants')->where('restaurant_id', $targetId)->first();
-
-        return $this->formatProfile($fresh);
     }
 
     /**
@@ -146,80 +137,87 @@ class OwnerProfileService
     ): array {
         $restaurant = $this->requireActiveOwnedRestaurant($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
-
         $oldLogo = $restaurant->logo_image;
         $oldCover = $restaurant->cover_image;
-        $newLogo = $oldLogo;
-        $newCover = $oldCover;
         $newlyStoredPublic = [];
 
         try {
-            if ($logoFile !== null) {
-                $stored = $this->fileStorageService->storePublicImage(
-                    file: $logoFile,
-                    directory: "restaurants/{$targetId}",
-                    fieldName: 'logo_image',
-                );
-                $newLogo = $stored['path'];
-                $newlyStoredPublic[] = $newLogo;
-            } elseif ($removeLogo) {
-                $newLogo = null;
-            }
-
-            if ($coverFile !== null) {
-                $stored = $this->fileStorageService->storePublicImage(
-                    file: $coverFile,
-                    directory: "restaurants/{$targetId}",
-                    fieldName: 'cover_image',
-                );
-                $newCover = $stored['path'];
-                $newlyStoredPublic[] = $newCover;
-            } elseif ($removeCover) {
-                $newCover = null;
-            }
-
-            DB::transaction(function () use ($targetId, $newLogo, $newCover, $oldLogo, $oldCover, $user, $request): void {
-                DB::table('restaurants')->where('restaurant_id', $targetId)->update([
-                    'logo_image' => $newLogo,
-                    'cover_image' => $newCover,
-                    'updated_at' => now(),
-                ]);
-
-                $this->auditLogService->record(
-                    actorUserId: (int) $user->user_id,
-                    action: 'owner_branding_updated',
-                    entityType: 'restaurants',
-                    entityId: $targetId,
-                    oldValues: ['logo_image' => $oldLogo, 'cover_image' => $oldCover],
-                    newValues: ['logo_image' => $newLogo, 'cover_image' => $newCover],
-                    request: $request,
-                );
-            });
+            $newLogo = $this->resolveUpdatedImagePath($logoFile, $removeLogo, $oldLogo, $targetId, 'logo_image', $newlyStoredPublic);
+            $newCover = $this->resolveUpdatedImagePath($coverFile, $removeCover, $oldCover, $targetId, 'cover_image', $newlyStoredPublic);
+            $this->persistBrandingUpdate($targetId, $oldLogo, $oldCover, $newLogo, $newCover, $user, $request);
         } catch (\Throwable $e) {
             $this->fileStorageService->cleanupStoredPaths($newlyStoredPublic, []);
             throw $e;
         }
 
-        // Delete replaced/removed files only if no DB record still references them
-        if ($oldLogo !== null && $oldLogo !== '' && $oldLogo !== $newLogo) {
+        $this->deleteUnreferencedImageIfReplaced($oldLogo, $newLogo);
+        $this->deleteUnreferencedImageIfReplaced($oldCover, $newCover);
+
+        return $this->formatProfile(DB::table('restaurants')->where('restaurant_id', $targetId)->first());
+    }
+
+    /**
+     * @param  array<int, string>  $newlyStoredPublic
+     */
+    private function resolveUpdatedImagePath(
+        ?UploadedFile $file,
+        bool $remove,
+        ?string $existingPath,
+        int $restaurantId,
+        string $fieldName,
+        array &$newlyStoredPublic,
+    ): ?string {
+        if ($file !== null) {
+            $path = $this->fileStorageService->storePublicImage(
+                file: $file,
+                directory: "restaurants/{$restaurantId}",
+                fieldName: $fieldName,
+            )['path'];
+            $newlyStoredPublic[] = $path;
+
+            return $path;
+        }
+
+        return $remove ? null : $existingPath;
+    }
+
+    private function persistBrandingUpdate(
+        int $targetId,
+        ?string $oldLogo,
+        ?string $oldCover,
+        ?string $newLogo,
+        ?string $newCover,
+        User $user,
+        Request $request,
+    ): void {
+        DB::transaction(function () use ($targetId, $newLogo, $newCover, $oldLogo, $oldCover, $user, $request): void {
+            DB::table('restaurants')->where('restaurant_id', $targetId)->update([
+                'logo_image' => $newLogo,
+                'cover_image' => $newCover,
+                'updated_at' => now(),
+            ]);
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: 'owner_branding_updated',
+                entityType: 'restaurants',
+                entityId: $targetId,
+                oldValues: ['logo_image' => $oldLogo, 'cover_image' => $oldCover],
+                newValues: ['logo_image' => $newLogo, 'cover_image' => $newCover],
+                request: $request,
+            );
+        });
+    }
+
+    private function deleteUnreferencedImageIfReplaced(?string $oldPath, ?string $newPath): void
+    {
+        if ($oldPath !== null && $oldPath !== '' && $oldPath !== $newPath) {
             $this->fileStorageService->deleteIfUnreferenced(
                 'public',
-                $oldLogo,
+                $oldPath,
                 fn (string $path): bool => $this->isPublicImageReferenced($path),
             );
         }
-
-        if ($oldCover !== null && $oldCover !== '' && $oldCover !== $newCover) {
-            $this->fileStorageService->deleteIfUnreferenced(
-                'public',
-                $oldCover,
-                fn (string $path): bool => $this->isPublicImageReferenced($path),
-            );
-        }
-
-        $fresh = DB::table('restaurants')->where('restaurant_id', $targetId)->first();
-
-        return $this->formatProfile($fresh);
     }
 
     /**
@@ -369,52 +367,62 @@ class OwnerProfileService
                 ]);
             }
 
-            $isClosed = (bool) ($row['is_closed'] ?? false);
-            if ($isClosed) {
+            if ((bool) ($row['is_closed'] ?? false)) {
                 $byDay[$day]['closed'] = true;
                 $normalized[] = [
-                    'day_of_week' => $day,
-                    'opening_time' => '00:00',
-                    'closing_time' => '00:00',
-                    'closes_next_day' => false,
-                    'is_closed' => true,
+                    'day_of_week' => $day, 'opening_time' => '00:00', 'closing_time' => '00:00',
+                    'closes_next_day' => false, 'is_closed' => true,
                 ];
                 continue;
             }
 
-            $open = $this->parseTimeMinutes((string) ($row['opening_time'] ?? ''), "operating_hours.{$idx}.opening_time");
-            $close = $this->parseTimeMinutes((string) ($row['closing_time'] ?? ''), "operating_hours.{$idx}.closing_time");
-            $closesNextDay = (bool) ($row['closes_next_day'] ?? ($close['minutes'] <= $open['minutes']));
-
-            if ($open['minutes'] === $close['minutes']) {
-                throw ValidationException::withMessages([
-                    "operating_hours.{$idx}.closing_time" => ['Closing time must differ from opening time.'],
-                ]);
-            }
-
-            if (! $closesNextDay && $close['minutes'] <= $open['minutes']) {
-                throw ValidationException::withMessages([
-                    "operating_hours.{$idx}.closing_time" => ['Closing time must be after opening time unless marked as overnight.'],
-                ]);
-            }
-
-            $endMinutes = $closesNextDay ? $close['minutes'] + 1440 : $close['minutes'];
-            $byDay[$day]['open'][] = [
-                'start' => $open['minutes'],
-                'end' => $endMinutes,
-                'idx' => $idx,
-            ];
-
-            $normalized[] = [
-                'day_of_week' => $day,
-                'opening_time' => $open['hhmm'],
-                'closing_time' => $close['hhmm'],
-                'closes_next_day' => $closesNextDay,
-                'is_closed' => false,
-            ];
+            [$period, $entry] = $this->normalizeOpenHourRow($row, $idx, $day);
+            $byDay[$day]['open'][] = $period;
+            $normalized[] = $entry;
         }
 
-        // Reject mixed closed + open rows on the same day, and overlapping periods
+        $this->assertNoOverlappingHours($byDay);
+
+        return $normalized;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array{0: array{start: int, end: int, idx: int}, 1: array<string, mixed>}
+     */
+    private function normalizeOpenHourRow(array $row, int $idx, int $day): array
+    {
+        $open = $this->parseTimeMinutes((string) ($row['opening_time'] ?? ''), "operating_hours.{$idx}.opening_time");
+        $close = $this->parseTimeMinutes((string) ($row['closing_time'] ?? ''), "operating_hours.{$idx}.closing_time");
+        $closesNextDay = (bool) ($row['closes_next_day'] ?? ($close['minutes'] <= $open['minutes']));
+
+        if ($open['minutes'] === $close['minutes']) {
+            throw ValidationException::withMessages([
+                "operating_hours.{$idx}.closing_time" => ['Closing time must differ from opening time.'],
+            ]);
+        }
+        if (! $closesNextDay && $close['minutes'] <= $open['minutes']) {
+            throw ValidationException::withMessages([
+                "operating_hours.{$idx}.closing_time" => ['Closing time must be after opening time unless marked as overnight.'],
+            ]);
+        }
+
+        $endMinutes = $closesNextDay ? $close['minutes'] + 1440 : $close['minutes'];
+
+        return [
+            ['start' => $open['minutes'], 'end' => $endMinutes, 'idx' => $idx],
+            [
+                'day_of_week' => $day, 'opening_time' => $open['hhmm'], 'closing_time' => $close['hhmm'],
+                'closes_next_day' => $closesNextDay, 'is_closed' => false,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $byDay
+     */
+    private function assertNoOverlappingHours(array $byDay): void
+    {
         foreach ($byDay as $day => $info) {
             if (! empty($info['closed']) && ! empty($info['open'])) {
                 throw ValidationException::withMessages([
@@ -432,7 +440,6 @@ class OwnerProfileService
                 }
             }
 
-            // Check overnight spillover into next day
             $nextDay = ($day + 1) % 7;
             $nextPeriods = $byDay[$nextDay]['open'] ?? [];
             foreach ($periods as $p) {
@@ -448,8 +455,6 @@ class OwnerProfileService
                 }
             }
         }
-
-        return $normalized;
     }
 
     /**

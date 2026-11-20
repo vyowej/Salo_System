@@ -2,12 +2,12 @@
 
 namespace App\Features\Restaurants\Controllers;
 
+use App\Features\Restaurants\Requests\ShowOwnerInventoryConfigRequest;
+use App\Features\Restaurants\Requests\UpdateOwnerInventoryConfigRequest;
 use App\Features\Restaurants\Services\OwnerInventoryService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class OwnerInventoryController extends Controller
 {
@@ -15,11 +15,9 @@ class OwnerInventoryController extends Controller
         private readonly OwnerInventoryService $ownerInventoryService,
     ) {}
 
-    public function showConfig(Request $request): JsonResponse
+    public function showConfig(ShowOwnerInventoryConfigRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'restaurant_id' => ['nullable', 'integer', 'min:1'],
-        ]);
+        $validated = $request->validated();
 
         $restaurantId = isset($validated['restaurant_id'])
             ? (int) $validated['restaurant_id']
@@ -36,14 +34,9 @@ class OwnerInventoryController extends Controller
         );
     }
 
-    public function updateConfig(Request $request): JsonResponse
+    public function updateConfig(UpdateOwnerInventoryConfigRequest $request): JsonResponse
     {
-        $allowedModes = (array) config('salo.inventory.deduction_modes', ['manual', 'on_completion']);
-
-        $validated = $request->validate([
-            'restaurant_id' => ['nullable', 'integer', 'min:1'],
-            'deduction_mode' => ['required', 'string', Rule::in($allowedModes)],
-        ]);
+        $validated = $request->validated();
 
         $restaurantId = isset($validated['restaurant_id'])
             ? (int) $validated['restaurant_id']

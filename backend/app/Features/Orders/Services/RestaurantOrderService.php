@@ -3,9 +3,11 @@
 namespace App\Features\Orders\Services;
 
 use App\Features\Notifications\Services\NotificationService;
+use App\Features\Orders\Support\OrderPaymentSnapshotLoader;
 use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
 use App\Support\AuditLogService;
+use App\Support\WorkspaceAccessResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -32,52 +34,12 @@ class RestaurantOrderService
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
+        private readonly WorkspaceAccessResolver $workspaceAccessResolver,
     ) {}
 
     public function requireActiveAuthorizedRestaurant(User $user, ?int $restaurantId = null): object
     {
-        $ownerQuery = DB::table('restaurant_owners as ro')
-            ->join('restaurants as r', 'r.restaurant_id', '=', 'ro.restaurant_id')
-            ->where('ro.user_id', $user->user_id);
-
-        if ($restaurantId !== null) {
-            $ownerQuery->where('ro.restaurant_id', $restaurantId);
-        } else {
-            $ownerQuery->orderBy('ro.restaurant_id');
-        }
-
-        $restaurant = $ownerQuery->select('r.*')->first();
-
-        if (! $restaurant) {
-            $staffQuery = DB::table('restaurant_staff as rs')
-                ->join('restaurants as r', 'r.restaurant_id', '=', 'rs.restaurant_id')
-                ->where('rs.user_id', $user->user_id)
-                ->where('rs.staff_status', 'active');
-
-            if ($restaurantId !== null) {
-                $staffQuery->where('rs.restaurant_id', $restaurantId);
-            } else {
-                $staffQuery->orderBy('rs.restaurant_id');
-            }
-
-            $staffRows = $staffQuery->select(['r.*', 'rs.staff_position'])->get();
-            $restaurant = $staffRows->first(
-                fn (object $row): bool => User::isOrderHandlerPosition($row->staff_position)
-            );
-        }
-
-        if (! $restaurant) {
-            abort(403, 'Forbidden: you are not authorized to manage orders for this restaurant.');
-        }
-
-        if ($restaurant->restaurant_status !== 'active') {
-            abort(
-                403,
-                "Restaurant order handling is only available for active restaurants (current status: {$restaurant->restaurant_status})."
-            );
-        }
-
-        return $restaurant;
+        return $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForOrders($user, $restaurantId);
     }
 
     /**
@@ -150,7 +112,7 @@ class RestaurantOrderService
                 ->get(['order_item_id', 'order_id', 'menu_item_id', 'item_name', 'unit_price', 'quantity', 'line_total'])
                 ->groupBy('order_id');
 
-        $paymentsByOrder = $this->loadPaymentsByOrder($orderIds);
+        $paymentsByOrder = OrderPaymentSnapshotLoader::loadByOrderIds($orderIds);
 
         $orders = $rows->map(function (object $row) use ($itemsByOrder, $paymentsByOrder): array {
             $orderId = (int) $row->order_id;
@@ -242,7 +204,7 @@ class RestaurantOrderService
             ->values()
             ->all();
 
-        $payment = $this->loadPaymentsByOrder([$orderId])->get($orderId);
+        $payment = OrderPaymentSnapshotLoader::loadByOrderIds([$orderId])->get($orderId);
 
         return [
             'order_id' => (int) $row->order_id,
@@ -460,23 +422,5 @@ class RestaurantOrderService
                 relatedEntityId: (int) $order->order_id,
             );
         }
-    }
-
-    /**
-     * @param  array<int, int>  $orderIds
-     */
-    private function loadPaymentsByOrder(array $orderIds)
-    {
-        if ($orderIds === []) {
-            return collect();
-        }
-
-        return DB::table('payment_allocations as pa')
-            ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
-            ->whereIn('pa.order_id', $orderIds)
-            ->where('pa.allocation_type', 'order_payment')
-            ->select(['pa.order_id', 'p.payment_method', 'p.payment_status', 'p.amount', 'p.paid_at'])
-            ->get()
-            ->keyBy('order_id');
     }
 }

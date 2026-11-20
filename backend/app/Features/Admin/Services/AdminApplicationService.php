@@ -8,7 +8,9 @@ use App\Features\Riders\Services\RiderApplicationService;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -51,175 +53,23 @@ class AdminApplicationService
         $dateRange = trim((string) ($filters['date_range'] ?? 'all'));
         $sortDir = strtolower((string) ($filters['direction'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        if ($type === 'rider') {
-            $query = DB::table('rider_applications as ra')
-                ->join('riders as r', 'r.rider_id', '=', 'ra.rider_id')
-                ->join('cities as c', 'c.city_id', '=', 'r.base_city_id')
-                ->join('users as u', 'u.user_id', '=', 'ra.applicant_user_id')
-                ->select([
-                    'ra.rider_application_id as id',
-                    'ra.reference_number',
-                    'ra.application_status',
-                    'ra.legal_first_name',
-                    'ra.legal_last_name',
-                    'ra.contact_email',
-                    'ra.contact_phone',
-                    'ra.submitted_at',
-                    'ra.reviewed_at',
-                    'ra.decided_at',
-                    'ra.reviewer_note',
-                    'r.rider_id',
-                    'r.vehicle_type',
-                    'r.rider_status',
-                    'c.city_name as zone',
-                    'u.username',
-                ]);
+        $isRider = $type === 'rider';
+        $query = $isRider
+            ? $this->buildRiderApplicationsQuery($search)
+            : $this->buildRestaurantApplicationsQuery($search);
 
-            if ($search !== '') {
-                $like = "%{$search}%";
-                $query->where(function ($q) use ($like): void {
-                    $q->where('ra.reference_number', 'like', $like)
-                        ->orWhere('ra.legal_first_name', 'like', $like)
-                        ->orWhere('ra.legal_last_name', 'like', $like)
-                        ->orWhere('ra.contact_email', 'like', $like)
-                        ->orWhere('c.city_name', 'like', $like)
-                        ->orWhere('r.vehicle_type', 'like', $like);
-                });
-            }
+        $this->applyCommonApplicationFilters($query, $status, $dateRange);
 
-            if ($status !== '' && $status !== 'all') {
-                $query->where('ra.application_status', $status);
-            }
+        $paginator = $query->orderBy('ra.submitted_at', $sortDir)->paginate($perPage);
+        $pageRows = collect($paginator->items());
+        $appIds = $pageRows->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+        $foreignKey = $isRider ? 'rider_application_id' : 'restaurant_application_id';
+        $docCountsByAppId = $this->loadApplicationDocumentCounts($foreignKey, $appIds);
 
-            if ($dateRange === '7d') {
-                $query->where('ra.submitted_at', '>=', now()->subDays(7));
-            } elseif ($dateRange === '30d') {
-                $query->where('ra.submitted_at', '>=', now()->subDays(30));
-            }
-
-            $paginator = $query->orderBy('ra.submitted_at', $sortDir)->paginate($perPage);
-            $pageRows = collect($paginator->items());
-            $riderAppIds = $pageRows->pluck('id')->map(static fn ($id): int => (int) $id)->all();
-            $docCountsByAppId = $riderAppIds === []
-                ? collect()
-                : DB::table('application_documents')
-                    ->whereIn('rider_application_id', $riderAppIds)
-                    ->selectRaw("rider_application_id, COUNT(*) as total, SUM(CASE WHEN document_status = 'verified' THEN 1 ELSE 0 END) as verified")
-                    ->groupBy('rider_application_id')
-                    ->get()
-                    ->keyBy('rider_application_id');
-
-            $items = $pageRows->map(function ($row) use ($docCountsByAppId) {
-                $docCounts = $docCountsByAppId->get((int) $row->id);
-
-                return [
-                    'id' => (int) $row->id,
-                    'type' => 'rider',
-                    'reference_number' => $row->reference_number,
-                    'name' => trim("{$row->legal_first_name} {$row->legal_last_name}"),
-                    'email' => $row->contact_email,
-                    'phone' => $row->contact_phone,
-                    'vehicle_type' => $row->vehicle_type,
-                    'zone' => $row->zone,
-                    'application_status' => $row->application_status,
-                    'rider_status' => $row->rider_status,
-                    'submitted_at' => $row->submitted_at,
-                    'reviewed_at' => $row->reviewed_at,
-                    'decided_at' => $row->decided_at,
-                    'reviewer_note' => $row->reviewer_note,
-                    'verified_docs_count' => (int) ($docCounts->verified ?? 0),
-                    'total_docs_count' => (int) ($docCounts->total ?? 0),
-                ];
-            })->all();
-        } else {
-            $query = DB::table('restaurant_applications as ra')
-                ->join('restaurants as rest', 'rest.restaurant_id', '=', 'ra.restaurant_id')
-                ->join('addresses as addr', 'addr.address_id', '=', 'rest.address_id')
-                ->join('barangays as brgy', 'brgy.barangay_id', '=', 'addr.barangay_id')
-                ->join('cities as c', 'c.city_id', '=', 'brgy.city_id')
-                ->select([
-                    'ra.restaurant_application_id as id',
-                    'ra.reference_number',
-                    'ra.application_status',
-                    'ra.legal_first_name',
-                    'ra.legal_last_name',
-                    'ra.contact_email',
-                    'ra.contact_phone',
-                    'ra.submitted_at',
-                    'ra.reviewed_at',
-                    'ra.decided_at',
-                    'ra.reviewer_note',
-                    'rest.restaurant_id',
-                    'rest.restaurant_name',
-                    'rest.business_type',
-                    'rest.ownership_structure',
-                    'rest.restaurant_status',
-                    'rest.logo_image',
-                    'rest.cover_image',
-                    'c.city_name as zone',
-                ]);
-
-            if ($search !== '') {
-                $like = "%{$search}%";
-                $query->where(function ($q) use ($like): void {
-                    $q->where('ra.reference_number', 'like', $like)
-                        ->orWhere('rest.restaurant_name', 'like', $like)
-                        ->orWhere('ra.legal_first_name', 'like', $like)
-                        ->orWhere('ra.legal_last_name', 'like', $like)
-                        ->orWhere('ra.contact_email', 'like', $like)
-                        ->orWhere('c.city_name', 'like', $like);
-                });
-            }
-
-            if ($status !== '' && $status !== 'all') {
-                $query->where('ra.application_status', $status);
-            }
-
-            if ($dateRange === '7d') {
-                $query->where('ra.submitted_at', '>=', now()->subDays(7));
-            } elseif ($dateRange === '30d') {
-                $query->where('ra.submitted_at', '>=', now()->subDays(30));
-            }
-
-            $paginator = $query->orderBy('ra.submitted_at', $sortDir)->paginate($perPage);
-            $pageRows = collect($paginator->items());
-            $restAppIds = $pageRows->pluck('id')->map(static fn ($id): int => (int) $id)->all();
-            $docCountsByAppId = $restAppIds === []
-                ? collect()
-                : DB::table('application_documents')
-                    ->whereIn('restaurant_application_id', $restAppIds)
-                    ->selectRaw("restaurant_application_id, COUNT(*) as total, SUM(CASE WHEN document_status = 'verified' THEN 1 ELSE 0 END) as verified")
-                    ->groupBy('restaurant_application_id')
-                    ->get()
-                    ->keyBy('restaurant_application_id');
-
-            $items = $pageRows->map(function ($row) use ($docCountsByAppId) {
-                $docCounts = $docCountsByAppId->get((int) $row->id);
-
-                return [
-                    'id' => (int) $row->id,
-                    'type' => 'restaurant',
-                    'reference_number' => $row->reference_number,
-                    'name' => $row->restaurant_name,
-                    'owner_name' => trim("{$row->legal_first_name} {$row->legal_last_name}"),
-                    'email' => $row->contact_email,
-                    'phone' => $row->contact_phone,
-                    'business_type' => $row->business_type,
-                    'ownership_structure' => $row->ownership_structure,
-                    'zone' => $row->zone,
-                    'logo_image' => $this->fileStorageService->publicUrl($row->logo_image),
-                    'cover_image' => $this->fileStorageService->publicUrl($row->cover_image),
-                    'application_status' => $row->application_status,
-                    'restaurant_status' => $row->restaurant_status,
-                    'submitted_at' => $row->submitted_at,
-                    'reviewed_at' => $row->reviewed_at,
-                    'decided_at' => $row->decided_at,
-                    'reviewer_note' => $row->reviewer_note,
-                    'verified_docs_count' => (int) ($docCounts->verified ?? 0),
-                    'total_docs_count' => (int) ($docCounts->total ?? 0),
-                ];
-            })->all();
-        }
+        $items = $pageRows->map(fn (object $row): array => $isRider
+            ? $this->formatRiderApplicationRow($row, $docCountsByAppId->get((int) $row->id))
+            : $this->formatRestaurantApplicationRow($row, $docCountsByAppId->get((int) $row->id))
+        )->all();
 
         return [
             'items' => $items,
@@ -229,6 +79,149 @@ class AdminApplicationService
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
             ],
+        ];
+    }
+
+    private function buildRiderApplicationsQuery(string $search): Builder
+    {
+        $query = DB::table('rider_applications as ra')
+            ->join('riders as r', 'r.rider_id', '=', 'ra.rider_id')
+            ->join('cities as c', 'c.city_id', '=', 'r.base_city_id')
+            ->join('users as u', 'u.user_id', '=', 'ra.applicant_user_id')
+            ->select([
+                'ra.rider_application_id as id', 'ra.reference_number', 'ra.application_status',
+                'ra.legal_first_name', 'ra.legal_last_name', 'ra.contact_email', 'ra.contact_phone',
+                'ra.submitted_at', 'ra.reviewed_at', 'ra.decided_at', 'ra.reviewer_note',
+                'r.rider_id', 'r.vehicle_type', 'r.rider_status', 'c.city_name as zone', 'u.username',
+            ]);
+
+        if ($search !== '') {
+            $like = "%{$search}%";
+            $query->where(function ($q) use ($like): void {
+                $q->where('ra.reference_number', 'like', $like)
+                    ->orWhere('ra.legal_first_name', 'like', $like)
+                    ->orWhere('ra.legal_last_name', 'like', $like)
+                    ->orWhere('ra.contact_email', 'like', $like)
+                    ->orWhere('c.city_name', 'like', $like)
+                    ->orWhere('r.vehicle_type', 'like', $like);
+            });
+        }
+
+        return $query;
+    }
+
+    private function buildRestaurantApplicationsQuery(string $search): Builder
+    {
+        $query = DB::table('restaurant_applications as ra')
+            ->join('restaurants as rest', 'rest.restaurant_id', '=', 'ra.restaurant_id')
+            ->join('addresses as addr', 'addr.address_id', '=', 'rest.address_id')
+            ->join('barangays as brgy', 'brgy.barangay_id', '=', 'addr.barangay_id')
+            ->join('cities as c', 'c.city_id', '=', 'brgy.city_id')
+            ->select([
+                'ra.restaurant_application_id as id', 'ra.reference_number', 'ra.application_status',
+                'ra.legal_first_name', 'ra.legal_last_name', 'ra.contact_email', 'ra.contact_phone',
+                'ra.submitted_at', 'ra.reviewed_at', 'ra.decided_at', 'ra.reviewer_note',
+                'rest.restaurant_id', 'rest.restaurant_name', 'rest.business_type',
+                'rest.ownership_structure', 'rest.restaurant_status', 'rest.logo_image',
+                'rest.cover_image', 'c.city_name as zone',
+            ]);
+
+        if ($search !== '') {
+            $like = "%{$search}%";
+            $query->where(function ($q) use ($like): void {
+                $q->where('ra.reference_number', 'like', $like)
+                    ->orWhere('rest.restaurant_name', 'like', $like)
+                    ->orWhere('ra.legal_first_name', 'like', $like)
+                    ->orWhere('ra.legal_last_name', 'like', $like)
+                    ->orWhere('ra.contact_email', 'like', $like)
+                    ->orWhere('c.city_name', 'like', $like);
+            });
+        }
+
+        return $query;
+    }
+
+    private function applyCommonApplicationFilters(Builder $query, string $status, string $dateRange): void
+    {
+        if ($status !== '' && $status !== 'all') {
+            $query->where('ra.application_status', $status);
+        }
+
+        if ($dateRange === '7d') {
+            $query->where('ra.submitted_at', '>=', now()->subDays(7));
+        } elseif ($dateRange === '30d') {
+            $query->where('ra.submitted_at', '>=', now()->subDays(30));
+        }
+    }
+
+    /**
+     * @param  array<int, int>  $applicationIds
+     */
+    private function loadApplicationDocumentCounts(string $foreignKey, array $applicationIds): Collection
+    {
+        if ($applicationIds === []) {
+            return collect();
+        }
+
+        return DB::table('application_documents')
+            ->whereIn($foreignKey, $applicationIds)
+            ->selectRaw("{$foreignKey}, COUNT(*) as total, SUM(CASE WHEN document_status = 'verified' THEN 1 ELSE 0 END) as verified")
+            ->groupBy($foreignKey)
+            ->get()
+            ->keyBy($foreignKey);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatRiderApplicationRow(object $row, ?object $docCounts): array
+    {
+        return [
+            'id' => (int) $row->id,
+            'type' => 'rider',
+            'reference_number' => $row->reference_number,
+            'name' => trim("{$row->legal_first_name} {$row->legal_last_name}"),
+            'email' => $row->contact_email,
+            'phone' => $row->contact_phone,
+            'vehicle_type' => $row->vehicle_type,
+            'zone' => $row->zone,
+            'application_status' => $row->application_status,
+            'rider_status' => $row->rider_status,
+            'submitted_at' => $row->submitted_at,
+            'reviewed_at' => $row->reviewed_at,
+            'decided_at' => $row->decided_at,
+            'reviewer_note' => $row->reviewer_note,
+            'verified_docs_count' => (int) ($docCounts->verified ?? 0),
+            'total_docs_count' => (int) ($docCounts->total ?? 0),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatRestaurantApplicationRow(object $row, ?object $docCounts): array
+    {
+        return [
+            'id' => (int) $row->id,
+            'type' => 'restaurant',
+            'reference_number' => $row->reference_number,
+            'name' => $row->restaurant_name,
+            'owner_name' => trim("{$row->legal_first_name} {$row->legal_last_name}"),
+            'email' => $row->contact_email,
+            'phone' => $row->contact_phone,
+            'business_type' => $row->business_type,
+            'ownership_structure' => $row->ownership_structure,
+            'zone' => $row->zone,
+            'logo_image' => $this->fileStorageService->publicUrl($row->logo_image),
+            'cover_image' => $this->fileStorageService->publicUrl($row->cover_image),
+            'application_status' => $row->application_status,
+            'restaurant_status' => $row->restaurant_status,
+            'submitted_at' => $row->submitted_at,
+            'reviewed_at' => $row->reviewed_at,
+            'decided_at' => $row->decided_at,
+            'reviewer_note' => $row->reviewer_note,
+            'verified_docs_count' => (int) ($docCounts->verified ?? 0),
+            'total_docs_count' => (int) ($docCounts->total ?? 0),
         ];
     }
 

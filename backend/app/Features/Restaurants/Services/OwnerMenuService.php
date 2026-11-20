@@ -132,15 +132,7 @@ class OwnerMenuService
             ]);
         }
 
-        $updates = [
-            'category_name' => $newName,
-            'description' => array_key_exists('description', $validated)
-                ? ($validated['description'] !== null ? trim((string) $validated['description']) : null)
-                : $category->description,
-            'sort_order' => array_key_exists('sort_order', $validated) ? (int) $validated['sort_order'] : (int) $category->sort_order,
-            'is_active' => array_key_exists('is_active', $validated) ? ((bool) $validated['is_active'] ? 1 : 0) : (int) $category->is_active,
-            'updated_at' => now(),
-        ];
+        $updates = $this->buildCategoryUpdates($validated, $category, $newName);
 
         DB::transaction(function () use ($categoryId, $category, $updates, $user, $request): void {
             DB::table('menu_categories')->where('menu_category_id', $categoryId)->update($updates);
@@ -157,6 +149,23 @@ class OwnerMenuService
         });
 
         return collect($this->listCategories($user, $targetId))->firstWhere('id', $categoryId);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function buildCategoryUpdates(array $validated, object $category, string $newName): array
+    {
+        return [
+            'category_name' => $newName,
+            'description' => array_key_exists('description', $validated)
+                ? ($validated['description'] !== null ? trim((string) $validated['description']) : null)
+                : $category->description,
+            'sort_order' => array_key_exists('sort_order', $validated) ? (int) $validated['sort_order'] : (int) $category->sort_order,
+            'is_active' => array_key_exists('is_active', $validated) ? ((bool) $validated['is_active'] ? 1 : 0) : (int) $category->is_active,
+            'updated_at' => now(),
+        ];
     }
 
     /**
@@ -307,54 +316,9 @@ class OwnerMenuService
 
         $this->assertCategoryOwnedByRestaurant($categoryId, $targetId);
 
-        $storedPhotoPath = null;
+        $storedPhotoPath = $this->storeMenuPhotoIfPresent($photoFile, $targetId);
         try {
-            if ($photoFile !== null) {
-                $stored = $this->fileStorageService->storePublicImage(
-                    file: $photoFile,
-                    directory: "restaurants/{$targetId}/menu",
-                    fieldName: 'photo',
-                );
-                $storedPhotoPath = $stored['path'];
-            }
-
-            $itemId = DB::transaction(function () use ($targetId, $categoryId, $validated, $storedPhotoPath, $user, $request): int {
-                $now = now();
-                $nextOrder = ((int) DB::table('menu_items')->where('restaurant_id', $targetId)->max('sort_order')) + 1;
-                $price = number_format((float) $validated['base_price'], 2, '.', '');
-                $availability = (string) ($validated['availability_status'] ?? 'available');
-
-                $id = (int) DB::table('menu_items')->insertGetId([
-                    'restaurant_id' => $targetId,
-                    'menu_category_id' => $categoryId,
-                    'item_name' => trim((string) $validated['item_name']),
-                    'description' => ! empty($validated['description']) ? trim((string) $validated['description']) : null,
-                    'photo_image' => $storedPhotoPath,
-                    'base_price' => $price,
-                    'availability_status' => $availability,
-                    'approval_status' => 'approved',
-                    'sort_order' => $validated['sort_order'] ?? $nextOrder,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]);
-
-                $this->auditLogService->record(
-                    actorUserId: (int) $user->user_id,
-                    action: 'owner_menu_item_created',
-                    entityType: 'menu_items',
-                    entityId: $id,
-                    newValues: [
-                        'restaurant_id' => $targetId,
-                        'menu_category_id' => $categoryId,
-                        'item_name' => trim((string) $validated['item_name']),
-                        'base_price' => $price,
-                        'availability_status' => $availability,
-                    ],
-                    request: $request,
-                );
-
-                return $id;
-            });
+            $itemId = $this->persistNewItem($targetId, $categoryId, $validated, $storedPhotoPath, $user, $request);
         } catch (\Throwable $e) {
             if ($storedPhotoPath !== null) {
                 $this->fileStorageService->cleanupStoredPaths([$storedPhotoPath], []);
@@ -363,6 +327,56 @@ class OwnerMenuService
         }
 
         return $this->getFormattedItem($itemId, $targetId);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function persistNewItem(
+        int $targetId,
+        int $categoryId,
+        array $validated,
+        ?string $storedPhotoPath,
+        User $user,
+        Request $request,
+    ): int {
+        return DB::transaction(function () use ($targetId, $categoryId, $validated, $storedPhotoPath, $user, $request): int {
+            $now = now();
+            $nextOrder = ((int) DB::table('menu_items')->where('restaurant_id', $targetId)->max('sort_order')) + 1;
+            $price = number_format((float) $validated['base_price'], 2, '.', '');
+            $availability = (string) ($validated['availability_status'] ?? 'available');
+
+            $id = (int) DB::table('menu_items')->insertGetId([
+                'restaurant_id' => $targetId,
+                'menu_category_id' => $categoryId,
+                'item_name' => trim((string) $validated['item_name']),
+                'description' => ! empty($validated['description']) ? trim((string) $validated['description']) : null,
+                'photo_image' => $storedPhotoPath,
+                'base_price' => $price,
+                'availability_status' => $availability,
+                'approval_status' => 'approved',
+                'sort_order' => $validated['sort_order'] ?? $nextOrder,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: 'owner_menu_item_created',
+                entityType: 'menu_items',
+                entityId: $id,
+                newValues: [
+                    'restaurant_id' => $targetId,
+                    'menu_category_id' => $categoryId,
+                    'item_name' => trim((string) $validated['item_name']),
+                    'base_price' => $price,
+                    'availability_status' => $availability,
+                ],
+                request: $request,
+            );
+
+            return $id;
+        });
     }
 
     /**
@@ -380,82 +394,20 @@ class OwnerMenuService
     ): array {
         $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
-
-        $existing = DB::table('menu_items')
-            ->where('menu_item_id', $itemId)
-            ->where('restaurant_id', $targetId)
-            ->first();
-
-        abort_unless($existing !== null, 404, 'Menu item not found.');
+        $existing = $this->findOwnedMenuItem($itemId, $targetId);
 
         $categoryId = array_key_exists('menu_category_id', $validated)
             ? (int) $validated['menu_category_id']
             : (int) $existing->menu_category_id;
-
         $this->assertCategoryOwnedByRestaurant($categoryId, $targetId);
 
         $oldPhoto = $existing->photo_image;
-        $newPhoto = $oldPhoto;
         $newlyStoredPath = null;
-
         try {
-            if ($photoFile !== null) {
-                $stored = $this->fileStorageService->storePublicImage(
-                    file: $photoFile,
-                    directory: "restaurants/{$targetId}/menu",
-                    fieldName: 'photo',
-                );
-                $newPhoto = $stored['path'];
-                $newlyStoredPath = $newPhoto;
-            } elseif ($removePhoto) {
-                $newPhoto = null;
-            }
-
-            $price = array_key_exists('base_price', $validated)
-                ? number_format((float) $validated['base_price'], 2, '.', '')
-                : (string) $existing->base_price;
-            $availability = array_key_exists('availability_status', $validated)
-                ? (string) $validated['availability_status']
-                : (string) $existing->availability_status;
-
-            $updates = [
-                'menu_category_id' => $categoryId,
-                'item_name' => array_key_exists('item_name', $validated)
-                    ? trim((string) $validated['item_name'])
-                    : $existing->item_name,
-                'description' => array_key_exists('description', $validated)
-                    ? ($validated['description'] !== null ? trim((string) $validated['description']) : null)
-                    : $existing->description,
-                'photo_image' => $newPhoto,
-                'base_price' => $price,
-                'availability_status' => $availability,
-                'sort_order' => array_key_exists('sort_order', $validated) ? (int) $validated['sort_order'] : (int) $existing->sort_order,
-                'updated_at' => now(),
-            ];
-
-            DB::transaction(function () use ($itemId, $existing, $updates, $user, $request): void {
-                DB::table('menu_items')->where('menu_item_id', $itemId)->update($updates);
-
-                $this->auditLogService->record(
-                    actorUserId: (int) $user->user_id,
-                    action: 'owner_menu_item_updated',
-                    entityType: 'menu_items',
-                    entityId: $itemId,
-                    oldValues: [
-                        'item_name' => $existing->item_name,
-                        'base_price' => (string) $existing->base_price,
-                        'availability_status' => $existing->availability_status,
-                        'menu_category_id' => (int) $existing->menu_category_id,
-                    ],
-                    newValues: [
-                        'item_name' => $updates['item_name'],
-                        'base_price' => $updates['base_price'],
-                        'availability_status' => $updates['availability_status'],
-                        'menu_category_id' => (int) $updates['menu_category_id'],
-                    ],
-                    request: $request,
-                );
-            });
+            $newlyStoredPath = $this->storeMenuPhotoIfPresent($photoFile, $targetId);
+            $newPhoto = $newlyStoredPath ?? ($removePhoto ? null : $oldPhoto);
+            $updates = $this->buildItemUpdates($validated, $existing, $categoryId, $newPhoto);
+            $this->persistItemUpdate($itemId, $existing, $updates, $user, $request);
         } catch (\Throwable $e) {
             if ($newlyStoredPath !== null) {
                 $this->fileStorageService->cleanupStoredPaths([$newlyStoredPath], []);
@@ -463,6 +415,92 @@ class OwnerMenuService
             throw $e;
         }
 
+        $this->deleteOldMenuPhotoIfReplaced($oldPhoto, $newPhoto);
+
+        return $this->getFormattedItem($itemId, $targetId);
+    }
+
+    private function storeMenuPhotoIfPresent(?UploadedFile $photoFile, int $restaurantId): ?string
+    {
+        if ($photoFile === null) {
+            return null;
+        }
+
+        return $this->fileStorageService->storePublicImage(
+            file: $photoFile,
+            directory: "restaurants/{$restaurantId}/menu",
+            fieldName: 'photo',
+        )['path'];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function buildItemUpdates(array $validated, object $existing, int $categoryId, ?string $newPhoto): array
+    {
+        return [
+            'menu_category_id' => $categoryId,
+            'item_name' => array_key_exists('item_name', $validated) ? trim((string) $validated['item_name']) : $existing->item_name,
+            'description' => array_key_exists('description', $validated)
+                ? ($validated['description'] !== null ? trim((string) $validated['description']) : null)
+                : $existing->description,
+            'photo_image' => $newPhoto,
+            'base_price' => array_key_exists('base_price', $validated)
+                ? number_format((float) $validated['base_price'], 2, '.', '')
+                : (string) $existing->base_price,
+            'availability_status' => array_key_exists('availability_status', $validated)
+                ? (string) $validated['availability_status']
+                : (string) $existing->availability_status,
+            'sort_order' => array_key_exists('sort_order', $validated) ? (int) $validated['sort_order'] : (int) $existing->sort_order,
+            'updated_at' => now(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $updates
+     */
+    private function persistItemUpdate(int $itemId, object $existing, array $updates, User $user, Request $request): void
+    {
+        DB::transaction(function () use ($itemId, $existing, $updates, $user, $request): void {
+            DB::table('menu_items')->where('menu_item_id', $itemId)->update($updates);
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: 'owner_menu_item_updated',
+                entityType: 'menu_items',
+                entityId: $itemId,
+                oldValues: [
+                    'item_name' => $existing->item_name,
+                    'base_price' => (string) $existing->base_price,
+                    'availability_status' => $existing->availability_status,
+                    'menu_category_id' => (int) $existing->menu_category_id,
+                ],
+                newValues: [
+                    'item_name' => $updates['item_name'],
+                    'base_price' => $updates['base_price'],
+                    'availability_status' => $updates['availability_status'],
+                    'menu_category_id' => (int) $updates['menu_category_id'],
+                ],
+                request: $request,
+            );
+        });
+    }
+
+    private function findOwnedMenuItem(int $itemId, int $restaurantId): object
+    {
+        $existing = DB::table('menu_items')
+            ->where('menu_item_id', $itemId)
+            ->where('restaurant_id', $restaurantId)
+            ->first();
+
+        abort_unless($existing !== null, 404, 'Menu item not found.');
+
+        return $existing;
+    }
+
+    private function deleteOldMenuPhotoIfReplaced(?string $oldPhoto, ?string $newPhoto): void
+    {
         if ($oldPhoto !== null && $oldPhoto !== '' && $oldPhoto !== $newPhoto) {
             $this->fileStorageService->deleteIfUnreferenced(
                 'public',
@@ -470,8 +508,6 @@ class OwnerMenuService
                 fn (string $path): bool => $this->isMenuPhotoReferenced($path),
             );
         }
-
-        return $this->getFormattedItem($itemId, $targetId);
     }
 
     /**
@@ -494,19 +530,9 @@ class OwnerMenuService
     {
         $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
+        $existing = $this->findOwnedMenuItem($itemId, $targetId);
 
-        $existing = DB::table('menu_items')
-            ->where('menu_item_id', $itemId)
-            ->where('restaurant_id', $targetId)
-            ->first();
-
-        abort_unless($existing !== null, 404, 'Menu item not found.');
-
-        $referencedByOrders = DB::table('order_items')
-            ->where('menu_item_id', $itemId)
-            ->exists();
-
-        if ($referencedByOrders) {
+        if (DB::table('order_items')->where('menu_item_id', $itemId)->exists()) {
             throw new ConflictHttpException(
                 'This menu item cannot be deleted because it is referenced by existing orders. Set its availability to Hidden instead.'
             );
@@ -515,10 +541,7 @@ class OwnerMenuService
         $oldPhoto = $existing->photo_image;
 
         DB::transaction(function () use ($itemId, $targetId, $existing, $user, $request): void {
-            DB::table('menu_items')
-                ->where('menu_item_id', $itemId)
-                ->where('restaurant_id', $targetId)
-                ->delete();
+            DB::table('menu_items')->where('menu_item_id', $itemId)->where('restaurant_id', $targetId)->delete();
 
             $this->auditLogService->record(
                 actorUserId: (int) $user->user_id,
@@ -534,13 +557,7 @@ class OwnerMenuService
             );
         });
 
-        if ($oldPhoto !== null && $oldPhoto !== '') {
-            $this->fileStorageService->deleteIfUnreferenced(
-                'public',
-                $oldPhoto,
-                fn (string $path): bool => $this->isMenuPhotoReferenced($path),
-            );
-        }
+        $this->deleteOldMenuPhotoIfReplaced($oldPhoto, null);
     }
 
     private function assertCategoryOwnedByRestaurant(int $categoryId, int $restaurantId): void

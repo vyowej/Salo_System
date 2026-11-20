@@ -2,12 +2,15 @@
 
 namespace App\Features\Admin\Controllers;
 
+use App\Features\Admin\Requests\CreateAdminUserRequest;
+use App\Features\Admin\Requests\UpdateAdminRestaurantStatusRequest;
+use App\Features\Admin\Requests\UpdateAdminRiderStatusRequest;
+use App\Features\Admin\Requests\UpdateAdminUserRequest;
 use App\Features\Admin\Services\AdminManagementService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class AdminManagementController extends Controller
 {
@@ -23,19 +26,9 @@ class AdminManagementController extends Controller
         );
     }
 
-    public function createUser(Request $request): JsonResponse
+    public function createUser(CreateAdminUserRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'username' => ['required', 'string', 'max:50', 'unique:users,username'],
-            'first_name' => ['required', 'string', 'max:100'],
-            'middle_initial' => ['nullable', 'string', 'max:1'],
-            'last_name' => ['required', 'string', 'max:100'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'phone_number' => ['nullable', 'string', 'max:30'],
-            'password' => ['required', 'string', 'min:8'],
-            'user_role' => ['sometimes', 'string', Rule::in(['customer', 'admin'])],
-            'account_status' => ['sometimes', 'string', Rule::in(['active', 'inactive', 'suspended', 'pending'])],
-        ]);
+        $validated = $request->validated();
 
         $user = $this->adminManagementService->createUser($validated, $request->user(), $request);
 
@@ -46,16 +39,9 @@ class AdminManagementController extends Controller
         );
     }
 
-    public function updateUser(Request $request, int $id): JsonResponse
+    public function updateUser(UpdateAdminUserRequest $request, int $id): JsonResponse
     {
-        $validated = $request->validate([
-            'first_name' => ['sometimes', 'string', 'max:100'],
-            'last_name' => ['sometimes', 'string', 'max:100'],
-            'phone_number' => ['nullable', 'string', 'max:30'],
-            'user_role' => ['sometimes', 'string', Rule::in(['customer', 'admin'])],
-            'account_status' => ['sometimes', 'string', Rule::in(['active', 'inactive', 'suspended', 'pending'])],
-            'reason' => ['nullable', 'string', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
         $user = $this->adminManagementService->updateUser($id, $validated, $request->user(), $request);
 
@@ -73,12 +59,9 @@ class AdminManagementController extends Controller
         );
     }
 
-    public function updateRestaurantStatus(Request $request, int $id): JsonResponse
+    public function updateRestaurantStatus(UpdateAdminRestaurantStatusRequest $request, int $id): JsonResponse
     {
-        $validated = $request->validate([
-            'status' => ['required', 'string', Rule::in(['pending', 'approved', 'rejected', 'active', 'inactive', 'suspended'])],
-            'reason' => ['nullable', 'string', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
         $restaurant = $this->adminManagementService->updateRestaurantStatus(
             restaurantId: $id,
@@ -102,12 +85,9 @@ class AdminManagementController extends Controller
         );
     }
 
-    public function updateRiderStatus(Request $request, int $id): JsonResponse
+    public function updateRiderStatus(UpdateAdminRiderStatusRequest $request, int $id): JsonResponse
     {
-        $validated = $request->validate([
-            'status' => ['required', 'string', Rule::in(['inactive', 'suspended'])],
-            'reason' => ['nullable', 'string', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
         $rider = $this->adminManagementService->updateRiderStatus(
             riderId: $id,

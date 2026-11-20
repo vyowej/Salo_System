@@ -4,6 +4,7 @@ namespace App\Features\Riders\Services;
 
 use App\Models\User;
 use App\Support\AuditLogService;
+use App\Support\WorkspaceAccessResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,7 @@ class RiderService
 
     public function __construct(
         private readonly AuditLogService $auditLogService,
+        private readonly WorkspaceAccessResolver $workspaceAccessResolver,
     ) {}
 
     /**
@@ -130,11 +132,11 @@ class RiderService
      */
     public function updateAvailability(User $user, string $status, Request $request): array
     {
-        $rider = $this->requireRiderRecord($user);
-
-        if (! $user->isActiveAccount() || $rider->rider_status !== 'active') {
-            abort(403, 'Only active riders with an active account can change online availability.');
-        }
+        $rider = $this->workspaceAccessResolver->requireActiveRider(
+            user: $user,
+            inactiveAccountMessage: 'Only active riders with an active account can change online availability.',
+            inactiveRiderMessage: 'Only active riders with an active account can change online availability.',
+        );
 
         if ($status !== 'online') {
             $hasActiveDelivery = DB::table('deliveries')

@@ -8,6 +8,7 @@ use App\Features\Notifications\Services\NotificationService;
 use App\Features\Restaurants\Services\AvailabilityService;
 use App\Models\User;
 use App\Support\AuditLogService;
+use App\Support\Money;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -51,7 +52,7 @@ class CheckoutService
         $groupErrors = [];
         $preparedGroups = [];
 
-        $deliveryFeeCents = $this->toCents((string) config('salo.orders.flat_delivery_fee', '49.00'));
+        $deliveryFeeCents = Money::toCents((string) config('salo.orders.flat_delivery_fee', '49.00'));
         $maxQty = max(1, (int) config('salo.orders.max_item_quantity', 50));
 
         foreach ($groupsInput as $gIdx => $group) {
@@ -282,14 +283,14 @@ class CheckoutService
                     $grp = $groupsById->get((int) $opt->add_on_group_id);
                     $grpId = (int) $opt->add_on_group_id;
                     $selectedCountByGroup[$grpId] = ($selectedCountByGroup[$grpId] ?? 0) + 1;
-                    $addOnPriceCents = $this->toCents((string) $opt->additional_price);
+                    $addOnPriceCents = Money::toCents((string) $opt->additional_price);
 
                     $selectedAddOns[] = [
                         'add_on_option_id' => (int) $opt->add_on_option_id,
                         'group_name' => $grp ? (string) $grp->group_name : 'Add-on',
                         'option_name' => (string) $opt->option_name,
                         'additional_price_cents' => $addOnPriceCents,
-                        'additional_price_decimal' => $this->fromCents($addOnPriceCents),
+                        'additional_price_decimal' => Money::fromCents($addOnPriceCents),
                     ];
                 }
 
@@ -318,7 +319,7 @@ class CheckoutService
                 sort($sortedOptionIds);
                 $configKey = $menuItemId.':'.implode(',', $sortedOptionIds);
 
-                $baseCents = $this->toCents((string) $menuItem->base_price);
+                $baseCents = Money::toCents((string) $menuItem->base_price);
                 $addOnsCents = array_sum(array_column($selectedAddOns, 'additional_price_cents'));
                 $unitWithAddOnsCents = $baseCents + $addOnsCents;
 
@@ -333,7 +334,7 @@ class CheckoutService
                     $newLineCents = $unitWithAddOnsCents * $combinedQty;
                     $preparedItems[$existingIdx]['quantity'] = $combinedQty;
                     $preparedItems[$existingIdx]['line_total_cents'] = $newLineCents;
-                    $preparedItems[$existingIdx]['line_total_decimal'] = $this->fromCents($newLineCents);
+                    $preparedItems[$existingIdx]['line_total_decimal'] = Money::fromCents($newLineCents);
                     $subtotalCents += ($newLineCents - $oldLineCents);
                     continue;
                 }
@@ -345,10 +346,10 @@ class CheckoutService
                 $preparedItems[] = [
                     'menu_item_id' => (int) $menuItem->menu_item_id,
                     'item_name' => $menuItem->item_name,
-                    'unit_price_decimal' => $this->fromCents($baseCents),
+                    'unit_price_decimal' => Money::fromCents($baseCents),
                     'quantity' => $quantity,
                     'line_total_cents' => $lineTotalCents,
-                    'line_total_decimal' => $this->fromCents($lineTotalCents),
+                    'line_total_decimal' => Money::fromCents($lineTotalCents),
                     'add_ons' => $selectedAddOns,
                 ];
             }
@@ -380,11 +381,11 @@ class CheckoutService
             $computedGroupsSummary[] = [
                 'restaurant_id' => (int) $group['restaurant']->restaurant_id,
                 'restaurant_name' => $group['restaurant']->restaurant_name,
-                'subtotal_amount' => (float) $this->fromCents($group['subtotal_cents']),
-                'delivery_fee' => (float) $this->fromCents($group['delivery_fee_cents']),
-                'total_amount' => (float) $this->fromCents($group['total_cents']),
+                'subtotal_amount' => (float) Money::fromCents($group['subtotal_cents']),
+                'delivery_fee' => (float) Money::fromCents($group['delivery_fee_cents']),
+                'total_amount' => (float) Money::fromCents($group['total_cents']),
             ];
-            if ($group['expected_total'] !== null && $this->toCents($group['expected_total']) !== $group['total_cents']) {
+            if ($group['expected_total'] !== null && Money::toCents($group['expected_total']) !== $group['total_cents']) {
                 $totalMismatch = true;
             }
         }
@@ -410,7 +411,7 @@ class CheckoutService
                 'customer_id' => $user->user_id,
                 'idempotency_key' => $idempotencyKey,
                 'checkout_status' => 'pending',
-                'total_amount' => $this->fromCents($checkoutTotalCents),
+                'total_amount' => Money::fromCents($checkoutTotalCents),
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
@@ -421,7 +422,7 @@ class CheckoutService
                 $rest = $group['restaurant'];
                 $addr = $group['address_snapshot'];
                 $orderRef = $this->generateUniqueReference('orders', 'order_reference', 'SALO-ORD');
-                $orderTotalDecimal = $this->fromCents($group['total_cents']);
+                $orderTotalDecimal = Money::fromCents($group['total_cents']);
 
                 $orderId = (int) DB::table('orders')->insertGetId([
                     'checkout_id' => $checkoutId,
@@ -440,8 +441,8 @@ class CheckoutService
                     'delivery_latitude' => $addr['latitude'] ?? null,
                     'delivery_longitude' => $addr['longitude'] ?? null,
                     'delivery_notes' => $addr['notes'] ?? null,
-                    'subtotal_amount' => $this->fromCents($group['subtotal_cents']),
-                    'delivery_fee' => $this->fromCents($group['delivery_fee_cents']),
+                    'subtotal_amount' => Money::fromCents($group['subtotal_cents']),
+                    'delivery_fee' => Money::fromCents($group['delivery_fee_cents']),
                     'total_amount' => $orderTotalDecimal,
                     'placed_at' => $now,
                     'created_at' => $now,
@@ -529,7 +530,7 @@ class CheckoutService
                 entityId: $checkoutId,
                 newValues: [
                     'idempotency_key' => $idempotencyKey,
-                    'total_amount' => $this->fromCents($checkoutTotalCents),
+                    'total_amount' => Money::fromCents($checkoutTotalCents),
                     'order_ids' => $createdOrderIds,
                 ],
                 request: $request,
@@ -584,30 +585,6 @@ class CheckoutService
             'payment_method' => 'cod',
             'orders' => $orders,
         ];
-    }
-
-    /**
-     * Parse a decimal money string into integer centavos without floating-point arithmetic.
-     */
-    private function toCents(string $decimal): int
-    {
-        $clean = trim($decimal);
-        if (str_starts_with($clean, '-')) {
-            return 0;
-        }
-        $parts = explode('.', $clean, 2);
-        $pesos = (int) preg_replace('/\D/', '', $parts[0] ?: '0');
-        $centStr = str_pad(substr(preg_replace('/\D/', '', $parts[1] ?? ''), 0, 2), 2, '0', STR_PAD_RIGHT);
-
-        return ($pesos * 100) + (int) $centStr;
-    }
-
-    private function fromCents(int $cents): string
-    {
-        $pesos = intdiv($cents, 100);
-        $rem = $cents % 100;
-
-        return sprintf('%d.%02d', $pesos, $rem);
     }
 
     private function generateUniqueReference(string $table, string $column, string $prefix): string

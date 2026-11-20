@@ -15,6 +15,12 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class StaffInvitationService
 {
+    private const STATUS_INVITED = 'invited';
+    private const STATUS_ACTIVE = 'active';
+    private const STATUS_EXPIRED = 'expired';
+    private const STATUS_CANCELLED = 'cancelled';
+    private const STATUS_DECLINED = 'declined';
+
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
@@ -42,114 +48,72 @@ class StaffInvitationService
         $usernameInput = isset($data['username']) ? trim((string) $data['username']) : '';
         $identifierInput = isset($data['identifier']) ? trim((string) $data['identifier']) : '';
 
-        if ($emailInput === '' && $usernameInput === '' && $identifierInput === '') {
-            throw ValidationException::withMessages([
-                'username' => ['A username or email is required.'],
-            ]);
-        }
-
-        if ($emailInput !== '' && strcasecmp($emailInput, (string) $owner->email) === 0) {
-            throw ValidationException::withMessages([
-                'email' => ['You cannot invite yourself as staff.'],
-            ]);
-        }
-        if ($usernameInput !== '' && strcasecmp($usernameInput, (string) $owner->username) === 0) {
-            throw ValidationException::withMessages([
-                'username' => ['You cannot invite yourself as staff.'],
-            ]);
-        }
-        if (
-            $identifierInput !== ''
-            && (strcasecmp($identifierInput, (string) $owner->email) === 0
-                || strcasecmp($identifierInput, (string) $owner->username) === 0)
-        ) {
-            throw ValidationException::withMessages([
-                'identifier' => ['You cannot invite yourself as staff.'],
-            ]);
-        }
+        $this->validateInviteInputs($owner, $emailInput, $usernameInput, $identifierInput);
 
         $targetUser = $this->findInvitableUser($emailInput, $usernameInput, $identifierInput);
-
         if (! $targetUser) {
             return ['submitted' => true];
         }
 
+        $this->assertTargetUserInvitable($owner, $targetUser, $targetRestaurantId);
+
+        $expiryDays = max(1, (int) config('salo.staff.invitation_expiry_days', 7));
+        $this->persistSentInvitation($owner, $restaurant, $targetRestaurantId, $targetUser, $canonicalPosition, $note, $expiryDays, $request);
+
+        return ['submitted' => true];
+    }
+
+    private function validateInviteInputs(User $owner, string $emailInput, string $usernameInput, string $identifierInput): void
+    {
+        if ($emailInput === '' && $usernameInput === '' && $identifierInput === '') {
+            throw ValidationException::withMessages(['username' => ['A username or email is required.']]);
+        }
+        if ($emailInput !== '' && strcasecmp($emailInput, (string) $owner->email) === 0) {
+            throw ValidationException::withMessages(['email' => ['You cannot invite yourself as staff.']]);
+        }
+        if ($usernameInput !== '' && strcasecmp($usernameInput, (string) $owner->username) === 0) {
+            throw ValidationException::withMessages(['username' => ['You cannot invite yourself as staff.']]);
+        }
+        if (
+            $identifierInput !== ''
+            && (strcasecmp($identifierInput, (string) $owner->email) === 0 || strcasecmp($identifierInput, (string) $owner->username) === 0)
+        ) {
+            throw ValidationException::withMessages(['identifier' => ['You cannot invite yourself as staff.']]);
+        }
+    }
+
+    private function assertTargetUserInvitable(User $owner, object $targetUser, int $restaurantId): void
+    {
         if ((int) $targetUser->user_id === (int) $owner->user_id) {
-            throw ValidationException::withMessages([
-                'username' => ['You cannot invite yourself as staff.'],
-            ]);
+            throw ValidationException::withMessages(['username' => ['You cannot invite yourself as staff.']]);
         }
 
         $isAlreadyOwner = DB::table('restaurant_owners')
-            ->where('restaurant_id', $targetRestaurantId)
+            ->where('restaurant_id', $restaurantId)
             ->where('user_id', $targetUser->user_id)
             ->exists();
 
         if ($isAlreadyOwner) {
-            throw ValidationException::withMessages([
-                'username' => ['This user is already an owner of this restaurant.'],
-            ]);
+            throw ValidationException::withMessages(['username' => ['This user is already an owner of this restaurant.']]);
         }
+    }
 
-        $expiryDays = max(1, (int) config('salo.staff.invitation_expiry_days', 7));
-
+    private function persistSentInvitation(
+        User $owner,
+        object $restaurant,
+        int $targetRestaurantId,
+        object $targetUser,
+        string $canonicalPosition,
+        ?string $note,
+        int $expiryDays,
+        Request $request,
+    ): void {
         DB::transaction(function () use (
-            $owner,
-            $restaurant,
-            $targetRestaurantId,
-            $targetUser,
-            $canonicalPosition,
-            $note,
-            $expiryDays,
-            $request,
+            $owner, $restaurant, $targetRestaurantId, $targetUser, $canonicalPosition, $note, $expiryDays, $request,
         ): void {
             $now = now();
             $expiresAt = $now->copy()->addDays($expiryDays);
-
-            $existing = DB::table('restaurant_staff')
-                ->where('restaurant_id', $targetRestaurantId)
-                ->where('user_id', $targetUser->user_id)
-                ->lockForUpdate()
-                ->first();
-
-            if ($existing) {
-                $isExistingPendingAndValid = $existing->staff_status === 'invited'
-                    && ($existing->expires_at === null || Carbon::parse((string) $existing->expires_at)->gt($now));
-
-                if ($isExistingPendingAndValid || $existing->staff_status === 'active') {
-                    throw new ConflictHttpException('This user already has an active or pending staff record for this restaurant.');
-                }
-
-                $staffId = (int) $existing->staff_id;
-                DB::table('restaurant_staff')
-                    ->where('staff_id', $staffId)
-                    ->update([
-                        'invited_by' => $owner->user_id,
-                        'staff_position' => $canonicalPosition,
-                        'invitation_note' => $note,
-                        'staff_status' => 'invited',
-                        'invited_at' => $now,
-                        'expires_at' => $expiresAt,
-                        'responded_at' => null,
-                        'joined_at' => null,
-                        'updated_at' => $now,
-                    ]);
-            } else {
-                $staffId = (int) DB::table('restaurant_staff')->insertGetId([
-                    'restaurant_id' => $targetRestaurantId,
-                    'user_id' => $targetUser->user_id,
-                    'invited_by' => $owner->user_id,
-                    'staff_position' => $canonicalPosition,
-                    'invitation_note' => $note,
-                    'staff_status' => 'invited',
-                    'invited_at' => $now,
-                    'expires_at' => $expiresAt,
-                    'responded_at' => null,
-                    'joined_at' => null,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]);
-            }
+            $staffId = $this->upsertStaffInvitationRow($owner, $targetRestaurantId, $targetUser, $canonicalPosition, $note, $now, $expiresAt);
 
             $this->auditLogService->record(
                 actorUserId: (int) $owner->user_id,
@@ -176,8 +140,49 @@ class StaffInvitationService
                 relatedEntityId: $staffId,
             );
         });
+    }
 
-        return ['submitted' => true];
+    private function upsertStaffInvitationRow(
+        User $owner,
+        int $targetRestaurantId,
+        object $targetUser,
+        string $canonicalPosition,
+        ?string $note,
+        Carbon $now,
+        Carbon $expiresAt,
+    ): int {
+        $existing = DB::table('restaurant_staff')
+            ->where('restaurant_id', $targetRestaurantId)
+            ->where('user_id', $targetUser->user_id)
+            ->lockForUpdate()
+            ->first();
+
+        if ($existing) {
+            $isPendingAndValid = $existing->staff_status === self::STATUS_INVITED
+                && ($existing->expires_at === null || Carbon::parse((string) $existing->expires_at)->gt($now));
+
+            if ($isPendingAndValid || $existing->staff_status === self::STATUS_ACTIVE) {
+                throw new ConflictHttpException('This user already has an active or pending staff record for this restaurant.');
+            }
+
+            $staffId = (int) $existing->staff_id;
+            DB::table('restaurant_staff')->where('staff_id', $staffId)->update([
+                'invited_by' => $owner->user_id, 'staff_position' => $canonicalPosition,
+                'invitation_note' => $note, 'staff_status' => self::STATUS_INVITED,
+                'invited_at' => $now, 'expires_at' => $expiresAt,
+                'responded_at' => null, 'joined_at' => null, 'updated_at' => $now,
+            ]);
+
+            return $staffId;
+        }
+
+        return (int) DB::table('restaurant_staff')->insertGetId([
+            'restaurant_id' => $targetRestaurantId, 'user_id' => $targetUser->user_id,
+            'invited_by' => $owner->user_id, 'staff_position' => $canonicalPosition,
+            'invitation_note' => $note, 'staff_status' => self::STATUS_INVITED,
+            'invited_at' => $now, 'expires_at' => $expiresAt,
+            'responded_at' => null, 'joined_at' => null, 'created_at' => $now, 'updated_at' => $now,
+        ]);
     }
 
     /**
@@ -196,58 +201,15 @@ class StaffInvitationService
             ->leftJoin('users as inv', 'inv.user_id', '=', 'rs.invited_by')
             ->where('rs.restaurant_id', $targetRestaurantId)
             ->orderByDesc('rs.staff_id')
-            ->select([
-                'rs.*',
-                'u.first_name',
-                'u.last_name',
-                'u.username',
-                'inv.first_name as invited_by_first_name',
-            ])
+            ->select(['rs.*', 'u.first_name', 'u.last_name', 'u.username', 'inv.first_name as invited_by_first_name'])
             ->get();
 
-        $expiredIds = [];
-        foreach ($rawRows as $row) {
-            if ($row->staff_status === 'invited' && $this->isExpired($row->expires_at, $now)) {
-                $expiredIds[] = (int) $row->staff_id;
-                $row->staff_status = 'expired';
-            }
-        }
-
-        if ($expiredIds !== []) {
-            DB::table('restaurant_staff')
-                ->whereIn('staff_id', $expiredIds)
-                ->where('staff_status', 'invited')
-                ->update([
-                    'staff_status' => 'expired',
-                    'updated_at' => $now,
-                ]);
-        }
-
-        $rows = $rawRows
-            ->map(fn (object $row): array => [
-                'staff_id' => (int) $row->staff_id,
-                'restaurant_id' => (int) $row->restaurant_id,
-                'user_id' => (int) $row->user_id,
-                'first_name' => $row->first_name,
-                'last_name' => $row->last_name,
-                'username' => $row->username,
-                'staff_position' => $row->staff_position,
-                'status' => $this->mapExternalStatus((string) $row->staff_status),
-                'staff_status' => $row->staff_status,
-                'invitation_note' => $row->invitation_note,
-                'invited_by_first_name' => $row->invited_by_first_name,
-                'invited_at' => OrderTimestampFormatter::toManilaIso($row->invited_at),
-                'expires_at' => OrderTimestampFormatter::toManilaIso($row->expires_at),
-                'responded_at' => OrderTimestampFormatter::toManilaIso($row->responded_at),
-                'joined_at' => OrderTimestampFormatter::toManilaIso($row->joined_at),
-            ])
-            ->values()
-            ->all();
+        $this->expireOverdueFromRows($rawRows, $now);
 
         return [
             'restaurant_id' => $targetRestaurantId,
             'restaurant_name' => $restaurant->restaurant_name,
-            'staff' => $rows,
+            'staff' => $rawRows->map(fn (object $row): array => $this->formatRestaurantStaffRow($row))->values()->all(),
         ];
     }
 
@@ -259,11 +221,7 @@ class StaffInvitationService
     public function cancelInvitation(User $owner, int $staffId, Request $request): array
     {
         $result = DB::transaction(function () use ($owner, $staffId, $request): array {
-            $row = DB::table('restaurant_staff')
-                ->where('staff_id', $staffId)
-                ->lockForUpdate()
-                ->first();
-
+            $row = DB::table('restaurant_staff')->where('staff_id', $staffId)->lockForUpdate()->first();
             if (! $row) {
                 throw new NotFoundHttpException('Staff invitation not found.');
             }
@@ -271,35 +229,21 @@ class StaffInvitationService
             $restaurant = $this->requireOwnedActiveRestaurant($owner, (int) $row->restaurant_id);
             $now = now();
 
-            if ($row->staff_status === 'invited' && $this->isExpired($row->expires_at, $now)) {
-                DB::table('restaurant_staff')
-                    ->where('staff_id', $staffId)
-                    ->update(['staff_status' => 'expired', 'updated_at' => $now]);
-
+            if ($this->expireIfOverdueAndAssertPending($row, $staffId, $now, 'cancelled')) {
                 return ['expired' => true];
             }
 
-            if ($row->staff_status !== 'invited') {
-                throw new ConflictHttpException(
-                    "Only pending invitations can be cancelled (current status: {$this->mapExternalStatus((string) $row->staff_status)})."
-                );
-            }
-
-            DB::table('restaurant_staff')
-                ->where('staff_id', $staffId)
-                ->update([
-                    'staff_status' => 'cancelled',
-                    'responded_at' => $now,
-                    'updated_at' => $now,
-                ]);
+            DB::table('restaurant_staff')->where('staff_id', $staffId)->update([
+                'staff_status' => self::STATUS_CANCELLED, 'responded_at' => $now, 'updated_at' => $now,
+            ]);
 
             $this->auditLogService->record(
                 actorUserId: (int) $owner->user_id,
                 action: 'staff_invitation_cancelled',
                 entityType: 'restaurant_staff',
                 entityId: $staffId,
-                oldValues: ['staff_status' => 'invited'],
-                newValues: ['staff_status' => 'cancelled'],
+                oldValues: ['staff_status' => self::STATUS_INVITED],
+                newValues: ['staff_status' => self::STATUS_CANCELLED],
                 request: $request,
             );
 
@@ -307,7 +251,7 @@ class StaffInvitationService
                 userId: (int) $row->user_id,
                 workspace: 'customer',
                 type: 'staff_invitation_cancelled',
-                title: "Staff invitation cancelled",
+                title: 'Staff invitation cancelled',
                 body: "Your staff invitation from {$restaurant->restaurant_name} ({$row->staff_position}) was cancelled.",
                 relatedEntityType: 'staff_invitation',
                 relatedEntityId: $staffId,
@@ -320,10 +264,7 @@ class StaffInvitationService
             throw new ConflictHttpException('This staff invitation has expired.');
         }
 
-        return [
-            'staff_id' => $staffId,
-            'status' => 'cancelled',
-        ];
+        return ['staff_id' => $staffId, 'status' => self::STATUS_CANCELLED];
     }
 
     /**
@@ -340,49 +281,12 @@ class StaffInvitationService
             ->leftJoin('users as inv', 'inv.user_id', '=', 'rs.invited_by')
             ->where('rs.user_id', $user->user_id)
             ->orderByDesc('rs.staff_id')
-            ->select([
-                'rs.*',
-                'r.restaurant_name',
-                'r.restaurant_status',
-                'inv.first_name as invited_by_first_name',
-            ])
+            ->select(['rs.*', 'r.restaurant_name', 'r.restaurant_status', 'inv.first_name as invited_by_first_name'])
             ->get();
 
-        $expiredIds = [];
-        foreach ($rawRows as $row) {
-            if ($row->staff_status === 'invited' && $this->isExpired($row->expires_at, $now)) {
-                $expiredIds[] = (int) $row->staff_id;
-                $row->staff_status = 'expired';
-            }
-        }
+        $this->expireOverdueFromRows($rawRows, $now);
 
-        if ($expiredIds !== []) {
-            DB::table('restaurant_staff')
-                ->whereIn('staff_id', $expiredIds)
-                ->where('staff_status', 'invited')
-                ->update([
-                    'staff_status' => 'expired',
-                    'updated_at' => $now,
-                ]);
-        }
-
-        return $rawRows
-            ->map(fn (object $row): array => [
-                'staff_id' => (int) $row->staff_id,
-                'restaurant_id' => (int) $row->restaurant_id,
-                'restaurant_name' => $row->restaurant_name,
-                'staff_position' => $row->staff_position,
-                'status' => $this->mapExternalStatus((string) $row->staff_status),
-                'staff_status' => $row->staff_status,
-                'invitation_note' => $row->invitation_note,
-                'invited_by_first_name' => $row->invited_by_first_name,
-                'invited_at' => OrderTimestampFormatter::toManilaIso($row->invited_at),
-                'expires_at' => OrderTimestampFormatter::toManilaIso($row->expires_at),
-                'responded_at' => OrderTimestampFormatter::toManilaIso($row->responded_at),
-                'joined_at' => OrderTimestampFormatter::toManilaIso($row->joined_at),
-            ])
-            ->values()
-            ->all();
+        return $rawRows->map(fn (object $row): array => $this->formatAccountInvitationRow($row))->values()->all();
     }
 
     /**
@@ -393,28 +297,11 @@ class StaffInvitationService
     public function acceptInvitation(User $user, int $staffId, Request $request): array
     {
         $result = DB::transaction(function () use ($user, $staffId, $request): array {
-            $row = DB::table('restaurant_staff')
-                ->where('staff_id', $staffId)
-                ->lockForUpdate()
-                ->first();
-
-            if (! $row || (int) $row->user_id !== (int) $user->user_id) {
-                throw new NotFoundHttpException('Staff invitation not found.');
-            }
-
+            $row = $this->findInviteeRowForUpdate($user, $staffId);
             $now = now();
-            if ($row->staff_status === 'invited' && $this->isExpired($row->expires_at, $now)) {
-                DB::table('restaurant_staff')
-                    ->where('staff_id', $staffId)
-                    ->update(['staff_status' => 'expired', 'updated_at' => $now]);
 
+            if ($this->expireIfOverdueAndAssertPending($row, $staffId, $now, 'accepted')) {
                 return ['expired' => true];
-            }
-
-            if ($row->staff_status !== 'invited') {
-                throw new ConflictHttpException(
-                    "Only pending invitations can be accepted (current status: {$this->mapExternalStatus((string) $row->staff_status)})."
-                );
             }
 
             $restaurant = DB::table('restaurants')
@@ -425,42 +312,30 @@ class StaffInvitationService
                 throw new ConflictHttpException('This restaurant is no longer active.');
             }
 
-            DB::table('restaurant_staff')
-                ->where('staff_id', $staffId)
-                ->update([
-                    'staff_status' => 'active',
-                    'responded_at' => $now,
-                    'joined_at' => $now,
-                    'updated_at' => $now,
-                ]);
+            DB::table('restaurant_staff')->where('staff_id', $staffId)->update([
+                'staff_status' => self::STATUS_ACTIVE, 'responded_at' => $now, 'joined_at' => $now, 'updated_at' => $now,
+            ]);
 
             $this->auditLogService->record(
                 actorUserId: (int) $user->user_id,
                 action: 'staff_invitation_accepted',
                 entityType: 'restaurant_staff',
                 entityId: $staffId,
-                oldValues: ['staff_status' => 'invited'],
-                newValues: ['staff_status' => 'active', 'staff_position' => $row->staff_position],
+                oldValues: ['staff_status' => self::STATUS_INVITED],
+                newValues: ['staff_status' => self::STATUS_ACTIVE, 'staff_position' => $row->staff_position],
                 request: $request,
             );
 
-            $ownerIds = $this->notificationService->resolveRestaurantOwnerUserIds((int) $row->restaurant_id);
-            $inviteeFirstName = trim((string) ($user->first_name ?? '')) ?: 'A user';
-            $this->notificationService->notifyUsers(
-                userIds: $ownerIds,
-                workspace: 'restaurant',
-                type: 'staff_invitation_accepted',
-                title: 'Staff invitation accepted',
-                body: "{$inviteeFirstName} accepted the invitation to join {$restaurant->restaurant_name} as {$row->staff_position}.",
-                relatedEntityType: 'staff_invitation',
-                relatedEntityId: $staffId,
+            $this->notifyOwnersOfInvitationResponse(
+                $user,
+                (int) $row->restaurant_id,
+                $staffId,
+                'staff_invitation_accepted',
+                'Staff invitation accepted',
+                "accepted the invitation to join {$restaurant->restaurant_name} as {$row->staff_position}.",
             );
 
-            return [
-                'expired' => false,
-                'restaurant_id' => (int) $row->restaurant_id,
-                'staff_position' => $row->staff_position,
-            ];
+            return ['expired' => false, 'restaurant_id' => (int) $row->restaurant_id, 'staff_position' => $row->staff_position];
         });
 
         if ($result['expired'] === true) {
@@ -468,10 +343,8 @@ class StaffInvitationService
         }
 
         return [
-            'staff_id' => $staffId,
-            'restaurant_id' => $result['restaurant_id'],
-            'staff_position' => $result['staff_position'],
-            'status' => 'accepted',
+            'staff_id' => $staffId, 'restaurant_id' => $result['restaurant_id'],
+            'staff_position' => $result['staff_position'], 'status' => 'accepted',
         ];
     }
 
@@ -483,62 +356,36 @@ class StaffInvitationService
     public function declineInvitation(User $user, int $staffId, Request $request): array
     {
         $result = DB::transaction(function () use ($user, $staffId, $request): array {
-            $row = DB::table('restaurant_staff')
-                ->where('staff_id', $staffId)
-                ->lockForUpdate()
-                ->first();
-
-            if (! $row || (int) $row->user_id !== (int) $user->user_id) {
-                throw new NotFoundHttpException('Staff invitation not found.');
-            }
-
+            $row = $this->findInviteeRowForUpdate($user, $staffId);
             $now = now();
-            if ($row->staff_status === 'invited' && $this->isExpired($row->expires_at, $now)) {
-                DB::table('restaurant_staff')
-                    ->where('staff_id', $staffId)
-                    ->update(['staff_status' => 'expired', 'updated_at' => $now]);
 
+            if ($this->expireIfOverdueAndAssertPending($row, $staffId, $now, 'declined')) {
                 return ['expired' => true];
             }
 
-            if ($row->staff_status !== 'invited') {
-                throw new ConflictHttpException(
-                    "Only pending invitations can be declined (current status: {$this->mapExternalStatus((string) $row->staff_status)})."
-                );
-            }
+            $restaurantName = (string) (DB::table('restaurants')->where('restaurant_id', $row->restaurant_id)->value('restaurant_name') ?? 'the restaurant');
 
-            $restaurantName = (string) (DB::table('restaurants')
-                ->where('restaurant_id', $row->restaurant_id)
-                ->value('restaurant_name') ?? 'the restaurant');
-
-            DB::table('restaurant_staff')
-                ->where('staff_id', $staffId)
-                ->update([
-                    'staff_status' => 'declined',
-                    'responded_at' => $now,
-                    'updated_at' => $now,
-                ]);
+            DB::table('restaurant_staff')->where('staff_id', $staffId)->update([
+                'staff_status' => self::STATUS_DECLINED, 'responded_at' => $now, 'updated_at' => $now,
+            ]);
 
             $this->auditLogService->record(
                 actorUserId: (int) $user->user_id,
                 action: 'staff_invitation_declined',
                 entityType: 'restaurant_staff',
                 entityId: $staffId,
-                oldValues: ['staff_status' => 'invited'],
-                newValues: ['staff_status' => 'declined'],
+                oldValues: ['staff_status' => self::STATUS_INVITED],
+                newValues: ['staff_status' => self::STATUS_DECLINED],
                 request: $request,
             );
 
-            $ownerIds = $this->notificationService->resolveRestaurantOwnerUserIds((int) $row->restaurant_id);
-            $inviteeFirstName = trim((string) ($user->first_name ?? '')) ?: 'A user';
-            $this->notificationService->notifyUsers(
-                userIds: $ownerIds,
-                workspace: 'restaurant',
-                type: 'staff_invitation_declined',
-                title: 'Staff invitation declined',
-                body: "{$inviteeFirstName} declined the invitation to join {$restaurantName} as {$row->staff_position}.",
-                relatedEntityType: 'staff_invitation',
-                relatedEntityId: $staffId,
+            $this->notifyOwnersOfInvitationResponse(
+                $user,
+                (int) $row->restaurant_id,
+                $staffId,
+                'staff_invitation_declined',
+                'Staff invitation declined',
+                "declined the invitation to join {$restaurantName} as {$row->staff_position}.",
             );
 
             return ['expired' => false];
@@ -548,10 +395,7 @@ class StaffInvitationService
             throw new ConflictHttpException('This staff invitation has expired.');
         }
 
-        return [
-            'staff_id' => $staffId,
-            'status' => 'declined',
-        ];
+        return ['staff_id' => $staffId, 'status' => self::STATUS_DECLINED];
     }
 
     private function requireOwnedActiveRestaurant(User $owner, ?int $restaurantId = null): object
@@ -617,32 +461,118 @@ class StaffInvitationService
         return $query->where('username', $identifier)->first();
     }
 
-    private function expireOverdueInvitationsForRestaurant(int $restaurantId): void
+    private function findInviteeRowForUpdate(User $user, int $staffId): object
     {
-        $now = now();
-        DB::table('restaurant_staff')
-            ->where('restaurant_id', $restaurantId)
-            ->where('staff_status', 'invited')
-            ->whereNotNull('expires_at')
-            ->where('expires_at', '<=', $now)
-            ->update([
-                'staff_status' => 'expired',
-                'updated_at' => $now,
-            ]);
+        $row = DB::table('restaurant_staff')->where('staff_id', $staffId)->lockForUpdate()->first();
+        if (! $row || (int) $row->user_id !== (int) $user->user_id) {
+            throw new NotFoundHttpException('Staff invitation not found.');
+        }
+
+        return $row;
     }
 
-    private function expireOverdueInvitationsForUser(int $userId): void
+    private function expireIfOverdueAndAssertPending(object $row, int $staffId, Carbon $now, string $actionVerb): bool
     {
-        $now = now();
-        DB::table('restaurant_staff')
-            ->where('user_id', $userId)
-            ->where('staff_status', 'invited')
-            ->whereNotNull('expires_at')
-            ->where('expires_at', '<=', $now)
-            ->update([
-                'staff_status' => 'expired',
+        if ($row->staff_status === self::STATUS_INVITED && $this->isExpired($row->expires_at, $now)) {
+            DB::table('restaurant_staff')->where('staff_id', $staffId)->update([
+                'staff_status' => self::STATUS_EXPIRED,
                 'updated_at' => $now,
             ]);
+
+            return true;
+        }
+
+        if ($row->staff_status !== self::STATUS_INVITED) {
+            throw new ConflictHttpException(
+                "Only pending invitations can be {$actionVerb} (current status: {$this->mapExternalStatus((string) $row->staff_status)})."
+            );
+        }
+
+        return false;
+    }
+
+    private function expireOverdueFromRows(\Illuminate\Support\Collection $rawRows, Carbon $now): void
+    {
+        $expiredIds = [];
+        foreach ($rawRows as $row) {
+            if ($row->staff_status === self::STATUS_INVITED && $this->isExpired($row->expires_at, $now)) {
+                $expiredIds[] = (int) $row->staff_id;
+                $row->staff_status = self::STATUS_EXPIRED;
+            }
+        }
+
+        if ($expiredIds !== []) {
+            DB::table('restaurant_staff')
+                ->whereIn('staff_id', $expiredIds)
+                ->where('staff_status', self::STATUS_INVITED)
+                ->update(['staff_status' => self::STATUS_EXPIRED, 'updated_at' => $now]);
+        }
+    }
+
+    private function notifyOwnersOfInvitationResponse(
+        User $user,
+        int $restaurantId,
+        int $staffId,
+        string $type,
+        string $title,
+        string $bodySuffix,
+    ): void {
+        $ownerIds = $this->notificationService->resolveRestaurantOwnerUserIds($restaurantId);
+        $inviteeFirstName = trim((string) ($user->first_name ?? '')) ?: 'A user';
+        $this->notificationService->notifyUsers(
+            userIds: $ownerIds,
+            workspace: 'restaurant',
+            type: $type,
+            title: $title,
+            body: "{$inviteeFirstName} {$bodySuffix}",
+            relatedEntityType: 'staff_invitation',
+            relatedEntityId: $staffId,
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatRestaurantStaffRow(object $row): array
+    {
+        return [
+            'staff_id' => (int) $row->staff_id,
+            'restaurant_id' => (int) $row->restaurant_id,
+            'user_id' => (int) $row->user_id,
+            'first_name' => $row->first_name,
+            'last_name' => $row->last_name,
+            'username' => $row->username,
+            'staff_position' => $row->staff_position,
+            'status' => $this->mapExternalStatus((string) $row->staff_status),
+            'staff_status' => $row->staff_status,
+            'invitation_note' => $row->invitation_note,
+            'invited_by_first_name' => $row->invited_by_first_name,
+            'invited_at' => OrderTimestampFormatter::toManilaIso($row->invited_at),
+            'expires_at' => OrderTimestampFormatter::toManilaIso($row->expires_at),
+            'responded_at' => OrderTimestampFormatter::toManilaIso($row->responded_at),
+            'joined_at' => OrderTimestampFormatter::toManilaIso($row->joined_at),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatAccountInvitationRow(object $row): array
+    {
+        return [
+            'staff_id' => (int) $row->staff_id,
+            'restaurant_id' => (int) $row->restaurant_id,
+            'restaurant_name' => $row->restaurant_name,
+            'staff_position' => $row->staff_position,
+            'status' => $this->mapExternalStatus((string) $row->staff_status),
+            'staff_status' => $row->staff_status,
+            'invitation_note' => $row->invitation_note,
+            'invited_by_first_name' => $row->invited_by_first_name,
+            'invited_at' => OrderTimestampFormatter::toManilaIso($row->invited_at),
+            'expires_at' => OrderTimestampFormatter::toManilaIso($row->expires_at),
+            'responded_at' => OrderTimestampFormatter::toManilaIso($row->responded_at),
+            'joined_at' => OrderTimestampFormatter::toManilaIso($row->joined_at),
+        ];
     }
 
     private function isExpired(mixed $expiresAt, Carbon $now): bool
