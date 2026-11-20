@@ -3,6 +3,7 @@
 namespace App\Features\Riders\Controllers;
 
 use App\Features\Riders\Requests\SubmitRiderApplicationRequest;
+use App\Features\Riders\Requests\UploadRiderDocumentRequest;
 use App\Features\Riders\Services\RiderApplicationService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
@@ -46,16 +47,9 @@ class RiderApplicationController extends Controller
         );
     }
 
-    public function uploadDocument(Request $request, int $id): JsonResponse
+    public function uploadDocument(UploadRiderDocumentRequest $request, int $id): JsonResponse
     {
-        $maxKb = max(256, (int) config('salo.uploads.max_size_kb', 5120));
-        $docMimes = implode(',', (array) config('salo.uploads.allowed_document_types', ['pdf', 'jpg', 'jpeg', 'png']));
-
-        $validated = $request->validate([
-            'document_code' => ['required', 'string'],
-            'request_id' => ['nullable', 'integer'],
-            'file' => ['required', 'file', "mimes:{$docMimes}", "max:{$maxKb}"],
-        ]);
+        $validated = $request->validated();
 
         $application = $this->riderApplicationService->uploadDocument(
             user: $request->user(),

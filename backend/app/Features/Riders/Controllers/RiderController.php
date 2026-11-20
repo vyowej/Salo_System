@@ -2,12 +2,13 @@
 
 namespace App\Features\Riders\Controllers;
 
+use App\Features\Riders\Requests\UpdateRiderAvailabilityRequest;
+use App\Features\Riders\Requests\UpdateRiderProfileRequest;
 use App\Features\Riders\Services\RiderService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class RiderController extends Controller
 {
@@ -31,31 +32,17 @@ class RiderController extends Controller
         );
     }
 
-    public function updateProfile(Request $request): JsonResponse
+    public function updateProfile(UpdateRiderProfileRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'emergency_contact_name' => ['sometimes', 'string', 'max:150'],
-            'emergency_contact_relationship' => ['sometimes', 'string', Rule::in(['parent', 'spouse_partner', 'sibling', 'child', 'relative', 'friend', 'colleague', 'other'])],
-            'emergency_contact_phone' => ['sometimes', 'string', 'max:30'],
-            'emergency_contact_alt_phone' => ['nullable', 'string', 'max:30'],
-            'preferred_hubs' => ['nullable', 'string', 'max:255'],
-            'preferred_shifts' => ['nullable', 'array'],
-            'preferred_shifts.*' => ['string', Rule::in(['breakfast', 'lunch', 'afternoon', 'dinner', 'late_night', 'flexible'])],
-            'available_days' => ['nullable', 'array'],
-            'available_days.*' => ['string', Rule::in(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'])],
-        ]);
-
         return ApiResponse::success(
-            data: ['profile' => $this->riderService->updateProfile($request->user(), $validated, $request)],
+            data: ['profile' => $this->riderService->updateProfile($request->user(), $request->validated(), $request)],
             message: 'Rider profile updated.',
         );
     }
 
-    public function updateAvailability(Request $request): JsonResponse
+    public function updateAvailability(UpdateRiderAvailabilityRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'status' => ['required', 'string', Rule::in(RiderService::AVAILABILITY_STATUSES)],
-        ]);
+        $validated = $request->validated();
 
         $availability = $this->riderService->updateAvailability(
             user: $request->user(),

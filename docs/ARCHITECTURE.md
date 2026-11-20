@@ -99,3 +99,10 @@ Inline `$request->validate(...)` blocks across the 5 Locations controllers (`Adm
 - `UpdateRestaurantLocationRequest` / `UpdateRestaurantCoverageRequest`
 - `ValidateServiceAreaRequest`
 - `RecordRiderLocationRequest`
+
+## Riders & Orders FormRequest Validation (CLEAN-4B)
+
+The remaining inline `$request->validate(...)` blocks across `RiderController`, `RiderApplicationController`, `CustomerOrderController`, and `RestaurantOrderController` were extracted into dedicated `FormRequest` classes:
+
+- `backend/app/Features/Riders/Requests/`: `UpdateRiderProfileRequest`, `UpdateRiderAvailabilityRequest`, `UploadRiderDocumentRequest`
+- `backend/app/Features/Orders/Requests/`: `CancelCustomerOrderRequest`, `RejectRestaurantOrderRequest`

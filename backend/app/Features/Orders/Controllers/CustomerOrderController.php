@@ -2,6 +2,7 @@
 
 namespace App\Features\Orders\Controllers;
 
+use App\Features\Orders\Requests\CancelCustomerOrderRequest;
 use App\Features\Orders\Requests\CheckoutRequest;
 use App\Features\Orders\Services\CheckoutService;
 use App\Features\Orders\Services\CustomerOrderService;
@@ -48,11 +49,9 @@ class CustomerOrderController extends Controller
         );
     }
 
-    public function cancel(Request $request, int $id): JsonResponse
+    public function cancel(CancelCustomerOrderRequest $request, int $id): JsonResponse
     {
-        $validated = $request->validate([
-            'reason' => ['nullable', 'string', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
         $order = $this->customerOrderService->cancelOrder(
             user: $request->user(),

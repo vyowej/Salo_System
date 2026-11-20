@@ -2,6 +2,7 @@
 
 namespace App\Features\Orders\Controllers;
 
+use App\Features\Orders\Requests\RejectRestaurantOrderRequest;
 use App\Features\Orders\Services\RestaurantOrderService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
@@ -37,12 +38,9 @@ class RestaurantOrderController extends Controller
         return $this->handleTransition($request, $id, 'accept', 'Order accepted.');
     }
 
-    public function reject(Request $request, int $id): JsonResponse
+    public function reject(RejectRestaurantOrderRequest $request, int $id): JsonResponse
     {
-        $validated = $request->validate([
-            'restaurant_id' => ['nullable', 'integer'],
-            'reason' => ['required', 'string', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
         $order = $this->restaurantOrderService->transitionStatus(
             user: $request->user(),
