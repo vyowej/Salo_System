@@ -34,6 +34,63 @@ class RiderApplicationService
      */
     public function submit(User $user, array $validated, array $documentFiles, Request $request): array
     {
+        [$contactEmail, $verifiedAt, $vehicleType] = $this->validateSubmissionPreconditions($user, $validated, $documentFiles);
+
+        $storedPrivatePaths = [];
+
+        try {
+            $result = DB::transaction(function () use ($user, $validated, $documentFiles, $contactEmail, $verifiedAt, $vehicleType, $request, &$storedPrivatePaths): array {
+                $addressId = $this->addressService->createAddress([
+                    'province' => $validated['province'],
+                    'city' => $validated['city'],
+                    'barangay' => $validated['barangay'],
+                    'street' => $validated['street'] ?? null,
+                    'house_number' => $validated['house_number'] ?? null,
+                    'building_name' => $validated['building_name'] ?? null,
+                    'landmark' => $validated['landmark'] ?? null,
+                    'postal_code' => $validated['postal_code'] ?? null,
+                ]);
+
+                $baseCityId = $this->addressService->resolveCityIdByName(
+                    (string) $validated['base_city'],
+                    $validated['base_province'] ?? $validated['province'],
+                );
+
+                $riderId = $this->upsertRiderRecord($user, $validated, $vehicleType, $baseCityId);
+                $now = now();
+                [$applicationId, $referenceNumber] = $this->createApplicationRecord(
+                    $user,
+                    $riderId,
+                    $addressId,
+                    $validated,
+                    $contactEmail,
+                    $verifiedAt,
+                    $now,
+                );
+
+                $this->storeApplicationDocuments($user, $applicationId, $documentFiles, $now, $storedPrivatePaths);
+                $this->upsertPayoutAccount($riderId, $validated, $now);
+                $this->recordSubmissionAuditAndNotify($user, $applicationId, $referenceNumber, $vehicleType, $request);
+
+                return $this->getApplicationById($applicationId);
+            });
+        } catch (\Throwable $e) {
+            $this->fileStorageService->cleanupStoredPaths([], $storedPrivatePaths);
+            throw $e;
+        }
+
+        $this->otpService->forgetVerified($contactEmail, 'rider_application', (int) $user->user_id);
+
+        return $result;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @param  array<string, UploadedFile>  $documentFiles
+     * @return array{string, \Carbon\Carbon, string}
+     */
+    private function validateSubmissionPreconditions(User $user, array $validated, array $documentFiles): array
+    {
         $existingActive = DB::table('rider_applications')
             ->where('applicant_user_id', $user->user_id)
             ->whereIn('application_status', ['submitted', 'pending_review', 'under_review', 'additional_documents_required', 'needs_correction', 'resubmitted', 'approved'])
@@ -61,166 +118,191 @@ class RiderApplicationService
 
         $this->validateDocumentCodes($documentFiles, $vehicleType);
 
-        $storedPrivatePaths = [];
+        return [$contactEmail, $verifiedAt, $vehicleType];
+    }
 
-        try {
-            $result = DB::transaction(function () use ($user, $validated, $documentFiles, $contactEmail, $verifiedAt, $vehicleType, $request, &$storedPrivatePaths): array {
-            $addressId = $this->addressService->createAddress([
-                'province' => $validated['province'],
-                'city' => $validated['city'],
-                'barangay' => $validated['barangay'],
-                'street' => $validated['street'] ?? null,
-                'house_number' => $validated['house_number'] ?? null,
-                'building_name' => $validated['building_name'] ?? null,
-                'landmark' => $validated['landmark'] ?? null,
-                'postal_code' => $validated['postal_code'] ?? null,
-            ]);
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function upsertRiderRecord(User $user, array $validated, string $vehicleType, int $baseCityId): int
+    {
+        $isWalking = $vehicleType === 'walking';
+        $ownership = $validated['vehicle_ownership'] ?? null;
+        $hideOwner = $isWalking || $ownership === 'personally_owned';
 
-            $baseCityId = $this->addressService->resolveCityIdByName(
-                (string) $validated['base_city'],
-                $validated['base_province'] ?? $validated['province'],
-            );
+        $riderData = [
+            'vehicle_type' => $vehicleType,
+            'vehicle_brand' => $isWalking ? null : ($validated['vehicle_brand'] ?? null),
+            'vehicle_model' => $isWalking ? null : ($validated['vehicle_model'] ?? null),
+            'vehicle_color' => $isWalking ? null : ($validated['vehicle_color'] ?? null),
+            'vehicle_year' => $isWalking ? null : ($validated['vehicle_year'] ?? null),
+            'plate_number' => $isWalking || empty($validated['plate_number']) ? null : strtoupper(trim((string) $validated['plate_number'])),
+            'mv_file_number' => $isWalking ? null : ($validated['mv_file_number'] ?? null),
+            'vehicle_ownership' => $isWalking ? null : $ownership,
+            'vehicle_owner_name' => $hideOwner ? null : ($validated['vehicle_owner_name'] ?? null),
+            'vehicle_owner_relationship' => $hideOwner ? null : ($validated['vehicle_owner_relationship'] ?? null),
+            'bicycle_type' => $vehicleType === 'bicycle' ? ($validated['bicycle_type'] ?? null) : null,
+            'motor_wattage' => in_array($vehicleType, ['e_bike', 'e_scooter'], true) ? ($validated['motor_wattage'] ?? null) : null,
+            'emergency_contact_name' => trim((string) $validated['emergency_contact_name']),
+            'emergency_contact_relationship' => (string) $validated['emergency_contact_relationship'],
+            'emergency_contact_phone' => trim((string) $validated['emergency_contact_phone']),
+            'emergency_contact_alt_phone' => ! empty($validated['emergency_contact_alt_phone']) ? trim((string) $validated['emergency_contact_alt_phone']) : null,
+            'base_city_id' => $baseCityId,
+            'preferred_hubs' => $validated['preferred_hubs'] ?? null,
+            'preferred_shifts' => ! empty($validated['preferred_shifts']) ? implode(',', $validated['preferred_shifts']) : null,
+            'available_days' => ! empty($validated['available_days']) ? implode(',', $validated['available_days']) : null,
+            'rider_status' => 'pending',
+            'approved_at' => null,
+            'updated_at' => now(),
+        ];
 
-            $isWalking = $vehicleType === 'walking';
-            $riderData = [
-                'vehicle_type' => $vehicleType,
-                'vehicle_brand' => $isWalking ? null : ($validated['vehicle_brand'] ?? null),
-                'vehicle_model' => $isWalking ? null : ($validated['vehicle_model'] ?? null),
-                'vehicle_color' => $isWalking ? null : ($validated['vehicle_color'] ?? null),
-                'vehicle_year' => $isWalking ? null : ($validated['vehicle_year'] ?? null),
-                'plate_number' => $isWalking || empty($validated['plate_number']) ? null : strtoupper(trim((string) $validated['plate_number'])),
-                'mv_file_number' => $isWalking ? null : ($validated['mv_file_number'] ?? null),
-                'vehicle_ownership' => $isWalking ? null : ($validated['vehicle_ownership'] ?? null),
-                'vehicle_owner_name' => $isWalking || ($validated['vehicle_ownership'] ?? null) === 'personally_owned' ? null : ($validated['vehicle_owner_name'] ?? null),
-                'vehicle_owner_relationship' => $isWalking || ($validated['vehicle_ownership'] ?? null) === 'personally_owned' ? null : ($validated['vehicle_owner_relationship'] ?? null),
-                'bicycle_type' => $vehicleType === 'bicycle' ? ($validated['bicycle_type'] ?? null) : null,
-                'motor_wattage' => in_array($vehicleType, ['e_bike', 'e_scooter'], true) ? ($validated['motor_wattage'] ?? null) : null,
-                'emergency_contact_name' => trim((string) $validated['emergency_contact_name']),
-                'emergency_contact_relationship' => (string) $validated['emergency_contact_relationship'],
-                'emergency_contact_phone' => trim((string) $validated['emergency_contact_phone']),
-                'emergency_contact_alt_phone' => ! empty($validated['emergency_contact_alt_phone']) ? trim((string) $validated['emergency_contact_alt_phone']) : null,
-                'base_city_id' => $baseCityId,
-                'preferred_hubs' => $validated['preferred_hubs'] ?? null,
-                'preferred_shifts' => ! empty($validated['preferred_shifts']) ? implode(',', $validated['preferred_shifts']) : null,
-                'available_days' => ! empty($validated['available_days']) ? implode(',', $validated['available_days']) : null,
-                'rider_status' => 'pending',
-                'approved_at' => null,
-                'updated_at' => now(),
-            ];
+        $existingRiderId = DB::table('riders')->where('user_id', $user->user_id)->value('rider_id');
+        if ($existingRiderId) {
+            DB::table('riders')->where('rider_id', $existingRiderId)->update($riderData);
 
-            $existingRiderId = DB::table('riders')->where('user_id', $user->user_id)->value('rider_id');
-            if ($existingRiderId) {
-                DB::table('riders')->where('rider_id', $existingRiderId)->update($riderData);
-                $riderId = (int) $existingRiderId;
-            } else {
-                $riderData['user_id'] = $user->user_id;
-                $riderData['created_at'] = now();
-                $riderId = (int) DB::table('riders')->insertGetId($riderData);
-            }
-
-            $referenceNumber = $this->generateReferenceNumber();
-            $now = now();
-
-            $applicationId = (int) DB::table('rider_applications')->insertGetId([
-                'reference_number' => $referenceNumber,
-                'applicant_user_id' => $user->user_id,
-                'rider_id' => $riderId,
-                'application_status' => 'submitted',
-                'legal_first_name' => trim((string) $validated['legal_first_name']),
-                'legal_middle_name' => ! empty($validated['legal_middle_name']) ? trim((string) $validated['legal_middle_name']) : null,
-                'legal_last_name' => trim((string) $validated['legal_last_name']),
-                'legal_suffix' => ! empty($validated['legal_suffix']) ? trim((string) $validated['legal_suffix']) : null,
-                'date_of_birth' => $validated['date_of_birth'],
-                'gender' => $validated['gender'] ?? 'prefer_not_to_say',
-                'contact_phone' => trim((string) $validated['contact_phone']),
-                'contact_email' => $contactEmail,
-                'contact_email_verified_at' => $verifiedAt->format('Y-m-d H:i:s'),
-                'company_name' => ! empty($validated['company_name']) ? trim((string) $validated['company_name']) : null,
-                'residence_address_id' => $addressId,
-                'gov_id_type' => $validated['gov_id_type'],
-                'gov_id_number_encrypted' => Crypt::encryptString(trim((string) $validated['gov_id_number'])),
-                'gov_id_is_permanent' => (bool) $validated['gov_id_is_permanent'] ? 1 : 0,
-                'gov_id_expires_on' => (bool) $validated['gov_id_is_permanent'] ? null : ($validated['gov_id_expires_on'] ?? null),
-                'declarations_accepted_at' => $now->format('Y-m-d H:i:s'),
-                'terms_version' => (string) ($validated['terms_version'] ?? 'v1.0'),
-                'submitted_at' => $now->format('Y-m-d H:i:s'),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-
-            foreach ($documentFiles as $code => $file) {
-                $stored = $this->fileStorageService->storePrivateDocument(
-                    file: $file,
-                    directory: "applications/rider/{$applicationId}",
-                    fieldName: "documents.{$code}",
-                );
-                $storedPrivatePaths[] = $stored['path'];
-
-                DB::table('application_documents')->insert([
-                    'rider_application_id' => $applicationId,
-                    'document_code' => $code,
-                    'file_path' => $stored['path'],
-                    'original_filename' => $stored['original_filename'],
-                    'mime_type' => $stored['mime_type'],
-                    'file_size_bytes' => $stored['size_bytes'],
-                    'document_status' => 'pending_review',
-                    'uploaded_by' => $user->user_id,
-                    'uploaded_at' => $now->format('Y-m-d H:i:s'),
-                ]);
-            }
-
-            $existingPayout = DB::table('payout_accounts')->where('rider_id', $riderId)->value('payout_account_id');
-            $payoutPayload = [
-                'provider' => trim((string) $validated['payout_provider']),
-                'account_type' => $validated['payout_account_type'],
-                'account_holder_name' => trim((string) $validated['payout_account_holder_name']),
-                'account_number_encrypted' => Crypt::encryptString(trim((string) $validated['payout_account_number'])),
-                'updated_at' => $now,
-            ];
-
-            if ($existingPayout) {
-                DB::table('payout_accounts')->where('payout_account_id', $existingPayout)->update($payoutPayload);
-            } else {
-                $payoutPayload['rider_id'] = $riderId;
-                $payoutPayload['created_at'] = $now;
-                DB::table('payout_accounts')->insert($payoutPayload);
-            }
-
-            $this->auditLogService->record(
-                actorUserId: (int) $user->user_id,
-                action: 'rider_application_submitted',
-                entityType: 'rider_applications',
-                entityId: $applicationId,
-                newValues: [
-                    'reference_number' => $referenceNumber,
-                    'vehicle_type' => $vehicleType,
-                    'status' => 'submitted',
-                ],
-                request: $request,
-            );
-
-            $applicantFirstName = trim((string) ($user->first_name ?? '')) ?: 'An applicant';
-            $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $user->user_id);
-            $this->notificationService->notifyUsers(
-                userIds: $adminIds,
-                workspace: 'admin',
-                type: 'rider_application_submitted',
-                title: 'New rider application',
-                body: "{$applicantFirstName} submitted a rider application ({$referenceNumber}).",
-                relatedEntityType: 'rider_applications',
-                relatedEntityId: $applicationId,
-            );
-
-            return $this->getApplicationById($applicationId);
-        });
-        } catch (\Throwable $e) {
-            $this->fileStorageService->cleanupStoredPaths([], $storedPrivatePaths);
-            throw $e;
+            return (int) $existingRiderId;
         }
 
-        $this->otpService->forgetVerified($contactEmail, 'rider_application', (int) $user->user_id);
+        $riderData['user_id'] = $user->user_id;
+        $riderData['created_at'] = now();
 
-        return $result;
+        return (int) DB::table('riders')->insertGetId($riderData);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array{int, string}
+     */
+    private function createApplicationRecord(
+        User $user,
+        int $riderId,
+        int $addressId,
+        array $validated,
+        string $contactEmail,
+        \Carbon\Carbon $verifiedAt,
+        mixed $now,
+    ): array {
+        $referenceNumber = $this->generateReferenceNumber();
+
+        $applicationId = (int) DB::table('rider_applications')->insertGetId([
+            'reference_number' => $referenceNumber,
+            'applicant_user_id' => $user->user_id,
+            'rider_id' => $riderId,
+            'application_status' => 'submitted',
+            'legal_first_name' => trim((string) $validated['legal_first_name']),
+            'legal_middle_name' => ! empty($validated['legal_middle_name']) ? trim((string) $validated['legal_middle_name']) : null,
+            'legal_last_name' => trim((string) $validated['legal_last_name']),
+            'legal_suffix' => ! empty($validated['legal_suffix']) ? trim((string) $validated['legal_suffix']) : null,
+            'date_of_birth' => $validated['date_of_birth'],
+            'gender' => $validated['gender'] ?? 'prefer_not_to_say',
+            'contact_phone' => trim((string) $validated['contact_phone']),
+            'contact_email' => $contactEmail,
+            'contact_email_verified_at' => $verifiedAt->format('Y-m-d H:i:s'),
+            'company_name' => ! empty($validated['company_name']) ? trim((string) $validated['company_name']) : null,
+            'residence_address_id' => $addressId,
+            'gov_id_type' => $validated['gov_id_type'],
+            'gov_id_number_encrypted' => Crypt::encryptString(trim((string) $validated['gov_id_number'])),
+            'gov_id_is_permanent' => (bool) $validated['gov_id_is_permanent'] ? 1 : 0,
+            'gov_id_expires_on' => (bool) $validated['gov_id_is_permanent'] ? null : ($validated['gov_id_expires_on'] ?? null),
+            'declarations_accepted_at' => $now->format('Y-m-d H:i:s'),
+            'terms_version' => (string) ($validated['terms_version'] ?? 'v1.0'),
+            'submitted_at' => $now->format('Y-m-d H:i:s'),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        return [$applicationId, $referenceNumber];
+    }
+
+    /**
+     * @param  array<string, UploadedFile>  $documentFiles
+     * @param  list<string>  $storedPrivatePaths
+     */
+    private function storeApplicationDocuments(
+        User $user,
+        int $applicationId,
+        array $documentFiles,
+        mixed $now,
+        array &$storedPrivatePaths,
+    ): void {
+        foreach ($documentFiles as $code => $file) {
+            $stored = $this->fileStorageService->storePrivateDocument(
+                file: $file,
+                directory: "applications/rider/{$applicationId}",
+                fieldName: "documents.{$code}",
+            );
+            $storedPrivatePaths[] = $stored['path'];
+
+            DB::table('application_documents')->insert([
+                'rider_application_id' => $applicationId,
+                'document_code' => $code,
+                'file_path' => $stored['path'],
+                'original_filename' => $stored['original_filename'],
+                'mime_type' => $stored['mime_type'],
+                'file_size_bytes' => $stored['size_bytes'],
+                'document_status' => 'pending_review',
+                'uploaded_by' => $user->user_id,
+                'uploaded_at' => $now->format('Y-m-d H:i:s'),
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function upsertPayoutAccount(int $riderId, array $validated, mixed $now): void
+    {
+        $existingPayout = DB::table('payout_accounts')->where('rider_id', $riderId)->value('payout_account_id');
+        $payoutPayload = [
+            'provider' => trim((string) $validated['payout_provider']),
+            'account_type' => $validated['payout_account_type'],
+            'account_holder_name' => trim((string) $validated['payout_account_holder_name']),
+            'account_number_encrypted' => Crypt::encryptString(trim((string) $validated['payout_account_number'])),
+            'updated_at' => $now,
+        ];
+
+        if ($existingPayout) {
+            DB::table('payout_accounts')->where('payout_account_id', $existingPayout)->update($payoutPayload);
+
+            return;
+        }
+
+        $payoutPayload['rider_id'] = $riderId;
+        $payoutPayload['created_at'] = $now;
+        DB::table('payout_accounts')->insert($payoutPayload);
+    }
+
+    private function recordSubmissionAuditAndNotify(
+        User $user,
+        int $applicationId,
+        string $referenceNumber,
+        string $vehicleType,
+        Request $request,
+    ): void {
+        $this->auditLogService->record(
+            actorUserId: (int) $user->user_id,
+            action: 'rider_application_submitted',
+            entityType: 'rider_applications',
+            entityId: $applicationId,
+            newValues: [
+                'reference_number' => $referenceNumber,
+                'vehicle_type' => $vehicleType,
+                'status' => 'submitted',
+            ],
+            request: $request,
+        );
+
+        $applicantFirstName = trim((string) ($user->first_name ?? '')) ?: 'An applicant';
+        $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $user->user_id);
+        $this->notificationService->notifyUsers(
+            userIds: $adminIds,
+            workspace: 'admin',
+            type: 'rider_application_submitted',
+            title: 'New rider application',
+            body: "{$applicantFirstName} submitted a rider application ({$referenceNumber}).",
+            relatedEntityType: 'rider_applications',
+            relatedEntityId: $applicationId,
+        );
     }
 
     /**
@@ -267,61 +349,8 @@ class RiderApplicationService
 
         try {
             DB::transaction(function () use ($user, $applicationId, $app, $documentCode, $stored, $requestId, $request): void {
-            $now = now();
-
-            DB::table('application_documents')->insert([
-                'rider_application_id' => $applicationId,
-                'request_id' => $requestId,
-                'document_code' => $documentCode,
-                'file_path' => $stored['path'],
-                'original_filename' => $stored['original_filename'],
-                'mime_type' => $stored['mime_type'],
-                'file_size_bytes' => $stored['size_bytes'],
-                'document_status' => 'pending_review',
-                'uploaded_by' => $user->user_id,
-                'uploaded_at' => $now->format('Y-m-d H:i:s'),
-            ]);
-
-            if ($requestId) {
-                DB::table('application_document_requests')
-                    ->where('request_id', $requestId)
-                    ->where('rider_application_id', $applicationId)
-                    ->update([
-                        'request_status' => 'submitted',
-                        'fulfilled_at' => $now->format('Y-m-d H:i:s'),
-                    ]);
-            }
-
-            if (in_array($app->application_status, ['needs_correction', 'additional_documents_required'], true)) {
-                DB::table('rider_applications')
-                    ->where('rider_application_id', $applicationId)
-                    ->update([
-                        'application_status' => 'resubmitted',
-                        'updated_at' => $now,
-                    ]);
-
-                $applicantFirstName = trim((string) ($user->first_name ?? '')) ?: 'An applicant';
-                $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $user->user_id);
-                $this->notificationService->notifyUsers(
-                    userIds: $adminIds,
-                    workspace: 'admin',
-                    type: 'rider_application_resubmitted',
-                    title: 'Rider application resubmitted',
-                    body: "{$applicantFirstName} uploaded requested documents for application {$app->reference_number}.",
-                    relatedEntityType: 'rider_applications',
-                    relatedEntityId: $applicationId,
-                );
-            }
-
-            $this->auditLogService->record(
-                actorUserId: (int) $user->user_id,
-                action: 'rider_document_uploaded',
-                entityType: 'rider_applications',
-                entityId: $applicationId,
-                newValues: ['document_code' => $documentCode, 'request_id' => $requestId],
-                request: $request,
-            );
-        });
+                $this->persistUploadedDocument($user, $applicationId, $app, $documentCode, $stored, $requestId, $request);
+            });
         } catch (\Throwable $e) {
             $this->fileStorageService->cleanupStoredPaths([], [$stored['path']]);
             throw $e;
@@ -331,9 +360,86 @@ class RiderApplicationService
     }
 
     /**
+     * @param  array<string, mixed>  $stored
+     */
+    private function persistUploadedDocument(
+        User $user,
+        int $applicationId,
+        object $app,
+        string $documentCode,
+        array $stored,
+        ?int $requestId,
+        Request $request,
+    ): void {
+        $now = now();
+
+        DB::table('application_documents')->insert([
+            'rider_application_id' => $applicationId,
+            'request_id' => $requestId,
+            'document_code' => $documentCode,
+            'file_path' => $stored['path'],
+            'original_filename' => $stored['original_filename'],
+            'mime_type' => $stored['mime_type'],
+            'file_size_bytes' => $stored['size_bytes'],
+            'document_status' => 'pending_review',
+            'uploaded_by' => $user->user_id,
+            'uploaded_at' => $now->format('Y-m-d H:i:s'),
+        ]);
+
+        if ($requestId) {
+            DB::table('application_document_requests')
+                ->where('request_id', $requestId)
+                ->where('rider_application_id', $applicationId)
+                ->update([
+                    'request_status' => 'submitted',
+                    'fulfilled_at' => $now->format('Y-m-d H:i:s'),
+                ]);
+        }
+
+        if (in_array($app->application_status, ['needs_correction', 'additional_documents_required'], true)) {
+            DB::table('rider_applications')
+                ->where('rider_application_id', $applicationId)
+                ->update([
+                    'application_status' => 'resubmitted',
+                    'updated_at' => $now,
+                ]);
+
+            $applicantFirstName = trim((string) ($user->first_name ?? '')) ?: 'An applicant';
+            $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $user->user_id);
+            $this->notificationService->notifyUsers(
+                userIds: $adminIds,
+                workspace: 'admin',
+                type: 'rider_application_resubmitted',
+                title: 'Rider application resubmitted',
+                body: "{$applicantFirstName} uploaded requested documents for application {$app->reference_number}.",
+                relatedEntityType: 'rider_applications',
+                relatedEntityId: $applicationId,
+            );
+        }
+
+        $this->auditLogService->record(
+            actorUserId: (int) $user->user_id,
+            action: 'rider_document_uploaded',
+            entityType: 'rider_applications',
+            entityId: $applicationId,
+            newValues: ['document_code' => $documentCode, 'request_id' => $requestId],
+            request: $request,
+        );
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function getApplicationById(int $applicationId): array
+    {
+        $row = $this->loadApplicationRow($applicationId);
+        $documents = $this->loadApplicationDocuments($applicationId);
+        $requests = $this->loadApplicationDocumentRequests($applicationId);
+
+        return $this->formatApplicationPayload($row, $documents, $requests);
+    }
+
+    private function loadApplicationRow(int $applicationId): object
     {
         $row = DB::table('rider_applications as ra')
             ->join('riders as r', 'r.rider_id', '=', 'ra.rider_id')
@@ -380,7 +486,15 @@ class RiderApplicationService
 
         abort_unless($row !== null, 404, 'Rider application not found.');
 
-        $documents = DB::table('application_documents')
+        return $row;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadApplicationDocuments(int $applicationId): array
+    {
+        return DB::table('application_documents')
             ->where('rider_application_id', $applicationId)
             ->orderByDesc('uploaded_at')
             ->orderByDesc('document_id')
@@ -399,8 +513,14 @@ class RiderApplicationService
             ])
             ->values()
             ->all();
+    }
 
-        $requests = DB::table('application_document_requests')
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadApplicationDocumentRequests(int $applicationId): array
+    {
+        return DB::table('application_document_requests')
             ->where('rider_application_id', $applicationId)
             ->orderByDesc('created_at')
             ->get()
@@ -416,7 +536,15 @@ class RiderApplicationService
             ])
             ->values()
             ->all();
+    }
 
+    /**
+     * @param  list<array<string, mixed>>  $documents
+     * @param  list<array<string, mixed>>  $requests
+     * @return array<string, mixed>
+     */
+    private function formatApplicationPayload(object $row, array $documents, array $requests): array
+    {
         return [
             'rider_application_id' => (int) $row->rider_application_id,
             'rider_id' => (int) $row->rider_id,

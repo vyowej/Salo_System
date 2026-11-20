@@ -42,26 +42,11 @@ class RestaurantApplicationService
         array $menuItemPhotos = [],
         ?Request $request = null,
     ): array {
-        $offersDelivery = (bool) $validated['offers_delivery'];
-        $offersPickup = (bool) $validated['offers_pickup'];
-        $offersDineIn = (bool) $validated['offers_dine_in'];
-
-        if (! $offersDelivery && ! $offersPickup && ! $offersDineIn) {
-            throw ValidationException::withMessages([
-                'offers_delivery' => ['At least one service option (delivery, pickup, or dine-in) must be enabled.'],
-            ]);
-        }
-
-        $contactEmail = strtolower(trim((string) $validated['contact_email']));
-        $verifiedAt = $this->otpService->assertVerified($contactEmail, 'restaurant_application', (int) $user->user_id);
-
-        foreach (array_keys($documentFiles) as $code) {
-            if (! in_array($code, SubmitRestaurantApplicationRequest::RESTAURANT_DOCUMENT_CODES, true)) {
-                throw ValidationException::withMessages([
-                    "documents.{$code}" => ["Unsupported restaurant document code: {$code}."],
-                ]);
-            }
-        }
+        [$offersDelivery, $offersPickup, $offersDineIn, $contactEmail, $verifiedAt] = $this->validateSubmissionPreconditions(
+            $user,
+            $validated,
+            $documentFiles,
+        );
 
         $storedPublicPaths = [];
         $storedPrivatePaths = [];
@@ -83,265 +68,49 @@ class RestaurantApplicationService
                 &$storedPublicPaths,
                 &$storedPrivatePaths,
             ): array {
-            $now = now();
-
-            $addressId = $this->addressService->createAddress([
-                'province' => $validated['province'],
-                'city' => $validated['city'],
-                'barangay' => $validated['barangay'],
-                'street' => $validated['street'] ?? null,
-                'house_number' => $validated['house_number'] ?? null,
-                'building_name' => $validated['building_name'] ?? null,
-                'landmark' => $validated['landmark'] ?? null,
-                'postal_code' => $validated['postal_code'] ?? null,
-                'latitude' => $validated['latitude'] ?? null,
-                'longitude' => $validated['longitude'] ?? null,
-            ]);
-
-            $restaurantId = (int) DB::table('restaurants')->insertGetId([
-                'restaurant_name' => trim((string) $validated['restaurant_name']),
-                'registered_name' => ! empty($validated['registered_name']) ? trim((string) $validated['registered_name']) : null,
-                'business_type' => $validated['business_type'],
-                'ownership_structure' => $validated['ownership_structure'],
-                'description' => ! empty($validated['description']) ? trim((string) $validated['description']) : null,
-                'contact_phone' => trim((string) $validated['business_phone']),
-                'business_email' => strtolower(trim((string) $validated['business_email'])),
-                'address_id' => $addressId,
-                'delivery_radius' => $validated['delivery_radius'] ?? null,
-                'offers_delivery' => $offersDelivery ? 1 : 0,
-                'offers_pickup' => $offersPickup ? 1 : 0,
-                'offers_dine_in' => $offersDineIn ? 1 : 0,
-                'accepts_reservations' => (bool) ($validated['accepts_reservations'] ?? false) ? 1 : 0,
-                'restaurant_status' => 'pending',
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-
-            $logoPath = null;
-            $coverPath = null;
-
-            if ($logoFile !== null) {
-                $storedLogo = $this->fileStorageService->storePublicImage(
-                    file: $logoFile,
-                    directory: "restaurants/{$restaurantId}",
-                    fieldName: 'logo_image',
+                $now = now();
+                $addressId = $this->createRestaurantAddress($validated);
+                $restaurantId = $this->createRestaurantRecord(
+                    $validated,
+                    $addressId,
+                    $offersDelivery,
+                    $offersPickup,
+                    $offersDineIn,
+                    $now,
                 );
-                $logoPath = $storedLogo['path'];
-                $storedPublicPaths[] = $logoPath;
-            }
+                $this->storeRestaurantBranding($restaurantId, $logoFile, $coverFile, $now, $storedPublicPaths);
 
-            if ($coverFile !== null) {
-                $storedCover = $this->fileStorageService->storePublicImage(
-                    file: $coverFile,
-                    directory: "restaurants/{$restaurantId}",
-                    fieldName: 'cover_image',
-                );
-                $coverPath = $storedCover['path'];
-                $storedPublicPaths[] = $coverPath;
-            }
-
-            if ($logoPath !== null || $coverPath !== null) {
-                DB::table('restaurants')
-                    ->where('restaurant_id', $restaurantId)
-                    ->update([
-                        'logo_image' => $logoPath,
-                        'cover_image' => $coverPath,
-                        'updated_at' => $now,
-                    ]);
-            }
-
-            DB::table('restaurant_owners')->insert([
-                'restaurant_id' => $restaurantId,
-                'user_id' => $user->user_id,
-                'joined_at' => $now,
-            ]);
-
-            if (! empty($validated['categories']) && is_array($validated['categories'])) {
-                foreach ($validated['categories'] as $categoryName) {
-                    $cleanCategory = trim((string) $categoryName);
-                    if ($cleanCategory === '') {
-                        continue;
-                    }
-
-                    $categoryId = DB::table('restaurant_categories')
-                        ->where('category_name', $cleanCategory)
-                        ->value('category_id');
-
-                    if (! $categoryId) {
-                        $categoryId = DB::table('restaurant_categories')->insertGetId([
-                            'category_name' => mb_substr($cleanCategory, 0, 100),
-                            'is_active' => 1,
-                            'created_at' => $now,
-                            'updated_at' => $now,
-                        ]);
-                    }
-
-                    DB::table('restaurant_category_map')->insertOrIgnore([
-                        'restaurant_id' => $restaurantId,
-                        'category_id' => $categoryId,
-                    ]);
-                }
-            }
-
-            if (! empty($validated['operating_hours']) && is_array($validated['operating_hours'])) {
-                foreach ($validated['operating_hours'] as $hourRow) {
-                    DB::table('operating_hours')->insert([
-                        'restaurant_id' => $restaurantId,
-                        'day_of_week' => (int) $hourRow['day_of_week'],
-                        'opening_time' => $hourRow['opening_time'],
-                        'closing_time' => $hourRow['closing_time'],
-                        'is_closed' => (bool) ($hourRow['is_closed'] ?? false) ? 1 : 0,
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ]);
-                }
-            }
-
-            if (! empty($validated['menu_items']) && is_array($validated['menu_items'])) {
-                $categoryCache = [];
-                $categorySortOrder = 0;
-
-                foreach ($validated['menu_items'] as $idx => $itemRow) {
-                    $categoryName = trim((string) ($itemRow['category'] ?? 'Main Dishes'));
-                    if ($categoryName === '') {
-                        $categoryName = 'Main Dishes';
-                    }
-                    $categoryKey = mb_strtolower($categoryName);
-
-                    if (! isset($categoryCache[$categoryKey])) {
-                        $existingCatId = DB::table('menu_categories')
-                            ->where('restaurant_id', $restaurantId)
-                            ->where('category_name', $categoryName)
-                            ->value('menu_category_id');
-
-                        if ($existingCatId) {
-                            $categoryCache[$categoryKey] = (int) $existingCatId;
-                        } else {
-                            $categoryCache[$categoryKey] = (int) DB::table('menu_categories')->insertGetId([
-                                'restaurant_id' => $restaurantId,
-                                'category_name' => mb_substr($categoryName, 0, 100),
-                                'sort_order' => $categorySortOrder++,
-                                'is_active' => 1,
-                                'created_at' => $now,
-                                'updated_at' => $now,
-                            ]);
-                        }
-                    }
-
-                    $photoPath = null;
-                    $photoFile = $menuItemPhotos[$idx] ?? null;
-                    if ($photoFile instanceof UploadedFile) {
-                        $storedPhoto = $this->fileStorageService->storePublicImage(
-                            file: $photoFile,
-                            directory: "restaurants/{$restaurantId}/menu",
-                            fieldName: "menu_item_photos.{$idx}",
-                        );
-                        $photoPath = $storedPhoto['path'];
-                        $storedPublicPaths[] = $photoPath;
-                    }
-
-                    $isAvailable = array_key_exists('available', $itemRow)
-                        ? filter_var($itemRow['available'], FILTER_VALIDATE_BOOLEAN)
-                        : true;
-
-                    DB::table('menu_items')->insert([
-                        'restaurant_id' => $restaurantId,
-                        'menu_category_id' => $categoryCache[$categoryKey],
-                        'item_name' => mb_substr(trim((string) $itemRow['name']), 0, 200),
-                        'description' => ! empty($itemRow['description']) ? trim((string) $itemRow['description']) : null,
-                        'photo_image' => $photoPath,
-                        'base_price' => number_format((float) $itemRow['price'], 2, '.', ''),
-                        'availability_status' => $isAvailable ? 'available' : 'temporarily_unavailable',
-                        'approval_status' => 'pending',
-                        'sort_order' => (int) $idx,
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ]);
-                }
-            }
-
-            $referenceNumber = $this->generateReferenceNumber();
-
-            $applicationId = (int) DB::table('restaurant_applications')->insertGetId([
-                'reference_number' => $referenceNumber,
-                'applicant_user_id' => $user->user_id,
-                'restaurant_id' => $restaurantId,
-                'application_status' => 'submitted',
-                'applicant_position' => $validated['applicant_position'],
-                'legal_first_name' => trim((string) $validated['legal_first_name']),
-                'legal_middle_name' => ! empty($validated['legal_middle_name']) ? trim((string) $validated['legal_middle_name']) : null,
-                'legal_last_name' => trim((string) $validated['legal_last_name']),
-                'legal_suffix' => ! empty($validated['legal_suffix']) ? trim((string) $validated['legal_suffix']) : null,
-                'date_of_birth' => $validated['date_of_birth'],
-                'contact_phone' => trim((string) $validated['contact_phone']),
-                'contact_email' => $contactEmail,
-                'contact_email_verified_at' => $verifiedAt->format('Y-m-d H:i:s'),
-                'declarations_accepted_at' => $now->format('Y-m-d H:i:s'),
-                'terms_version' => (string) ($validated['terms_version'] ?? 'v1.0'),
-                'submitted_at' => $now->format('Y-m-d H:i:s'),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-
-            foreach ($documentFiles as $code => $file) {
-                $stored = $this->fileStorageService->storePrivateDocument(
-                    file: $file,
-                    directory: "applications/restaurant/{$applicationId}",
-                    fieldName: "documents.{$code}",
-                );
-                $storedPrivatePaths[] = $stored['path'];
-
-                DB::table('application_documents')->insert([
-                    'restaurant_application_id' => $applicationId,
-                    'document_code' => $code,
-                    'file_path' => $stored['path'],
-                    'original_filename' => $stored['original_filename'],
-                    'mime_type' => $stored['mime_type'],
-                    'file_size_bytes' => $stored['size_bytes'],
-                    'document_status' => 'pending_review',
-                    'uploaded_by' => $user->user_id,
-                    'uploaded_at' => $now->format('Y-m-d H:i:s'),
-                ]);
-            }
-
-            DB::table('payout_accounts')->insert([
-                'restaurant_id' => $restaurantId,
-                'provider' => trim((string) $validated['payout_provider']),
-                'account_type' => $validated['payout_account_type'],
-                'account_holder_name' => trim((string) $validated['payout_account_holder_name']),
-                'account_number_encrypted' => Crypt::encryptString(trim((string) $validated['payout_account_number'])),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-
-            $this->auditLogService->record(
-                actorUserId: (int) $user->user_id,
-                action: 'restaurant_application_submitted',
-                entityType: 'restaurant_applications',
-                entityId: $applicationId,
-                newValues: [
-                    'reference_number' => $referenceNumber,
+                DB::table('restaurant_owners')->insert([
                     'restaurant_id' => $restaurantId,
-                    'restaurant_name' => $validated['restaurant_name'],
-                    'status' => 'submitted',
-                ],
-                request: $request,
-            );
+                    'user_id' => $user->user_id,
+                    'joined_at' => $now,
+                ]);
 
-            $applicantFirstName = trim((string) ($user->first_name ?? '')) ?: 'An applicant';
-            $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $user->user_id);
-            $this->notificationService->notifyUsers(
-                userIds: $adminIds,
-                workspace: 'admin',
-                type: 'restaurant_application_submitted',
-                title: 'New restaurant application',
-                body: "{$applicantFirstName} submitted a restaurant application ({$referenceNumber}).",
-                relatedEntityType: 'restaurant_applications',
-                relatedEntityId: $applicationId,
-            );
+                $this->syncRestaurantCategories($restaurantId, $validated['categories'] ?? [], $now);
+                $this->insertOperatingHours($restaurantId, $validated['operating_hours'] ?? [], $now);
+                $this->insertInitialMenuItems(
+                    $restaurantId,
+                    $validated['menu_items'] ?? [],
+                    $menuItemPhotos,
+                    $now,
+                    $storedPublicPaths,
+                );
 
-            return $this->getApplicationById($applicationId);
-        });
+                [$applicationId, $referenceNumber] = $this->createApplicationRecord(
+                    $user,
+                    $restaurantId,
+                    $validated,
+                    $contactEmail,
+                    $verifiedAt,
+                    $now,
+                );
+
+                $this->storeApplicationDocuments($user, $applicationId, $documentFiles, $now, $storedPrivatePaths);
+                $this->insertPayoutAccount($restaurantId, $validated, $now);
+                $this->recordSubmissionAuditAndNotify($user, $applicationId, $referenceNumber, $restaurantId, $validated, $request);
+
+                return $this->getApplicationById($applicationId);
+            });
         } catch (\Throwable $e) {
             $this->fileStorageService->cleanupStoredPaths($storedPublicPaths, $storedPrivatePaths);
             throw $e;
@@ -350,6 +119,382 @@ class RestaurantApplicationService
         $this->otpService->forgetVerified($contactEmail, 'restaurant_application', (int) $user->user_id);
 
         return $result;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @param  array<string, UploadedFile>  $documentFiles
+     * @return array{bool, bool, bool, string, \Carbon\Carbon}
+     */
+    private function validateSubmissionPreconditions(User $user, array $validated, array $documentFiles): array
+    {
+        $offersDelivery = (bool) $validated['offers_delivery'];
+        $offersPickup = (bool) $validated['offers_pickup'];
+        $offersDineIn = (bool) $validated['offers_dine_in'];
+
+        if (! $offersDelivery && ! $offersPickup && ! $offersDineIn) {
+            throw ValidationException::withMessages([
+                'offers_delivery' => ['At least one service option (delivery, pickup, or dine-in) must be enabled.'],
+            ]);
+        }
+
+        $contactEmail = strtolower(trim((string) $validated['contact_email']));
+        $verifiedAt = $this->otpService->assertVerified($contactEmail, 'restaurant_application', (int) $user->user_id);
+
+        foreach (array_keys($documentFiles) as $code) {
+            if (! in_array($code, SubmitRestaurantApplicationRequest::RESTAURANT_DOCUMENT_CODES, true)) {
+                throw ValidationException::withMessages([
+                    "documents.{$code}" => ["Unsupported restaurant document code: {$code}."],
+                ]);
+            }
+        }
+
+        return [$offersDelivery, $offersPickup, $offersDineIn, $contactEmail, $verifiedAt];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function createRestaurantAddress(array $validated): int
+    {
+        return $this->addressService->createAddress([
+            'province' => $validated['province'],
+            'city' => $validated['city'],
+            'barangay' => $validated['barangay'],
+            'street' => $validated['street'] ?? null,
+            'house_number' => $validated['house_number'] ?? null,
+            'building_name' => $validated['building_name'] ?? null,
+            'landmark' => $validated['landmark'] ?? null,
+            'postal_code' => $validated['postal_code'] ?? null,
+            'latitude' => $validated['latitude'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function createRestaurantRecord(
+        array $validated,
+        int $addressId,
+        bool $offersDelivery,
+        bool $offersPickup,
+        bool $offersDineIn,
+        mixed $now,
+    ): int {
+        return (int) DB::table('restaurants')->insertGetId([
+            'restaurant_name' => trim((string) $validated['restaurant_name']),
+            'registered_name' => ! empty($validated['registered_name']) ? trim((string) $validated['registered_name']) : null,
+            'business_type' => $validated['business_type'],
+            'ownership_structure' => $validated['ownership_structure'],
+            'description' => ! empty($validated['description']) ? trim((string) $validated['description']) : null,
+            'contact_phone' => trim((string) $validated['business_phone']),
+            'business_email' => strtolower(trim((string) $validated['business_email'])),
+            'address_id' => $addressId,
+            'delivery_radius' => $validated['delivery_radius'] ?? null,
+            'offers_delivery' => $offersDelivery ? 1 : 0,
+            'offers_pickup' => $offersPickup ? 1 : 0,
+            'offers_dine_in' => $offersDineIn ? 1 : 0,
+            'accepts_reservations' => (bool) ($validated['accepts_reservations'] ?? false) ? 1 : 0,
+            'restaurant_status' => 'pending',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+    }
+
+    /**
+     * @param  list<string>  $storedPublicPaths
+     */
+    private function storeRestaurantBranding(
+        int $restaurantId,
+        ?UploadedFile $logoFile,
+        ?UploadedFile $coverFile,
+        mixed $now,
+        array &$storedPublicPaths,
+    ): void {
+        $logoPath = null;
+        $coverPath = null;
+
+        if ($logoFile !== null) {
+            $storedLogo = $this->fileStorageService->storePublicImage(
+                file: $logoFile,
+                directory: "restaurants/{$restaurantId}",
+                fieldName: 'logo_image',
+            );
+            $logoPath = $storedLogo['path'];
+            $storedPublicPaths[] = $logoPath;
+        }
+
+        if ($coverFile !== null) {
+            $storedCover = $this->fileStorageService->storePublicImage(
+                file: $coverFile,
+                directory: "restaurants/{$restaurantId}",
+                fieldName: 'cover_image',
+            );
+            $coverPath = $storedCover['path'];
+            $storedPublicPaths[] = $coverPath;
+        }
+
+        if ($logoPath !== null || $coverPath !== null) {
+            DB::table('restaurants')
+                ->where('restaurant_id', $restaurantId)
+                ->update([
+                    'logo_image' => $logoPath,
+                    'cover_image' => $coverPath,
+                    'updated_at' => $now,
+                ]);
+        }
+    }
+
+    private function syncRestaurantCategories(int $restaurantId, mixed $categories, mixed $now): void
+    {
+        if (empty($categories) || ! is_array($categories)) {
+            return;
+        }
+
+        foreach ($categories as $categoryName) {
+            $cleanCategory = trim((string) $categoryName);
+            if ($cleanCategory === '') {
+                continue;
+            }
+
+            $categoryId = DB::table('restaurant_categories')
+                ->where('category_name', $cleanCategory)
+                ->value('category_id');
+
+            if (! $categoryId) {
+                $categoryId = DB::table('restaurant_categories')->insertGetId([
+                    'category_name' => mb_substr($cleanCategory, 0, 100),
+                    'is_active' => 1,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+
+            DB::table('restaurant_category_map')->insertOrIgnore([
+                'restaurant_id' => $restaurantId,
+                'category_id' => $categoryId,
+            ]);
+        }
+    }
+
+    private function insertOperatingHours(int $restaurantId, mixed $operatingHours, mixed $now): void
+    {
+        if (empty($operatingHours) || ! is_array($operatingHours)) {
+            return;
+        }
+
+        foreach ($operatingHours as $hourRow) {
+            DB::table('operating_hours')->insert([
+                'restaurant_id' => $restaurantId,
+                'day_of_week' => (int) $hourRow['day_of_week'],
+                'opening_time' => $hourRow['opening_time'],
+                'closing_time' => $hourRow['closing_time'],
+                'is_closed' => (bool) ($hourRow['is_closed'] ?? false) ? 1 : 0,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<int|string, UploadedFile>  $menuItemPhotos
+     * @param  list<string>  $storedPublicPaths
+     */
+    private function insertInitialMenuItems(
+        int $restaurantId,
+        mixed $menuItems,
+        array $menuItemPhotos,
+        mixed $now,
+        array &$storedPublicPaths,
+    ): void {
+        if (empty($menuItems) || ! is_array($menuItems)) {
+            return;
+        }
+
+        $categoryCache = [];
+        $categorySortOrder = 0;
+
+        foreach ($menuItems as $idx => $itemRow) {
+            $categoryName = trim((string) ($itemRow['category'] ?? 'Main Dishes'));
+            if ($categoryName === '') {
+                $categoryName = 'Main Dishes';
+            }
+            $categoryKey = mb_strtolower($categoryName);
+
+            if (! isset($categoryCache[$categoryKey])) {
+                $existingCatId = DB::table('menu_categories')
+                    ->where('restaurant_id', $restaurantId)
+                    ->where('category_name', $categoryName)
+                    ->value('menu_category_id');
+
+                $categoryCache[$categoryKey] = $existingCatId
+                    ? (int) $existingCatId
+                    : (int) DB::table('menu_categories')->insertGetId([
+                        'restaurant_id' => $restaurantId,
+                        'category_name' => mb_substr($categoryName, 0, 100),
+                        'sort_order' => $categorySortOrder++,
+                        'is_active' => 1,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+            }
+
+            $photoPath = null;
+            $photoFile = $menuItemPhotos[$idx] ?? null;
+            if ($photoFile instanceof UploadedFile) {
+                $storedPhoto = $this->fileStorageService->storePublicImage(
+                    file: $photoFile,
+                    directory: "restaurants/{$restaurantId}/menu",
+                    fieldName: "menu_item_photos.{$idx}",
+                );
+                $photoPath = $storedPhoto['path'];
+                $storedPublicPaths[] = $photoPath;
+            }
+
+            $isAvailable = array_key_exists('available', $itemRow)
+                ? filter_var($itemRow['available'], FILTER_VALIDATE_BOOLEAN)
+                : true;
+
+            DB::table('menu_items')->insert([
+                'restaurant_id' => $restaurantId,
+                'menu_category_id' => $categoryCache[$categoryKey],
+                'item_name' => mb_substr(trim((string) $itemRow['name']), 0, 200),
+                'description' => ! empty($itemRow['description']) ? trim((string) $itemRow['description']) : null,
+                'photo_image' => $photoPath,
+                'base_price' => number_format((float) $itemRow['price'], 2, '.', ''),
+                'availability_status' => $isAvailable ? 'available' : 'temporarily_unavailable',
+                'approval_status' => 'pending',
+                'sort_order' => (int) $idx,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array{int, string}
+     */
+    private function createApplicationRecord(
+        User $user,
+        int $restaurantId,
+        array $validated,
+        string $contactEmail,
+        \Carbon\Carbon $verifiedAt,
+        mixed $now,
+    ): array {
+        $referenceNumber = $this->generateReferenceNumber();
+
+        $applicationId = (int) DB::table('restaurant_applications')->insertGetId([
+            'reference_number' => $referenceNumber,
+            'applicant_user_id' => $user->user_id,
+            'restaurant_id' => $restaurantId,
+            'application_status' => 'submitted',
+            'applicant_position' => $validated['applicant_position'],
+            'legal_first_name' => trim((string) $validated['legal_first_name']),
+            'legal_middle_name' => ! empty($validated['legal_middle_name']) ? trim((string) $validated['legal_middle_name']) : null,
+            'legal_last_name' => trim((string) $validated['legal_last_name']),
+            'legal_suffix' => ! empty($validated['legal_suffix']) ? trim((string) $validated['legal_suffix']) : null,
+            'date_of_birth' => $validated['date_of_birth'],
+            'contact_phone' => trim((string) $validated['contact_phone']),
+            'contact_email' => $contactEmail,
+            'contact_email_verified_at' => $verifiedAt->format('Y-m-d H:i:s'),
+            'declarations_accepted_at' => $now->format('Y-m-d H:i:s'),
+            'terms_version' => (string) ($validated['terms_version'] ?? 'v1.0'),
+            'submitted_at' => $now->format('Y-m-d H:i:s'),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        return [$applicationId, $referenceNumber];
+    }
+
+    /**
+     * @param  array<string, UploadedFile>  $documentFiles
+     * @param  list<string>  $storedPrivatePaths
+     */
+    private function storeApplicationDocuments(
+        User $user,
+        int $applicationId,
+        array $documentFiles,
+        mixed $now,
+        array &$storedPrivatePaths,
+    ): void {
+        foreach ($documentFiles as $code => $file) {
+            $stored = $this->fileStorageService->storePrivateDocument(
+                file: $file,
+                directory: "applications/restaurant/{$applicationId}",
+                fieldName: "documents.{$code}",
+            );
+            $storedPrivatePaths[] = $stored['path'];
+
+            DB::table('application_documents')->insert([
+                'restaurant_application_id' => $applicationId,
+                'document_code' => $code,
+                'file_path' => $stored['path'],
+                'original_filename' => $stored['original_filename'],
+                'mime_type' => $stored['mime_type'],
+                'file_size_bytes' => $stored['size_bytes'],
+                'document_status' => 'pending_review',
+                'uploaded_by' => $user->user_id,
+                'uploaded_at' => $now->format('Y-m-d H:i:s'),
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function insertPayoutAccount(int $restaurantId, array $validated, mixed $now): void
+    {
+        DB::table('payout_accounts')->insert([
+            'restaurant_id' => $restaurantId,
+            'provider' => trim((string) $validated['payout_provider']),
+            'account_type' => $validated['payout_account_type'],
+            'account_holder_name' => trim((string) $validated['payout_account_holder_name']),
+            'account_number_encrypted' => Crypt::encryptString(trim((string) $validated['payout_account_number'])),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function recordSubmissionAuditAndNotify(
+        User $user,
+        int $applicationId,
+        string $referenceNumber,
+        int $restaurantId,
+        array $validated,
+        ?Request $request,
+    ): void {
+        $this->auditLogService->record(
+            actorUserId: (int) $user->user_id,
+            action: 'restaurant_application_submitted',
+            entityType: 'restaurant_applications',
+            entityId: $applicationId,
+            newValues: [
+                'reference_number' => $referenceNumber,
+                'restaurant_id' => $restaurantId,
+                'restaurant_name' => $validated['restaurant_name'],
+                'status' => 'submitted',
+            ],
+            request: $request,
+        );
+
+        $applicantFirstName = trim((string) ($user->first_name ?? '')) ?: 'An applicant';
+        $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $user->user_id);
+        $this->notificationService->notifyUsers(
+            userIds: $adminIds,
+            workspace: 'admin',
+            type: 'restaurant_application_submitted',
+            title: 'New restaurant application',
+            body: "{$applicantFirstName} submitted a restaurant application ({$referenceNumber}).",
+            relatedEntityType: 'restaurant_applications',
+            relatedEntityId: $applicationId,
+        );
     }
 
     /**
@@ -375,6 +520,28 @@ class RestaurantApplicationService
      */
     public function uploadDocument(User $user, int $applicationId, string $documentCode, UploadedFile $file, ?int $requestId, Request $request): array
     {
+        $app = $this->assertCanUploadDocument($user, $applicationId, $documentCode);
+
+        $stored = $this->fileStorageService->storePrivateDocument(
+            file: $file,
+            directory: "applications/restaurant/{$applicationId}",
+            fieldName: 'file',
+        );
+
+        try {
+            DB::transaction(function () use ($user, $applicationId, $app, $documentCode, $stored, $requestId, $request): void {
+                $this->persistUploadedDocument($user, $applicationId, $app, $documentCode, $stored, $requestId, $request);
+            });
+        } catch (\Throwable $e) {
+            $this->fileStorageService->cleanupStoredPaths([], [$stored['path']]);
+            throw $e;
+        }
+
+        return $this->getApplicationById($applicationId);
+    }
+
+    private function assertCanUploadDocument(User $user, int $applicationId, string $documentCode): object
+    {
         $app = DB::table('restaurant_applications')->where('restaurant_application_id', $applicationId)->first();
         if (! $app) {
             abort(404, 'Restaurant application not found.');
@@ -392,81 +559,92 @@ class RestaurantApplicationService
             throw ValidationException::withMessages(['document_code' => ['Invalid restaurant document code.']]);
         }
 
-        $stored = $this->fileStorageService->storePrivateDocument(
-            file: $file,
-            directory: "applications/restaurant/{$applicationId}",
-            fieldName: 'file',
-        );
+        return $app;
+    }
 
-        try {
-            DB::transaction(function () use ($user, $applicationId, $app, $documentCode, $stored, $requestId, $request): void {
-            $now = now();
+    /**
+     * @param  array<string, mixed>  $stored
+     */
+    private function persistUploadedDocument(
+        User $user,
+        int $applicationId,
+        object $app,
+        string $documentCode,
+        array $stored,
+        ?int $requestId,
+        Request $request,
+    ): void {
+        $now = now();
 
-            DB::table('application_documents')->insert([
-                'restaurant_application_id' => $applicationId,
-                'request_id' => $requestId,
-                'document_code' => $documentCode,
-                'file_path' => $stored['path'],
-                'original_filename' => $stored['original_filename'],
-                'mime_type' => $stored['mime_type'],
-                'file_size_bytes' => $stored['size_bytes'],
-                'document_status' => 'pending_review',
-                'uploaded_by' => $user->user_id,
-                'uploaded_at' => $now->format('Y-m-d H:i:s'),
-            ]);
+        DB::table('application_documents')->insert([
+            'restaurant_application_id' => $applicationId,
+            'request_id' => $requestId,
+            'document_code' => $documentCode,
+            'file_path' => $stored['path'],
+            'original_filename' => $stored['original_filename'],
+            'mime_type' => $stored['mime_type'],
+            'file_size_bytes' => $stored['size_bytes'],
+            'document_status' => 'pending_review',
+            'uploaded_by' => $user->user_id,
+            'uploaded_at' => $now->format('Y-m-d H:i:s'),
+        ]);
 
-            if ($requestId) {
-                DB::table('application_document_requests')
-                    ->where('request_id', $requestId)
-                    ->where('restaurant_application_id', $applicationId)
-                    ->update([
-                        'request_status' => 'submitted',
-                        'fulfilled_at' => $now->format('Y-m-d H:i:s'),
-                    ]);
-            }
-
-            if (in_array($app->application_status, ['needs_correction', 'additional_documents_required'], true)) {
-                DB::table('restaurant_applications')
-                    ->where('restaurant_application_id', $applicationId)
-                    ->update([
-                        'application_status' => 'resubmitted',
-                        'updated_at' => $now,
-                    ]);
-
-                $applicantFirstName = trim((string) ($user->first_name ?? '')) ?: 'An applicant';
-                $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $user->user_id);
-                $this->notificationService->notifyUsers(
-                    userIds: $adminIds,
-                    workspace: 'admin',
-                    type: 'restaurant_application_resubmitted',
-                    title: 'Restaurant application resubmitted',
-                    body: "{$applicantFirstName} uploaded requested documents for application {$app->reference_number}.",
-                    relatedEntityType: 'restaurant_applications',
-                    relatedEntityId: $applicationId,
-                );
-            }
-
-            $this->auditLogService->record(
-                actorUserId: (int) $user->user_id,
-                action: 'restaurant_document_uploaded',
-                entityType: 'restaurant_applications',
-                entityId: $applicationId,
-                newValues: ['document_code' => $documentCode, 'request_id' => $requestId],
-                request: $request,
-            );
-        });
-        } catch (\Throwable $e) {
-            $this->fileStorageService->cleanupStoredPaths([], [$stored['path']]);
-            throw $e;
+        if ($requestId) {
+            DB::table('application_document_requests')
+                ->where('request_id', $requestId)
+                ->where('restaurant_application_id', $applicationId)
+                ->update([
+                    'request_status' => 'submitted',
+                    'fulfilled_at' => $now->format('Y-m-d H:i:s'),
+                ]);
         }
 
-        return $this->getApplicationById($applicationId);
+        if (in_array($app->application_status, ['needs_correction', 'additional_documents_required'], true)) {
+            DB::table('restaurant_applications')
+                ->where('restaurant_application_id', $applicationId)
+                ->update([
+                    'application_status' => 'resubmitted',
+                    'updated_at' => $now,
+                ]);
+
+            $applicantFirstName = trim((string) ($user->first_name ?? '')) ?: 'An applicant';
+            $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $user->user_id);
+            $this->notificationService->notifyUsers(
+                userIds: $adminIds,
+                workspace: 'admin',
+                type: 'restaurant_application_resubmitted',
+                title: 'Restaurant application resubmitted',
+                body: "{$applicantFirstName} uploaded requested documents for application {$app->reference_number}.",
+                relatedEntityType: 'restaurant_applications',
+                relatedEntityId: $applicationId,
+            );
+        }
+
+        $this->auditLogService->record(
+            actorUserId: (int) $user->user_id,
+            action: 'restaurant_document_uploaded',
+            entityType: 'restaurant_applications',
+            entityId: $applicationId,
+            newValues: ['document_code' => $documentCode, 'request_id' => $requestId],
+            request: $request,
+        );
     }
 
     /**
      * @return array<string, mixed>
      */
     public function getApplicationById(int $applicationId): array
+    {
+        $row = $this->loadApplicationRow($applicationId);
+        $categories = $this->loadRestaurantCategories((int) $row->restaurant_id);
+        $documents = $this->loadApplicationDocuments($applicationId);
+        $requests = $this->loadApplicationDocumentRequests($applicationId);
+        $menuItems = $this->loadApplicationMenuItems((int) $row->restaurant_id);
+
+        return $this->formatApplicationPayload($row, $categories, $documents, $requests, $menuItems);
+    }
+
+    private function loadApplicationRow(int $applicationId): object
     {
         $row = DB::table('restaurant_applications as ra')
             ->join('restaurants as rest', 'rest.restaurant_id', '=', 'ra.restaurant_id')
@@ -505,14 +683,28 @@ class RestaurantApplicationService
 
         abort_unless($row !== null, 404, 'Restaurant application not found.');
 
-        $categories = DB::table('restaurant_category_map as rcm')
+        return $row;
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function loadRestaurantCategories(int $restaurantId): array
+    {
+        return DB::table('restaurant_category_map as rcm')
             ->join('restaurant_categories as rc', 'rc.category_id', '=', 'rcm.category_id')
-            ->where('rcm.restaurant_id', $row->restaurant_id)
+            ->where('rcm.restaurant_id', $restaurantId)
             ->pluck('rc.category_name')
             ->values()
             ->all();
+    }
 
-        $documents = DB::table('application_documents')
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadApplicationDocuments(int $applicationId): array
+    {
+        return DB::table('application_documents')
             ->where('restaurant_application_id', $applicationId)
             ->orderByDesc('uploaded_at')
             ->orderByDesc('document_id')
@@ -531,8 +723,14 @@ class RestaurantApplicationService
             ])
             ->values()
             ->all();
+    }
 
-        $requests = DB::table('application_document_requests')
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadApplicationDocumentRequests(int $applicationId): array
+    {
+        return DB::table('application_document_requests')
             ->where('restaurant_application_id', $applicationId)
             ->orderByDesc('created_at')
             ->get()
@@ -548,10 +746,16 @@ class RestaurantApplicationService
             ])
             ->values()
             ->all();
+    }
 
-        $menuItems = DB::table('menu_items as mi')
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadApplicationMenuItems(int $restaurantId): array
+    {
+        return DB::table('menu_items as mi')
             ->join('menu_categories as mc', 'mc.menu_category_id', '=', 'mi.menu_category_id')
-            ->where('mi.restaurant_id', $row->restaurant_id)
+            ->where('mi.restaurant_id', $restaurantId)
             ->orderBy('mi.sort_order')
             ->orderBy('mi.menu_item_id')
             ->get([
@@ -577,7 +781,22 @@ class RestaurantApplicationService
             ])
             ->values()
             ->all();
+    }
 
+    /**
+     * @param  list<mixed>  $categories
+     * @param  list<array<string, mixed>>  $documents
+     * @param  list<array<string, mixed>>  $requests
+     * @param  list<array<string, mixed>>  $menuItems
+     * @return array<string, mixed>
+     */
+    private function formatApplicationPayload(
+        object $row,
+        array $categories,
+        array $documents,
+        array $requests,
+        array $menuItems,
+    ): array {
         return [
             'restaurant_application_id' => (int) $row->restaurant_application_id,
             'restaurant_id' => (int) $row->restaurant_id,

@@ -119,3 +119,8 @@ Cohesive private helpers were extracted in 3 Locations services while preserving
 
 - `OtpService`: decomposed `send()` and `verify()` into cohesive private helpers (`enforceSendLimits`, `storePendingOtp`, `requirePendingOtp`, `handleFailedAttempt`, `markVerified`, `recordOtpAuditLog`), eliminating duplicated `audit_logs` insertion while preserving OTP cache keys, rate-limiting, attempt lockouts, and single-use verification.
 - `AvailabilityService`: decomposed `compute()` into `resolveIsOpen()` and `isPeriodOpenNow()` while preserving `Asia/Manila` timezone conversion, closure precedence, and overnight (`closes_next_day`) spillover rules. (`AuthService` and `PasswordResetService` were left unchanged.)
+
+## Applications & Onboarding Services Decomposition (CLEAN-4E)
+
+- `RestaurantApplicationService`: decomposed `submit()`, `uploadDocument()`, and `getApplicationById()` into cohesive private helpers for precondition validation, restaurant/branding/categories/hours/menu-item/application/document/payout creation, resubmission persistence, and application detail assembly while preserving single-transaction rollback and storage cleanup.
+- `RiderApplicationService`: decomposed `submit()`, `uploadDocument()`, and `getApplicationById()` into cohesive private helpers for precondition validation, rider/application/document/payout upsert, resubmission persistence, and application detail assembly while preserving single-transaction rollback and storage cleanup. (`AccountService` and already-cleaned `AdminApplicationService` were left unchanged.)
