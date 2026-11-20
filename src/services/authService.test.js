@@ -81,7 +81,7 @@ test('apiClient uses credentials include, initializes CSRF, retries 419 once, an
 
     assert.equal(loginResult.user.user_id, 42);
     assert.equal(loginResult.user.name, 'Maria L. Santos');
-    assert.equal(loginResult.user.role, 'owner');
+    assert.equal(loginResult.user.role, 'customer');
     assert.equal(loginAttempts, 2);
     assert.equal(calls.filter((c) => c.url.endsWith('/auth/csrf')).length, 2);
     assert.ok(calls.every((c) => c.init.credentials === 'include'));
@@ -150,8 +150,8 @@ test('apiClient uses credentials include, initializes CSRF, retries 419 once, an
     await staleInFlight;
 
     assert.equal(getDefaultWorkspace(['customer', 'owner', 'admin']), 'admin');
-    assert.equal(getDefaultWorkspace(['customer', 'staff', 'rider']), 'rider');
-    assert.equal(getDefaultWorkspace(['customer', 'staff']), 'staff');
+    assert.equal(getDefaultWorkspace(['customer', 'staff', 'rider']), 'customer');
+    assert.equal(getDefaultWorkspace(['customer', 'staff']), 'customer');
     assert.equal(getDefaultWorkspace(['customer']), 'customer');
     assert.ok(apiClient.getBaseUrl().endsWith('/api'));
   } finally {

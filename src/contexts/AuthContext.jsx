@@ -2,6 +2,38 @@ import { createContext, useState, useEffect, useCallback } from 'react';
 import authService, { getDefaultWorkspace, normalizeUser } from '../services/authService';
 
 const AuthContext = createContext(null);
+const ACTIVE_WORKSPACE_STORAGE_KEY = 'salo_active_workspace';
+
+function readStoredWorkspaceForUser(userId) {
+  if (!userId || typeof sessionStorage === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (String(parsed?.userId) !== String(userId)) {
+      return null;
+    }
+    return typeof parsed?.workspace === 'string' ? parsed.workspace : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredWorkspaceForUser(userId, workspace) {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    if (!userId || !workspace) {
+      sessionStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+      return;
+    }
+    sessionStorage.setItem(
+      ACTIVE_WORKSPACE_STORAGE_KEY,
+      JSON.stringify({ userId: String(userId), workspace }),
+    );
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -12,16 +44,20 @@ export function AuthProvider({ children }) {
     if (!nextUser) {
       setUser(null);
       setActiveWorkspaceState(null);
+      writeStoredWorkspaceForUser(null, null);
       return null;
     }
 
-    const normalized = normalizeUser(nextUser, preferredWorkspace);
-    const workspace = preferredWorkspace && normalized.roles.includes(preferredWorkspace)
-      ? preferredWorkspace
+    const userId = nextUser.user_id ?? nextUser.id ?? null;
+    const candidateWorkspace = preferredWorkspace || readStoredWorkspaceForUser(userId);
+    const normalized = normalizeUser(nextUser, candidateWorkspace);
+    const workspace = candidateWorkspace && normalized.roles.includes(candidateWorkspace)
+      ? candidateWorkspace
       : getDefaultWorkspace(normalized.roles);
 
     setUser({ ...normalized, role: workspace });
     setActiveWorkspaceState(workspace);
+    writeStoredWorkspaceForUser(userId, workspace);
     return { ...normalized, role: workspace };
   }, []);
 
@@ -74,8 +110,10 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (credentials) => {
     setLoading(true);
     try {
+      writeStoredWorkspaceForUser(null, null);
       const result = await authService.login(credentials);
-      const activeUser = applyAuthenticatedUser(result.user);
+      const defaultWorkspace = getDefaultWorkspace(result.user?.roles);
+      const activeUser = applyAuthenticatedUser(result.user, defaultWorkspace);
       return { user: activeUser };
     } finally {
       setLoading(false);
@@ -85,8 +123,10 @@ export function AuthProvider({ children }) {
   const register = useCallback(async (userData) => {
     setLoading(true);
     try {
+      writeStoredWorkspaceForUser(null, null);
       const result = await authService.register(userData);
-      const activeUser = applyAuthenticatedUser(result.user);
+      const defaultWorkspace = getDefaultWorkspace(result.user?.roles);
+      const activeUser = applyAuthenticatedUser(result.user, defaultWorkspace);
       return { user: activeUser };
     } finally {
       setLoading(false);
@@ -111,6 +151,7 @@ export function AuthProvider({ children }) {
         return prev;
       }
       setActiveWorkspaceState(workspaceRole);
+      writeStoredWorkspaceForUser(prev.user_id ?? prev.id, workspaceRole);
       return { ...prev, role: workspaceRole };
     });
   }, []);

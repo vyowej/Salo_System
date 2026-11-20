@@ -4,18 +4,18 @@ import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useAuth } from '../../../hooks/useAuth';
 import { useCart } from '../../../hooks/useCart';
 import useAddresses from '../../../hooks/useAddresses';
-import accountService from '../../../services/accountService';
+import useContactNumbers, { MAX_SAVED_CONTACT_NUMBERS } from '../../../hooks/useContactNumbers';
 import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import AddressFormModal from '../components/AddressFormModal';
+import ContactNumberFormModal from '../components/ContactNumberFormModal';
 import {
   buildCheckoutPayload,
   DELIVERY_NOTES_MAX_LENGTH,
   expandRestaurantGroupsToSubOrders,
   findAddressBySelectionId,
   isValidPhilippineMobile,
-  normalizePhilippineMobile,
   parseCheckoutValidationErrors,
   validateDeliveryContactPhone,
   validateDeliveryNotes,
@@ -37,7 +37,7 @@ function createIdempotencyKey() {
 }
 
 export default function CheckoutPage() {
-  const { user, updateUser } = useAuth();
+  const { user } = useAuth();
   const {
     restaurantGroups,
     itemsSubtotal,
@@ -48,6 +48,11 @@ export default function CheckoutPage() {
     clearCart,
   } = useCart();
   const { addresses, loading: addressesLoading, addAddress } = useAddresses();
+  const {
+    contactNumbers,
+    defaultContactNumber,
+    addContactNumber,
+  } = useContactNumbers();
 
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [orderNotes, setOrderNotes] = useState('');
@@ -62,11 +67,8 @@ export default function CheckoutPage() {
   const [confirmedCheckout, setConfirmedCheckout] = useState(null);
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [targetForNewAddress, setTargetForNewAddress] = useState(null);
-  const [phoneInput, setPhoneInput] = useState(() => user?.phone_number || user?.phone || '');
-  const [isEditingPhone, setIsEditingPhone] = useState(false);
-  const [phoneSaving, setPhoneSaving] = useState(false);
-  const [phoneSaveError, setPhoneSaveError] = useState('');
-  const [phoneSavedMessage, setPhoneSavedMessage] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState(null);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
   const idempotencyKeyRef = useRef(createIdempotencyKey());
 
   const subOrders = useMemo(
@@ -106,42 +108,34 @@ export default function CheckoutPage() {
 
   const hasInvalidDeliveryAddresses = groupValidations.some((v) => !v.isValid);
   const hasDeliverySubOrders = subOrders.some((subOrder) => subOrder.fulfillment === 'delivery');
+  const selectedContact = useMemo(
+    () =>
+      contactNumbers.find((item) => item.id === selectedContactId) ||
+      defaultContactNumber ||
+      null,
+    [contactNumbers, selectedContactId, defaultContactNumber]
+  );
   const phoneValidation = useMemo(
     () => validateDeliveryContactPhone(user, subOrders),
     [user, subOrders]
   );
-  const hasInvalidPhoneForDelivery = !phoneValidation.isValid;
+  const hasValidSelectedContact = Boolean(
+    selectedContact && isValidPhilippineMobile(selectedContact.phoneNumber)
+  );
+  const hasInvalidPhoneForDelivery =
+    hasDeliverySubOrders && !hasValidSelectedContact && !phoneValidation.isValid;
   const notesValidation = useMemo(
     () => validateDeliveryNotes({ orderNotes, orderNotesBySubOrder, subOrders }),
     [orderNotes, orderNotesBySubOrder, subOrders]
   );
   const hasInvalidDeliveryNotes = !notesValidation.isValid;
 
-  const handleSavePhone = async (e) => {
-    e.preventDefault();
-    setPhoneSaveError('');
-    setPhoneSavedMessage('');
-
-    const normalized = normalizePhilippineMobile(phoneInput);
-    if (!isValidPhilippineMobile(normalized)) {
-      setPhoneSaveError('Enter a valid Philippine mobile number (e.g. 09171234567 or +639171234567).');
-      return;
+  const handleSaveNewContact = (payload) => {
+    const created = addContactNumber(payload);
+    if (created?.id) {
+      setSelectedContactId(created.id);
     }
-
-    setPhoneSaving(true);
-    try {
-      const updatedUser = await accountService.updateProfile({ phone_number: normalized });
-      updateUser(updatedUser);
-      setPhoneInput(updatedUser?.phone_number || updatedUser?.phone || normalized);
-      setIsEditingPhone(false);
-      setPhoneSavedMessage('Contact phone number saved.');
-      setError(null);
-    } catch (err) {
-      const fieldMsg = err?.errors?.phone_number?.[0] || err?.errors?.phone_number;
-      setPhoneSaveError(fieldMsg || err?.message || 'Unable to save contact phone number.');
-    } finally {
-      setPhoneSaving(false);
-    }
+    setError(null);
   };
 
   if (confirmedCheckout) {
@@ -677,90 +671,116 @@ export default function CheckoutPage() {
               padding: 'var(--space-4)',
               boxShadow: 'var(--shadow-xs)',
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)', gap: 'var(--space-2)' }}>
-                <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, margin: 0 }}>
-                  Contact Phone Number
-                </h2>
-                {phoneValidation.isValid && !isEditingPhone && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                <div>
+                  <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, margin: 0 }}>
+                    Contact Phone Number
+                  </h2>
+                  <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                    Select which saved number riders should call upon delivery.
+                  </p>
+                </div>
+                {contactNumbers.length < MAX_SAVED_CONTACT_NUMBERS && (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      setPhoneInput(phoneValidation.phone || '');
-                      setPhoneSaveError('');
-                      setPhoneSavedMessage('');
-                      setIsEditingPhone(true);
-                    }}
+                    onClick={() => setContactModalOpen(true)}
                   >
-                    Change
+                    + Add New Number
                   </Button>
                 )}
               </div>
 
-              {phoneValidation.isValid && !isEditingPhone ? (
-                <div>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    📱 {phoneValidation.phone}
+              {contactNumbers.length === 0 ? (
+                <div style={{
+                  padding: 'var(--space-3)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px dashed var(--border-primary)',
+                  background: 'var(--surface-secondary)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 'var(--space-3)',
+                  flexWrap: 'wrap',
+                }}>
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                    {phoneValidation.isValid
+                      ? `Using account phone number: ${phoneValidation.phone}`
+                      : 'No saved contact numbers yet. Add a Philippine mobile number for delivery updates.'}
                   </p>
-                  <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-                    Riders will use this number to contact you upon delivery.
-                  </p>
-                  {phoneSavedMessage && (
-                    <p style={{ margin: '6px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--status-success-text, #15803d)', fontWeight: 600 }}>
-                      {phoneSavedMessage}
-                    </p>
-                  )}
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setContactModalOpen(true)}
+                  >
+                    + Add Contact Number
+                  </Button>
                 </div>
               ) : (
-                <form onSubmit={handleSavePhone} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-                    {phoneValidation.error || 'Enter a Philippine mobile number (e.g. 09171234567) for delivery updates.'}
-                  </p>
-                  <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <input
-                      type="tel"
-                      value={phoneInput}
-                      onChange={(e) => {
-                        setPhoneInput(e.target.value);
-                        setPhoneSaveError('');
-                      }}
-                      placeholder="09171234567"
-                      aria-label="Contact phone number"
-                      style={{
-                        flex: 1,
-                        minWidth: 180,
-                        padding: '8px 12px',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid var(--border-primary)',
-                        background: 'var(--surface-secondary)',
-                        color: 'var(--text-primary)',
-                        fontSize: 'var(--font-size-sm)',
-                      }}
-                    />
-                    <Button type="submit" variant="primary" size="sm" loading={phoneSaving} disabled={phoneSaving}>
-                      Save Phone Number
-                    </Button>
-                    {phoneValidation.isValid && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setIsEditingPhone(false);
-                          setPhoneSaveError('');
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                  {contactNumbers.map((contact) => {
+                    const isSelected = selectedContact?.id === contact.id;
+                    return (
+                      <label
+                        key={contact.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 'var(--space-3)',
+                          padding: 'var(--space-3) var(--space-4)',
+                          borderRadius: 'var(--radius-md)',
+                          border: isSelected ? '1.5px solid var(--accent)' : '1px solid var(--border-primary)',
+                          background: isSelected ? 'var(--accent-subtle)' : 'var(--surface-secondary)',
+                          cursor: 'pointer',
+                          transition: 'all var(--transition-fast)',
                         }}
                       >
-                        Cancel
-                      </Button>
-                    )}
-                  </div>
-                  {(phoneSaveError || (!phoneValidation.isValid && phoneValidation.error)) && (
-                    <div role="alert" style={{ fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)' }}>
-                      {phoneSaveError || phoneValidation.error}
+                        <input
+                          type="radio"
+                          name="checkoutContactNumber"
+                          value={contact.id}
+                          checked={isSelected}
+                          onChange={() => {
+                            setSelectedContactId(contact.id);
+                            setError(null);
+                          }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>
+                              {contact.label}
+                            </strong>
+                            {contact.isDefault && (
+                              <Badge variant="success" size="sm">Default</Badge>
+                            )}
+                          </div>
+                          <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                            📱 {contact.phoneNumber}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+
+                  {selectedContact && (
+                    <div style={{
+                      marginTop: 'var(--space-1)',
+                      padding: 'var(--space-2) var(--space-3)',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'var(--surface-secondary)',
+                      border: '1px solid var(--border-secondary)',
+                      fontSize: 'var(--font-size-xs)',
+                      color: 'var(--text-secondary)',
+                    }}>
+                      Selected for this order:{' '}
+                      <strong style={{ color: 'var(--text-primary)' }}>
+                        {selectedContact.label} · {selectedContact.phoneNumber}
+                      </strong>
                     </div>
                   )}
-                </form>
+                </div>
               )}
             </div>
           )}
@@ -890,6 +910,22 @@ export default function CheckoutPage() {
             <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
               Estimated total — final prices and delivery fees are confirmed by the server on checkout.
             </p>
+            {hasDeliverySubOrders && selectedContact && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+                paddingTop: 'var(--space-2)',
+                borderTop: '1px solid var(--border-secondary)',
+                fontSize: 'var(--font-size-xs)',
+              }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Delivery Contact</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {selectedContact.label} · {selectedContact.phoneNumber}
+                </span>
+              </div>
+            )}
           </div>
 
           <Button
@@ -935,6 +971,13 @@ export default function CheckoutPage() {
         }}
         onSave={handleModalSaveAddress}
         existingAddresses={addresses}
+      />
+
+      <ContactNumberFormModal
+        isOpen={contactModalOpen}
+        onClose={() => setContactModalOpen(false)}
+        onSave={handleSaveNewContact}
+        existingContacts={contactNumbers}
       />
     </CustomerLayout>
   );

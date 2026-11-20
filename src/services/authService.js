@@ -5,7 +5,6 @@
 
 import apiClient, { clearCsrfCache } from './apiClient';
 
-const ROLE_PRIORITY = ['admin', 'owner', 'rider', 'staff', 'customer'];
 let inFlightCurrentUserPromise = null;
 let currentUserRequestGeneration = 0;
 
@@ -19,13 +18,11 @@ export function getDefaultWorkspace(roles = []) {
     return 'customer';
   }
 
-  for (const candidate of ROLE_PRIORITY) {
-    if (roles.includes(candidate)) {
-      return candidate;
-    }
+  if (roles.includes('admin')) {
+    return 'admin';
   }
 
-  return roles[0] || 'customer';
+  return 'customer';
 }
 
 export function getWorkspaceHomePath(role) {

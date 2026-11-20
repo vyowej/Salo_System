@@ -9,6 +9,7 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
 import AddressFormModal from '../components/AddressFormModal';
+import ContactNumbersManager from '../components/ContactNumbersManager';
 import './ProfilePage.css';
 
 /* ─── Validation ─────────────────────────────────────────── */
@@ -29,6 +30,7 @@ const NAV_GROUPS = [
     items: [
       { id: 'personal',      icon: '👤', label: 'Personal Info' },
       { id: 'addresses',     icon: '📍', label: 'Addresses'     },
+      { id: 'contacts',      icon: '📱', label: 'Contact Numbers' },
       { id: 'notifications', icon: '🔔', label: 'Notifications' },
     ],
   },
@@ -722,6 +724,25 @@ export default function ProfilePage() {
     </div>
   );
 
+  /* Contact Numbers */
+  const renderContacts = () => (
+    <div className="profile-section-card">
+      <div className="profile-section-header">
+        <div className="profile-section-header__text">
+          <p className="profile-section-header__label">Account</p>
+          <h2 className="profile-section-header__title">Saved Contact Numbers</h2>
+          <p className="profile-section-header__subtitle">
+            Manage your personal, work, and alternate mobile numbers for deliveries.
+          </p>
+        </div>
+      </div>
+
+      <div className="profile-section-body">
+        <ContactNumbersManager />
+      </div>
+    </div>
+  );
+
   /* Danger Zone */
   const renderDanger = () => (
     <div className="profile-section-card profile-section-card--danger">
@@ -750,6 +771,7 @@ export default function ProfilePage() {
       case 'security':      return renderSecurity();
       case 'notifications': return renderNotifications();
       case 'addresses':     return renderAddresses();
+      case 'contacts':      return renderContacts();
       case 'danger':        return renderDanger();
       default:              return renderPersonal();
     }

@@ -7,6 +7,7 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
 import AddressFormModal from '../components/AddressFormModal';
+import ContactNumbersManager from '../components/ContactNumbersManager';
 import UnifiedSettingsShell from '../../../components/settings/UnifiedSettingsShell';
 import {
   SettingsAccountSection,
@@ -146,6 +147,16 @@ export default function CustomerSettingsPage() {
                 Manage all addresses →
               </Link>
             </div>
+          </SettingsCard>
+        );
+
+      case 'contact_numbers':
+        return (
+          <SettingsCard
+            title="Contact numbers"
+            description="Your saved mobile numbers for delivery and rider coordination."
+          >
+            <ContactNumbersManager />
           </SettingsCard>
         );
 

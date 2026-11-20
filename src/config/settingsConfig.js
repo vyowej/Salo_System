@@ -50,6 +50,14 @@ const ROLE_SPECIFIC_SECTIONS = {
       description: 'Manage your saved delivery and billing addresses.',
     },
     {
+      id: 'contact_numbers',
+      group: 'Customer',
+      label: 'Contact Numbers',
+      eyebrow: 'Delivery',
+      title: 'Saved Contact Numbers',
+      description: 'Manage your personal, work, and alternate contact numbers.',
+    },
+    {
       id: 'privacy',
       group: 'Customer',
       label: 'Privacy',

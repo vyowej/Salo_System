@@ -9,14 +9,14 @@ import './SwitchAccountModal.css';
 export default function SwitchAccountModal({
   open,
   onClose,
-  currentRole = 'customer',
+  currentRole = null,
   onUseDifferentAccount,
 }) {
   const navigate = useNavigate();
   const { user, roles, activeWorkspace, setActiveWorkspace, logout } = useAuth();
   const closeBtnRef = useRef(null);
 
-  const workspaces = resolveUserWorkspaces(activeWorkspace || currentRole, roles.length ? roles : user?.roles);
+  const workspaces = resolveUserWorkspaces(currentRole || activeWorkspace, roles.length ? roles : user?.roles);
 
   useEffect(() => {
     if (!open) return undefined;
