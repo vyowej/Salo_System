@@ -106,3 +106,11 @@ The remaining inline `$request->validate(...)` blocks across `RiderController`, 
 
 - `backend/app/Features/Riders/Requests/`: `UpdateRiderProfileRequest`, `UpdateRiderAvailabilityRequest`, `UploadRiderDocumentRequest`
 - `backend/app/Features/Orders/Requests/`: `CancelCustomerOrderRequest`, `RejectRestaurantOrderRequest`
+
+## Locations Services Decomposition (CLEAN-4C)
+
+Cohesive private helpers were extracted in 3 Locations services while preserving all SQL semantics, transactions, authorization checks, and response contracts:
+
+- `ServiceAreaValidationService`: decomposed `checkPlatformSupport()` and `checkRestaurantSupport()` (`loadMatchingActiveAreas`, `matchActivePlatformArea`, `platformResult`, `matchRestaurantCoverage`, `restaurantResult`)
+- `RiderTrackingService`: decomposed `recordLocation()` and `getOrderTracking()` (`requireActiveRider`, `verifyActiveRiderDelivery`, `findOutOfOrderResult`, `loadAuthorizedOrderForTracking`, `loadDeliverySummary`, `loadLatestActiveRiderLocation`, `formatTrackingPayload`)
+- `RestaurantLocationService`: decomposed `getLocationAndCoverage()` and `updateCoverage()` (`loadFormattedAddress`, `loadFormattedCoverage`, `resolveValidatedCoverageEntries`)

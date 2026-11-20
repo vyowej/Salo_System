@@ -25,11 +25,26 @@ class RestaurantLocationService
     {
         $restaurant = $this->resolveAuthorizedRestaurant($user, $restaurantId);
 
+        return [
+            'restaurant_id' => (int) $restaurant->restaurant_id,
+            'restaurant_name' => $restaurant->restaurant_name,
+            'restaurant_status' => $restaurant->restaurant_status,
+            'location' => $this->loadFormattedAddress((int) $restaurant->address_id),
+            'coverage' => $this->loadFormattedCoverage((int) $restaurant->restaurant_id),
+            'available_platform_areas' => $this->adminServiceAreas->list(activeOnly: true),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function loadFormattedAddress(int $addressId): ?array
+    {
         $address = DB::table('addresses as a')
             ->join('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
             ->join('cities as c', 'c.city_id', '=', 'b.city_id')
             ->join('provinces as p', 'p.province_id', '=', 'c.province_id')
-            ->where('a.address_id', $restaurant->address_id)
+            ->where('a.address_id', $addressId)
             ->select([
                 'a.address_id',
                 'a.street',
@@ -46,11 +61,36 @@ class RestaurantLocationService
             ])
             ->first();
 
+        if (! $address) {
+            return null;
+        }
+
+        return [
+            'country' => 'Philippines',
+            'province' => $address->province_name,
+            'city' => $address->city_name,
+            'barangay' => $address->barangay_name,
+            'street' => $address->street ?? '',
+            'house_number' => $address->house_number ?? '',
+            'building_name' => $address->building_name ?? '',
+            'landmark' => $address->landmark ?? '',
+            'postal_code' => $address->postal_code ?? '',
+            'latitude' => $address->latitude !== null ? (float) $address->latitude : null,
+            'longitude' => $address->longitude !== null ? (float) $address->longitude : null,
+            'gps_accuracy' => $address->gps_accuracy !== null ? (float) $address->gps_accuracy : null,
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadFormattedCoverage(int $restaurantId): array
+    {
         $coverageRows = DB::table('service_areas as sa')
             ->join('cities as c', 'c.city_id', '=', 'sa.city_id')
             ->join('provinces as p', 'p.province_id', '=', 'c.province_id')
             ->leftJoin('barangays as b', 'b.barangay_id', '=', 'sa.barangay_id')
-            ->where('sa.restaurant_id', $restaurant->restaurant_id)
+            ->where('sa.restaurant_id', $restaurantId)
             ->orderBy('p.province_name')
             ->orderBy('c.city_name')
             ->orderBy('b.barangay_name')
@@ -68,7 +108,7 @@ class RestaurantLocationService
             $coverageRows->pluck('province_name')->map(static fn ($name): string => (string) $name)->all()
         );
 
-        $coverage = $coverageRows
+        return $coverageRows
             ->map(function (object $row) use ($activeAreas): array {
                 $platform = $this->serviceAreaValidation->checkPlatformSupport(
                     (string) $row->province_name,
@@ -86,28 +126,6 @@ class RestaurantLocationService
                 ];
             })
             ->all();
-
-        return [
-            'restaurant_id' => (int) $restaurant->restaurant_id,
-            'restaurant_name' => $restaurant->restaurant_name,
-            'restaurant_status' => $restaurant->restaurant_status,
-            'location' => $address ? [
-                'country' => 'Philippines',
-                'province' => $address->province_name,
-                'city' => $address->city_name,
-                'barangay' => $address->barangay_name,
-                'street' => $address->street ?? '',
-                'house_number' => $address->house_number ?? '',
-                'building_name' => $address->building_name ?? '',
-                'landmark' => $address->landmark ?? '',
-                'postal_code' => $address->postal_code ?? '',
-                'latitude' => $address->latitude !== null ? (float) $address->latitude : null,
-                'longitude' => $address->longitude !== null ? (float) $address->longitude : null,
-                'gps_accuracy' => $address->gps_accuracy !== null ? (float) $address->gps_accuracy : null,
-            ] : null,
-            'coverage' => $coverage,
-            'available_platform_areas' => $this->adminServiceAreas->list(activeOnly: true),
-        ];
     }
 
     /**
@@ -161,7 +179,35 @@ class RestaurantLocationService
     public function updateCoverage(User $user, ?int $restaurantId, array $areas, ?Request $request = null): array
     {
         $restaurant = $this->resolveAuthorizedRestaurant($user, $restaurantId);
+        $resolvedEntries = $this->resolveValidatedCoverageEntries((int) $restaurant->restaurant_id, $areas);
 
+        DB::transaction(function () use ($user, $restaurant, $resolvedEntries, $areas, $request): void {
+            DB::table('service_areas')->where('restaurant_id', $restaurant->restaurant_id)->delete();
+            if ($resolvedEntries !== []) {
+                DB::table('service_areas')->insert($resolvedEntries);
+            }
+
+            $this->auditLog->record(
+                actorUserId: $user->user_id,
+                action: 'restaurant.coverage_updated',
+                entityType: 'restaurant',
+                entityId: $restaurant->restaurant_id,
+                oldValues: null,
+                newValues: ['areas_count' => count($resolvedEntries), 'areas' => $areas],
+                reason: 'Updated restaurant delivery coverage',
+                request: $request,
+            );
+        });
+
+        return $this->getLocationAndCoverage($user, (int) $restaurant->restaurant_id);
+    }
+
+    /**
+     * @param  list<array{province: string, city: string, barangay?: string|null}>  $areas
+     * @return list<array<string, mixed>>
+     */
+    private function resolveValidatedCoverageEntries(int $restaurantId, array $areas): array
+    {
         // Validate every selected coverage area against Admin-activated platform service areas
         $resolvedEntries = [];
         $seenKeys = [];
@@ -188,32 +234,14 @@ class RestaurantLocationService
             $seenKeys[$dedupeKey] = true;
 
             $resolvedEntries[] = [
-                'restaurant_id' => $restaurant->restaurant_id,
+                'restaurant_id' => $restaurantId,
                 'city_id' => $ids['city_id'],
                 'barangay_id' => $ids['barangay_id'],
                 'created_at' => now(),
             ];
         }
 
-        DB::transaction(function () use ($user, $restaurant, $resolvedEntries, $areas, $request): void {
-            DB::table('service_areas')->where('restaurant_id', $restaurant->restaurant_id)->delete();
-            if ($resolvedEntries !== []) {
-                DB::table('service_areas')->insert($resolvedEntries);
-            }
-
-            $this->auditLog->record(
-                actorUserId: $user->user_id,
-                action: 'restaurant.coverage_updated',
-                entityType: 'restaurant',
-                entityId: $restaurant->restaurant_id,
-                oldValues: null,
-                newValues: ['areas_count' => count($resolvedEntries), 'areas' => $areas],
-                reason: 'Updated restaurant delivery coverage',
-                request: $request,
-            );
-        });
-
-        return $this->getLocationAndCoverage($user, (int) $restaurant->restaurant_id);
+        return $resolvedEntries;
     }
 
     private function resolveAuthorizedRestaurant(User $user, ?int $restaurantId): object

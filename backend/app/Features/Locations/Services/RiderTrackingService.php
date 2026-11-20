@@ -20,30 +20,16 @@ class RiderTrackingService
      */
     public function recordLocation(User $user, array $data): array
     {
-        $rider = DB::table('riders')->where('user_id', $user->user_id)->first();
-        if (! $rider || ! in_array($rider->rider_status, ['approved', 'active'], true)) {
-            abort(403, 'Active approved rider profile required.');
-        }
+        $rider = $this->requireActiveRider($user);
 
         $deliveryId = isset($data['delivery_id']) && is_numeric($data['delivery_id'])
             ? (int) $data['delivery_id']
             : null;
 
         if ($deliveryId !== null) {
-            $delivery = DB::table('deliveries')
-                ->where('delivery_id', $deliveryId)
-                ->where('rider_id', $rider->rider_id)
-                ->first();
-
-            if (! $delivery) {
-                abort(403, 'Delivery does not belong to this rider.');
-            }
-
-            if (! in_array($delivery->delivery_status, self::ACTIVE_DELIVERY_STATUSES, true)) {
-                return [
-                    'recorded' => false,
-                    'reason' => 'Tracking stopped because delivery is no longer active.',
-                ];
+            $inactiveResult = $this->verifyActiveRiderDelivery($deliveryId, (int) $rider->rider_id);
+            if ($inactiveResult !== null) {
+                return $inactiveResult;
             }
         }
 
@@ -51,18 +37,9 @@ class RiderTrackingService
             ? CarbonImmutable::parse((string) $data['recorded_at'])
             : CarbonImmutable::now();
 
-        // Deduplicate / ignore out-of-order stale updates
-        $latest = DB::table('rider_locations')
-            ->where('rider_id', $rider->rider_id)
-            ->orderByDesc('recorded_at')
-            ->first();
-
-        if ($latest && CarbonImmutable::parse((string) $latest->recorded_at)->greaterThan($recordedAt)) {
-            return [
-                'recorded' => false,
-                'reason' => 'Ignored out-of-order GPS update.',
-                'latest_recorded_at' => $latest->recorded_at,
-            ];
+        $outOfOrderResult = $this->findOutOfOrderResult((int) $rider->rider_id, $recordedAt);
+        if ($outOfOrderResult !== null) {
+            return $outOfOrderResult;
         }
 
         $id = (int) DB::table('rider_locations')->insertGetId([
@@ -102,6 +79,71 @@ class RiderTrackingService
      */
     public function getOrderTracking(int $orderId, User $viewer, bool $isAdmin = false): array
     {
+        $order = $this->loadAuthorizedOrderForTracking($orderId, $viewer, $isAdmin);
+        $delivery = $this->loadDeliverySummary($orderId);
+        $riderLocation = $this->loadLatestActiveRiderLocation($delivery);
+
+        return $this->formatTrackingPayload($order, $delivery, $riderLocation);
+    }
+
+    private function requireActiveRider(User $user): object
+    {
+        $rider = DB::table('riders')->where('user_id', $user->user_id)->first();
+        if (! $rider || ! in_array($rider->rider_status, ['approved', 'active'], true)) {
+            abort(403, 'Active approved rider profile required.');
+        }
+
+        return $rider;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function verifyActiveRiderDelivery(int $deliveryId, int $riderId): ?array
+    {
+        $delivery = DB::table('deliveries')
+            ->where('delivery_id', $deliveryId)
+            ->where('rider_id', $riderId)
+            ->first();
+
+        if (! $delivery) {
+            abort(403, 'Delivery does not belong to this rider.');
+        }
+
+        if (! in_array($delivery->delivery_status, self::ACTIVE_DELIVERY_STATUSES, true)) {
+            return [
+                'recorded' => false,
+                'reason' => 'Tracking stopped because delivery is no longer active.',
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findOutOfOrderResult(int $riderId, CarbonImmutable $recordedAt): ?array
+    {
+        // Deduplicate / ignore out-of-order stale updates
+        $latest = DB::table('rider_locations')
+            ->where('rider_id', $riderId)
+            ->orderByDesc('recorded_at')
+            ->first();
+
+        if ($latest && CarbonImmutable::parse((string) $latest->recorded_at)->greaterThan($recordedAt)) {
+            return [
+                'recorded' => false,
+                'reason' => 'Ignored out-of-order GPS update.',
+                'latest_recorded_at' => $latest->recorded_at,
+            ];
+        }
+
+        return null;
+    }
+
+    private function loadAuthorizedOrderForTracking(int $orderId, User $viewer, bool $isAdmin): object
+    {
         $order = DB::table('orders as o')
             ->join('restaurants as r', 'r.restaurant_id', '=', 'o.restaurant_id')
             ->join('addresses as ra', 'ra.address_id', '=', 'r.address_id')
@@ -139,7 +181,12 @@ class RiderTrackingService
             abort(403, 'You are not authorized to track this order.');
         }
 
-        $delivery = DB::table('deliveries as d')
+        return $order;
+    }
+
+    private function loadDeliverySummary(int $orderId): ?object
+    {
+        return DB::table('deliveries as d')
             ->leftJoin('riders as ri', 'ri.rider_id', '=', 'd.rider_id')
             ->leftJoin('users as ru', 'ru.user_id', '=', 'ri.user_id')
             ->where('d.order_id', $orderId)
@@ -158,28 +205,45 @@ class RiderTrackingService
                 'ru.last_name as rider_last_name',
             ])
             ->first();
+    }
 
-        $riderLocation = null;
-        if ($delivery && $delivery->rider_id && in_array($delivery->delivery_status, self::ACTIVE_DELIVERY_STATUSES, true)) {
-            $latestGps = DB::table('rider_locations')
-                ->where('rider_id', $delivery->rider_id)
-                ->orderByDesc('recorded_at')
-                ->first();
-
-            if ($latestGps) {
-                $recordedAt = CarbonImmutable::parse((string) $latestGps->recorded_at);
-                $ageSeconds = $recordedAt->diffInSeconds(CarbonImmutable::now());
-                $riderLocation = [
-                    'latitude' => (float) $latestGps->latitude,
-                    'longitude' => (float) $latestGps->longitude,
-                    'accuracy_meters' => $latestGps->accuracy_meters !== null ? (float) $latestGps->accuracy_meters : null,
-                    'recorded_at' => $recordedAt->toIso8601String(),
-                    'age_seconds' => $ageSeconds,
-                    'is_stale' => $ageSeconds > self::STALE_THRESHOLD_SECONDS,
-                ];
-            }
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function loadLatestActiveRiderLocation(?object $delivery): ?array
+    {
+        if (! $delivery || ! $delivery->rider_id || ! in_array($delivery->delivery_status, self::ACTIVE_DELIVERY_STATUSES, true)) {
+            return null;
         }
 
+        $latestGps = DB::table('rider_locations')
+            ->where('rider_id', $delivery->rider_id)
+            ->orderByDesc('recorded_at')
+            ->first();
+
+        if (! $latestGps) {
+            return null;
+        }
+
+        $recordedAt = CarbonImmutable::parse((string) $latestGps->recorded_at);
+        $ageSeconds = $recordedAt->diffInSeconds(CarbonImmutable::now());
+
+        return [
+            'latitude' => (float) $latestGps->latitude,
+            'longitude' => (float) $latestGps->longitude,
+            'accuracy_meters' => $latestGps->accuracy_meters !== null ? (float) $latestGps->accuracy_meters : null,
+            'recorded_at' => $recordedAt->toIso8601String(),
+            'age_seconds' => $ageSeconds,
+            'is_stale' => $ageSeconds > self::STALE_THRESHOLD_SECONDS,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $riderLocation
+     * @return array<string, mixed>
+     */
+    private function formatTrackingPayload(object $order, ?object $delivery, ?array $riderLocation): array
+    {
         return [
             'order_id' => (int) $order->order_id,
             'order_reference' => $order->order_reference,

@@ -24,41 +24,71 @@ class ServiceAreaValidationService
         $cleanBarangay = $barangay !== null ? mb_strtolower(trim($barangay)) : '';
 
         if ($cleanProvince === '' || $cleanCity === '') {
-            return [
-                'supported' => false,
-                'platform_supported' => false,
-                'matched_level' => null,
-                'matched_area_id' => null,
-                'reason' => 'Province and city/municipality are required to check service area coverage.',
-            ];
+            return $this->platformResult(
+                supported: false,
+                matchedLevel: null,
+                matchedAreaId: null,
+                reason: 'Province and city/municipality are required to check service area coverage.',
+            );
         }
 
+        $activeAreas = $this->loadMatchingActiveAreas($cleanProvince, $preloadedActiveAreas);
+        $matched = $this->matchActivePlatformArea($activeAreas, $cleanCity, $cleanBarangay, $province);
+        if ($matched !== null) {
+            return $matched;
+        }
+
+        $locationLabel = $barangay ? "Brgy. {$barangay}, {$city}, {$province}" : "{$city}, {$province}";
+
+        return $this->platformResult(
+            supported: false,
+            matchedLevel: null,
+            matchedAreaId: null,
+            reason: "{$locationLabel} is currently outside SALO's active service areas.",
+        );
+    }
+
+    /**
+     * @param  iterable<int, object>|null  $preloadedActiveAreas
+     * @return iterable<int, object>
+     */
+    private function loadMatchingActiveAreas(string $cleanProvince, ?iterable $preloadedActiveAreas): iterable
+    {
         if ($preloadedActiveAreas !== null) {
-            $activeAreas = [];
+            $filtered = [];
             foreach ($preloadedActiveAreas as $candidate) {
                 if (mb_strtolower((string) ($candidate->province_name ?? '')) === $cleanProvince) {
-                    $activeAreas[] = $candidate;
+                    $filtered[] = $candidate;
                 }
             }
-        } else {
-            $activeAreas = DB::table('platform_service_areas as psa')
-                ->join('provinces as p', 'p.province_id', '=', 'psa.province_id')
-                ->leftJoin('cities as c', 'c.city_id', '=', 'psa.city_id')
-                ->leftJoin('barangays as b', 'b.barangay_id', '=', 'psa.barangay_id')
-                ->where('psa.is_active', 1)
-                ->where('p.province_name', $cleanProvince)
-                ->select([
-                    'psa.platform_service_area_id',
-                    'psa.area_level',
-                    'psa.city_id',
-                    'psa.barangay_id',
-                    'p.province_name',
-                    'c.city_name',
-                    'b.barangay_name',
-                ])
-                ->get();
+
+            return $filtered;
         }
 
+        return DB::table('platform_service_areas as psa')
+            ->join('provinces as p', 'p.province_id', '=', 'psa.province_id')
+            ->leftJoin('cities as c', 'c.city_id', '=', 'psa.city_id')
+            ->leftJoin('barangays as b', 'b.barangay_id', '=', 'psa.barangay_id')
+            ->where('psa.is_active', 1)
+            ->where('p.province_name', $cleanProvince)
+            ->select([
+                'psa.platform_service_area_id',
+                'psa.area_level',
+                'psa.city_id',
+                'psa.barangay_id',
+                'p.province_name',
+                'c.city_name',
+                'b.barangay_name',
+            ])
+            ->get();
+    }
+
+    /**
+     * @param  iterable<int, object>  $activeAreas
+     * @return array<string, mixed>|null
+     */
+    private function matchActivePlatformArea(iterable $activeAreas, string $cleanCity, string $cleanBarangay, string $province): ?array
+    {
         // 1. Exact barangay match
         if ($cleanBarangay !== '') {
             foreach ($activeAreas as $area) {
@@ -67,13 +97,12 @@ class ServiceAreaValidationService
                     && mb_strtolower((string) $area->city_name) === $cleanCity
                     && mb_strtolower((string) $area->barangay_name) === $cleanBarangay
                 ) {
-                    return [
-                        'supported' => true,
-                        'platform_supported' => true,
-                        'matched_level' => 'barangay',
-                        'matched_area_id' => (int) $area->platform_service_area_id,
-                        'reason' => "Brgy. {$area->barangay_name}, {$area->city_name} is an active SALO service area.",
-                    ];
+                    return $this->platformResult(
+                        supported: true,
+                        matchedLevel: 'barangay',
+                        matchedAreaId: (int) $area->platform_service_area_id,
+                        reason: "Brgy. {$area->barangay_name}, {$area->city_name} is an active SALO service area.",
+                    );
                 }
             }
         }
@@ -85,37 +114,47 @@ class ServiceAreaValidationService
                 && $area->barangay_id === null
                 && mb_strtolower((string) $area->city_name) === $cleanCity
             ) {
-                return [
-                    'supported' => true,
-                    'platform_supported' => true,
-                    'matched_level' => 'city',
-                    'matched_area_id' => (int) $area->platform_service_area_id,
-                    'reason' => "{$area->city_name} is an active SALO service area.",
-                ];
+                return $this->platformResult(
+                    supported: true,
+                    matchedLevel: 'city',
+                    matchedAreaId: (int) $area->platform_service_area_id,
+                    reason: "{$area->city_name} is an active SALO service area.",
+                );
             }
         }
 
         // 3. Active province-wide match (city_id IS NULL AND barangay_id IS NULL)
         foreach ($activeAreas as $area) {
             if ($area->city_id === null && $area->barangay_id === null) {
-                return [
-                    'supported' => true,
-                    'platform_supported' => true,
-                    'matched_level' => 'province',
-                    'matched_area_id' => (int) $area->platform_service_area_id,
-                    'reason' => "{$province} is an active SALO service area.",
-                ];
+                return $this->platformResult(
+                    supported: true,
+                    matchedLevel: 'province',
+                    matchedAreaId: (int) $area->platform_service_area_id,
+                    reason: "{$province} is an active SALO service area.",
+                );
             }
         }
 
-        $locationLabel = $barangay ? "Brgy. {$barangay}, {$city}, {$province}" : "{$city}, {$province}";
+        return null;
+    }
 
+    /**
+     * @return array{
+     *   supported: bool,
+     *   platform_supported: bool,
+     *   matched_level: string|null,
+     *   matched_area_id: int|null,
+     *   reason: string
+     * }
+     */
+    private function platformResult(bool $supported, ?string $matchedLevel, ?int $matchedAreaId, string $reason): array
+    {
         return [
-            'supported' => false,
-            'platform_supported' => false,
-            'matched_level' => null,
-            'matched_area_id' => null,
-            'reason' => "{$locationLabel} is currently outside SALO's active service areas.",
+            'supported' => $supported,
+            'platform_supported' => $supported,
+            'matched_level' => $matchedLevel,
+            'matched_area_id' => $matchedAreaId,
+            'reason' => $reason,
         ];
     }
 
@@ -165,34 +204,22 @@ class ServiceAreaValidationService
     {
         $platform = $this->checkPlatformSupport($province, $city, $barangay);
         if (! $platform['platform_supported']) {
-            return [
-                'supported' => false,
-                'platform_supported' => false,
-                'restaurant_supported' => false,
-                'restaurant_configured' => false,
-                'reason' => $platform['reason'],
-            ];
+            return $this->restaurantResult(false, false, false, false, $platform['reason']);
         }
 
         $restaurant = DB::table('restaurants')->where('restaurant_id', $restaurantId)->first();
         if (! $restaurant) {
-            return [
-                'supported' => false,
-                'platform_supported' => true,
-                'restaurant_supported' => false,
-                'restaurant_configured' => false,
-                'reason' => 'Restaurant not found.',
-            ];
+            return $this->restaurantResult(false, true, false, false, 'Restaurant not found.');
         }
 
         if ((int) $restaurant->offers_delivery !== 1) {
-            return [
-                'supported' => false,
-                'platform_supported' => true,
-                'restaurant_supported' => false,
-                'restaurant_configured' => true,
-                'reason' => "{$restaurant->restaurant_name} does not currently offer delivery.",
-            ];
+            return $this->restaurantResult(
+                false,
+                true,
+                false,
+                true,
+                "{$restaurant->restaurant_name} does not currently offer delivery.",
+            );
         }
 
         $coverageRows = DB::table('service_areas as sa')
@@ -203,15 +230,24 @@ class ServiceAreaValidationService
             ->get();
 
         if ($coverageRows->isEmpty()) {
-            return [
-                'supported' => true,
-                'platform_supported' => true,
-                'restaurant_supported' => true,
-                'restaurant_configured' => false,
-                'reason' => $platform['reason'],
-            ];
+            return $this->restaurantResult(true, true, true, false, $platform['reason']);
         }
 
+        return $this->matchRestaurantCoverage($restaurant, $coverageRows, $city, $barangay);
+    }
+
+    /**
+     * @param  iterable<int, object>  $coverageRows
+     * @return array{
+     *   supported: bool,
+     *   platform_supported: bool,
+     *   restaurant_supported: bool,
+     *   restaurant_configured: bool,
+     *   reason: string
+     * }
+     */
+    private function matchRestaurantCoverage(object $restaurant, iterable $coverageRows, string $city, ?string $barangay): array
+    {
         $cleanCity = mb_strtolower(trim($city));
         $cleanBarangay = $barangay !== null ? mb_strtolower(trim($barangay)) : '';
 
@@ -220,33 +256,58 @@ class ServiceAreaValidationService
                 continue;
             }
             if ($row->barangay_id === null) {
-                return [
-                    'supported' => true,
-                    'platform_supported' => true,
-                    'restaurant_supported' => true,
-                    'restaurant_configured' => true,
-                    'reason' => "{$restaurant->restaurant_name} delivers to {$city}.",
-                ];
+                return $this->restaurantResult(
+                    true,
+                    true,
+                    true,
+                    true,
+                    "{$restaurant->restaurant_name} delivers to {$city}.",
+                );
             }
             if ($cleanBarangay !== '' && mb_strtolower((string) $row->barangay_name) === $cleanBarangay) {
-                return [
-                    'supported' => true,
-                    'platform_supported' => true,
-                    'restaurant_supported' => true,
-                    'restaurant_configured' => true,
-                    'reason' => "{$restaurant->restaurant_name} delivers to Brgy. {$row->barangay_name}, {$city}.",
-                ];
+                return $this->restaurantResult(
+                    true,
+                    true,
+                    true,
+                    true,
+                    "{$restaurant->restaurant_name} delivers to Brgy. {$row->barangay_name}, {$city}.",
+                );
             }
         }
 
         $areaText = $barangay ? "Brgy. {$barangay}, {$city}" : $city;
 
+        return $this->restaurantResult(
+            false,
+            true,
+            false,
+            true,
+            "{$restaurant->restaurant_name} does not deliver to {$areaText}.",
+        );
+    }
+
+    /**
+     * @return array{
+     *   supported: bool,
+     *   platform_supported: bool,
+     *   restaurant_supported: bool,
+     *   restaurant_configured: bool,
+     *   reason: string
+     * }
+     */
+    private function restaurantResult(
+        bool $supported,
+        bool $platformSupported,
+        bool $restaurantSupported,
+        bool $restaurantConfigured,
+        string $reason,
+    ): array {
         return [
-            'supported' => false,
-            'platform_supported' => true,
-            'restaurant_supported' => false,
-            'restaurant_configured' => true,
-            'reason' => "{$restaurant->restaurant_name} does not deliver to {$areaText}.",
+            'supported' => $supported,
+            'platform_supported' => $platformSupported,
+            'restaurant_supported' => $restaurantSupported,
+            'restaurant_configured' => $restaurantConfigured,
+            'reason' => $reason,
         ];
     }
 }
