@@ -29,39 +29,14 @@ class AvailabilityService
         $todayClosure = $closures->firstWhere('closure_date', $todayDate);
         $yesterdayClosure = $closures->firstWhere('closure_date', $yesterdayDate);
 
-        $isOpen = false;
-
-        if (! $todayClosure) {
-            foreach ($operatingHours as $period) {
-                if ((int) $period->is_closed === 1) {
-                    continue;
-                }
-
-                $dow = (int) $period->day_of_week;
-                $openTime = (string) $period->opening_time;
-                $closeTime = (string) $period->closing_time;
-                $closesNextDay = (int) $period->closes_next_day === 1;
-
-                if ($dow === $todayDow) {
-                    if ($closesNextDay) {
-                        if ($currentTime >= $openTime) {
-                            $isOpen = true;
-                            break;
-                        }
-                    } elseif ($currentTime >= $openTime && $currentTime < $closeTime) {
-                        $isOpen = true;
-                        break;
-                    }
-                }
-
-                if ($dow === $yesterdayDow && $closesNextDay && ! $yesterdayClosure) {
-                    if ($currentTime < $closeTime) {
-                        $isOpen = true;
-                        break;
-                    }
-                }
-            }
-        }
+        $isOpen = $this->resolveIsOpen(
+            $operatingHours,
+            $todayClosure,
+            $yesterdayClosure,
+            $currentTime,
+            $todayDow,
+            $yesterdayDow,
+        );
 
         $acceptingOrders = (bool) $restaurant->accepting_orders;
         $acceptingReservations = (bool) $restaurant->accepts_reservations && (bool) $restaurant->accepting_reservations;
@@ -77,5 +52,57 @@ class AvailabilityService
             'temporarily_unavailable' => $temporarilyUnavailable,
             'closure_reason' => $todayClosure?->reason,
         ];
+    }
+
+    /**
+     * @param  Collection<int, object>  $operatingHours
+     */
+    private function resolveIsOpen(
+        Collection $operatingHours,
+        ?object $todayClosure,
+        ?object $yesterdayClosure,
+        string $currentTime,
+        int $todayDow,
+        int $yesterdayDow,
+    ): bool {
+        if ($todayClosure) {
+            return false;
+        }
+
+        foreach ($operatingHours as $period) {
+            if ($this->isPeriodOpenNow($period, $yesterdayClosure, $currentTime, $todayDow, $yesterdayDow)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isPeriodOpenNow(
+        object $period,
+        ?object $yesterdayClosure,
+        string $currentTime,
+        int $todayDow,
+        int $yesterdayDow,
+    ): bool {
+        if ((int) $period->is_closed === 1) {
+            return false;
+        }
+
+        $dow = (int) $period->day_of_week;
+        $openTime = (string) $period->opening_time;
+        $closeTime = (string) $period->closing_time;
+        $closesNextDay = (int) $period->closes_next_day === 1;
+
+        if ($dow === $todayDow) {
+            return $closesNextDay
+                ? $currentTime >= $openTime
+                : ($currentTime >= $openTime && $currentTime < $closeTime);
+        }
+
+        return $dow === $yesterdayDow
+            && $closesNextDay
+            && ! $yesterdayClosure
+            && $currentTime < $closeTime;
     }
 }

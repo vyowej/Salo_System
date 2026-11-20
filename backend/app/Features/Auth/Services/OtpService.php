@@ -39,30 +39,10 @@ class OtpService
         $length = max(4, min(8, (int) config('salo.otp.length', 6)));
 
         $cooldownKey = $this->cooldownKey($purpose, $normalizedEmail, $user->user_id);
-        $cooldownExpiresAt = Cache::get($cooldownKey);
-        if (is_int($cooldownExpiresAt) && $cooldownExpiresAt > now()->timestamp) {
-            $retryAfter = $cooldownExpiresAt - now()->timestamp;
-            throw new ThrottleRequestsException("Please wait {$retryAfter} seconds before requesting another code.");
-        }
-
         $hourlyKey = "otp:hourly:{$user->user_id}|{$request->ip()}";
-        if (RateLimiter::tooManyAttempts($hourlyKey, self::MAX_HOURLY_SENDS)) {
-            throw new ThrottleRequestsException('Too many verification code requests. Please try again later.');
-        }
+        $this->enforceSendLimits($cooldownKey, $hourlyKey);
 
-        $maxNumber = (10 ** $length) - 1;
-        $code = str_pad((string) random_int(0, $maxNumber), $length, '0', STR_PAD_LEFT);
-        $expiresAt = now()->addMinutes($expirationMinutes);
-
-        Cache::put($this->pendingKey($purpose, $normalizedEmail, $user->user_id), [
-            'hash' => Hash::make($code),
-            'attempts' => 0,
-            'expires_at' => $expiresAt->timestamp,
-            'user_id' => (int) $user->user_id,
-        ], $expiresAt);
-
-        // Clear any prior verified flag for this email/purpose when a new OTP is requested.
-        Cache::forget($this->verifiedKey($purpose, $normalizedEmail, $user->user_id));
+        $code = $this->storePendingOtp($purpose, $normalizedEmail, (int) $user->user_id, $length, $expirationMinutes);
 
         Cache::put($cooldownKey, now()->addSeconds($cooldownSeconds)->timestamp, $cooldownSeconds);
         RateLimiter::hit($hourlyKey, self::HOURLY_DECAY_SECONDS);
@@ -73,15 +53,7 @@ class OtpService
             expirationMinutes: $expirationMinutes,
         ));
 
-        DB::table('audit_logs')->insert([
-            'actor_user_id' => $user->user_id,
-            'action' => 'email_otp_sent',
-            'entity_type' => 'users',
-            'entity_id' => (string) $user->user_id,
-            'new_values' => json_encode(['email' => $normalizedEmail, 'purpose' => $purpose]),
-            'ip_address' => $request->ip(),
-            'created_at' => now(),
-        ]);
+        $this->recordOtpAuditLog((int) $user->user_id, 'email_otp_sent', $normalizedEmail, $purpose, $request);
 
         return [
             'email' => $normalizedEmail,
@@ -102,6 +74,65 @@ class OtpService
         $maxAttempts = max(1, (int) config('salo.otp.max_attempts', 5));
         $pendingKey = $this->pendingKey($purpose, $normalizedEmail, $user->user_id);
 
+        $record = $this->requirePendingOtp($pendingKey, $maxAttempts);
+
+        if (! Hash::check(trim($code), (string) $record['hash'])) {
+            $this->handleFailedAttempt($pendingKey, $record, (int) ($record['attempts'] ?? 0), $maxAttempts);
+        }
+
+        $verifiedAt = $this->markVerified($purpose, $normalizedEmail, $user, $pendingKey);
+        $this->recordOtpAuditLog((int) $user->user_id, 'email_otp_verified', $normalizedEmail, $purpose, $request);
+
+        return [
+            'email' => $normalizedEmail,
+            'purpose' => $purpose,
+            'verified' => true,
+            'verified_at' => $verifiedAt->toIso8601String(),
+        ];
+    }
+
+    private function enforceSendLimits(string $cooldownKey, string $hourlyKey): void
+    {
+        $cooldownExpiresAt = Cache::get($cooldownKey);
+        if (is_int($cooldownExpiresAt) && $cooldownExpiresAt > now()->timestamp) {
+            $retryAfter = $cooldownExpiresAt - now()->timestamp;
+            throw new ThrottleRequestsException("Please wait {$retryAfter} seconds before requesting another code.");
+        }
+
+        if (RateLimiter::tooManyAttempts($hourlyKey, self::MAX_HOURLY_SENDS)) {
+            throw new ThrottleRequestsException('Too many verification code requests. Please try again later.');
+        }
+    }
+
+    private function storePendingOtp(
+        string $purpose,
+        string $normalizedEmail,
+        int $userId,
+        int $length,
+        int $expirationMinutes,
+    ): string {
+        $maxNumber = (10 ** $length) - 1;
+        $code = str_pad((string) random_int(0, $maxNumber), $length, '0', STR_PAD_LEFT);
+        $expiresAt = now()->addMinutes($expirationMinutes);
+
+        Cache::put($this->pendingKey($purpose, $normalizedEmail, $userId), [
+            'hash' => Hash::make($code),
+            'attempts' => 0,
+            'expires_at' => $expiresAt->timestamp,
+            'user_id' => $userId,
+        ], $expiresAt);
+
+        // Clear any prior verified flag for this email/purpose when a new OTP is requested.
+        Cache::forget($this->verifiedKey($purpose, $normalizedEmail, $userId));
+
+        return $code;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function requirePendingOtp(string $pendingKey, int $maxAttempts): array
+    {
         $record = Cache::get($pendingKey);
         if (! is_array($record) || ! isset($record['hash'], $record['expires_at'])) {
             throw ValidationException::withMessages([
@@ -122,23 +153,32 @@ class OtpService
             throw new ThrottleRequestsException('Maximum verification attempts exceeded. Please request a new code.');
         }
 
-        if (! Hash::check(trim($code), (string) $record['hash'])) {
-            $attempts++;
-            if ($attempts >= $maxAttempts) {
-                Cache::forget($pendingKey);
-                throw new ThrottleRequestsException('Maximum verification attempts exceeded. Please request a new code.');
-            }
+        return $record;
+    }
 
-            $remainingTtl = max(1, (int) $record['expires_at'] - now()->timestamp);
-            $record['attempts'] = $attempts;
-            Cache::put($pendingKey, $record, $remainingTtl);
-
-            $remainingAttempts = $maxAttempts - $attempts;
-            throw ValidationException::withMessages([
-                'code' => ["Invalid verification code. {$remainingAttempts} attempt(s) remaining."],
-            ]);
+    /**
+     * @param  array<string, mixed>  $record
+     */
+    private function handleFailedAttempt(string $pendingKey, array $record, int $attempts, int $maxAttempts): never
+    {
+        $attempts++;
+        if ($attempts >= $maxAttempts) {
+            Cache::forget($pendingKey);
+            throw new ThrottleRequestsException('Maximum verification attempts exceeded. Please request a new code.');
         }
 
+        $remainingTtl = max(1, (int) $record['expires_at'] - now()->timestamp);
+        $record['attempts'] = $attempts;
+        Cache::put($pendingKey, $record, $remainingTtl);
+
+        $remainingAttempts = $maxAttempts - $attempts;
+        throw ValidationException::withMessages([
+            'code' => ["Invalid verification code. {$remainingAttempts} attempt(s) remaining."],
+        ]);
+    }
+
+    private function markVerified(string $purpose, string $normalizedEmail, User $user, string $pendingKey): Carbon
+    {
         // Single-use: invalidate immediately after successful check.
         Cache::forget($pendingKey);
         Cache::forget($this->cooldownKey($purpose, $normalizedEmail, $user->user_id));
@@ -157,22 +197,25 @@ class OtpService
             $user->save();
         }
 
+        return $verifiedAt;
+    }
+
+    private function recordOtpAuditLog(
+        int $userId,
+        string $action,
+        string $normalizedEmail,
+        string $purpose,
+        Request $request,
+    ): void {
         DB::table('audit_logs')->insert([
-            'actor_user_id' => $user->user_id,
-            'action' => 'email_otp_verified',
+            'actor_user_id' => $userId,
+            'action' => $action,
             'entity_type' => 'users',
-            'entity_id' => (string) $user->user_id,
+            'entity_id' => (string) $userId,
             'new_values' => json_encode(['email' => $normalizedEmail, 'purpose' => $purpose]),
             'ip_address' => $request->ip(),
             'created_at' => now(),
         ]);
-
-        return [
-            'email' => $normalizedEmail,
-            'purpose' => $purpose,
-            'verified' => true,
-            'verified_at' => $verifiedAt->toIso8601String(),
-        ];
     }
 
     /**

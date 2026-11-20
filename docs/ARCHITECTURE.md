@@ -114,3 +114,8 @@ Cohesive private helpers were extracted in 3 Locations services while preserving
 - `ServiceAreaValidationService`: decomposed `checkPlatformSupport()` and `checkRestaurantSupport()` (`loadMatchingActiveAreas`, `matchActivePlatformArea`, `platformResult`, `matchRestaurantCoverage`, `restaurantResult`)
 - `RiderTrackingService`: decomposed `recordLocation()` and `getOrderTracking()` (`requireActiveRider`, `verifyActiveRiderDelivery`, `findOutOfOrderResult`, `loadAuthorizedOrderForTracking`, `loadDeliverySummary`, `loadLatestActiveRiderLocation`, `formatTrackingPayload`)
 - `RestaurantLocationService`: decomposed `getLocationAndCoverage()` and `updateCoverage()` (`loadFormattedAddress`, `loadFormattedCoverage`, `resolveValidatedCoverageEntries`)
+
+## Auth & Availability Services Cleanup (CLEAN-4D)
+
+- `OtpService`: decomposed `send()` and `verify()` into cohesive private helpers (`enforceSendLimits`, `storePendingOtp`, `requirePendingOtp`, `handleFailedAttempt`, `markVerified`, `recordOtpAuditLog`), eliminating duplicated `audit_logs` insertion while preserving OTP cache keys, rate-limiting, attempt lockouts, and single-use verification.
+- `AvailabilityService`: decomposed `compute()` into `resolveIsOpen()` and `isPeriodOpenNow()` while preserving `Asia/Manila` timezone conversion, closure precedence, and overnight (`closes_next_day`) spillover rules. (`AuthService` and `PasswordResetService` were left unchanged.)
