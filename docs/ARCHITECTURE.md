@@ -89,3 +89,13 @@ The 4 paginated listing methods (`listUsers`, `listRestaurants`, `listRiders`, `
 - `selectOrderColumns(bool $hasPaymentStatusFilter)`
 - `loadOrderItemCounts(array $orderIds)`
 - `formatAdminOrderRow(object $row, ?object $counts, ?object $latestPayment, bool $hasPaymentStatusFilter)`
+
+## Locations FormRequest Validation (CLEAN-4A)
+
+Inline `$request->validate(...)` blocks across the 5 Locations controllers (`AdminServiceAreaController`, `CustomerAddressController`, `RestaurantLocationController`, `LocationLookupController`, and `TrackingController`) were extracted into 8 `FormRequest` classes under `backend/app/Features/Locations/Requests/`:
+
+- `StoreServiceAreaRequest` / `UpdateServiceAreaRequest`
+- `StoreCustomerAddressRequest` / `UpdateCustomerAddressRequest` (preserving `prepareForValidation()` `recipient_phone` normalization via `UpdateProfileRequest::normalizePhilippineMobile()`)
+- `UpdateRestaurantLocationRequest` / `UpdateRestaurantCoverageRequest`
+- `ValidateServiceAreaRequest`
+- `RecordRiderLocationRequest`

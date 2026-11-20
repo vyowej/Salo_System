@@ -2,6 +2,8 @@
 
 namespace App\Features\Locations\Controllers;
 
+use App\Features\Locations\Requests\UpdateRestaurantCoverageRequest;
+use App\Features\Locations\Requests\UpdateRestaurantLocationRequest;
 use App\Features\Locations\Services\RestaurantLocationService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
@@ -27,22 +29,9 @@ class RestaurantLocationController extends Controller
         );
     }
 
-    public function updateLocation(Request $request): JsonResponse
+    public function updateLocation(UpdateRestaurantLocationRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'restaurant_id' => ['nullable', 'integer', 'min:1'],
-            'province' => ['required', 'string', 'max:100'],
-            'city' => ['required', 'string', 'max:100'],
-            'barangay' => ['required', 'string', 'max:100'],
-            'street' => ['required', 'string', 'max:255'],
-            'house_number' => ['nullable', 'string', 'max:50'],
-            'building_name' => ['nullable', 'string', 'max:150'],
-            'landmark' => ['nullable', 'string', 'max:500'],
-            'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
-            'latitude' => ['required', 'numeric', 'between:-90,90'],
-            'longitude' => ['required', 'numeric', 'between:-180,180'],
-            'gps_accuracy' => ['nullable', 'numeric', 'min:0', 'max:100000'],
-        ]);
+        $validated = $request->validated();
 
         $data = $this->restaurantLocations->updateLocation(
             $request->user(),
@@ -57,15 +46,9 @@ class RestaurantLocationController extends Controller
         );
     }
 
-    public function updateCoverage(Request $request): JsonResponse
+    public function updateCoverage(UpdateRestaurantCoverageRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'restaurant_id' => ['nullable', 'integer', 'min:1'],
-            'areas' => ['present', 'array'],
-            'areas.*.province' => ['required', 'string', 'max:100'],
-            'areas.*.city' => ['required', 'string', 'max:100'],
-            'areas.*.barangay' => ['nullable', 'string', 'max:100'],
-        ]);
+        $validated = $request->validated();
 
         $data = $this->restaurantLocations->updateCoverage(
             $request->user(),

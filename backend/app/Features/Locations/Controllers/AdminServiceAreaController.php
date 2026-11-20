@@ -2,11 +2,12 @@
 
 namespace App\Features\Locations\Controllers;
 
+use App\Features\Locations\Requests\StoreServiceAreaRequest;
+use App\Features\Locations\Requests\UpdateServiceAreaRequest;
 use App\Features\Locations\Services\AdminServiceAreaService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class AdminServiceAreaController extends Controller
 {
@@ -22,21 +23,9 @@ class AdminServiceAreaController extends Controller
         );
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreServiceAreaRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'province' => ['required', 'string', 'max:100'],
-            'city' => ['nullable', 'string', 'max:100'],
-            'barangay' => ['nullable', 'string', 'max:100'],
-            'is_active' => ['sometimes', 'boolean'],
-            'center_latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'center_longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'boundary_geojson' => ['nullable', 'string'],
-            'notes' => ['nullable', 'string', 'max:255'],
-            'reason' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $area = $this->adminServiceAreas->create($request->user(), $validated, $request);
+        $area = $this->adminServiceAreas->create($request->user(), $request->validated(), $request);
 
         return ApiResponse::success(
             data: ['service_area' => $area],
@@ -45,18 +34,9 @@ class AdminServiceAreaController extends Controller
         );
     }
 
-    public function update(Request $request, int $id): JsonResponse
+    public function update(UpdateServiceAreaRequest $request, int $id): JsonResponse
     {
-        $validated = $request->validate([
-            'is_active' => ['sometimes', 'boolean'],
-            'center_latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'center_longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'boundary_geojson' => ['nullable', 'string'],
-            'notes' => ['nullable', 'string', 'max:255'],
-            'reason' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $area = $this->adminServiceAreas->update($request->user(), $id, $validated, $request);
+        $area = $this->adminServiceAreas->update($request->user(), $id, $request->validated(), $request);
 
         return ApiResponse::success(
             data: ['service_area' => $area],

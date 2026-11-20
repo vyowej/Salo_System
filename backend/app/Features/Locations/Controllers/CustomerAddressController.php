@@ -2,7 +2,8 @@
 
 namespace App\Features\Locations\Controllers;
 
-use App\Features\Account\Requests\UpdateProfileRequest;
+use App\Features\Locations\Requests\StoreCustomerAddressRequest;
+use App\Features\Locations\Requests\UpdateCustomerAddressRequest;
 use App\Features\Locations\Services\CustomerAddressService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
@@ -23,37 +24,9 @@ class CustomerAddressController extends Controller
         );
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreCustomerAddressRequest $request): JsonResponse
     {
-        if ($request->exists('recipient_phone')) {
-            $rawPhone = $request->input('recipient_phone');
-            $normalizedPhone = is_string($rawPhone) && trim($rawPhone) !== ''
-                ? UpdateProfileRequest::normalizePhilippineMobile($rawPhone)
-                : null;
-            $request->merge(['recipient_phone' => $normalizedPhone]);
-        }
-
-        $validated = $request->validate([
-            'label' => ['required', 'string', 'max:50'],
-            'recipient_name' => ['nullable', 'string', 'max:150'],
-            'recipient_phone' => ['nullable', 'string', 'regex:/^09\d{9}$/'],
-            'province' => ['required', 'string', 'max:100'],
-            'city' => ['required', 'string', 'max:100'],
-            'barangay' => ['required', 'string', 'max:100'],
-            'street' => ['required', 'string', 'max:255'],
-            'house_number' => ['nullable', 'string', 'max:50'],
-            'building_name' => ['nullable', 'string', 'max:150'],
-            'landmark' => ['nullable', 'string', 'max:500'],
-            'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'gps_accuracy' => ['nullable', 'numeric', 'min:0', 'max:100000'],
-            'is_default' => ['sometimes', 'boolean'],
-        ], [
-            'recipient_phone.regex' => 'Enter a valid mobile number, like 09171234567.',
-        ]);
-
-        $address = $this->customerAddresses->createForUser($request->user(), $validated);
+        $address = $this->customerAddresses->createForUser($request->user(), $request->validated());
 
         return ApiResponse::success(
             data: ['address' => $address],
@@ -62,37 +35,9 @@ class CustomerAddressController extends Controller
         );
     }
 
-    public function update(Request $request, int $id): JsonResponse
+    public function update(UpdateCustomerAddressRequest $request, int $id): JsonResponse
     {
-        if ($request->exists('recipient_phone')) {
-            $rawPhone = $request->input('recipient_phone');
-            $normalizedPhone = is_string($rawPhone) && trim($rawPhone) !== ''
-                ? UpdateProfileRequest::normalizePhilippineMobile($rawPhone)
-                : null;
-            $request->merge(['recipient_phone' => $normalizedPhone]);
-        }
-
-        $validated = $request->validate([
-            'label' => ['sometimes', 'string', 'max:50'],
-            'recipient_name' => ['nullable', 'string', 'max:150'],
-            'recipient_phone' => ['nullable', 'string', 'regex:/^09\d{9}$/'],
-            'province' => ['sometimes', 'string', 'max:100'],
-            'city' => ['sometimes', 'string', 'max:100'],
-            'barangay' => ['sometimes', 'string', 'max:100'],
-            'street' => ['sometimes', 'string', 'max:255'],
-            'house_number' => ['nullable', 'string', 'max:50'],
-            'building_name' => ['nullable', 'string', 'max:150'],
-            'landmark' => ['nullable', 'string', 'max:500'],
-            'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'gps_accuracy' => ['nullable', 'numeric', 'min:0', 'max:100000'],
-            'is_default' => ['sometimes', 'boolean'],
-        ], [
-            'recipient_phone.regex' => 'Enter a valid mobile number, like 09171234567.',
-        ]);
-
-        $address = $this->customerAddresses->updateForUser($request->user(), $id, $validated);
+        $address = $this->customerAddresses->updateForUser($request->user(), $id, $request->validated());
 
         return ApiResponse::success(
             data: ['address' => $address],

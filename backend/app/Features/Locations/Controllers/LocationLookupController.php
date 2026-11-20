@@ -2,6 +2,7 @@
 
 namespace App\Features\Locations\Controllers;
 
+use App\Features\Locations\Requests\ValidateServiceAreaRequest;
 use App\Features\Locations\Services\AdminServiceAreaService;
 use App\Features\Locations\Services\PsgcLocationService;
 use App\Features\Locations\Services\ServiceAreaValidationService;
@@ -69,14 +70,9 @@ class LocationLookupController extends Controller
         );
     }
 
-    public function validateServiceArea(Request $request): JsonResponse
+    public function validateServiceArea(ValidateServiceAreaRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'province' => ['required', 'string', 'max:100'],
-            'city' => ['required', 'string', 'max:100'],
-            'barangay' => ['nullable', 'string', 'max:100'],
-            'restaurant_id' => ['nullable', 'integer', 'min:1'],
-        ]);
+        $validated = $request->validated();
 
         $result = isset($validated['restaurant_id'])
             ? $this->validation->checkRestaurantSupport(

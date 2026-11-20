@@ -2,6 +2,7 @@
 
 namespace App\Features\Locations\Controllers;
 
+use App\Features\Locations\Requests\RecordRiderLocationRequest;
 use App\Features\Locations\Services\RiderTrackingService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
@@ -14,19 +15,9 @@ class TrackingController extends Controller
         private readonly RiderTrackingService $tracking,
     ) {}
 
-    public function recordRiderLocation(Request $request): JsonResponse
+    public function recordRiderLocation(RecordRiderLocationRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'delivery_id' => ['nullable', 'integer', 'min:1'],
-            'latitude' => ['required', 'numeric', 'between:-90,90'],
-            'longitude' => ['required', 'numeric', 'between:-180,180'],
-            'accuracy_meters' => ['nullable', 'numeric', 'min:0', 'max:100000'],
-            'heading' => ['nullable', 'numeric', 'between:0,360'],
-            'speed_mps' => ['nullable', 'numeric', 'min:0'],
-            'recorded_at' => ['nullable', 'date'],
-        ]);
-
-        $result = $this->tracking->recordLocation($request->user(), $validated);
+        $result = $this->tracking->recordLocation($request->user(), $request->validated());
 
         return ApiResponse::success(
             data: $result,
