@@ -5,6 +5,7 @@ namespace App\Features\Admin\Services;
 use App\Features\Notifications\Services\NotificationService;
 use App\Models\User;
 use App\Support\AuditLogService;
+use App\Support\FileStorageService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
@@ -16,6 +17,7 @@ class AdminManagementService
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
+        private readonly FileStorageService $fileStorageService,
     ) {}
 
     /**
@@ -184,6 +186,10 @@ class AdminManagementService
 
         $paginator = $query->orderBy('rest.created_at', $sortDir)->paginate($perPage);
         $items = $paginator->items();
+        foreach ($items as $item) {
+            $item->logo_image = $this->fileStorageService->publicUrl($item->logo_image);
+            $item->cover_image = $this->fileStorageService->publicUrl($item->cover_image);
+        }
         $this->attachPrimaryOwnersToRestaurants($items);
 
         return $this->formatPaginatedResult($paginator, $items);

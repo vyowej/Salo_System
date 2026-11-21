@@ -3,6 +3,7 @@
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\RequireRole;
 use App\Support\ApiResponse;
+use App\Support\Storage\ImageStorageUnavailableException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -86,6 +87,13 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::error(
                     message: $e->getMessage() ?: 'Too many attempts. Please try again later.',
                     status: 429,
+                );
+            }
+
+            if ($e instanceof ImageStorageUnavailableException) {
+                return ApiResponse::error(
+                    message: $e->getMessage(),
+                    status: $e->statusCode(),
                 );
             }
 

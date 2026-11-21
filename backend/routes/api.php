@@ -17,6 +17,7 @@ use App\Features\Locations\Controllers\CustomerAddressController;
 use App\Features\Locations\Controllers\LocationLookupController;
 use App\Features\Locations\Controllers\RestaurantLocationController;
 use App\Features\Locations\Controllers\TrackingController;
+use App\Features\Media\Controllers\PublicImageProxyController;
 use App\Features\Notifications\Controllers\NotificationController;
 use App\Features\Orders\Controllers\CustomerOrderController;
 use App\Features\Orders\Controllers\RestaurantOrderController;
@@ -34,6 +35,10 @@ use App\Features\Riders\Controllers\RiderDeliveryController;
 use App\Support\ApiResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/media/images/{fileId}', [PublicImageProxyController::class, 'show'])
+    ->where('fileId', '[A-Za-z0-9_-]{10,128}')
+    ->middleware('throttle:600,1');
 
 Route::get('/health', function () {
     $database = 'down';

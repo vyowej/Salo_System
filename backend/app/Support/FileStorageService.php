@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Support\Storage\GoogleDrivePublicImageStore;
+use App\Support\Storage\PublicImageStore;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -10,6 +12,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FileStorageService
 {
+    public function __construct(
+        private readonly PublicImageStore $publicImageStore,
+    ) {}
     private const IMAGE_MIME_MAP = [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
@@ -36,20 +41,34 @@ class FileStorageService
     ];
 
     /**
-     * Store a public image (restaurant logo, cover photo, menu item image) on the public disk.
+     * Store a public image (restaurant logo, cover photo, menu item image) via the configured PublicImageStore.
      *
      * @return array<string, mixed>
      */
     public function storePublicImage(UploadedFile $file, string $directory, string $fieldName = 'image'): array
     {
-        return $this->storeFile(
+        $validated = $this->validateUploadedFile(
             file: $file,
-            disk: 'public',
-            directory: trim($directory, '/'),
             mimeMap: self::IMAGE_MIME_MAP,
             allowedExtensions: (array) config('salo.uploads.allowed_image_types', ['jpg', 'jpeg', 'png', 'webp']),
             fieldName: $fieldName,
         );
+
+        $storedValue = $this->publicImageStore->put(
+            localPath: $validated['real_path'],
+            mime: $validated['mime_type'],
+            name: $validated['filename'],
+            directory: trim($directory, '/'),
+            meta: ['field' => $fieldName],
+        );
+
+        return [
+            'path' => $storedValue,
+            'url' => $this->publicUrl($storedValue),
+            'original_filename' => $validated['original_filename'],
+            'mime_type' => $validated['mime_type'],
+            'size_bytes' => $validated['size_bytes'],
+        ];
     }
 
     /**
@@ -59,14 +78,28 @@ class FileStorageService
      */
     public function storePrivateDocument(UploadedFile $file, string $directory, string $fieldName = 'document'): array
     {
-        return $this->storeFile(
+        $validated = $this->validateUploadedFile(
             file: $file,
-            disk: 'local',
-            directory: trim($directory, '/'),
             mimeMap: self::DOCUMENT_MIME_MAP,
             allowedExtensions: (array) config('salo.uploads.allowed_document_types', ['pdf', 'jpg', 'jpeg', 'png']),
             fieldName: $fieldName,
         );
+
+        $storedPath = $file->storeAs(trim($directory, '/'), $validated['filename'], 'local');
+
+        if ($storedPath === false) {
+            throw ValidationException::withMessages([
+                $fieldName => ['Failed to store uploaded file.'],
+            ]);
+        }
+
+        return [
+            'path' => $storedPath,
+            'url' => null,
+            'original_filename' => $validated['original_filename'],
+            'mime_type' => $validated['mime_type'],
+            'size_bytes' => $validated['size_bytes'],
+        ];
     }
 
     /**
@@ -99,6 +132,32 @@ class FileStorageService
      */
     public function deleteIfUnreferenced(string $disk, ?string $path, callable $isReferenced): bool
     {
+        if ($disk === 'public') {
+            if ($path === null || trim($path) === '') {
+                return false;
+            }
+
+            $trimmed = trim($path);
+            if (str_starts_with($trimmed, 'gdrive:')) {
+                if ($isReferenced($trimmed)) {
+                    return false;
+                }
+
+                return $this->publicImageStore->delete($trimmed);
+            }
+
+            $normalized = $this->normalizeRelativePath($trimmed);
+            if ($normalized === null || $isReferenced($normalized)) {
+                return false;
+            }
+
+            if ($this->publicImageStore->delete($normalized)) {
+                return true;
+            }
+
+            return Storage::disk('public')->exists($normalized) && Storage::disk('public')->delete($normalized);
+        }
+
         $normalized = $this->normalizeRelativePath($path);
         if ($normalized === null) {
             return false;
@@ -124,8 +183,23 @@ class FileStorageService
     public function cleanupStoredPaths(array $publicPaths = [], array $privatePaths = []): void
     {
         foreach ($publicPaths as $path) {
-            $normalized = $this->normalizeRelativePath($path);
-            if ($normalized !== null && Storage::disk('public')->exists($normalized)) {
+            $trimmed = trim((string) $path);
+            if ($trimmed === '') {
+                continue;
+            }
+
+            if (str_starts_with($trimmed, 'gdrive:')) {
+                $this->publicImageStore->delete($trimmed);
+
+                continue;
+            }
+
+            $normalized = $this->normalizeRelativePath($trimmed);
+            if ($normalized === null) {
+                continue;
+            }
+
+            if (! $this->publicImageStore->delete($normalized) && Storage::disk('public')->exists($normalized)) {
                 Storage::disk('public')->delete($normalized);
             }
         }
@@ -150,6 +224,17 @@ class FileStorageService
         $trimmed = trim($storedPath);
         if ($trimmed === '') {
             return null;
+        }
+
+        if (GoogleDrivePublicImageStore::isDriveValue($trimmed)) {
+            $fileId = GoogleDrivePublicImageStore::extractFileId($trimmed);
+            if ($fileId === null) {
+                return null;
+            }
+
+            $appUrl = rtrim((string) config('app.url', 'http://localhost:8000'), '/');
+
+            return $appUrl.'/api/media/images/'.$fileId;
         }
 
         if (preg_match('#^https?://#i', $trimmed) === 1) {
@@ -206,12 +291,10 @@ class FileStorageService
     /**
      * @param  array<string, string>  $mimeMap
      * @param  array<int, string>  $allowedExtensions
-     * @return array<string, mixed>
+     * @return array{real_path: string, filename: string, original_filename: string, mime_type: string, size_bytes: int}
      */
-    private function storeFile(
+    private function validateUploadedFile(
         UploadedFile $file,
-        string $disk,
-        string $directory,
         array $mimeMap,
         array $allowedExtensions,
         string $fieldName,
@@ -262,17 +345,10 @@ class FileStorageService
         }
 
         $filename = Str::uuid()->toString().'.'.$canonicalExt;
-        $storedPath = $file->storeAs($directory, $filename, $disk);
-
-        if ($storedPath === false) {
-            throw ValidationException::withMessages([
-                $fieldName => ['Failed to store uploaded file.'],
-            ]);
-        }
 
         return [
-            'path' => $storedPath,
-            'url' => $disk === 'public' ? $this->publicUrl($storedPath) : null,
+            'real_path' => $realPath,
+            'filename' => $filename,
             'original_filename' => mb_substr($originalName ?: $filename, 0, 255),
             'mime_type' => $detectedMime,
             'size_bytes' => $sizeBytes,

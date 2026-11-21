@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Support\Storage\GoogleDrivePublicImageStore;
+use App\Support\Storage\GoogleDriveTokenProvider;
+use App\Support\Storage\LocalPublicImageStore;
+use App\Support\Storage\PublicImageStore;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -11,7 +15,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(GoogleDriveTokenProvider::class);
+
+        $this->app->singleton(PublicImageStore::class, function ($app): PublicImageStore {
+            $driver = strtolower(trim((string) config('salo.uploads.public_image_driver', 'local')));
+
+            if ($driver === 'google_drive') {
+                return new GoogleDrivePublicImageStore($app->make(GoogleDriveTokenProvider::class));
+            }
+
+            return new LocalPublicImageStore;
+        });
     }
 
     /**

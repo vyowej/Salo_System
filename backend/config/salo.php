@@ -10,6 +10,7 @@ return [
     ],
 
     'uploads' => [
+        'public_image_driver' => env('PUBLIC_IMAGE_STORAGE', 'local'),
         'max_size_kb' => (int) env('MAX_UPLOAD_SIZE_KB', 5120),
         'allowed_image_types' => array_values(array_filter(array_map(
             static fn (string $ext): string => strtolower(trim($ext)),
@@ -19,6 +20,14 @@ return [
             static fn (string $ext): string => strtolower(trim($ext)),
             explode(',', (string) env('ALLOWED_DOCUMENT_TYPES', 'pdf,jpg,jpeg,png')),
         ))),
+        'google_drive' => [
+            'client_id' => env('GOOGLE_DRIVE_CLIENT_ID'),
+            'client_secret' => env('GOOGLE_DRIVE_CLIENT_SECRET'),
+            'refresh_token' => env('GOOGLE_DRIVE_REFRESH_TOKEN'),
+            'public_folder_id' => env('GOOGLE_DRIVE_PUBLIC_FOLDER_ID'),
+            'timeout_seconds' => max(5, (int) env('GOOGLE_DRIVE_TIMEOUT_SECONDS', 20)),
+            'proxy_cache' => filter_var(env('GOOGLE_DRIVE_PROXY_CACHE', true), FILTER_VALIDATE_BOOLEAN),
+        ],
     ],
 
     'orders' => [
