@@ -4,6 +4,7 @@ import AuthLayout from '../../../layouts/AuthLayout';
 import { Input, PasswordField } from '../../../components/forms';
 import Button from '../../../components/common/Button';
 import { useAuth } from '../../../hooks/useAuth';
+import accountService from '../../../services/accountService';
 import { getDefaultWorkspace, getWorkspaceHomePath } from '../../../services/authService';
 import './LoginPage.css';
 
@@ -18,6 +19,8 @@ export default function LoginPage({ embedded = false, onSwitch }) {
   });
   const [passwordResetKey, setPasswordResetKey] = useState(0);
   const [error, setError] = useState(null);
+  const [reactivationStatus, setReactivationStatus] = useState('');
+  const [reactivating, setReactivating] = useState(false);
 
   const getDestination = (resUser) => {
     if (location.state?.from?.pathname) {
@@ -70,13 +73,44 @@ export default function LoginPage({ embedded = false, onSwitch }) {
       </div>
 
       {error && (
-        <div className="auth-error-banner" role="alert">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <span>{error}</span>
+        <div className="auth-error-banner" role="alert" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>{error}</span>
+          </div>
+          {String(error).toLowerCase().includes('not active') && formData.email && formData.password && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              loading={reactivating}
+              onClick={async () => {
+                setReactivating(true);
+                setReactivationStatus('');
+                try {
+                  await accountService.requestReactivation({
+                    email: formData.email.trim(),
+                    password: formData.password,
+                    reason: 'User requested reactivation from login screen.',
+                  });
+                  setReactivationStatus('Reactivation request submitted for administrator approval.');
+                } catch (reqErr) {
+                  setReactivationStatus(reqErr?.message || 'Unable to submit reactivation request.');
+                } finally {
+                  setReactivating(false);
+                }
+              }}
+            >
+              Request Account Reactivation
+            </Button>
+          )}
+          {reactivationStatus && (
+            <span style={{ fontSize: 'var(--font-size-xs)' }}>{reactivationStatus}</span>
+          )}
         </div>
       )}
 

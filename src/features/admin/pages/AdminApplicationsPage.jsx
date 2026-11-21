@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
 import { DataTable, PageHeader, StatusBadge, showAdminToast } from '../components';
 import ApplicationReviewModal from '../components/ApplicationReviewModal';
+import AdminChangeRequestsPanel from '../components/AdminChangeRequestsPanel';
 import { hasAdminPermission } from '../constants';
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import useAdminSession from '../contexts/useAdminSession';
@@ -62,11 +63,13 @@ export default function AdminApplicationsPage() {
     || hasAdminPermission(currentAdmin.role, 'applications', 'approve');
 
   const rawType = searchParams.get('type');
-  const activeType = rawType === 'rider' && canViewRiders
-    ? 'rider'
-    : canViewRestaurants
-      ? 'restaurant'
-      : 'rider';
+  const activeType = rawType === 'changes'
+    ? 'changes'
+    : rawType === 'rider' && canViewRiders
+      ? 'rider'
+      : canViewRestaurants
+        ? 'restaurant'
+        : 'rider';
 
   const { query: globalQuery } = useAdminPageSearch({
     scopeLabel: activeType === 'restaurant' ? 'Restaurant Applications' : 'Rider Applications',
@@ -265,9 +268,23 @@ export default function AdminApplicationsPage() {
                   <span className="admin-segmented-tab__badge">{pendingRiderCount}</span>
                 </button>
               )}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeType === 'changes'}
+                className={`admin-segmented-tab ${activeType === 'changes' ? 'is-active' : ''}`}
+                onClick={() => switchType('changes')}
+              >
+                <span>Settings &amp; Account Requests</span>
+              </button>
             </div>
           )}
         />
+
+        {activeType === 'changes' ? (
+          <AdminChangeRequestsPanel canApprove={canApproveRestaurant || canApproveRider} />
+        ) : (
+          <>
 
         <div className="admin-status-chips" role="group" aria-label="Filter applications by status">
           {STATUS_CHIPS.map((chip) => (
@@ -353,6 +370,8 @@ export default function AdminApplicationsPage() {
           onClose={() => setSelectedApp(null)}
           onUpdated={() => setRevision((value) => value + 1)}
         />
+          </>
+        )}
       </section>
     </AdminLayout>
   );

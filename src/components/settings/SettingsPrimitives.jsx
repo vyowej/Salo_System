@@ -68,6 +68,8 @@ export function SettingsDangerZone({
   actionLabel,
   onAction,
   disabled = false,
+  secondaryActionLabel,
+  onSecondaryAction,
 }) {
   return (
     <section className="salo-settings-danger-card" aria-label={SETTINGS_LABELS.dangerZoneTitle}>
@@ -76,9 +78,16 @@ export function SettingsDangerZone({
         <h3 className="salo-settings-danger-title">{title}</h3>
         {description && <p className="salo-settings-danger-desc">{description}</p>}
       </div>
-      <Button type="button" variant="danger" size="sm" onClick={onAction} disabled={disabled}>
-        {actionLabel}
-      </Button>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        <Button type="button" variant="danger" size="sm" onClick={onAction} disabled={disabled}>
+          {actionLabel}
+        </Button>
+        {secondaryActionLabel && onSecondaryAction && (
+          <Button type="button" variant="danger-outline" size="sm" onClick={onSecondaryAction} disabled={disabled}>
+            {secondaryActionLabel}
+          </Button>
+        )}
+      </div>
     </section>
   );
 }

@@ -71,6 +71,34 @@ export const riderService = {
     const response = await apiClient.post(`/rider/deliveries/${encodeURIComponent(orderId)}/delivered`, payload);
     return response?.data?.delivery ?? null;
   },
+
+  async getChangeRequests() {
+    const response = await apiClient.get('/rider/change-requests');
+    return response?.data?.requests ?? [];
+  },
+
+  async submitChangeRequest(payload) {
+    const fd = payload instanceof FormData ? payload : new FormData();
+    if (!(payload instanceof FormData)) {
+      Object.entries(payload || {}).forEach(([key, val]) => {
+        if (val === undefined || val === null) return;
+        if (key === 'documents' && Array.isArray(val)) {
+          val.forEach((file) => {
+            if (file) fd.append('documents[]', file);
+          });
+        } else {
+          fd.append(key, String(val));
+        }
+      });
+    }
+    const response = await apiClient.post('/rider/change-requests', fd);
+    return response?.data?.request ?? null;
+  },
+
+  async cancelChangeRequest(requestId) {
+    const response = await apiClient.delete(`/rider/change-requests/${encodeURIComponent(requestId)}`);
+    return response?.data?.request ?? null;
+  },
 };
 
 export default riderService;

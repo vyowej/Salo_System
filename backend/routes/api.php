@@ -1,10 +1,14 @@
 <?php
 
+use App\Features\Account\Controllers\AccountContactController;
 use App\Features\Account\Controllers\AccountController;
+use App\Features\Account\Controllers\AccountLifecycleController;
+use App\Features\Account\Controllers\AccountSettingsController;
 use App\Features\Account\Controllers\AccountStaffInvitationController;
 use App\Features\Admin\Controllers\AdminApplicationController;
 use App\Features\Admin\Controllers\AdminManagementController;
 use App\Features\Admin\Controllers\AdminOrderController;
+use App\Features\Admin\Controllers\AdminSettingsRequestController;
 use App\Features\Applications\Controllers\ApplicationDocumentController;
 use App\Features\Auth\Controllers\AuthController;
 use App\Features\Auth\Controllers\OtpController;
@@ -20,9 +24,11 @@ use App\Features\Restaurants\Controllers\OwnerInventoryController;
 use App\Features\Restaurants\Controllers\OwnerMenuController;
 use App\Features\Restaurants\Controllers\OwnerProfileController;
 use App\Features\Restaurants\Controllers\RestaurantApplicationController;
+use App\Features\Restaurants\Controllers\RestaurantChangeRequestController;
 use App\Features\Restaurants\Controllers\RestaurantController;
 use App\Features\Restaurants\Controllers\StaffInvitationController;
 use App\Features\Riders\Controllers\RiderApplicationController;
+use App\Features\Riders\Controllers\RiderChangeRequestController;
 use App\Features\Riders\Controllers\RiderController;
 use App\Features\Riders\Controllers\RiderDeliveryController;
 use App\Support\ApiResponse;
@@ -58,6 +64,7 @@ Route::prefix('auth')->group(function (): void {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);
     Route::post('/password/reset', [AuthController::class, 'resetPassword']);
+    Route::post('/reactivation-request', [AccountLifecycleController::class, 'requestReactivation'])->middleware('throttle:10,1');
 
     Route::middleware('auth')->group(function (): void {
         Route::post('/logout', [AuthController::class, 'logout']);
@@ -69,6 +76,19 @@ Route::prefix('account')->middleware('auth')->group(function (): void {
     Route::patch('/profile', [AccountController::class, 'updateProfile']);
     Route::put('/password', [AccountController::class, 'updatePassword']);
     Route::get('/applications', [AccountController::class, 'applications']);
+
+    Route::get('/settings', [AccountSettingsController::class, 'show']);
+    Route::put('/settings', [AccountSettingsController::class, 'update']);
+
+    Route::get('/contact-numbers', [AccountContactController::class, 'index']);
+    Route::post('/contact-numbers', [AccountContactController::class, 'store']);
+    Route::patch('/contact-numbers/{id}', [AccountContactController::class, 'update'])->whereNumber('id');
+    Route::patch('/contact-numbers/{id}/default', [AccountContactController::class, 'setDefault'])->whereNumber('id');
+    Route::delete('/contact-numbers/{id}', [AccountContactController::class, 'destroy'])->whereNumber('id');
+
+    Route::get('/lifecycle-requests', [AccountLifecycleController::class, 'index']);
+    Route::post('/deactivate', [AccountLifecycleController::class, 'deactivate']);
+    Route::post('/deletion-request', [AccountLifecycleController::class, 'requestDeletion']);
 
     Route::get('/staff-invitations', [AccountStaffInvitationController::class, 'index']);
     Route::post('/staff-invitations/{id}/accept', [AccountStaffInvitationController::class, 'accept'])->whereNumber('id');
@@ -102,6 +122,11 @@ Route::prefix('rider')->middleware('auth')->group(function (): void {
         Route::patch('/profile', [RiderController::class, 'updateProfile']);
         Route::patch('/availability', [RiderController::class, 'updateAvailability']);
         Route::post('/location', [TrackingController::class, 'recordRiderLocation']);
+
+        Route::get('/change-requests', [RiderChangeRequestController::class, 'index']);
+        Route::post('/change-requests', [RiderChangeRequestController::class, 'store']);
+        Route::delete('/change-requests/{id}', [RiderChangeRequestController::class, 'destroy'])->whereNumber('id');
+        Route::get('/change-requests/{id}/documents/{index}', [RiderChangeRequestController::class, 'document'])->whereNumber(['id', 'index']);
 
         Route::get('/deliveries/available', [RiderDeliveryController::class, 'available']);
         Route::get('/deliveries/current', [RiderDeliveryController::class, 'current']);
@@ -137,6 +162,13 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::patch('/profile', [OwnerProfileController::class, 'update']);
         Route::post('/profile/media', [OwnerProfileController::class, 'updateMedia']);
         Route::patch('/accepting-status', [OwnerProfileController::class, 'updateAcceptingStatus']);
+        Route::get('/settings', [OwnerProfileController::class, 'settings']);
+        Route::patch('/settings', [OwnerProfileController::class, 'updateSettings']);
+
+        Route::get('/change-requests', [RestaurantChangeRequestController::class, 'index']);
+        Route::post('/change-requests', [RestaurantChangeRequestController::class, 'store']);
+        Route::delete('/change-requests/{id}', [RestaurantChangeRequestController::class, 'destroy'])->whereNumber('id');
+        Route::get('/change-requests/{id}/documents/{index}', [RestaurantChangeRequestController::class, 'document'])->whereNumber(['id', 'index']);
 
         Route::get('/operating-hours', [OwnerProfileController::class, 'operatingHours']);
         Route::put('/operating-hours', [OwnerProfileController::class, 'updateOperatingHours']);
@@ -203,6 +235,13 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::get('/locations/overview', [AdminServiceAreaController::class, 'locationsOverview']);
     Route::get('/orders', [AdminOrderController::class, 'index']);
     Route::get('/orders/{id}/tracking', [TrackingController::class, 'adminOrderTracking'])->whereNumber('id');
+
+    Route::get('/change-requests', [AdminSettingsRequestController::class, 'changeRequests']);
+    Route::post('/change-requests/{id}/decision', [AdminSettingsRequestController::class, 'decideChangeRequest'])->whereNumber('id');
+    Route::get('/change-requests/{id}/documents/{index}', [AdminSettingsRequestController::class, 'changeRequestDocument'])->whereNumber(['id', 'index']);
+
+    Route::get('/lifecycle-requests', [AdminSettingsRequestController::class, 'lifecycleRequests']);
+    Route::post('/lifecycle-requests/{id}/decision', [AdminSettingsRequestController::class, 'decideLifecycleRequest'])->whereNumber('id');
 });
 
 Route::prefix('locations')->middleware('throttle:120,1')->group(function (): void {

@@ -97,6 +97,39 @@ class OwnerProfileController extends Controller
         );
     }
 
+    public function settings(Request $request): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+
+        return ApiResponse::success(
+            data: $this->ownerProfileService->getSettings($request->user(), $restaurantId),
+            message: 'Restaurant settings retrieved.',
+        );
+    }
+
+    public function updateSettings(Request $request): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+        $validated = $request->validate([
+            'offers_delivery' => ['sometimes', 'boolean'],
+            'offers_pickup' => ['sometimes', 'boolean'],
+            'offers_dine_in' => ['sometimes', 'boolean'],
+            'accepts_reservations' => ['sometimes', 'boolean'],
+            'accepting_orders' => ['sometimes', 'boolean'],
+            'accepting_reservations' => ['sometimes', 'boolean'],
+            'inventory_deduction_mode' => ['sometimes', 'string', 'in:manual,on_completion'],
+            'delivery_radius' => ['sometimes', 'nullable', 'numeric', 'min:0.5', 'max:100'],
+            'reservation_min_notice_hours' => ['sometimes', 'integer', 'min:0', 'max:168'],
+            'reservation_max_party_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'reservation_notes' => ['sometimes', 'nullable', 'string', 'max:1000'],
+        ]);
+
+        return ApiResponse::success(
+            data: $this->ownerProfileService->updateSettings($request->user(), $validated, $restaurantId, $request),
+            message: 'Restaurant settings updated.',
+        );
+    }
+
     private function resolveRestaurantId(Request $request): ?int
     {
         $val = $request->input('restaurant_id') ?? $request->query('restaurant_id');

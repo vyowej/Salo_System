@@ -99,6 +99,14 @@ const ROLE_SPECIFIC_SECTIONS = {
       title: 'Payout & Payment Details',
       description: 'Review your connected payout method and protected payment status.',
     },
+    {
+      id: 'verification',
+      group: 'Restaurant',
+      label: 'Verification & Identity',
+      eyebrow: 'Admin Approval',
+      title: 'Verified Business Identity',
+      description: 'Submit sensitive legal name or business type changes for administrator review.',
+    },
   ],
   rider: [
     {
@@ -106,8 +114,16 @@ const ROLE_SPECIFIC_SECTIONS = {
       group: 'Rider',
       label: 'Driver Mode',
       eyebrow: 'Availability',
-      title: 'Driver Mode Eligibility',
-      description: 'Review the readiness checks required before going online for deliveries.',
+      title: 'Driver Mode & Availability',
+      description: 'Manage your live availability status and review readiness checks before going online.',
+    },
+    {
+      id: 'verification',
+      group: 'Rider',
+      label: 'Vehicle & Verification',
+      eyebrow: 'Admin Approval',
+      title: 'Verified Vehicle & Identity',
+      description: 'View approved vehicle details and submit verification change requests for administrator review.',
     },
     {
       id: 'location',

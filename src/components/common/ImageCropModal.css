@@ -1,0 +1,66 @@
+.salo-crop-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.salo-crop-hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.salo-crop-viewport {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--border-primary);
+  background: var(--surface-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  max-width: 100%;
+}
+
+.salo-crop-viewport.is-dragging {
+  cursor: grabbing;
+}
+
+.salo-crop-viewport img {
+  pointer-events: none;
+  max-width: none;
+  max-height: none;
+  display: block;
+}
+
+.salo-crop-zoom-row {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.salo-crop-zoom-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--color-primary);
+}
+
+.salo-crop-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.salo-crop-error {
+  margin: 0;
+  color: var(--color-danger, #b91c1c);
+  font-size: var(--font-size-xs);
+}

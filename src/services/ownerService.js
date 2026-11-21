@@ -447,6 +447,52 @@ export const ownerService = {
   requestPayout() {
     notAvailable('Requesting payout');
   },
+
+  async getSettings(restaurantId) {
+    const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.get(`/restaurant/settings${query}`);
+    return res?.data ?? null;
+  },
+
+  async updateSettings(restaurantId, payload) {
+    const res = await apiClient.patch('/restaurant/settings', {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      ...payload,
+    });
+    return res?.data ?? null;
+  },
+
+  async getChangeRequests(restaurantId) {
+    const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.get(`/restaurant/change-requests${query}`);
+    return res?.data?.requests ?? [];
+  },
+
+  async submitChangeRequest(restaurantId, payload) {
+    const fd = payload instanceof FormData ? payload : new FormData();
+    if (!(payload instanceof FormData)) {
+      Object.entries(payload || {}).forEach(([key, val]) => {
+        if (val === undefined || val === null) return;
+        if (key === 'documents' && Array.isArray(val)) {
+          val.forEach((file) => {
+            if (file) fd.append('documents[]', file);
+          });
+        } else {
+          fd.append(key, String(val));
+        }
+      });
+    }
+    if (restaurantId && !fd.has('restaurant_id')) {
+      fd.append('restaurant_id', String(restaurantId));
+    }
+    const res = await apiClient.post('/restaurant/change-requests', fd);
+    return res?.data?.request ?? null;
+  },
+
+  async cancelChangeRequest(requestId) {
+    const res = await apiClient.delete(`/restaurant/change-requests/${encodeURIComponent(requestId)}`);
+    return res?.data?.request ?? null;
+  },
 };
 
 export default ownerService;

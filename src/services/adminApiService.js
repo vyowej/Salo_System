@@ -111,6 +111,37 @@ export const adminApiService = {
   async getOrderTracking(orderId) {
     return locationApiService.getAdminOrderTracking(orderId);
   },
+
+  async getChangeRequests(params = {}) {
+    const response = await apiClient.get(`/admin/change-requests${toQueryString(params)}`);
+    return response?.data?.requests ?? [];
+  },
+
+  async decideChangeRequest(requestId, { decision, reviewNote = '' }) {
+    const response = await apiClient.post(`/admin/change-requests/${encodeURIComponent(requestId)}/decision`, {
+      decision,
+      review_note: reviewNote || null,
+    });
+    return response?.data?.request ?? null;
+  },
+
+  getChangeRequestDocumentUrl(requestId, index) {
+    const base = String(apiClient.baseURL || '/api').replace(/\/$/, '');
+    return `${base}/admin/change-requests/${encodeURIComponent(requestId)}/documents/${encodeURIComponent(index)}`;
+  },
+
+  async getLifecycleRequests(params = {}) {
+    const response = await apiClient.get(`/admin/lifecycle-requests${toQueryString(params)}`);
+    return response?.data?.requests ?? [];
+  },
+
+  async decideLifecycleRequest(lifecycleRequestId, { decision, reviewNote = '' }) {
+    const response = await apiClient.post(`/admin/lifecycle-requests/${encodeURIComponent(lifecycleRequestId)}/decision`, {
+      decision,
+      review_note: reviewNote || null,
+    });
+    return response?.data?.request ?? null;
+  },
 };
 
 export default adminApiService;

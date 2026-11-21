@@ -518,8 +518,15 @@ class OwnerProfileService
             'cover_image' => $this->fileStorageService->publicUrl($row->cover_image),
             'offers_delivery' => (bool) $row->offers_delivery,
             'offers_pickup' => (bool) $row->offers_pickup,
+            'offers_dine_in' => (bool) ($row->offers_dine_in ?? true),
+            'accepts_reservations' => (bool) ($row->accepts_reservations ?? false),
             'accepting_orders' => (bool) $row->accepting_orders,
             'accepting_reservations' => (bool) $row->accepting_reservations,
+            'inventory_deduction_mode' => $row->inventory_deduction_mode ?? 'manual',
+            'delivery_radius' => $row->delivery_radius !== null ? (float) $row->delivery_radius : null,
+            'reservation_min_notice_hours' => (int) ($row->reservation_min_notice_hours ?? 2),
+            'reservation_max_party_size' => (int) ($row->reservation_max_party_size ?? 8),
+            'reservation_notes' => $row->reservation_notes,
             'address' => $addr ? [
                 'street' => $addr->street,
                 'barangay' => $addr->barangay_name,
@@ -528,5 +535,110 @@ class OwnerProfileService
                 'postal_code' => $addr->postal_code,
             ] : null,
         ];
+    }
+
+    /**
+     * Retrieve operational settings + payout summary for the active owned restaurant.
+     *
+     * @return array<string, mixed>
+     */
+    public function getSettings(User $user, ?int $restaurantId = null): array
+    {
+        $restaurant = $this->requireActiveOwnedRestaurant($user, $restaurantId);
+        $payout = DB::table('payout_accounts')
+            ->where('restaurant_id', $restaurant->restaurant_id)
+            ->first();
+
+        return [
+            'profile' => $this->formatProfile($restaurant),
+            'payout_account' => $payout ? [
+                'provider' => $payout->provider,
+                'account_type' => $payout->account_type,
+                'account_holder_name' => $payout->account_holder_name,
+                'has_account_number' => ! empty($payout->account_number_encrypted),
+                'updated_at' => $payout->updated_at,
+            ] : null,
+        ];
+    }
+
+    /**
+     * Update non-verification operational restaurant settings.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    public function updateSettings(User $user, array $validated, ?int $restaurantId, Request $request): array
+    {
+        $restaurant = $this->requireActiveOwnedRestaurant($user, $restaurantId);
+        $targetId = (int) $restaurant->restaurant_id;
+
+        $offersDelivery = array_key_exists('offers_delivery', $validated)
+            ? (bool) $validated['offers_delivery']
+            : (bool) $restaurant->offers_delivery;
+        $offersPickup = array_key_exists('offers_pickup', $validated)
+            ? (bool) $validated['offers_pickup']
+            : (bool) $restaurant->offers_pickup;
+        $offersDineIn = array_key_exists('offers_dine_in', $validated)
+            ? (bool) $validated['offers_dine_in']
+            : (bool) $restaurant->offers_dine_in;
+
+        if (! $offersDelivery && ! $offersPickup && ! $offersDineIn) {
+            throw ValidationException::withMessages([
+                'offers_delivery' => ['At least one service (delivery, pickup, or dine-in) must remain enabled.'],
+            ]);
+        }
+
+        $updates = [
+            'offers_delivery' => $offersDelivery ? 1 : 0,
+            'offers_pickup' => $offersPickup ? 1 : 0,
+            'offers_dine_in' => $offersDineIn ? 1 : 0,
+            'accepts_reservations' => array_key_exists('accepts_reservations', $validated)
+                ? ((bool) $validated['accepts_reservations'] ? 1 : 0)
+                : (int) $restaurant->accepts_reservations,
+            'accepting_orders' => array_key_exists('accepting_orders', $validated)
+                ? ((bool) $validated['accepting_orders'] ? 1 : 0)
+                : (int) $restaurant->accepting_orders,
+            'accepting_reservations' => array_key_exists('accepting_reservations', $validated)
+                ? ((bool) $validated['accepting_reservations'] ? 1 : 0)
+                : (int) $restaurant->accepting_reservations,
+            'inventory_deduction_mode' => array_key_exists('inventory_deduction_mode', $validated)
+                ? (string) $validated['inventory_deduction_mode']
+                : $restaurant->inventory_deduction_mode,
+            'delivery_radius' => array_key_exists('delivery_radius', $validated)
+                ? ($validated['delivery_radius'] !== null ? (float) $validated['delivery_radius'] : null)
+                : $restaurant->delivery_radius,
+            'reservation_min_notice_hours' => array_key_exists('reservation_min_notice_hours', $validated)
+                ? (int) $validated['reservation_min_notice_hours']
+                : (int) $restaurant->reservation_min_notice_hours,
+            'reservation_max_party_size' => array_key_exists('reservation_max_party_size', $validated)
+                ? (int) $validated['reservation_max_party_size']
+                : (int) $restaurant->reservation_max_party_size,
+            'reservation_notes' => array_key_exists('reservation_notes', $validated)
+                ? ($validated['reservation_notes'] !== null ? trim((string) $validated['reservation_notes']) : null)
+                : $restaurant->reservation_notes,
+            'updated_at' => now(),
+        ];
+
+        DB::transaction(function () use ($targetId, $restaurant, $updates, $user, $request): void {
+            DB::table('restaurants')->where('restaurant_id', $targetId)->update($updates);
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: 'owner_settings_updated',
+                entityType: 'restaurants',
+                entityId: $targetId,
+                oldValues: [
+                    'offers_delivery' => (bool) $restaurant->offers_delivery,
+                    'offers_pickup' => (bool) $restaurant->offers_pickup,
+                    'offers_dine_in' => (bool) $restaurant->offers_dine_in,
+                    'accepts_reservations' => (bool) $restaurant->accepts_reservations,
+                    'inventory_deduction_mode' => $restaurant->inventory_deduction_mode,
+                ],
+                newValues: $updates,
+                request: $request,
+            );
+        });
+
+        return $this->getSettings($user, $targetId);
     }
 }

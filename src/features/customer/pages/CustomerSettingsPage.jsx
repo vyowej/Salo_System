@@ -1,14 +1,15 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useAuth } from '../../../hooks/useAuth';
 import useAddresses from '../../../hooks/useAddresses';
+import accountService from '../../../services/accountService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import Modal from '../../../components/common/Modal';
 import AddressFormModal from '../components/AddressFormModal';
 import ContactNumbersManager from '../components/ContactNumbersManager';
 import UnifiedSettingsShell from '../../../components/settings/UnifiedSettingsShell';
+import { AccountLifecycleModals } from '../../../components/settings/AccountLifecycleModals';
 import {
   SettingsAccountSection,
   SettingsCard,
@@ -36,39 +37,83 @@ const INITIAL_PRIVACY = {
 };
 
 export default function CustomerSettingsPage() {
-  const { user, updateUser } = useAuth();
+  const { user } = useAuth();
   const { addresses, addAddress } = useAddresses();
   const sections = getSettingsSectionsForRole('customer');
 
   const [activeSection, setActiveSection] = useState('account');
-  const [email, setEmail] = useState(user?.email || '');
+  const [savedSettings, setSavedSettings] = useState({
+    notifications: INITIAL_NOTIFICATIONS,
+    security: INITIAL_SECURITY,
+    privacy: INITIAL_PRIVACY,
+  });
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const [security, setSecurity] = useState(INITIAL_SECURITY);
   const [privacy, setPrivacy] = useState(INITIAL_PRIVACY);
   const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
 
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const addAddressBtnRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    accountService.getSettings()
+      .then((data) => {
+        if (cancelled || !data) return;
+        const nextNotif = { ...INITIAL_NOTIFICATIONS, ...(data.notifications || {}) };
+        const nextSec = { ...INITIAL_SECURITY, ...(data.security || {}) };
+        const nextPriv = { ...INITIAL_PRIVACY, ...(data.privacy || {}) };
+        setSavedSettings({ notifications: nextNotif, security: nextSec, privacy: nextPriv });
+        setNotifications(nextNotif);
+        setSecurity(nextSec);
+        setPrivacy(nextPriv);
+      })
+      .catch(() => {
+        // Keep defaults if offline or unauthenticated
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const profileName = user?.name || user?.username || 'Customer';
   const profileEmail = user?.email || user?.username || '';
   const initials = profileName.slice(0, 2).toUpperCase();
 
-  const handleSave = () => {
-    if (updateUser && email.trim()) {
-      updateUser({ email: email.trim() });
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    setNotice('');
+    try {
+      const updated = await accountService.updateSettings({
+        notifications,
+        security,
+        privacy,
+      });
+      const nextNotif = { ...INITIAL_NOTIFICATIONS, ...(updated?.notifications || notifications) };
+      const nextSec = { ...INITIAL_SECURITY, ...(updated?.security || security) };
+      const nextPriv = { ...INITIAL_PRIVACY, ...(updated?.privacy || privacy) };
+      setSavedSettings({ notifications: nextNotif, security: nextSec, privacy: nextPriv });
+      setNotifications(nextNotif);
+      setSecurity(nextSec);
+      setPrivacy(nextPriv);
+      setDirty(false);
+      setNotice('Customer settings saved.');
+    } catch (err) {
+      setNotice(err?.message || 'Unable to save settings.');
+    } finally {
+      setSaving(false);
     }
-    setDirty(false);
-    setNotice('Customer settings saved.');
   };
 
   const handleDiscard = () => {
-    setEmail(user?.email || 'customer@salo.local');
-    setNotifications(INITIAL_NOTIFICATIONS);
-    setSecurity(INITIAL_SECURITY);
-    setPrivacy(INITIAL_PRIVACY);
+    setNotifications(savedSettings.notifications);
+    setSecurity(savedSettings.security);
+    setPrivacy(savedSettings.privacy);
     setDirty(false);
     setNotice('');
   };
@@ -84,18 +129,15 @@ export default function CustomerSettingsPage() {
             profileEmail={profileEmail}
             profileInitials={initials}
             profileAvatar={user?.avatar}
-            emailValue={email}
-            onEmailChange={(value) => {
-              setEmail(value);
-              setDirty(true);
-              setNotice('');
-            }}
+            emailValue={profileEmail}
             onNavigateToSecurity={() => setActiveSection('security')}
             dangerZone={{
-              title: 'Deactivate account',
-              description: 'Deactivating your account disables access to saved addresses, favorites, and order history.',
+              title: 'Deactivate or delete account',
+              description: 'Deactivate your account temporarily or request permanent account deletion.',
               actionLabel: 'Deactivate account',
               onAction: () => setDeactivateOpen(true),
+              secondaryActionLabel: 'Request deletion',
+              onSecondaryAction: () => setDeleteOpen(true),
             }}
           />
         );
@@ -300,35 +342,13 @@ export default function CustomerSettingsPage() {
         triggerRef={addAddressBtnRef}
       />
 
-      <Modal
-        open={deactivateOpen}
-        onClose={() => setDeactivateOpen(false)}
-        title="Deactivate account"
-        size="sm"
-        footer={(
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setDeactivateOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              size="sm"
-              onClick={() => {
-                setDeactivateOpen(false);
-                setNotice('Account deactivation is a UI preview only.');
-              }}
-            >
-              Confirm deactivation
-            </Button>
-          </div>
-        )}
-      >
-        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          Deactivating your account will disable access to your saved addresses, favorites, and order history.
-          This action is not connected to backend persistence in this build.
-        </p>
-      </Modal>
+      <AccountLifecycleModals
+        deactivateOpen={deactivateOpen}
+        onCloseDeactivate={() => setDeactivateOpen(false)}
+        deleteOpen={deleteOpen}
+        onCloseDelete={() => setDeleteOpen(false)}
+        onNotice={(msg) => setNotice(msg)}
+      />
     </CustomerLayout>
   );
 }
