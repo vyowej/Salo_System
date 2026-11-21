@@ -79,6 +79,31 @@ class WorkspaceAccessResolver
     }
 
     /**
+     * Resolve and authorize an active restaurant for menu publishing (owners or active publisher staff such as Manager).
+     */
+    public function requireActiveAuthorizedRestaurantForMenuPublish(User $user, ?int $restaurantId = null): object
+    {
+        $restaurant = $this->findOwnedOrStaffRestaurant(
+            user: $user,
+            restaurantId: $restaurantId,
+            positionCheck: static fn (?string $pos): bool => User::isMenuPublisherPosition($pos),
+        );
+
+        if (! $restaurant) {
+            abort(403, 'Forbidden: you are not authorized to publish this restaurant menu.');
+        }
+
+        if ($restaurant->restaurant_status !== 'active') {
+            abort(
+                403,
+                "Restaurant menu publishing is only available for active restaurants (current status: {$restaurant->restaurant_status})."
+            );
+        }
+
+        return $restaurant;
+    }
+
+    /**
      * Resolve and authorize an active rider whose user account is also active.
      */
     public function requireActiveRider(

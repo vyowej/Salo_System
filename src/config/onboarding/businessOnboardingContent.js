@@ -82,6 +82,13 @@ export const BUSINESS_ONBOARDING_CONTENT = {
           href: '/owner/profile#operating-hours-heading',
           ctaLabel: 'Review Toggles',
         },
+        publish: {
+          id: 'publish',
+          label: 'Publish Your Restaurant',
+          description: 'Review your draft menu and publish your restaurant so customers can discover and order from you.',
+          href: '/owner/menu',
+          ctaLabel: 'Publish Menu',
+        },
       },
       primaryButton: 'Next',
       stepSkipButton: 'Skip this step',

@@ -174,4 +174,33 @@ INSERT INTO menu_items (restaurant_id, menu_category_id, item_name, description,
 (@rest_kape, @mc_kape, 'Iced Barako Latte', 'Batangas liberica espresso over milk and muscovado syrup.', 135.00, 'available', 'approved', 1),
 (@rest_kape, @mc_kape, 'Queso de Bola Ensaymada', 'Brioche pastry topped with buttercream and aged edam cheese.', 110.00, 'available', 'approved', 2);
 
+-- 6. Publish demo restaurants & approved menu items
+UPDATE restaurants
+SET is_published = 1,
+    first_published_at = CURRENT_TIMESTAMP,
+    last_published_at = CURRENT_TIMESTAMP
+WHERE restaurant_id IN (@rest_dalisay, @rest_iloko, @rest_kape);
+
+UPDATE menu_categories
+SET published_category_name = category_name,
+    published_description = description,
+    published_sort_order = sort_order,
+    published_is_active = is_active,
+    is_published = 1,
+    draft_state = 'clean'
+WHERE restaurant_id IN (@rest_dalisay, @rest_iloko, @rest_kape);
+
+UPDATE menu_items
+SET published_menu_category_id = menu_category_id,
+    published_item_name = item_name,
+    published_description = description,
+    published_photo_image = photo_image,
+    published_base_price = base_price,
+    published_sort_order = sort_order,
+    is_published = 1,
+    draft_state = 'clean',
+    published_at = CURRENT_TIMESTAMP
+WHERE restaurant_id IN (@rest_dalisay, @rest_iloko, @rest_kape)
+  AND approval_status = 'approved';
+
 COMMIT;

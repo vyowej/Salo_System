@@ -5,6 +5,7 @@ namespace App\Features\Restaurants\Services;
 use App\Features\Reviews\Services\ReviewAggregationService;
 use App\Models\User;
 use App\Support\FileStorageService;
+use App\Support\PublicRestaurantVisibility;
 use App\Support\SqlLike;
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
@@ -34,6 +35,8 @@ class RestaurantService
         private readonly AvailabilityService $availabilityService,
         private readonly FileStorageService $fileStorageService,
         private readonly ReviewAggregationService $reviewAggregationService,
+        private readonly PublicRestaurantVisibility $visibility,
+        private readonly MenuPublishService $menuPublishService,
     ) {}
 
     /**
@@ -104,8 +107,9 @@ class RestaurantService
         $query = DB::table('restaurants as r')
             ->join('addresses as a', 'a.address_id', '=', 'r.address_id')
             ->join('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
-            ->join('cities as c', 'c.city_id', '=', 'b.city_id')
-            ->where('r.restaurant_status', 'active')
+            ->join('cities as c', 'c.city_id', '=', 'b.city_id');
+
+        $this->visibility->applyVisibleRestaurantScope($query, 'r')
             ->select([
                 'r.restaurant_id', 'r.restaurant_name', 'r.business_type', 'r.description',
                 'r.logo_image', 'r.cover_image', 'r.offers_delivery', 'r.offers_pickup',
@@ -217,13 +221,14 @@ class RestaurantService
      */
     public function getRestaurantDetails(int $restaurantId): array
     {
-        $row = DB::table('restaurants as r')
+        $query = DB::table('restaurants as r')
             ->join('addresses as a', 'a.address_id', '=', 'r.address_id')
             ->join('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
             ->join('cities as c', 'c.city_id', '=', 'b.city_id')
             ->join('provinces as p', 'p.province_id', '=', 'c.province_id')
-            ->where('r.restaurant_id', $restaurantId)
-            ->where('r.restaurant_status', 'active')
+            ->where('r.restaurant_id', $restaurantId);
+
+        $row = $this->visibility->applyVisibleRestaurantScope($query, 'r')
             ->first([
                 'r.restaurant_id',
                 'r.restaurant_name',
@@ -337,42 +342,32 @@ class RestaurantService
      */
     public function getRestaurantMenu(int $restaurantId): array
     {
-        $exists = DB::table('restaurants')
-            ->where('restaurant_id', $restaurantId)
-            ->where('restaurant_status', 'active')
-            ->exists();
-
-        if (! $exists) {
+        if (! $this->visibility->isVisible($restaurantId)) {
             throw new NotFoundHttpException('Restaurant not found.');
         }
 
-        $categories = DB::table('menu_categories')
-            ->where('restaurant_id', $restaurantId)
-            ->where('is_active', 1)
-            ->orderBy('sort_order')
-            ->orderBy('menu_category_id')
-            ->get(['menu_category_id', 'category_name', 'description', 'sort_order']);
+        $categories = $this->visibility->publishedCategoriesQuery($restaurantId)
+            ->get([
+                'menu_category_id',
+                'published_category_name as category_name',
+                'published_description as description',
+                'published_sort_order as sort_order',
+            ]);
 
         $categoryIds = $categories->pluck('menu_category_id')->map(fn ($id) => (int) $id)->all();
 
         $items = $categoryIds === []
             ? collect()
-            : DB::table('menu_items')
-                ->where('restaurant_id', $restaurantId)
-                ->whereIn('menu_category_id', $categoryIds)
-                ->where('approval_status', 'approved')
-                ->where('availability_status', '!=', 'hidden')
-                ->orderBy('sort_order')
-                ->orderBy('menu_item_id')
+            : $this->visibility->publishedItemsQuery($restaurantId, $categoryIds)
                 ->get([
                     'menu_item_id',
-                    'menu_category_id',
-                    'item_name',
-                    'description',
-                    'photo_image',
-                    'base_price',
+                    'published_menu_category_id as menu_category_id',
+                    'published_item_name as item_name',
+                    'published_description as description',
+                    'published_photo_image as photo_image',
+                    'published_base_price as base_price',
                     'availability_status',
-                    'sort_order',
+                    'published_sort_order as sort_order',
                 ]);
 
         $itemIds = $items->pluck('menu_item_id')->map(fn ($id) => (int) $id)->all();
@@ -439,10 +434,10 @@ class RestaurantService
         $countsRow = DB::selectOne(
             'SELECT
                 (SELECT COUNT(*) FROM operating_hours WHERE restaurant_id = ? AND is_closed = 0) as open_periods_count,
-                (SELECT COUNT(*) FROM menu_categories WHERE restaurant_id = ? AND is_active = 1) as menu_categories_count,
-                (SELECT COUNT(*) FROM menu_items WHERE restaurant_id = ? AND availability_status != ?) as menu_items_count,
+                (SELECT COUNT(*) FROM menu_categories WHERE restaurant_id = ? AND is_active = 1 AND draft_state != ?) as menu_categories_count,
+                (SELECT COUNT(*) FROM menu_items WHERE restaurant_id = ? AND availability_status != ? AND draft_state != ?) as menu_items_count,
                 (SELECT COUNT(*) FROM restaurant_tables WHERE restaurant_id = ? AND is_active = 1) as tables_count',
-            [$targetRestaurantId, $targetRestaurantId, $targetRestaurantId, 'hidden', $targetRestaurantId]
+            [$targetRestaurantId, $targetRestaurantId, 'pending_delete', $targetRestaurantId, 'hidden', 'pending_delete', $targetRestaurantId]
         );
 
         return $this->formatOwnerSetupStatus($restaurant, $address, $countsRow);
@@ -517,6 +512,7 @@ class RestaurantService
                 'accepting_reservations' => $acceptsReservations ? (bool) $restaurant->accepting_reservations : null,
                 'complete' => $acceptingOrders && (! $acceptsReservations || (bool) $restaurant->accepting_reservations),
             ],
+            'publish' => $this->menuPublishService->buildPublishStatusForRestaurant($restaurant, $address),
         ];
     }
 

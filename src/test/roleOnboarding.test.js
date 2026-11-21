@@ -463,6 +463,21 @@ test('RoleOnboardingModal & SetupChecklistCard render accessible dialog markup a
       ),
     );
     assert.equal(hiddenCardHtml, '');
+
+    const withPublishPending = deriveBusinessSetupChecklist({
+      backendStatus: {
+        business_profile: { complete: true },
+        operating_hours: { complete: true },
+        menu: { complete: true },
+        tables: { applicable: false, complete: true },
+        availability_toggles: { complete: true },
+        publish: { complete: false },
+      },
+    });
+    assert.equal(withPublishPending.totalCount, 5);
+    assert.equal(withPublishPending.completedCount, 4);
+    assert.equal(withPublishPending.allComplete, false);
+    assert.equal(withPublishPending.items.at(-1).id, 'publish');
   } finally {
     await server.close();
   }

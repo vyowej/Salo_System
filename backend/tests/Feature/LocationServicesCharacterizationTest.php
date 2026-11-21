@@ -48,9 +48,38 @@ class LocationServicesCharacterizationTest extends TestCase
             'business_email' => 'locsvc_' . random_int(100, 999) . '@example.com',
             'address_id' => $addressId,
             'restaurant_status' => 'active',
+            'is_published' => 1,
             'offers_delivery' => $offersDelivery,
             'created_at' => now(),
             'updated_at' => now(),
+        ]);
+
+        $catId = (int) DB::table('menu_categories')->insertGetId([
+            'restaurant_id' => $restaurantId,
+            'category_name' => 'Mains',
+            'sort_order' => 1,
+            'is_active' => 1,
+            'draft_state' => 'clean',
+            'is_published' => 1,
+            'published_category_name' => 'Mains',
+            'published_sort_order' => 1,
+            'published_is_active' => 1,
+        ]);
+
+        DB::table('menu_items')->insert([
+            'restaurant_id' => $restaurantId,
+            'menu_category_id' => $catId,
+            'item_name' => 'LocSvc Dish',
+            'base_price' => '100.00',
+            'availability_status' => 'available',
+            'approval_status' => 'approved',
+            'sort_order' => 1,
+            'draft_state' => 'clean',
+            'is_published' => 1,
+            'published_menu_category_id' => $catId,
+            'published_item_name' => 'LocSvc Dish',
+            'published_base_price' => '100.00',
+            'published_sort_order' => 1,
         ]);
 
         DB::table('restaurant_owners')->insert([

@@ -523,7 +523,7 @@ class AdminApplicationService
                     'restaurant',
                     'restaurant_application_approved',
                     'Restaurant application approved',
-                    "Your restaurant application ({$ref}) is approved. Your restaurant workspace is ready.",
+                    "Your restaurant application ({$ref}) is approved. Your workspace is ready — set up your menu and publish when you're ready to go live.",
                 ]
                 : [
                     'rider',

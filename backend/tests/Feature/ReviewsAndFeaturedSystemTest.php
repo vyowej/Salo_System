@@ -62,7 +62,38 @@ class ReviewsAndFeaturedSystemTest extends TestCase
             'offers_pickup' => 1,
             'offers_dine_in' => 1,
             'restaurant_status' => $status,
+            'is_published' => $status === 'active' ? 1 : 0,
         ]);
+
+        if ($status === 'active') {
+            $catId = (int) DB::table('menu_categories')->insertGetId([
+                'restaurant_id' => $restaurantId,
+                'category_name' => 'Signature',
+                'sort_order' => 1,
+                'is_active' => 1,
+                'draft_state' => 'clean',
+                'is_published' => 1,
+                'published_category_name' => 'Signature',
+                'published_sort_order' => 1,
+                'published_is_active' => 1,
+            ]);
+
+            DB::table('menu_items')->insert([
+                'restaurant_id' => $restaurantId,
+                'menu_category_id' => $catId,
+                'item_name' => 'House Special',
+                'base_price' => '150.00',
+                'availability_status' => 'available',
+                'approval_status' => 'approved',
+                'sort_order' => 1,
+                'draft_state' => 'clean',
+                'is_published' => 1,
+                'published_menu_category_id' => $catId,
+                'published_item_name' => 'House Special',
+                'published_base_price' => '150.00',
+                'published_sort_order' => 1,
+            ]);
+        }
 
         DB::table('restaurant_owners')->insert([
             'restaurant_id' => $restaurantId,

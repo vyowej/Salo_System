@@ -265,6 +265,25 @@ class OwnerWorkspaceTest extends TestCase
             'availability_status' => 'hidden',
         ])->assertStatus(201)->json('data.item');
 
+        // Draft items are NOT publicly visible before publishing
+        $this->getJson("/api/restaurants/{$restId}/menu")->assertStatus(404);
+
+        // Complete required profile/hours then publish
+        DB::table('restaurants')->where('restaurant_id', $restId)->update([
+            'description' => 'Bistro description',
+            'contact_phone' => '09171234567',
+        ]);
+        DB::table('operating_hours')->insert([
+            'restaurant_id' => $restId,
+            'day_of_week' => 1,
+            'opening_time' => '09:00:00',
+            'closing_time' => '21:00:00',
+            'closes_next_day' => 0,
+            'is_closed' => 0,
+        ]);
+        $this->actingAs($owner)->postJson('/api/restaurant/menu/publish', ['restaurant_id' => $restId])
+            ->assertOk();
+
         // Public menu shows available & sold_out, hides 'hidden'
         $publicMenu = $this->getJson("/api/restaurants/{$restId}/menu")->assertOk();
         $publicJson = (string) $publicMenu->getContent();

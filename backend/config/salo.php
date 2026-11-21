@@ -67,6 +67,13 @@ return [
         ],
     ],
 
+    'menu' => [
+        // Allowed restaurant_staff.staff_position values for publishing/unpublishing restaurant menus (case-insensitive, trimmed).
+        'publisher_positions' => [
+            'Manager',
+        ],
+    ],
+
     'reviews' => [
         // Default fallback values; runtime policy overrides live in platform_settings.
         'min_rating' => 1,

@@ -29,6 +29,7 @@ class OwnerMenuService
 
         $counts = DB::table('menu_items')
             ->where('restaurant_id', $targetId)
+            ->where('draft_state', '!=', 'pending_delete')
             ->selectRaw('menu_category_id, COUNT(*) as total')
             ->groupBy('menu_category_id')
             ->pluck('total', 'menu_category_id');
@@ -37,15 +38,20 @@ class OwnerMenuService
             ->where('restaurant_id', $targetId)
             ->orderBy('sort_order')
             ->orderBy('menu_category_id')
-            ->get(['menu_category_id', 'category_name', 'description', 'sort_order', 'is_active'])
-            ->map(fn ($row) => [
-                'id' => (int) $row->menu_category_id,
-                'name' => $row->category_name,
-                'description' => $row->description,
-                'sort_order' => (int) $row->sort_order,
-                'is_active' => (bool) $row->is_active,
-                'items_count' => (int) ($counts[$row->menu_category_id] ?? 0),
+            ->get([
+                'menu_category_id',
+                'category_name',
+                'description',
+                'sort_order',
+                'is_active',
+                'draft_state',
+                'is_published',
+                'published_category_name',
+                'published_description',
+                'published_sort_order',
+                'published_is_active',
             ])
+            ->map(fn ($row) => $this->formatCategory($row, (int) ($counts[$row->menu_category_id] ?? 0)))
             ->values()
             ->all();
     }
@@ -81,6 +87,8 @@ class OwnerMenuService
                 'description' => ! empty($validated['description']) ? trim((string) $validated['description']) : null,
                 'sort_order' => $validated['sort_order'] ?? $nextOrder,
                 'is_active' => array_key_exists('is_active', $validated) ? ((bool) $validated['is_active'] ? 1 : 0) : 1,
+                'draft_state' => 'new',
+                'is_published' => 0,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
@@ -157,13 +165,22 @@ class OwnerMenuService
      */
     private function buildCategoryUpdates(array $validated, object $category, string $newName): array
     {
+        $newDescription = array_key_exists('description', $validated)
+            ? ($validated['description'] !== null ? trim((string) $validated['description']) : null)
+            : $category->description;
+        $newSortOrder = array_key_exists('sort_order', $validated)
+            ? (int) $validated['sort_order']
+            : (int) $category->sort_order;
+        $newIsActive = array_key_exists('is_active', $validated)
+            ? ((bool) $validated['is_active'] ? 1 : 0)
+            : (int) $category->is_active;
+
         return [
             'category_name' => $newName,
-            'description' => array_key_exists('description', $validated)
-                ? ($validated['description'] !== null ? trim((string) $validated['description']) : null)
-                : $category->description,
-            'sort_order' => array_key_exists('sort_order', $validated) ? (int) $validated['sort_order'] : (int) $category->sort_order,
-            'is_active' => array_key_exists('is_active', $validated) ? ((bool) $validated['is_active'] ? 1 : 0) : (int) $category->is_active,
+            'description' => $newDescription,
+            'sort_order' => $newSortOrder,
+            'is_active' => $newIsActive,
+            'draft_state' => $this->computeCategoryDraftState($category, $newName, $newDescription, $newSortOrder, $newIsActive),
             'updated_at' => now(),
         ];
     }
@@ -177,27 +194,38 @@ class OwnerMenuService
         $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
 
-        $existingIds = DB::table('menu_categories')
+        $existingRows = DB::table('menu_categories')
             ->where('restaurant_id', $targetId)
-            ->pluck('menu_category_id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
+            ->get()
+            ->keyBy('menu_category_id');
 
         foreach ($orderedIds as $catId) {
-            if (! in_array((int) $catId, $existingIds, true)) {
+            if (! $existingRows->has((int) $catId)) {
                 throw ValidationException::withMessages([
                     'ordered_ids' => ['All category IDs must belong to your restaurant.'],
                 ]);
             }
         }
 
-        DB::transaction(function () use ($orderedIds, $targetId, $user, $request): void {
+        DB::transaction(function () use ($orderedIds, $targetId, $existingRows, $user, $request): void {
             $now = now();
             foreach (array_values($orderedIds) as $index => $catId) {
+                $cat = $existingRows->get((int) $catId);
+                $draftState = $this->computeCategoryDraftState(
+                    $cat,
+                    (string) $cat->category_name,
+                    $cat->description,
+                    $index,
+                    (int) $cat->is_active,
+                );
                 DB::table('menu_categories')
                     ->where('menu_category_id', (int) $catId)
                     ->where('restaurant_id', $targetId)
-                    ->update(['sort_order' => $index, 'updated_at' => $now]);
+                    ->update([
+                        'sort_order' => $index,
+                        'draft_state' => $draftState,
+                        'updated_at' => $now,
+                    ]);
             }
 
             $this->auditLogService->record(
@@ -228,6 +256,7 @@ class OwnerMenuService
         $hasItems = DB::table('menu_items')
             ->where('restaurant_id', $targetId)
             ->where('menu_category_id', $categoryId)
+            ->where('draft_state', '!=', 'pending_delete')
             ->exists();
 
         if ($hasItems) {
@@ -237,20 +266,76 @@ class OwnerMenuService
         }
 
         DB::transaction(function () use ($categoryId, $targetId, $category, $user, $request): void {
-            DB::table('menu_categories')
-                ->where('menu_category_id', $categoryId)
-                ->where('restaurant_id', $targetId)
-                ->delete();
+            if ((int) $category->is_published === 1) {
+                DB::table('menu_categories')
+                    ->where('menu_category_id', $categoryId)
+                    ->where('restaurant_id', $targetId)
+                    ->update(['draft_state' => 'pending_delete', 'updated_at' => now()]);
+            } else {
+                DB::table('menu_categories')
+                    ->where('menu_category_id', $categoryId)
+                    ->where('restaurant_id', $targetId)
+                    ->delete();
+            }
 
             $this->auditLogService->record(
                 actorUserId: (int) $user->user_id,
                 action: 'owner_menu_category_deleted',
                 entityType: 'menu_categories',
                 entityId: $categoryId,
-                oldValues: ['restaurant_id' => $targetId, 'category_name' => $category->category_name],
+                oldValues: [
+                    'restaurant_id' => $targetId,
+                    'category_name' => $category->category_name,
+                    'pending_delete' => (int) $category->is_published === 1,
+                ],
                 request: $request,
             );
         });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function restoreCategory(User $user, int $categoryId, ?int $restaurantId, Request $request): array
+    {
+        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $targetId = (int) $restaurant->restaurant_id;
+
+        $category = DB::table('menu_categories')
+            ->where('menu_category_id', $categoryId)
+            ->where('restaurant_id', $targetId)
+            ->first();
+
+        abort_unless($category !== null, 404, 'Menu category not found.');
+
+        if ($category->draft_state === 'pending_delete') {
+            $nextState = $this->computeCategoryDraftState(
+                $category,
+                (string) $category->category_name,
+                $category->description,
+                (int) $category->sort_order,
+                (int) $category->is_active,
+                ignorePendingDelete: true,
+            );
+
+            DB::transaction(function () use ($categoryId, $targetId, $nextState, $user, $request): void {
+                DB::table('menu_categories')
+                    ->where('menu_category_id', $categoryId)
+                    ->where('restaurant_id', $targetId)
+                    ->update(['draft_state' => $nextState, 'updated_at' => now()]);
+
+                $this->auditLogService->record(
+                    actorUserId: (int) $user->user_id,
+                    action: 'owner_menu_category_restored',
+                    entityType: 'menu_categories',
+                    entityId: $categoryId,
+                    newValues: ['restaurant_id' => $targetId, 'draft_state' => $nextState],
+                    request: $request,
+                );
+            });
+        }
+
+        return collect($this->listCategories($user, $targetId))->firstWhere('id', $categoryId);
     }
 
     /**
@@ -279,6 +364,15 @@ class OwnerMenuService
                 'availability_status',
                 'approval_status',
                 'sort_order',
+                'draft_state',
+                'is_published',
+                'published_menu_category_id',
+                'published_item_name',
+                'published_description',
+                'published_photo_image',
+                'published_base_price',
+                'published_sort_order',
+                'published_at',
             ])
             ->filter(static fn (object $row): bool => $categoriesById->has($row->menu_category_id))
             ->map(function (object $row) use ($categoriesById): object {
@@ -356,6 +450,8 @@ class OwnerMenuService
                 'availability_status' => $availability,
                 'approval_status' => 'approved',
                 'sort_order' => $validated['sort_order'] ?? $nextOrder,
+                'draft_state' => 'new',
+                'is_published' => 0,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
@@ -439,20 +535,34 @@ class OwnerMenuService
      */
     private function buildItemUpdates(array $validated, object $existing, int $categoryId, ?string $newPhoto): array
     {
+        $newName = array_key_exists('item_name', $validated) ? trim((string) $validated['item_name']) : $existing->item_name;
+        $newDescription = array_key_exists('description', $validated)
+            ? ($validated['description'] !== null ? trim((string) $validated['description']) : null)
+            : $existing->description;
+        $newPrice = array_key_exists('base_price', $validated)
+            ? number_format((float) $validated['base_price'], 2, '.', '')
+            : number_format((float) $existing->base_price, 2, '.', '');
+        $newSortOrder = array_key_exists('sort_order', $validated) ? (int) $validated['sort_order'] : (int) $existing->sort_order;
+
         return [
             'menu_category_id' => $categoryId,
-            'item_name' => array_key_exists('item_name', $validated) ? trim((string) $validated['item_name']) : $existing->item_name,
-            'description' => array_key_exists('description', $validated)
-                ? ($validated['description'] !== null ? trim((string) $validated['description']) : null)
-                : $existing->description,
+            'item_name' => $newName,
+            'description' => $newDescription,
             'photo_image' => $newPhoto,
-            'base_price' => array_key_exists('base_price', $validated)
-                ? number_format((float) $validated['base_price'], 2, '.', '')
-                : (string) $existing->base_price,
+            'base_price' => $newPrice,
             'availability_status' => array_key_exists('availability_status', $validated)
                 ? (string) $validated['availability_status']
                 : (string) $existing->availability_status,
-            'sort_order' => array_key_exists('sort_order', $validated) ? (int) $validated['sort_order'] : (int) $existing->sort_order,
+            'sort_order' => $newSortOrder,
+            'draft_state' => $this->computeItemDraftState(
+                $existing,
+                $categoryId,
+                $newName,
+                $newDescription,
+                $newPhoto,
+                $newPrice,
+                $newSortOrder,
+            ),
             'updated_at' => now(),
         ];
     }
@@ -539,9 +649,17 @@ class OwnerMenuService
         }
 
         $oldPhoto = $existing->photo_image;
+        $isPublished = (int) $existing->is_published === 1;
 
-        DB::transaction(function () use ($itemId, $targetId, $existing, $user, $request): void {
-            DB::table('menu_items')->where('menu_item_id', $itemId)->where('restaurant_id', $targetId)->delete();
+        DB::transaction(function () use ($itemId, $targetId, $existing, $isPublished, $user, $request): void {
+            if ($isPublished) {
+                DB::table('menu_items')
+                    ->where('menu_item_id', $itemId)
+                    ->where('restaurant_id', $targetId)
+                    ->update(['draft_state' => 'pending_delete', 'updated_at' => now()]);
+            } else {
+                DB::table('menu_items')->where('menu_item_id', $itemId)->where('restaurant_id', $targetId)->delete();
+            }
 
             $this->auditLogService->record(
                 actorUserId: (int) $user->user_id,
@@ -552,12 +670,56 @@ class OwnerMenuService
                     'restaurant_id' => $targetId,
                     'item_name' => $existing->item_name,
                     'base_price' => (string) $existing->base_price,
+                    'pending_delete' => $isPublished,
                 ],
                 request: $request,
             );
         });
 
-        $this->deleteOldMenuPhotoIfReplaced($oldPhoto, null);
+        if (! $isPublished) {
+            $this->deleteOldMenuPhotoIfReplaced($oldPhoto, null);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function restoreItem(User $user, int $itemId, ?int $restaurantId, Request $request): array
+    {
+        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $targetId = (int) $restaurant->restaurant_id;
+        $existing = $this->findOwnedMenuItem($itemId, $targetId);
+
+        if ($existing->draft_state === 'pending_delete') {
+            $nextState = $this->computeItemDraftState(
+                $existing,
+                (int) $existing->menu_category_id,
+                (string) $existing->item_name,
+                $existing->description,
+                $existing->photo_image,
+                number_format((float) $existing->base_price, 2, '.', ''),
+                (int) $existing->sort_order,
+                ignorePendingDelete: true,
+            );
+
+            DB::transaction(function () use ($itemId, $targetId, $nextState, $user, $request): void {
+                DB::table('menu_items')
+                    ->where('menu_item_id', $itemId)
+                    ->where('restaurant_id', $targetId)
+                    ->update(['draft_state' => $nextState, 'updated_at' => now()]);
+
+                $this->auditLogService->record(
+                    actorUserId: (int) $user->user_id,
+                    action: 'owner_menu_item_restored',
+                    entityType: 'menu_items',
+                    entityId: $itemId,
+                    newValues: ['restaurant_id' => $targetId, 'draft_state' => $nextState],
+                    request: $request,
+                );
+            });
+        }
+
+        return $this->getFormattedItem($itemId, $targetId);
     }
 
     private function assertCategoryOwnedByRestaurant(int $categoryId, int $restaurantId): void
@@ -580,6 +742,7 @@ class OwnerMenuService
 
         return DB::table('menu_items')
             ->whereIn('photo_image', [$relativePath, $prefixed])
+            ->orWhereIn('published_photo_image', [$relativePath, $prefixed])
             ->exists();
     }
 
@@ -603,6 +766,15 @@ class OwnerMenuService
                 'mi.availability_status',
                 'mi.approval_status',
                 'mi.sort_order',
+                'mi.draft_state',
+                'mi.is_published',
+                'mi.published_menu_category_id',
+                'mi.published_item_name',
+                'mi.published_description',
+                'mi.published_photo_image',
+                'mi.published_base_price',
+                'mi.published_sort_order',
+                'mi.published_at',
                 'mc.category_name',
             ]);
 
@@ -614,8 +786,35 @@ class OwnerMenuService
     /**
      * @return array<string, mixed>
      */
+    private function formatCategory(object $row, int $itemsCount): array
+    {
+        $isPublished = (bool) $row->is_published;
+
+        return [
+            'id' => (int) $row->menu_category_id,
+            'name' => $row->category_name,
+            'description' => $row->description,
+            'sort_order' => (int) $row->sort_order,
+            'is_active' => (bool) $row->is_active,
+            'items_count' => $itemsCount,
+            'is_published' => $isPublished,
+            'publish_state' => $this->resolvePublishState((string) $row->draft_state, $isPublished),
+            'published' => $isPublished ? [
+                'name' => $row->published_category_name,
+                'description' => $row->published_description,
+                'sort_order' => $row->published_sort_order !== null ? (int) $row->published_sort_order : null,
+                'is_active' => $row->published_is_active !== null ? (bool) $row->published_is_active : null,
+            ] : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function formatItem(object $row): array
     {
+        $isPublished = (bool) $row->is_published;
+
         return [
             'id' => (int) $row->menu_item_id,
             'restaurant_id' => (int) $row->restaurant_id,
@@ -628,6 +827,87 @@ class OwnerMenuService
             'availability' => $row->availability_status,
             'approval_status' => $row->approval_status,
             'sort_order' => (int) $row->sort_order,
+            'is_published' => $isPublished,
+            'publish_state' => $this->resolvePublishState((string) $row->draft_state, $isPublished),
+            'published' => $isPublished ? [
+                'menu_category_id' => $row->published_menu_category_id !== null ? (int) $row->published_menu_category_id : null,
+                'name' => $row->published_item_name,
+                'description' => $row->published_description,
+                'photo_url' => $this->fileStorageService->publicUrl($row->published_photo_image),
+                'price' => $row->published_base_price !== null ? (float) $row->published_base_price : null,
+                'sort_order' => $row->published_sort_order !== null ? (int) $row->published_sort_order : null,
+                'published_at' => $row->published_at,
+            ] : null,
         ];
+    }
+
+    private function resolvePublishState(string $draftState, bool $isPublished): string
+    {
+        if (! $isPublished) {
+            return 'new';
+        }
+
+        return match ($draftState) {
+            'clean' => 'published',
+            'modified' => 'modified',
+            'pending_delete' => 'pending_delete',
+            default => 'new',
+        };
+    }
+
+    private function computeCategoryDraftState(
+        object $existing,
+        string $name,
+        ?string $description,
+        int $sortOrder,
+        int $isActive,
+        bool $ignorePendingDelete = false,
+    ): string {
+        if ((int) $existing->is_published !== 1) {
+            return 'new';
+        }
+
+        if (! $ignorePendingDelete && $existing->draft_state === 'pending_delete') {
+            return 'pending_delete';
+        }
+
+        $matchesPublished = $name === $existing->published_category_name
+            && $description === $existing->published_description
+            && $sortOrder === (int) $existing->published_sort_order
+            && $isActive === (int) $existing->published_is_active;
+
+        return $matchesPublished ? 'clean' : 'modified';
+    }
+
+    private function computeItemDraftState(
+        object $existing,
+        int $categoryId,
+        string $name,
+        ?string $description,
+        ?string $photoImage,
+        string $price,
+        int $sortOrder,
+        bool $ignorePendingDelete = false,
+    ): string {
+        if ((int) $existing->is_published !== 1) {
+            return 'new';
+        }
+
+        if (! $ignorePendingDelete && $existing->draft_state === 'pending_delete') {
+            return 'pending_delete';
+        }
+
+        $publishedPrice = $existing->published_base_price !== null
+            ? number_format((float) $existing->published_base_price, 2, '.', '')
+            : null;
+
+        $matchesPublished = $categoryId === (int) $existing->published_menu_category_id
+            && $name === $existing->published_item_name
+            && $description === $existing->published_description
+            && $photoImage === $existing->published_photo_image
+            && $price === $publishedPrice
+            && $sortOrder === (int) $existing->published_sort_order;
+
+        return $matchesPublished ? 'clean' : 'modified';
     }
 }

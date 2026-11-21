@@ -18,6 +18,9 @@ export function normalizeMenuItem(item = {}) {
     availability: normalizeMenuAvailability(item),
     isAvailable: normalizeMenuAvailability(item) === 'available',
     photo: item.photo || null,
+    is_published: Boolean(item.is_published),
+    publish_state: item.publish_state || (item.is_published ? 'published' : 'new'),
+    published: item.published || null,
     preparationInfo: item.preparationInfo || '',
     dietaryInfo: Array.isArray(item.dietaryInfo) ? item.dietaryInfo : [],
     addOns: Array.isArray(item.addOns) ? item.addOns.map((group) => ({

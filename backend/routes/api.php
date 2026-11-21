@@ -23,6 +23,7 @@ use App\Features\Orders\Controllers\CustomerOrderController;
 use App\Features\Orders\Controllers\RestaurantOrderController;
 use App\Features\Restaurants\Controllers\OwnerInventoryController;
 use App\Features\Restaurants\Controllers\OwnerMenuController;
+use App\Features\Restaurants\Controllers\OwnerMenuPublishController;
 use App\Features\Restaurants\Controllers\OwnerProfileController;
 use App\Features\Restaurants\Controllers\RestaurantApplicationController;
 use App\Features\Restaurants\Controllers\RestaurantChangeRequestController;
@@ -194,6 +195,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::put('/menu/categories/reorder', [OwnerMenuController::class, 'reorderCategories']);
         Route::patch('/menu/categories/{categoryId}', [OwnerMenuController::class, 'updateCategory'])->whereNumber('categoryId');
         Route::delete('/menu/categories/{categoryId}', [OwnerMenuController::class, 'destroyCategory'])->whereNumber('categoryId');
+        Route::post('/menu/categories/{categoryId}/restore', [OwnerMenuController::class, 'restoreCategory'])->whereNumber('categoryId');
 
         Route::get('/menu/items', [OwnerMenuController::class, 'items']);
         Route::post('/menu/items', [OwnerMenuController::class, 'storeItem']);
@@ -201,6 +203,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::patch('/menu/items/{itemId}', [OwnerMenuController::class, 'updateItem'])->whereNumber('itemId');
         Route::patch('/menu/items/{itemId}/availability', [OwnerMenuController::class, 'updateItemAvailability'])->whereNumber('itemId');
         Route::delete('/menu/items/{itemId}', [OwnerMenuController::class, 'destroyItem'])->whereNumber('itemId');
+        Route::post('/menu/items/{itemId}/restore', [OwnerMenuController::class, 'restoreItem'])->whereNumber('itemId');
 
         Route::get('/staff', [StaffInvitationController::class, 'index']);
         Route::post('/staff/invitations', [StaffInvitationController::class, 'storeInvitation'])->middleware('throttle:20,1');
@@ -208,6 +211,12 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
     });
 
     Route::middleware('role:owner,staff')->group(function (): void {
+        Route::get('/menu/publish-status', [OwnerMenuPublishController::class, 'status']);
+        Route::get('/menu/preview', [OwnerMenuPublishController::class, 'preview']);
+        Route::post('/menu/publish', [OwnerMenuPublishController::class, 'publish'])->middleware('throttle:20,1');
+        Route::post('/menu/unpublish', [OwnerMenuPublishController::class, 'unpublish'])->middleware('throttle:20,1');
+        Route::post('/menu/discard-changes', [OwnerMenuPublishController::class, 'discard']);
+
         Route::get('/location', [RestaurantLocationController::class, 'show']);
         Route::patch('/location', [RestaurantLocationController::class, 'updateLocation']);
         Route::put('/coverage', [RestaurantLocationController::class, 'updateCoverage']);

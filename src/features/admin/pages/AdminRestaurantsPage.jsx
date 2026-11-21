@@ -57,6 +57,8 @@ function mapRestaurant(row) {
     serviceCoverage: row.zone ? [row.zone] : [],
     status: statusLabel,
     rawStatus,
+    isPublished: Boolean(row.is_published),
+    lastPublishedAt: row.last_published_at || null,
     applicationStatus: appStatusLabel,
     verificationStatus: rawAppStatus === 'approved' ? 'Verified' : (rawAppStatus === 'rejected' ? 'Rejected' : 'Pending'),
     operatingStatus: rawStatus === 'active'
@@ -177,7 +179,7 @@ export default function AdminRestaurantsPage() {
   const directoryColumns = [
     { key: 'name', label: 'Restaurant', render: (restaurant) => <button className="admin-text-link" type="button" onClick={() => { setSelected(restaurant); setDetailTab('Profile'); }}><strong>{restaurant.name}</strong><span>{restaurant.ownerName} · {restaurant.ownerEmail}</span></button> },
     { key: 'address', label: 'Physical address / coverage', render: (restaurant) => <>{restaurant.address}<br /><span className="admin-muted">City: {restaurant.zone}</span></> },
-    { key: 'status', label: 'Account / operating', render: (restaurant) => <><StatusBadge status={restaurant.status} /><br /><span className="admin-muted">{restaurant.operatingStatus || '—'} · {restaurant.applicationStatus || '—'} · {restaurant.verificationStatus || '—'}</span></> },
+    { key: 'status', label: 'Account / operating', render: (restaurant) => <><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><StatusBadge status={restaurant.status} /><StatusBadge status={restaurant.isPublished ? 'Published' : 'Not published'} /></div><span className="admin-muted">{restaurant.operatingStatus || '—'} · {restaurant.applicationStatus || '—'} · {restaurant.verificationStatus || '—'}</span></> },
     { key: 'businessType', label: 'Business type', render: (restaurant) => restaurant.businessType || '—' },
     { key: 'services', label: 'Services', render: (restaurant) => [restaurant.offersDelivery && 'Delivery', restaurant.offersPickup && 'Pickup', restaurant.offersDineIn && 'Dine-in'].filter(Boolean).join(', ') || '—' },
     { key: 'joinedDate', label: 'Registered', render: (restaurant) => formatDate(restaurant.joinedDate) },

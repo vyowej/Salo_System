@@ -6,9 +6,9 @@ use App\Features\Reviews\Services\FeaturedRestaurantService;
 use App\Features\Reviews\Services\ReviewAggregationService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
+use App\Support\PublicRestaurantVisibility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class PublicReviewController extends Controller
@@ -16,6 +16,7 @@ class PublicReviewController extends Controller
     public function __construct(
         private readonly ReviewAggregationService $aggregationService,
         private readonly FeaturedRestaurantService $featuredService,
+        private readonly PublicRestaurantVisibility $visibility,
     ) {}
 
     public function featuredRestaurant(): JsonResponse
@@ -30,12 +31,7 @@ class PublicReviewController extends Controller
 
     public function restaurantReviews(Request $request, int $id): JsonResponse
     {
-        $isActivePublic = DB::table('restaurants')
-            ->where('restaurant_id', $id)
-            ->where('restaurant_status', 'active')
-            ->exists();
-
-        if (! $isActivePublic) {
+        if (! $this->visibility->isVisible($id)) {
             throw new NotFoundHttpException('Restaurant not found.');
         }
 

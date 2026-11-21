@@ -89,6 +89,7 @@ class CustomerContactNumbersTest extends TestCase
                 'offers_dine_in' => 0,
                 'accepting_orders' => 1,
                 'restaurant_status' => 'active',
+                'is_published' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -108,6 +109,11 @@ class CustomerContactNumbersTest extends TestCase
                 'category_name' => 'Mains',
                 'sort_order' => 1,
                 'is_active' => 1,
+                'draft_state' => 'clean',
+                'is_published' => 1,
+                'published_category_name' => 'Mains',
+                'published_sort_order' => 1,
+                'published_is_active' => 1,
                 'created_at' => now(),
             ]);
 
@@ -118,6 +124,12 @@ class CustomerContactNumbersTest extends TestCase
                 'base_price' => '180.00',
                 'availability_status' => 'available',
                 'approval_status' => 'approved',
+                'draft_state' => 'clean',
+                'is_published' => 1,
+                'published_menu_category_id' => $catId,
+                'published_item_name' => 'Chicken Inasal '.$i,
+                'published_base_price' => '180.00',
+                'published_sort_order' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

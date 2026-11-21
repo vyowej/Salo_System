@@ -147,6 +147,7 @@ class User extends Authenticatable
                 'staff_position' => $row->staff_position,
                 'staff_status' => $row->staff_status,
                 'can_handle_orders' => self::isOrderHandlerPosition($row->staff_position),
+                'can_publish_menu' => self::isMenuPublisherPosition($row->staff_position),
                 'permissions' => null,
                 'joined_at' => $row->joined_at,
             ])
@@ -201,6 +202,7 @@ class User extends Authenticatable
             'restaurant_ownerships' => $ownerships,
             'restaurant_staff_assignments' => $staffAssignments,
             'order_handler_positions' => array_values((array) config('salo.orders.handler_positions', [])),
+            'menu_publisher_positions' => array_values((array) config('salo.menu.publisher_positions', [])),
             'rider_profile' => $riderProfile,
         ];
 
@@ -225,6 +227,11 @@ class User extends Authenticatable
     public static function isInventoryManagerPosition(?string $position): bool
     {
         return self::matchesConfiguredPosition($position, 'salo.inventory.manager_positions');
+    }
+
+    public static function isMenuPublisherPosition(?string $position): bool
+    {
+        return self::matchesConfiguredPosition($position, 'salo.menu.publisher_positions');
     }
 
     private static function matchesConfiguredPosition(?string $position, string $configKey): bool

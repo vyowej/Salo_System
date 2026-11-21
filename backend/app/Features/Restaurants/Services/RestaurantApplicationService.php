@@ -366,6 +366,8 @@ class RestaurantApplicationService
                 'availability_status' => $isAvailable ? 'available' : 'temporarily_unavailable',
                 'approval_status' => 'pending',
                 'sort_order' => (int) $idx,
+                'draft_state' => 'new',
+                'is_published' => 0,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);

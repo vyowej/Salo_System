@@ -92,6 +92,7 @@ class CheckoutOrderTest extends TestCase
             'offers_dine_in' => 1,
             'accepting_orders' => 1,
             'restaurant_status' => 'active',
+            'is_published' => 1,
             'created_at' => now(),
             'updated_at' => now(),
         ], $overrides));
@@ -121,6 +122,11 @@ class CheckoutOrderTest extends TestCase
                 'category_name' => 'Mains',
                 'sort_order' => 0,
                 'is_active' => 1,
+                'draft_state' => 'clean',
+                'is_published' => 1,
+                'published_category_name' => 'Mains',
+                'published_sort_order' => 0,
+                'published_is_active' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]));
@@ -133,6 +139,12 @@ class CheckoutOrderTest extends TestCase
             'availability_status' => 'available',
             'approval_status' => 'approved',
             'sort_order' => 0,
+            'draft_state' => 'clean',
+            'is_published' => 1,
+            'published_menu_category_id' => $catId,
+            'published_item_name' => $name,
+            'published_base_price' => $price,
+            'published_sort_order' => 0,
             'created_at' => now(),
             'updated_at' => now(),
         ], $overrides));

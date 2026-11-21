@@ -75,6 +75,16 @@ class OwnerMenuController extends Controller
         );
     }
 
+    public function restoreCategory(Request $request, int $categoryId): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+
+        return ApiResponse::success(
+            data: ['category' => $this->ownerMenuService->restoreCategory($request->user(), $categoryId, $restaurantId, $request)],
+            message: 'Menu category restored.',
+        );
+    }
+
     public function items(Request $request): JsonResponse
     {
         $restaurantId = $this->resolveRestaurantId($request);
@@ -145,6 +155,16 @@ class OwnerMenuController extends Controller
         return ApiResponse::success(
             data: null,
             message: 'Menu item deleted.',
+        );
+    }
+
+    public function restoreItem(Request $request, int $itemId): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+
+        return ApiResponse::success(
+            data: ['item' => $this->ownerMenuService->restoreItem($request->user(), $itemId, $restaurantId, $request)],
+            message: 'Menu item restored.',
         );
     }
 

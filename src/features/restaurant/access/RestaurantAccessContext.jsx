@@ -4,6 +4,8 @@ import {
   buildRestaurantAccess,
   canAccessNavigationItem,
   canStaffPositionHandleOrders,
+  canStaffPositionPublishMenu,
+  MENU_PUBLISHER_PERMISSIONS,
   ORDER_HANDLER_PERMISSIONS,
 } from './permissionMap';
 import RestaurantAccessContext from './restaurantAccessContext';
@@ -43,6 +45,9 @@ export function resolveBackendAccessData(user) {
   const orderHandlerPositions = Array.isArray(user?.order_handler_positions)
     ? user.order_handler_positions
     : [];
+  const menuPublisherPositions = Array.isArray(user?.menu_publisher_positions)
+    ? user.menu_publisher_positions
+    : [];
 
   const staffMemberships = staffRows.map((st, idx) => {
     const restId = String(st.restaurant_id);
@@ -51,12 +56,20 @@ export function resolveBackendAccessData(user) {
       orderHandlerPositions,
       st.can_handle_orders,
     );
+    const canPublishMenu = canStaffPositionPublishMenu(
+      st.staff_position,
+      menuPublisherPositions,
+      st.can_publish_menu,
+    );
     const explicitPermissions = Array.isArray(st.permissions) && st.permissions.length > 0
       ? st.permissions
       : [];
-    const permissions = canHandleOrders
+    const basePermissions = canHandleOrders
       ? Array.from(new Set([...explicitPermissions, ...ORDER_HANDLER_PERMISSIONS]))
       : explicitPermissions.filter((perm) => !String(perm).startsWith('orders.'));
+    const permissions = canPublishMenu
+      ? Array.from(new Set([...basePermissions, ...MENU_PUBLISHER_PERMISSIONS]))
+      : basePermissions.filter((perm) => perm !== 'menu.publish');
 
     if (st.restaurant_id && !restaurantMap.has(restId)) {
       restaurantMap.set(restId, {

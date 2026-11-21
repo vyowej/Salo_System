@@ -132,14 +132,17 @@ class DriveOrphansCommand extends Command
         }
 
         $menuItems = DB::table('menu_items')
-            ->select(['photo_image'])
+            ->select(['photo_image', 'published_photo_image'])
             ->where('photo_image', 'like', GoogleDrivePublicImageStore::PREFIX.'%')
+            ->orWhere('published_photo_image', 'like', GoogleDrivePublicImageStore::PREFIX.'%')
             ->get();
 
         foreach ($menuItems as $row) {
-            $id = GoogleDrivePublicImageStore::extractFileId(is_string($row->photo_image) ? $row->photo_image : null);
-            if ($id !== null) {
-                $ids[$id] = true;
+            foreach (['photo_image', 'published_photo_image'] as $col) {
+                $id = GoogleDrivePublicImageStore::extractFileId(is_string($row->{$col}) ? $row->{$col} : null);
+                if ($id !== null) {
+                    $ids[$id] = true;
+                }
             }
         }
 

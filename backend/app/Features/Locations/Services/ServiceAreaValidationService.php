@@ -2,10 +2,14 @@
 
 namespace App\Features\Locations\Services;
 
+use App\Support\PublicRestaurantVisibility;
 use Illuminate\Support\Facades\DB;
 
 class ServiceAreaValidationService
 {
+    public function __construct(
+        private readonly PublicRestaurantVisibility $visibility,
+    ) {}
     /**
      * Validate whether a Philippine administrative location is covered by an active SALO platform service area.
      *
@@ -207,7 +211,10 @@ class ServiceAreaValidationService
             return $this->restaurantResult(false, false, false, false, $platform['reason']);
         }
 
-        $restaurant = DB::table('restaurants')->where('restaurant_id', $restaurantId)->first();
+        $restaurant = $this->visibility->applyVisibleRestaurantScope(
+            DB::table('restaurants as r')->where('r.restaurant_id', $restaurantId),
+            'r',
+        )->first(['r.restaurant_id', 'r.restaurant_name', 'r.offers_delivery']);
         if (! $restaurant) {
             return $this->restaurantResult(false, true, false, false, 'Restaurant not found.');
         }

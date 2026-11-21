@@ -171,7 +171,7 @@ class AdminManagementService
                 'rest.business_type', 'rest.ownership_structure', 'rest.contact_phone',
                 'rest.business_email', 'rest.logo_image', 'rest.cover_image',
                 'rest.offers_delivery', 'rest.offers_pickup', 'rest.offers_dine_in',
-                'rest.accepts_reservations', 'rest.restaurant_status', 'rest.created_at',
+                'rest.accepts_reservations', 'rest.restaurant_status', 'rest.is_published', 'rest.last_published_at', 'rest.created_at',
                 'addr.street', 'brgy.barangay_name', 'c.city_name as zone',
                 'ra.reference_number', 'ra.application_status',
             ]);

@@ -389,6 +389,13 @@ export function deriveBusinessSetupChecklist({
         done: backendStatus.availability_toggles.complete,
       });
     }
+
+    if (backendStatus.publish && typeof backendStatus.publish.complete === 'boolean' && itemsConfig.publish) {
+      derived.push({
+        ...itemsConfig.publish,
+        done: backendStatus.publish.complete,
+      });
+    }
   } else if (workspaceData && workspaceData.restaurant) {
     const rest = workspaceData.restaurant;
     const loc = rest.location || {};

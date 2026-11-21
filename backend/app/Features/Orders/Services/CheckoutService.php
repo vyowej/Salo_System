@@ -9,6 +9,7 @@ use App\Features\Restaurants\Services\AvailabilityService;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\Money;
+use App\Support\PublicRestaurantVisibility;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class CheckoutService
         private readonly CustomerOrderService $customerOrderService,
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
+        private readonly PublicRestaurantVisibility $visibility,
     ) {}
 
     /**
@@ -88,7 +90,7 @@ class CheckoutService
             $itemsInput = is_array($group['items']) ? $group['items'] : [];
 
             $restaurant = DB::table('restaurants')->where('restaurant_id', $restaurantId)->first();
-            if (! $restaurant || $restaurant->restaurant_status !== 'active') {
+            if (! $restaurant || ! $this->visibility->isVisible($restaurantId)) {
                 $groupErrors["groups.{$gIdx}.restaurant_id"][] = 'This restaurant is currently unavailable for ordering.';
                 continue;
             }
@@ -229,16 +231,19 @@ class CheckoutService
                 }
 
                 $menuItem = DB::table('menu_items as mi')
-                    ->join('menu_categories as mc', 'mc.menu_category_id', '=', 'mi.menu_category_id')
+                    ->leftJoin('menu_categories as mc', 'mc.menu_category_id', '=', 'mi.published_menu_category_id')
                     ->where('mi.menu_item_id', $menuItemId)
                     ->where('mi.restaurant_id', $restaurantId)
                     ->first([
                         'mi.menu_item_id',
-                        'mi.item_name',
-                        'mi.base_price',
+                        DB::raw('COALESCE(mi.published_item_name, mi.item_name) as display_name'),
+                        'mi.published_item_name as item_name',
+                        'mi.published_base_price as base_price',
                         'mi.availability_status',
                         'mi.approval_status',
-                        'mc.is_active as category_active',
+                        'mi.is_published',
+                        'mc.is_published as category_published',
+                        'mc.published_is_active as category_active',
                     ]);
 
                 if (! $menuItem) {
@@ -246,8 +251,15 @@ class CheckoutService
                     continue;
                 }
 
-                if ($menuItem->approval_status !== 'approved' || (int) $menuItem->category_active !== 1) {
-                    $groupErrors["groups.{$gIdx}.items.{$iIdx}.menu_item_id"][] = "{$menuItem->item_name} is not available for ordering.";
+                if (
+                    (int) $menuItem->is_published !== 1
+                    || $menuItem->approval_status !== 'approved'
+                    || (int) $menuItem->category_published !== 1
+                    || (int) $menuItem->category_active !== 1
+                    || $menuItem->item_name === null
+                    || $menuItem->base_price === null
+                ) {
+                    $groupErrors["groups.{$gIdx}.items.{$iIdx}.menu_item_id"][] = "{$menuItem->display_name} is not available for ordering.";
                     continue;
                 }
 

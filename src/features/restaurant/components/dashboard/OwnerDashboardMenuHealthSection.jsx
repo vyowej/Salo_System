@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import Button from '../../../../components/common/Button';
 
-export default function OwnerDashboardMenuHealthSection({ stats }) {
+export default function OwnerDashboardMenuHealthSection({ stats, publishStatus = null }) {
   return (
     <section style={{ marginBottom: 'var(--space-8)' }}>
       <div
@@ -29,6 +29,15 @@ export default function OwnerDashboardMenuHealthSection({ stats }) {
           <h2 className="section-title" style={{ margin: 0 }}>
             Menu Health
           </h2>
+          {publishStatus ? (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'inline-block', marginTop: 4 }}>
+              {publishStatus.is_published
+                ? (publishStatus.pending_changes?.total > 0
+                  ? `Published · ${publishStatus.pending_changes.total} unpublished change(s)`
+                  : 'Published to customers')
+                : 'Not published yet (hidden from customers)'}
+            </span>
+          ) : null}
         </div>
         <Link to="/owner/menu" style={{ textDecoration: 'none' }}>
           <Button variant="outline" size="sm">

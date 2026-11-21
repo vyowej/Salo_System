@@ -8,6 +8,7 @@ import Modal from '../../../components/common/Modal';
 import ImageUploader from '../../../components/common/ImageUploader';
 import RestaurantImage from '../../customer/components/RestaurantImage';
 import { EmptyState, ErrorState, LoadingSpinner } from '../../../components/feedback';
+import MenuPublishBar from '../components/MenuPublishBar';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import { INVENTORY_MENU_DISPLAY } from './inventoryMenuDisplayConfig';
 import {
@@ -88,14 +89,17 @@ export default function OwnerMenuPage() {
   const [editingCategoryId, setEditingCategoryId] = useState(null);
   const [deleteCategory, setDeleteCategory] = useState(null);
   const [replacementCategoryId, setReplacementCategoryId] = useState('');
+  const [publishStatus, setPublishStatus] = useState(null);
+  const [publishBusy, setPublishBusy] = useState(false);
 
   const loadMenu = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [rawItems, rawCategories] = await Promise.all([
+      const [rawItems, rawCategories, rawPublishStatus] = await Promise.all([
         ownerService.fetchMenuItems(selectedRestaurantId),
         ownerService.fetchMenuCategories(selectedRestaurantId),
+        ownerService.getMenuPublishStatus(selectedRestaurantId).catch(() => null),
       ]);
       const items = (rawItems || []).map((item) =>
         normalizeMenuItem({
@@ -112,8 +116,12 @@ export default function OwnerMenuPage() {
           visible: cat.is_active !== false,
           sortOrder: cat.sort_order ?? 0,
           itemsCount: cat.items_count ?? 0,
+          publish_state: cat.publish_state || (cat.is_published ? 'published' : 'new'),
+          is_published: Boolean(cat.is_published),
+          published: cat.published || null,
         })),
       }));
+      setPublishStatus(rawPublishStatus);
       setSelectedCategory('All');
     } catch (loadError) {
       setError(loadError.message || 'Unable to load menu data.');
@@ -386,6 +394,58 @@ export default function OwnerMenuPage() {
     }));
   }
 
+  async function restoreMenuItem(id) {
+    try {
+      await ownerService.restoreMenuItem(selectedRestaurantId, id);
+      await loadMenu();
+    } catch (restoreError) {
+      setError(restoreError.message || 'Unable to restore the menu item.');
+    }
+  }
+
+  async function restoreCategory(id) {
+    try {
+      await ownerService.restoreMenuCategory(selectedRestaurantId, id);
+      await loadMenu();
+    } catch (restoreError) {
+      setError(restoreError.message || 'Unable to restore the category.');
+    }
+  }
+
+  async function handlePublishMenu() {
+    setPublishBusy(true);
+    try {
+      await ownerService.publishMenu(selectedRestaurantId);
+      await loadMenu();
+    } finally {
+      setPublishBusy(false);
+    }
+  }
+
+  async function handleUnpublishRestaurant(reason) {
+    setPublishBusy(true);
+    try {
+      await ownerService.unpublishRestaurant(selectedRestaurantId, reason);
+      await loadMenu();
+    } finally {
+      setPublishBusy(false);
+    }
+  }
+
+  async function handleDiscardChanges() {
+    setPublishBusy(true);
+    try {
+      await ownerService.discardMenuChanges(selectedRestaurantId);
+      await loadMenu();
+    } finally {
+      setPublishBusy(false);
+    }
+  }
+
+  async function handlePreviewMenu() {
+    return ownerService.getMenuPreview(selectedRestaurantId);
+  }
+
   if (loading) return <OwnerLayout><LoadingSpinner size="lg" label="Loading menu..." /></OwnerLayout>;
   if (error && menuItems.length === 0 && categories.length === 0) {
     return <OwnerLayout><ErrorState description={error} onRetry={loadMenu} /></OwnerLayout>;
@@ -401,6 +461,16 @@ export default function OwnerMenuPage() {
 
       {error && <div className="form-error" role="alert" style={{ marginBottom: 'var(--space-4)' }}>{error}</div>}
 
+      <MenuPublishBar
+        publishStatus={publishStatus}
+        canPublish={access.canAccess(['menu.publish'])}
+        busy={publishBusy}
+        onPublish={handlePublishMenu}
+        onUnpublish={handleUnpublishRestaurant}
+        onDiscard={handleDiscardChanges}
+        onPreview={handlePreviewMenu}
+      />
+
       <section style={{ background: 'var(--surface-primary)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)', marginBottom: 'var(--space-6)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
           <div>
@@ -414,8 +484,14 @@ export default function OwnerMenuPage() {
             <div key={category.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', borderTop: '1px solid var(--border-secondary)', paddingTop: 8 }}>
               <span style={{ flex: 1, minWidth: 140, fontWeight: 600, color: category.visible ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                 {category.name}{!category.visible && ' · Hidden'}
+                {category.publish_state === 'new' && <Badge variant="default" size="sm" style={{ marginLeft: 8 }}>Draft</Badge>}
+                {category.publish_state === 'modified' && <Badge variant="warning" size="sm" style={{ marginLeft: 8 }}>Edited</Badge>}
+                {category.publish_state === 'pending_delete' && <Badge variant="danger" size="sm" style={{ marginLeft: 8 }}>Will be removed</Badge>}
               </span>
               {access.canAccess(['menu.categories.manage']) && <>
+                {category.publish_state === 'pending_delete' && (
+                  <Button variant="outline" size="sm" onClick={() => restoreCategory(category.id)}>Undo remove</Button>
+                )}
                 <Button variant="outline" size="sm" disabled={index === 0} onClick={() => saveCategories(categories.map((entry, order) => order === index ? categories[index - 1] : order === index - 1 ? categories[index] : entry))}>Move up</Button>
                 <Button variant="outline" size="sm" disabled={index === categories.length - 1} onClick={() => saveCategories(categories.map((entry, order) => order === index ? categories[index + 1] : order === index + 1 ? categories[index] : entry))}>Move down</Button>
                 <Button variant="outline" size="sm" onClick={() => saveCategories(categories.map((entry) => entry.id === category.id ? { ...entry, visible: !entry.visible } : entry))}>{category.visible ? 'Hide' : 'Show'}</Button>
@@ -467,11 +543,21 @@ export default function OwnerMenuPage() {
                 {item.photo ? (
                   <RestaurantImage image={item.photo} alt={item.photo.alt || item.name} style={{ width: 64, height: 64, borderRadius: 'var(--radius-lg)', flex: '0 0 64px' }} />
                 ) : <div aria-hidden="true" style={{ width: 64, height: 64, borderRadius: 'var(--radius-lg)', display: 'grid', placeItems: 'center', background: 'var(--bg-secondary)', fontSize: 30, flex: '0 0 64px' }}>{item.image || '🍲'}</div>}
-                <Badge variant={item.availability === 'available' ? 'success' : item.availability === 'hidden' ? 'default' : 'warning'} size="sm">{AVAILABILITY_LABELS[item.availability]}</Badge>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {item.publish_state === 'new' && <Badge variant="default" size="sm">New draft</Badge>}
+                  {item.publish_state === 'modified' && <Badge variant="warning" size="sm">Edited</Badge>}
+                  {item.publish_state === 'pending_delete' && <Badge variant="danger" size="sm">Will be removed</Badge>}
+                  <Badge variant={item.availability === 'available' ? 'success' : item.availability === 'hidden' ? 'default' : 'warning'} size="sm">{AVAILABILITY_LABELS[item.availability]}</Badge>
+                </div>
               </div>
               <div style={{ minHeight: 100 }}>
                 <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', fontWeight: 700 }}>{item.category}</span>
                 <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)', margin: '4px 0' }}>{item.name}</h3>
+                {item.publish_state === 'modified' && item.published?.price != null && Number(item.published.price) !== Number(item.price) && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                    Live price: ₱{Number(item.published.price).toLocaleString('en-PH')} → Draft: ₱{Number(item.price).toLocaleString('en-PH')}
+                  </div>
+                )}
                 <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-xs)', lineHeight: 1.5, margin: 0 }}>{item.description}</p>
                 {item.dietaryInfo.length > 0 && <p style={{ color: 'var(--text-muted)', fontSize: 11, margin: '6px 0' }}>{item.dietaryInfo.join(' · ')}</p>}
               </div>
@@ -482,7 +568,7 @@ export default function OwnerMenuPage() {
                         <small style={{ color: 'var(--text-muted)' }}>{item.stockQuantity !== null && item.stockQuantity !== undefined && item.stockQuantity !== '' && Number.isFinite(Number(item.stockQuantity)) ? `${item.stockQuantity} in stock` : 'Stock not tracked'}</small>
                 </div>
                 {access.canAccess(['menu.availability.manage']) && (
-                  <select aria-label={`Availability for ${item.name}`} value={item.availability} onChange={(event) => updateAvailability(item, event.target.value)} style={{ ...CONTROL_STYLE, width: 'auto', maxWidth: 170, padding: '7px 8px', fontSize: 12 }}>
+                  <select title="Applies immediately (live)" aria-label={`Availability for ${item.name}`} value={item.availability} onChange={(event) => updateAvailability(item, event.target.value)} style={{ ...CONTROL_STYLE, width: 'auto', maxWidth: 170, padding: '7px 8px', fontSize: 12 }}>
                     {MENU_AVAILABILITY.map((status) => <option key={status} value={status}>{AVAILABILITY_LABELS[status]}</option>)}
                   </select>
                 )}
@@ -494,9 +580,12 @@ export default function OwnerMenuPage() {
                   <Button variant="ghost" size="sm" onClick={() => setDeleteId(null)}>Cancel</Button>
                 </div>
               ) : (canEditForm() || access.canAccess(['menu.items.delete'])) && (
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {item.publish_state === 'pending_delete' && (
+                    <Button variant="outline" size="sm" onClick={() => restoreMenuItem(item.id)}>Undo remove</Button>
+                  )}
                   {canEditForm() && <Button variant="outline" size="sm" onClick={() => openEditItem(item)}>Edit item</Button>}
-                  {access.canAccess(['menu.items.delete']) && <Button variant="ghost" size="sm" onClick={() => setDeleteId(item.id)}>Remove</Button>}
+                  {access.canAccess(['menu.items.delete']) && item.publish_state !== 'pending_delete' && <Button variant="ghost" size="sm" onClick={() => setDeleteId(item.id)}>Remove</Button>}
                 </div>
               )}
             </article>

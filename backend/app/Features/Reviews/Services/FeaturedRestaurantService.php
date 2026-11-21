@@ -6,6 +6,7 @@ use App\Features\Notifications\Services\NotificationService;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use App\Support\PublicRestaurantVisibility;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,7 @@ class FeaturedRestaurantService
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
         private readonly FileStorageService $fileStorageService,
+        private readonly PublicRestaurantVisibility $visibility,
     ) {}
 
     /**
@@ -41,13 +43,15 @@ class FeaturedRestaurantService
     {
         $today = now('Asia/Manila')->toDateString();
 
-        $row = DB::table('featured_restaurant_weeks as fw')
-            ->join('restaurants as r', 'r.restaurant_id', '=', 'fw.restaurant_id')
-            ->leftJoin('addresses as a', 'a.address_id', '=', 'r.address_id')
-            ->leftJoin('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
-            ->leftJoin('cities as c', 'c.city_id', '=', 'b.city_id')
-            ->where('fw.selection_status', 'active')
-            ->where('r.restaurant_status', 'active')
+        $row = $this->visibility->applyVisibleRestaurantScope(
+            DB::table('featured_restaurant_weeks as fw')
+                ->join('restaurants as r', 'r.restaurant_id', '=', 'fw.restaurant_id')
+                ->leftJoin('addresses as a', 'a.address_id', '=', 'r.address_id')
+                ->leftJoin('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
+                ->leftJoin('cities as c', 'c.city_id', '=', 'b.city_id')
+                ->where('fw.selection_status', 'active'),
+            'r',
+        )
             ->where('fw.feature_start_date', '<=', $today)
             ->where('fw.feature_end_date', '>=', $today)
             ->orderByDesc('fw.feature_start_date')
@@ -142,13 +146,15 @@ class FeaturedRestaurantService
             ? round((float) $platformAgg->mean_rating, 4)
             : round($fallbackC, 4);
 
-        // 2. Per-restaurant eligible aggregates in evaluation window (active restaurants only)
-        $restQuery = DB::table('restaurants as r')
-            ->leftJoin('reviews as rv', function ($join) use ($evalStartDb, $evalEndDb): void {
-                $join->on('rv.restaurant_id', '=', 'r.restaurant_id')
-                    ->whereBetween('rv.created_at', [$evalStartDb, $evalEndDb]);
-            })
-            ->where('r.restaurant_status', 'active')
+        // 2. Per-restaurant eligible aggregates in evaluation window (active & published restaurants only)
+        $restQuery = $this->visibility->applyVisibleRestaurantScope(
+            DB::table('restaurants as r')
+                ->leftJoin('reviews as rv', function ($join) use ($evalStartDb, $evalEndDb): void {
+                    $join->on('rv.restaurant_id', '=', 'r.restaurant_id')
+                        ->whereBetween('rv.created_at', [$evalStartDb, $evalEndDb]);
+                }),
+            'r',
+        )
             ->select([
                 'r.restaurant_id',
                 'r.restaurant_name',
@@ -359,8 +365,8 @@ class FeaturedRestaurantService
         if (! $restaurant) {
             throw new NotFoundHttpException('Restaurant not found.');
         }
-        if ($restaurant->restaurant_status !== 'active') {
-            throw new UnprocessableEntityHttpException('Only active restaurants can be selected as Featured Restaurant of the Week.');
+        if (! $this->visibility->isVisible($restaurantId)) {
+            throw new UnprocessableEntityHttpException('Only active, published restaurants with a visible menu can be selected as Featured Restaurant of the Week.');
         }
 
         $computed = $this->computeCandidates($referenceDate);

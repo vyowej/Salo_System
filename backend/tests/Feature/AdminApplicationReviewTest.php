@@ -219,14 +219,14 @@ class AdminApplicationReviewTest extends TestCase
             'note' => 'Too late',
         ])->assertStatus(409);
 
-        // After approval: restaurant & initial menu items ARE publicly visible
+        // After approval: restaurant is active for owner workspace, but stays hidden from customers until published
         $this->getJson('/api/restaurants?search='.urlencode('Transition Bistro'))
             ->assertOk()
-            ->assertJsonCount(1, 'data.restaurants');
-        $this->getJson("/api/restaurants/{$restId}")->assertOk();
-        $this->getJson("/api/restaurants/{$restId}/menu")
-            ->assertOk()
-            ->assertJsonPath('data.categories.0.items.0.name', 'Adobo Platter');
+            ->assertJsonCount(0, 'data.restaurants');
+        $this->getJson("/api/restaurants/{$restId}")->assertStatus(404);
+        $this->getJson("/api/restaurants/{$restId}/menu")->assertStatus(404);
+        $this->assertSame(0, (int) DB::table('restaurants')->where('restaurant_id', $restId)->value('is_published'));
+        $this->assertSame('approved', DB::table('menu_items')->where('restaurant_id', $restId)->value('approval_status'));
 
         // Audit logs recorded before/after statuses
         $logs = DB::table('audit_logs')

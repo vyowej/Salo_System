@@ -209,6 +209,54 @@ export const ownerService = {
     await apiClient.delete(`/restaurant/menu/items/${itemId}${query}`);
   },
 
+  async restoreMenuItem(restaurantId, itemId) {
+    const res = await apiClient.post(`/restaurant/menu/items/${itemId}/restore`, {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+    });
+    return res?.data?.item ?? null;
+  },
+
+  async restoreMenuCategory(restaurantId, categoryId) {
+    const res = await apiClient.post(`/restaurant/menu/categories/${categoryId}/restore`, {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+    });
+    return res?.data?.category ?? null;
+  },
+
+  async getMenuPublishStatus(restaurantId) {
+    const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.get(`/restaurant/menu/publish-status${query}`);
+    return res?.data?.publish_status ?? null;
+  },
+
+  async getMenuPreview(restaurantId) {
+    const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.get(`/restaurant/menu/preview${query}`);
+    return res?.data ?? null;
+  },
+
+  async publishMenu(restaurantId) {
+    const res = await apiClient.post('/restaurant/menu/publish', {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+    });
+    return res?.data ?? null;
+  },
+
+  async unpublishRestaurant(restaurantId, reason = '') {
+    const res = await apiClient.post('/restaurant/menu/unpublish', {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      ...(reason ? { reason } : {}),
+    });
+    return res?.data?.publish_status ?? null;
+  },
+
+  async discardMenuChanges(restaurantId) {
+    const res = await apiClient.post('/restaurant/menu/discard-changes', {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+    });
+    return res?.data?.publish_status ?? null;
+  },
+
   getRestaurant() {
     return null;
   },

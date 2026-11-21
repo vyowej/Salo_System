@@ -51,13 +51,18 @@ class PublicRestaurantsTest extends TestCase
     public function test_hidden_menu_items_excluded_and_sold_out_and_addons_included(): void
     {
         [, , , $addressId] = $this->createLocationFixture();
-        $restaurantId = $this->createRestaurant($addressId, 'Menu Test Bistro', 'active');
+        $restaurantId = $this->createRestaurant($addressId, 'Menu Test Bistro', 'active', ['seed_menu' => false]);
 
         $catMains = DB::table('menu_categories')->insertGetId([
             'restaurant_id' => $restaurantId,
             'category_name' => 'Mains',
             'sort_order' => 1,
             'is_active' => 1,
+            'draft_state' => 'clean',
+            'is_published' => 1,
+            'published_category_name' => 'Mains',
+            'published_sort_order' => 1,
+            'published_is_active' => 1,
         ]);
 
         $catHidden = DB::table('menu_categories')->insertGetId([
@@ -65,6 +70,11 @@ class PublicRestaurantsTest extends TestCase
             'category_name' => 'Archived',
             'sort_order' => 2,
             'is_active' => 0,
+            'draft_state' => 'clean',
+            'is_published' => 1,
+            'published_category_name' => 'Archived',
+            'published_sort_order' => 2,
+            'published_is_active' => 0,
         ]);
 
         $availItemId = DB::table('menu_items')->insertGetId([
@@ -76,6 +86,13 @@ class PublicRestaurantsTest extends TestCase
             'availability_status' => 'available',
             'approval_status' => 'approved',
             'sort_order' => 1,
+            'draft_state' => 'clean',
+            'is_published' => 1,
+            'published_menu_category_id' => $catMains,
+            'published_item_name' => 'Chicken Inasal',
+            'published_description' => 'Chargrilled chicken.',
+            'published_base_price' => 195.00,
+            'published_sort_order' => 1,
         ]);
 
         DB::table('menu_items')->insert([
@@ -87,6 +104,13 @@ class PublicRestaurantsTest extends TestCase
             'availability_status' => 'sold_out',
             'approval_status' => 'approved',
             'sort_order' => 2,
+            'draft_state' => 'clean',
+            'is_published' => 1,
+            'published_menu_category_id' => $catMains,
+            'published_item_name' => 'Crispy Pata',
+            'published_description' => 'Crispy pork leg.',
+            'published_base_price' => 650.00,
+            'published_sort_order' => 2,
         ]);
 
         DB::table('menu_items')->insert([
@@ -98,6 +122,13 @@ class PublicRestaurantsTest extends TestCase
             'availability_status' => 'temporarily_unavailable',
             'approval_status' => 'approved',
             'sort_order' => 3,
+            'draft_state' => 'clean',
+            'is_published' => 1,
+            'published_menu_category_id' => $catMains,
+            'published_item_name' => 'Seasonal Halo-Halo',
+            'published_description' => 'Temporarily out of ingredients.',
+            'published_base_price' => 145.00,
+            'published_sort_order' => 3,
         ]);
 
         DB::table('menu_items')->insert([
@@ -435,7 +466,10 @@ class PublicRestaurantsTest extends TestCase
 
     private function createRestaurant(int $addressId, string $name, string $status, array $overrides = []): int
     {
-        return DB::table('restaurants')->insertGetId(array_merge([
+        $seedMenu = $overrides['seed_menu'] ?? ($status === 'active');
+        unset($overrides['seed_menu']);
+
+        $restaurantId = (int) DB::table('restaurants')->insertGetId(array_merge([
             'restaurant_name' => $name,
             'registered_name' => $name.' Legal Corp',
             'business_type' => 'restaurant',
@@ -451,7 +485,40 @@ class PublicRestaurantsTest extends TestCase
             'accepting_orders' => 1,
             'accepting_reservations' => 1,
             'restaurant_status' => $status,
+            'is_published' => $status === 'active' ? 1 : 0,
         ], $overrides));
+
+        if ($seedMenu) {
+            $catId = (int) DB::table('menu_categories')->insertGetId([
+                'restaurant_id' => $restaurantId,
+                'category_name' => 'Menu',
+                'sort_order' => 1,
+                'is_active' => 1,
+                'draft_state' => 'clean',
+                'is_published' => 1,
+                'published_category_name' => 'Menu',
+                'published_sort_order' => 1,
+                'published_is_active' => 1,
+            ]);
+
+            DB::table('menu_items')->insert([
+                'restaurant_id' => $restaurantId,
+                'menu_category_id' => $catId,
+                'item_name' => 'House Dish',
+                'base_price' => 120.00,
+                'availability_status' => 'available',
+                'approval_status' => 'approved',
+                'sort_order' => 1,
+                'draft_state' => 'clean',
+                'is_published' => 1,
+                'published_menu_category_id' => $catId,
+                'published_item_name' => 'House Dish',
+                'published_base_price' => 120.00,
+                'published_sort_order' => 1,
+            ]);
+        }
+
+        return $restaurantId;
     }
 
     /**

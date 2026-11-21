@@ -67,3 +67,22 @@ test('valid add-on limits permit optional and required groups', () => {
     ],
   }), {});
 });
+
+test('menu normalization preserves publish_state, is_published, and published snapshot', () => {
+  const modified = normalizeMenuItem({
+    name: 'Special Tapsilog',
+    price: 145,
+    is_published: true,
+    publish_state: 'modified',
+    published: { name: 'Tapsilog', price: 120 },
+  });
+
+  assert.equal(modified.is_published, true);
+  assert.equal(modified.publish_state, 'modified');
+  assert.deepEqual(modified.published, { name: 'Tapsilog', price: 120 });
+
+  const draft = normalizeMenuItem({ name: 'New Dish', price: 99 });
+  assert.equal(draft.is_published, false);
+  assert.equal(draft.publish_state, 'new');
+  assert.equal(draft.published, null);
+});
