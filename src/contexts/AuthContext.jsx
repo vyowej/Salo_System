@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect, useCallback } from 'react';
 import authService, { getDefaultWorkspace, normalizeUser } from '../services/authService';
+import contactNumberService from '../services/contactNumberService';
 
 const AuthContext = createContext(null);
 const ACTIVE_WORKSPACE_STORAGE_KEY = 'salo_active_workspace';
@@ -45,6 +46,7 @@ export function AuthProvider({ children }) {
       setUser(null);
       setActiveWorkspaceState(null);
       writeStoredWorkspaceForUser(null, null);
+      contactNumberService.clearCache();
       return null;
     }
 
@@ -54,6 +56,10 @@ export function AuthProvider({ children }) {
     const workspace = candidateWorkspace && normalized.roles.includes(candidateWorkspace)
       ? candidateWorkspace
       : getDefaultWorkspace(normalized.roles);
+
+    if (workspace !== 'customer' || !contactNumberService.isLoadedFor(userId)) {
+      contactNumberService.clearCache();
+    }
 
     setUser({ ...normalized, role: workspace });
     setActiveWorkspaceState(workspace);

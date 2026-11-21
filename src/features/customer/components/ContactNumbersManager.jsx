@@ -20,6 +20,9 @@ function getLabelIcon(label) {
 export default function ContactNumbersManager({ hideAddButton = false }) {
   const {
     contactNumbers,
+    loading,
+    error,
+    refreshContactNumbers,
     addContactNumber,
     updateContactNumber,
     deleteContactNumber,
@@ -29,36 +32,90 @@ export default function ContactNumbersManager({ hideAddButton = false }) {
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [actionBusyId, setActionBusyId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
 
   const isLimitReached = contactNumbers.length >= MAX_SAVED_CONTACT_NUMBERS;
 
+  const showStatus = (msg) => {
+    setStatusMessage(msg);
+    setActionError('');
+  };
+
   const handleOpenAdd = () => {
     setEditingContact(null);
+    setActionError('');
     setFormModalOpen(true);
   };
 
   const handleOpenEdit = (contact) => {
     setEditingContact(contact);
+    setActionError('');
     setFormModalOpen(true);
   };
 
-  const handleSave = (payload) => {
+  const handleSave = async (payload) => {
     if (editingContact?.id) {
-      updateContactNumber(editingContact.id, payload);
+      await updateContactNumber(editingContact.id, payload);
+      showStatus('Contact number updated.');
     } else {
-      addContactNumber(payload);
+      await addContactNumber(payload);
+      showStatus('Contact number saved.');
     }
   };
 
-  const handleConfirmDelete = () => {
-    if (deleteTarget?.id) {
-      deleteContactNumber(deleteTarget.id);
+  const handleSetDefault = async (contact) => {
+    setActionError('');
+    setStatusMessage('');
+    setActionBusyId(contact.id);
+    try {
+      await setDefaultContactNumber(contact.id);
+      showStatus(`${contact.label} (${contact.phoneNumber}) set as default.`);
+    } catch (err) {
+      setActionError(err?.message || 'Unable to update default contact number.');
+    } finally {
+      setActionBusyId(null);
     }
-    setDeleteTarget(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget?.id) return;
+    setDeleting(true);
+    setActionError('');
+    setStatusMessage('');
+    try {
+      await deleteContactNumber(deleteTarget.id);
+      setDeleteTarget(null);
+      showStatus('Contact number deleted.');
+    } catch (err) {
+      setActionError(err?.message || 'Unable to delete contact number.');
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
     <div className="salo-contacts-manager">
+      {(error || actionError) && (
+        <div className="salo-contacts-feedback salo-contacts-feedback--error" role="alert">
+          <span>{actionError || error}</span>
+          {error && (
+            <Button type="button" variant="ghost" size="sm" onClick={refreshContactNumbers}>
+              Retry
+            </Button>
+          )}
+        </div>
+      )}
+
+      {statusMessage && (
+        <div className="salo-contacts-feedback salo-contacts-feedback--success" role="status">
+          <span>✓ {statusMessage}</span>
+        </div>
+      )}
+
       {isLimitReached ? (
         <div className="salo-contacts-limit-banner" role="status">
           <span aria-hidden="true">ℹ️</span>
@@ -84,7 +141,11 @@ export default function ContactNumbersManager({ hideAddButton = false }) {
         </div>
       )}
 
-      {contactNumbers.length === 0 ? (
+      {loading && contactNumbers.length === 0 ? (
+        <div className="salo-contacts-loading" role="status">
+          Loading saved contact numbers...
+        </div>
+      ) : contactNumbers.length === 0 ? (
         <div className="salo-contacts-empty">
           <div className="salo-contacts-empty__icon" aria-hidden="true">📱</div>
           <h3 className="salo-contacts-empty__title">No Saved Contact Numbers Yet</h3>
@@ -123,10 +184,11 @@ export default function ContactNumbersManager({ hideAddButton = false }) {
                   <button
                     type="button"
                     className="salo-contact-action-btn"
-                    onClick={() => setDefaultContactNumber(contact.id)}
+                    onClick={() => handleSetDefault(contact)}
+                    disabled={actionBusyId === contact.id}
                     aria-label={`Set ${contact.label} (${contact.phoneNumber}) as default contact number`}
                   >
-                    Set as Default
+                    {actionBusyId === contact.id ? 'Updating...' : 'Set as Default'}
                   </button>
                 ) : (
                   <span className="salo-contact-action-btn default-active">
@@ -175,10 +237,10 @@ export default function ContactNumbersManager({ hideAddButton = false }) {
         size="sm"
         footer={(
           <div className="salo-contact-delete-footer">
-            <Button type="button" variant="ghost" size="md" onClick={() => setDeleteTarget(null)}>
+            <Button type="button" variant="ghost" size="md" onClick={() => setDeleteTarget(null)} disabled={deleting}>
               Cancel
             </Button>
-            <Button type="button" variant="danger" size="md" onClick={handleConfirmDelete}>
+            <Button type="button" variant="danger" size="md" onClick={handleConfirmDelete} loading={deleting} disabled={deleting}>
               Delete Number
             </Button>
           </div>

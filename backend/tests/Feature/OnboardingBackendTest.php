@@ -59,26 +59,10 @@ class OnboardingBackendTest extends TestCase
             ->assertStatus(422)
             ->assertJsonStructure(['errors' => ['province', 'city', 'barangay', 'street']]);
 
-        // Invalid recipient_phone rejected
-        $this->actingAs($customer1, 'web')
-            ->postJson('/api/customer/addresses', [
-                'label' => 'Home',
-                'recipient_name' => 'Juan Dela Cruz',
-                'recipient_phone' => '08123',
-                'province' => 'Metro Manila',
-                'city' => 'Quezon City',
-                'barangay' => 'Diliman',
-                'street' => '123 University Ave',
-            ])
-            ->assertStatus(422)
-            ->assertJsonPath('errors.recipient_phone.0', 'Enter a valid mobile number, like 09171234567.');
-
-        // First saved address automatically becomes default and normalizes +639 phone
+        // First saved address automatically becomes default
         $createRes = $this->actingAs($customer1, 'web')
             ->postJson('/api/customer/addresses', [
                 'label' => 'Home',
-                'recipient_name' => 'Juan Dela Cruz',
-                'recipient_phone' => '+639171234567',
                 'province' => 'Metro Manila',
                 'city' => 'Quezon City',
                 'barangay' => 'Diliman',
@@ -90,8 +74,9 @@ class OnboardingBackendTest extends TestCase
 
         $createRes->assertStatus(201)
             ->assertJsonPath('data.address.is_default', true)
-            ->assertJsonPath('data.address.recipient_phone', '09171234567')
-            ->assertJsonPath('data.address.city', 'Quezon City');
+            ->assertJsonPath('data.address.city', 'Quezon City')
+            ->assertJsonMissingPath('data.address.recipient_name')
+            ->assertJsonMissingPath('data.address.recipient_phone');
 
         $addressId = $createRes->json('data.address.id');
 

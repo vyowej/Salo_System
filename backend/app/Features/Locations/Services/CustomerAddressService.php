@@ -34,8 +34,6 @@ class CustomerAddressService
                 'ua.address_id',
                 'ua.address_label',
                 'ua.is_default',
-                'ua.recipient_name',
-                'ua.recipient_phone',
                 'a.street',
                 'a.house_number',
                 'a.building_name',
@@ -104,8 +102,6 @@ class CustomerAddressService
                 'address_id' => $addressId,
                 'address_label' => mb_substr(trim((string) ($data['label'] ?? 'Home')), 0, 50),
                 'is_default' => $shouldBeDefault ? 1 : 0,
-                'recipient_name' => isset($data['recipient_name']) ? mb_substr(trim((string) $data['recipient_name']), 0, 150) : null,
-                'recipient_phone' => isset($data['recipient_phone']) ? mb_substr(trim((string) $data['recipient_phone']), 0, 30) : null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -162,12 +158,6 @@ class CustomerAddressService
                         ? mb_substr(trim((string) $data['label']), 0, 50)
                         : $existing->address_label,
                     'is_default' => $shouldBeDefault ? 1 : 0,
-                    'recipient_name' => array_key_exists('recipient_name', $data)
-                        ? ($data['recipient_name'] !== null ? mb_substr(trim((string) $data['recipient_name']), 0, 150) : null)
-                        : $existing->recipient_name,
-                    'recipient_phone' => array_key_exists('recipient_phone', $data)
-                        ? ($data['recipient_phone'] !== null ? mb_substr(trim((string) $data['recipient_phone']), 0, 30) : null)
-                        : $existing->recipient_phone,
                     'updated_at' => now(),
                 ]);
         });
@@ -245,8 +235,6 @@ class CustomerAddressService
                 'ua.address_id',
                 'ua.address_label',
                 'ua.is_default',
-                'ua.recipient_name',
-                'ua.recipient_phone',
                 'a.street',
                 'a.house_number',
                 'a.building_name',
@@ -283,8 +271,6 @@ class CustomerAddressService
             'country' => 'Philippines',
             'label' => $row->address_label,
             'is_default' => (bool) $row->is_default,
-            'recipient_name' => $row->recipient_name ?? '',
-            'recipient_phone' => $row->recipient_phone ?? '',
             'province' => $row->province_name,
             'city' => $row->city_name,
             'barangay' => $row->barangay_name,

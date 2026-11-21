@@ -429,11 +429,13 @@ export function buildCheckoutPayload({
   orderNotesBySubOrder = {},
   idempotencyKey,
   expectedTotalsByRestaurant = {},
+  contactNumberId = null,
 }) {
   const trimmedNotes = String(orderNotes || '').trim();
   const subOrders = expandRestaurantGroupsToSubOrders(restaurantGroups);
+  const parsedContactId = Number(contactNumberId);
 
-  return {
+  const payload = {
     payment_method: 'cod',
     idempotency_key: idempotencyKey,
     groups: subOrders.map((subOrder, groupIndex) => {
@@ -471,6 +473,12 @@ export function buildCheckoutPayload({
       };
     }),
   };
+
+  if (Number.isInteger(parsedContactId) && parsedContactId > 0) {
+    payload.contact_number_id = parsedContactId;
+  }
+
+  return payload;
 }
 
 /**

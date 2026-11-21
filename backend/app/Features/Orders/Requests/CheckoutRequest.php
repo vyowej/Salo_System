@@ -22,6 +22,7 @@ class CheckoutRequest extends FormRequest
         return [
             'payment_method' => ['required', 'string', Rule::in(['cod'])],
             'idempotency_key' => ['required', 'string', 'min:8', 'max:64'],
+            'contact_number_id' => ['nullable', 'integer', 'min:1'],
             'groups' => ['required', 'array', 'min:1', 'max:20'],
             'groups.*.restaurant_id' => ['required', 'integer', 'min:1'],
             'groups.*.fulfillment' => ['required', 'string', Rule::in(['delivery', 'pickup'])],

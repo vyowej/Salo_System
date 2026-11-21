@@ -13,8 +13,6 @@ test('addressService: starts with empty cache and maps backend address rows', ()
     address_id: 99,
     label: 'Home',
     is_default: true,
-    recipient_name: 'Maria Santos',
-    recipient_phone: '09171234567',
     province: 'Metro Manila',
     city: 'Quezon City',
     barangay: 'Laging Handa',
@@ -29,7 +27,9 @@ test('addressService: starts with empty cache and maps backend address rows', ()
 
   assert.equal(mapped.id, 42);
   assert.equal(mapped.isDefault, true);
-  assert.equal(mapped.mobileNumber, '09171234567');
+  assert.equal('recipientName' in mapped, false);
+  assert.equal('mobileNumber' in mapped, false);
+  assert.equal('phone' in mapped, false);
   assert.equal(mapped.notes, 'Blue gate');
   assert.equal(mapped.lat, 14.6321);
 });
@@ -37,8 +37,6 @@ test('addressService: starts with empty cache and maps backend address rows', ()
 test('addressService: toBackendAddressPayload normalizes frontend fields for /api/customer/addresses', () => {
   const payload = toBackendAddressPayload({
     label: ' Work ',
-    recipientName: ' Juan Dela Cruz ',
-    mobileNumber: '09181112222',
     province: 'Metro Manila',
     city: 'Makati City',
     barangay: 'Bel-Air',
@@ -51,8 +49,8 @@ test('addressService: toBackendAddressPayload normalizes frontend fields for /ap
   });
 
   assert.equal(payload.label, 'Work');
-  assert.equal(payload.recipient_name, 'Juan Dela Cruz');
-  assert.equal(payload.recipient_phone, '09181112222');
+  assert.equal('recipient_name' in payload, false);
+  assert.equal('recipient_phone' in payload, false);
   assert.equal(payload.landmark, 'Lobby desk');
   assert.equal(payload.is_default, true);
 });

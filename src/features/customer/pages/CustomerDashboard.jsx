@@ -11,6 +11,8 @@ import ActiveStatusStrip from '../components/ActiveStatusStrip';
 import HeroCarousel from '../components/HeroCarousel';
 import FeatureStrip from '../components/FeatureStrip';
 import CategoryChips from '../components/CategoryChips';
+import { FeaturedRestaurantBanner } from '../../../components/reviews';
+import { MOCK_FEATURED_RESTAURANT_WEEKS } from '../../../mocks/reviewsAndFeaturedMock';
 import RoleOnboardingModal from '../../../components/onboarding/RoleOnboardingModal';
 import { useRoleOnboarding } from '../../../hooks/useRoleOnboarding';
 import './CustomerDashboard.css';
@@ -270,6 +272,15 @@ export default function CustomerDashboard() {
             setPage(1);
           }}
         />
+
+        {/* ── Featured Restaurant of the Week (Mock UI Phase) ── */}
+        {isDefaultExploreView && (
+          <FeaturedRestaurantBanner
+            featured={MOCK_FEATURED_RESTAURANT_WEEKS.find((w) => w.selection_status === 'active')}
+            onViewRestaurant={(featured) => navigate(`/customer/restaurants/${featured.restaurant_id}`)}
+            onReserveTable={(featured) => navigate(`/customer/restaurants/${featured.restaurant_id}?tab=reserve`)}
+          />
+        )}
 
         {/* ── Spotlight Kitchen Card (Visible above fold at 1920x1080) ── */}
         {loading && isDefaultExploreView ? (

@@ -6,6 +6,7 @@ import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
+import OrderReviewSection from '../components/OrderReviewSection';
 import { formatDateTimeManila, formatShortOrderId, formatPeso } from '../../../utils/format';
 import {
   buildOrderTimelineSteps,
@@ -770,6 +771,13 @@ export default function OrderDetailPage() {
               </div>
             )}
           </div>
+
+          <OrderReviewSection
+            restaurantName={activeSub?.restaurantName || 'Restaurant'}
+            riderName={tracking?.rider?.name || order.riderFirstName || null}
+            isDelivery={fulfillment === 'delivery'}
+            isEligible={['completed', 'delivered'].includes(statusKey)}
+          />
         </div>
       </div>
     </CustomerLayout>

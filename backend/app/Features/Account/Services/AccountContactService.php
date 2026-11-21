@@ -51,21 +51,32 @@ class AccountContactService
      */
     public function create(User $user, array $validated): array
     {
-        $count = DB::table('user_contact_numbers')
-            ->where('user_id', $user->user_id)
-            ->count();
-
-        if ($count >= self::MAX_CONTACTS) {
-            throw ValidationException::withMessages([
-                'phone_number' => ['You can save up to '.self::MAX_CONTACTS.' contact numbers.'],
-            ]);
-        }
-
         $phone = $this->normalizePhone((string) $validated['phone_number']);
         $label = trim((string) ($validated['label'] ?? 'Personal')) ?: 'Personal';
-        $wantsDefault = (bool) ($validated['is_default'] ?? false) || $count === 0;
 
-        $contactId = DB::transaction(function () use ($user, $label, $phone, $wantsDefault): int {
+        $contactId = DB::transaction(function () use ($user, $label, $phone, $validated): int {
+            $existingRows = DB::table('user_contact_numbers')
+                ->where('user_id', $user->user_id)
+                ->lockForUpdate()
+                ->get(['contact_id', 'phone_number']);
+
+            if ($existingRows->count() >= self::MAX_CONTACTS) {
+                throw ValidationException::withMessages([
+                    'phone_number' => ['You can save up to '.self::MAX_CONTACTS.' contact numbers.'],
+                ]);
+            }
+
+            $duplicate = $existingRows->contains(
+                fn (object $row): bool => $this->normalizePhone((string) $row->phone_number) === $phone
+            );
+            if ($duplicate) {
+                throw ValidationException::withMessages([
+                    'phone_number' => ['This contact number is already saved.'],
+                ]);
+            }
+
+            $wantsDefault = (bool) ($validated['is_default'] ?? false) || $existingRows->isEmpty();
+
             if ($wantsDefault) {
                 DB::table('user_contact_numbers')
                     ->where('user_id', $user->user_id)
@@ -101,19 +112,44 @@ class AccountContactService
      */
     public function update(User $user, int $contactId, array $validated): array
     {
-        $existing = $this->requireOwned($user, $contactId);
+        DB::transaction(function () use ($user, $contactId, $validated): void {
+            $allRows = DB::table('user_contact_numbers')
+                ->where('user_id', $user->user_id)
+                ->orderBy('contact_id')
+                ->lockForUpdate()
+                ->get();
 
-        $phone = array_key_exists('phone_number', $validated)
-            ? $this->normalizePhone((string) $validated['phone_number'])
-            : $existing->phone_number;
-        $label = array_key_exists('label', $validated)
-            ? (trim((string) $validated['label']) ?: $existing->label)
-            : $existing->label;
-        $wantsDefault = array_key_exists('is_default', $validated)
-            ? (bool) $validated['is_default']
-            : (bool) $existing->is_default;
+            $existing = $allRows->firstWhere('contact_id', $contactId);
+            if ($existing === null) {
+                throw new NotFoundHttpException('Contact number not found.');
+            }
 
-        DB::transaction(function () use ($user, $contactId, $label, $phone, $wantsDefault): void {
+            $phone = array_key_exists('phone_number', $validated)
+                ? $this->normalizePhone((string) $validated['phone_number'])
+                : $existing->phone_number;
+            $label = array_key_exists('label', $validated)
+                ? (trim((string) $validated['label']) ?: $existing->label)
+                : $existing->label;
+
+            $duplicate = $allRows->contains(
+                fn (object $row): bool => (int) $row->contact_id !== $contactId
+                    && $this->normalizePhone((string) $row->phone_number) === $phone
+            );
+            if ($duplicate) {
+                throw ValidationException::withMessages([
+                    'phone_number' => ['This contact number is already saved.'],
+                ]);
+            }
+
+            $wantsDefault = array_key_exists('is_default', $validated)
+                ? (bool) $validated['is_default']
+                : (bool) $existing->is_default;
+
+            // Keep at least one default when only one contact exists
+            if (! $wantsDefault && $allRows->count() === 1) {
+                $wantsDefault = true;
+            }
+
             if ($wantsDefault) {
                 DB::table('user_contact_numbers')
                     ->where('user_id', $user->user_id)
@@ -133,6 +169,16 @@ class AccountContactService
                 DB::table('users')
                     ->where('user_id', $user->user_id)
                     ->update(['phone_number' => $phone, 'updated_at' => now()]);
+            } elseif ((bool) $existing->is_default) {
+                $replacement = $allRows->first(fn (object $row): bool => (int) $row->contact_id !== $contactId);
+                if ($replacement !== null) {
+                    DB::table('user_contact_numbers')
+                        ->where('contact_id', $replacement->contact_id)
+                        ->update(['is_default' => 1, 'updated_at' => now()]);
+                    DB::table('users')
+                        ->where('user_id', $user->user_id)
+                        ->update(['phone_number' => $replacement->phone_number, 'updated_at' => now()]);
+                }
             }
         });
 
@@ -146,9 +192,17 @@ class AccountContactService
      */
     public function setDefault(User $user, int $contactId): array
     {
-        $existing = $this->requireOwned($user, $contactId);
+        DB::transaction(function () use ($user, $contactId): void {
+            $allRows = DB::table('user_contact_numbers')
+                ->where('user_id', $user->user_id)
+                ->lockForUpdate()
+                ->get();
 
-        DB::transaction(function () use ($user, $contactId, $existing): void {
+            $existing = $allRows->firstWhere('contact_id', $contactId);
+            if ($existing === null) {
+                throw new NotFoundHttpException('Contact number not found.');
+            }
+
             DB::table('user_contact_numbers')
                 ->where('user_id', $user->user_id)
                 ->update(['is_default' => 0, 'updated_at' => now()]);
@@ -169,16 +223,22 @@ class AccountContactService
 
     public function delete(User $user, int $contactId): void
     {
-        $existing = $this->requireOwned($user, $contactId);
+        DB::transaction(function () use ($user, $contactId): void {
+            $allRows = DB::table('user_contact_numbers')
+                ->where('user_id', $user->user_id)
+                ->orderBy('contact_id')
+                ->lockForUpdate()
+                ->get();
 
-        DB::transaction(function () use ($user, $contactId, $existing): void {
+            $existing = $allRows->firstWhere('contact_id', $contactId);
+            if ($existing === null) {
+                throw new NotFoundHttpException('Contact number not found.');
+            }
+
             DB::table('user_contact_numbers')->where('contact_id', $contactId)->delete();
 
             if ((bool) $existing->is_default) {
-                $next = DB::table('user_contact_numbers')
-                    ->where('user_id', $user->user_id)
-                    ->orderBy('contact_id')
-                    ->first();
+                $next = $allRows->first(fn (object $row): bool => (int) $row->contact_id !== $contactId);
 
                 if ($next !== null) {
                     DB::table('user_contact_numbers')
@@ -190,20 +250,6 @@ class AccountContactService
                 }
             }
         });
-    }
-
-    private function requireOwned(User $user, int $contactId): object
-    {
-        $row = DB::table('user_contact_numbers')
-            ->where('contact_id', $contactId)
-            ->where('user_id', $user->user_id)
-            ->first();
-
-        if ($row === null) {
-            throw new NotFoundHttpException('Contact number not found.');
-        }
-
-        return $row;
     }
 
     private function normalizePhone(string $raw): string

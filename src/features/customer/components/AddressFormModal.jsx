@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Button from '../../../components/common/Button';
 import { LocationPicker } from '../../../components/location';
 import locationApiService from '../../../services/locationApiService';
-import { isValidPhilippineMobile, normalizePhilippineMobile } from '../../../services/onboardingService';
 import './AddressFormModal.css';
 
 const LABEL_OPTIONS = ['Home', 'Work', 'School', 'Other'];
@@ -45,8 +44,6 @@ function buildInitialAddressState(initialData, existingAddresses = []) {
     return {
       label: hasCustomLabel ? 'Other' : initialData.label || 'Home',
       customLabel: hasCustomLabel ? initialData.label : initialData.customLabel || '',
-      recipientName: initialData.recipientName || initialData.recipient_name || '',
-      mobileNumber: initialData.mobileNumber || initialData.phone || initialData.recipient_phone || '',
       street: initialData.street || '',
       houseNumber: initialData.houseNumber || initialData.house_number || '',
       barangay: initialData.barangay || '',
@@ -64,8 +61,6 @@ function buildInitialAddressState(initialData, existingAddresses = []) {
   return {
     label: 'Home',
     customLabel: '',
-    recipientName: '',
-    mobileNumber: '',
     street: '',
     houseNumber: '',
     barangay: '',
@@ -202,17 +197,6 @@ export function CustomerAddressForm({
   const validate = () => {
     const nextErrors = {};
 
-    if (!formData.recipientName.trim()) {
-      nextErrors.recipientName = 'Recipient name is required.';
-    }
-
-    const cleanMobile = formData.mobileNumber.replace(/\s+/g, '');
-    if (!cleanMobile) {
-      nextErrors.mobileNumber = 'Mobile number is required.';
-    } else if (!isValidPhilippineMobile(cleanMobile)) {
-      nextErrors.mobileNumber = 'Please enter a valid Philippine mobile number (e.g. 09171234567 or +639171234567).';
-    }
-
     if (!formData.street.trim()) {
       nextErrors.street = 'Street name, building, or unit details are required.';
     }
@@ -256,15 +240,10 @@ export function CustomerAddressForm({
       ? formData.customLabel.trim()
       : formData.label;
 
-    const normalizedMobile = normalizePhilippineMobile(formData.mobileNumber);
-
     const payload = {
       ...(initialData || {}),
       label: effectiveLabel,
       customLabel: formData.label === 'Other' ? formData.customLabel.trim() : '',
-      recipientName: formData.recipientName.trim(),
-      mobileNumber: normalizedMobile,
-      phone: normalizedMobile,
       street: formData.street.trim(),
       houseNumber: formData.houseNumber.trim(),
       barangay: formData.barangay.trim(),
@@ -347,54 +326,6 @@ export function CustomerAddressForm({
           )}
         </div>
       )}
-
-      {/* Recipient & Contact Number */}
-      <div className="salo-form-grid-2">
-        <div className="salo-form-group">
-          <label htmlFor={`${formId}-recipient`} className="salo-form-label">
-            Recipient Name <span className="required-indicator">*</span>
-          </label>
-          <input
-            id={`${formId}-recipient`}
-            ref={firstInputRef}
-            type="text"
-            className={`salo-form-input ${errors.recipientName ? 'is-invalid' : ''}`}
-            placeholder="e.g. Juan Dela Cruz"
-            value={formData.recipientName}
-            onChange={(e) => handleFieldChange('recipientName', e.target.value)}
-            aria-invalid={Boolean(errors.recipientName)}
-            aria-describedby={errors.recipientName ? `${formId}-recipient-error` : undefined}
-            required
-          />
-          {errors.recipientName && (
-            <span id={`${formId}-recipient-error`} className="salo-form-error" role="alert">
-              {errors.recipientName}
-            </span>
-          )}
-        </div>
-
-        <div className="salo-form-group">
-          <label htmlFor={`${formId}-mobile`} className="salo-form-label">
-            Mobile Number <span className="required-indicator">*</span>
-          </label>
-          <input
-            id={`${formId}-mobile`}
-            type="tel"
-            className={`salo-form-input ${errors.mobileNumber ? 'is-invalid' : ''}`}
-            placeholder="09XXXXXXXXX or +639XXXXXXXXX"
-            value={formData.mobileNumber}
-            onChange={(e) => handleFieldChange('mobileNumber', e.target.value)}
-            aria-invalid={Boolean(errors.mobileNumber)}
-            aria-describedby={errors.mobileNumber ? `${formId}-mobile-error` : undefined}
-            required
-          />
-          {errors.mobileNumber && (
-            <span id={`${formId}-mobile-error`} className="salo-form-error" role="alert">
-              {errors.mobileNumber}
-            </span>
-          )}
-        </div>
-      </div>
 
       {/* Interactive Map, GPS, Searchable Philippine Address Fields & Confirmation */}
       <LocationPicker

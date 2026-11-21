@@ -1,0 +1,61 @@
+.salo-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.salo-stars__buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.salo-stars__icon,
+.salo-stars__btn {
+  line-height: 1;
+  color: #D9D0C5;
+  transition: color 0.14s ease, transform 0.14s ease;
+}
+
+.salo-stars__btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.salo-stars__btn:hover {
+  transform: scale(1.12);
+}
+
+.salo-stars__btn:focus-visible {
+  outline: 2px solid var(--salo-orange, #D65A2E);
+  outline-offset: 2px;
+}
+
+.salo-stars__icon.is-filled,
+.salo-stars__btn.is-filled {
+  color: var(--salo-gold, #F4C542);
+}
+
+.salo-stars--sm .salo-stars__icon,
+.salo-stars--sm .salo-stars__btn {
+  font-size: 14px;
+}
+
+.salo-stars--md .salo-stars__icon,
+.salo-stars--md .salo-stars__btn {
+  font-size: 18px;
+}
+
+.salo-stars--lg .salo-stars__icon,
+.salo-stars--lg .salo-stars__btn {
+  font-size: 24px;
+}
+
+.salo-stars__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary, #5B3A29);
+}

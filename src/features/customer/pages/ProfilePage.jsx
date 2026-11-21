@@ -683,12 +683,11 @@ export default function ProfilePage() {
                       .filter(Boolean)
                       .join(', ')}
                   </p>
-                  <p className="profile-address-card__meta">
-                    {address.recipientName}
-                    {(address.mobileNumber || address.phone) &&
-                      ` · ${address.mobileNumber || address.phone}`}
-                    {address.notes && ` · Landmark: ${address.notes}`}
-                  </p>
+                  {address.notes && (
+                    <p className="profile-address-card__meta">
+                      Landmark: {address.notes}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

@@ -12,6 +12,12 @@ import RestaurantImage from '../components/RestaurantImage';
 import MenuItemCard from '../components/MenuItemCard';
 import OrderPanel from '../components/OrderPanel';
 import MobileOrderBar from '../components/MobileOrderBar';
+import { RatingSummaryCard, ReviewList } from '../../../components/reviews';
+import {
+  MOCK_FEATURED_RESTAURANT_WEEKS,
+  MOCK_RESTAURANT_REVIEWS,
+} from '../../../mocks/reviewsAndFeaturedMock';
+import { computeMockRatingSummary } from '../../../utils/reviewDisplayUtils';
 import { useMenuSearch } from '../hooks/useMenuSearch';
 import { useScrollSpy } from '../hooks/useScrollSpy';
 import './RestaurantDetailPage.css';
@@ -51,6 +57,8 @@ export default function RestaurantDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [menuSearch, setMenuSearch] = useState('');
   const [manualActiveTab, setManualActiveTab] = useState(null);
+  const [reviewDateRange, setReviewDateRange] = useState({ key: 'all', days: null });
+  const [reviewStarFilter, setReviewStarFilter] = useState('all');
 
   // ── Data fetching ──────────────────────────────────────────
   const fetchRest = useCallback(async () => {
@@ -120,6 +128,27 @@ export default function RestaurantDetailPage() {
       return { name: cat, items: [...available, ...unavailable] };
     });
   }, [restaurant, categories]);
+
+  const activeFeaturedWeek = useMemo(
+    () => MOCK_FEATURED_RESTAURANT_WEEKS.find((w) => w.selection_status === 'active') || null,
+    [],
+  );
+
+  const isFeaturedThisWeek = Boolean(
+    restaurant && activeFeaturedWeek && String(restaurant.id) === String(activeFeaturedWeek.restaurant_id),
+  );
+
+  const mockRestaurantReviews = useMemo(() => {
+    const matched = MOCK_RESTAURANT_REVIEWS.filter(
+      (r) => String(r.restaurant_id) === String(restaurant?.id || ''),
+    );
+    return matched.length > 0 ? matched : MOCK_RESTAURANT_REVIEWS.filter((r) => r.restaurant_id === 1);
+  }, [restaurant]);
+
+  const mockRatingSummary = useMemo(
+    () => computeMockRatingSummary(mockRestaurantReviews, reviewDateRange.days),
+    [mockRestaurantReviews, reviewDateRange.days],
+  );
 
   const allMenuItems = useMemo(
     () => categoryGroups.flatMap((g) => g.items),
@@ -333,6 +362,12 @@ export default function RestaurantDetailPage() {
           )}
 
           <div className="rdp-hero-stats">
+            {isFeaturedThisWeek && (
+              <div className="rdp-hero-stat-pill">
+                <span>Recognition</span>
+                <strong>★ Featured Restaurant of the Week</strong>
+              </div>
+            )}
             {restaurant.rating != null && restaurant.reviewCount != null && (
               <div className="rdp-hero-stat-pill">
                 <span>Rating</span>
@@ -498,6 +533,31 @@ export default function RestaurantDetailPage() {
         </div>{/* /rdp-two-col */}
 
       </div>{/* /restaurant-menu-section */}
+
+      {/* ══════════════════════════════════════════════════════
+          REVIEWS & RATINGS SECTION (Mock UI Phase)
+          ══════════════════════════════════════════════════════ */}
+      <section style={{ marginTop: 'var(--space-8)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }} aria-labelledby="restaurant-reviews-title">
+        <h2 id="restaurant-reviews-title" className="section-title" style={{ margin: 0 }}>
+          Customer Reviews &amp; Ratings
+        </h2>
+        <RatingSummaryCard
+          title={`${restaurant.name} Ratings`}
+          subtitle="Verified customer reviews (mock preview data)"
+          averageRating={mockRatingSummary.averageRating}
+          totalCount={mockRatingSummary.totalCount}
+          distribution={mockRatingSummary.distribution}
+          dateRangeKey={reviewDateRange.key}
+          onDateRangeChange={(key, days) => setReviewDateRange({ key, days })}
+        />
+        <ReviewList
+          reviews={mockRatingSummary.eligibleReviews}
+          starFilter={reviewStarFilter}
+          onStarFilterChange={setReviewStarFilter}
+          emptyTitle="No reviews match this filter"
+          emptyDescription="Try selecting another star rating or date range."
+        />
+      </section>
 
       {/* ── Mobile floating bar + bottom sheet ───────────── */}
       <MobileOrderBar

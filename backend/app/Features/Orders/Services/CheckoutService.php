@@ -52,6 +52,29 @@ class CheckoutService
         $groupErrors = [];
         $preparedGroups = [];
 
+        $selectedContactPhone = null;
+        if (array_key_exists('contact_number_id', $validated) && $validated['contact_number_id'] !== null) {
+            $contactId = (int) $validated['contact_number_id'];
+            $contactRow = DB::table('user_contact_numbers')
+                ->where('contact_id', $contactId)
+                ->where('user_id', $user->user_id)
+                ->first(['contact_id', 'phone_number']);
+
+            if (! $contactRow) {
+                throw ValidationException::withMessages([
+                    'contact_number_id' => ['The selected contact number was not found in your saved contact numbers.'],
+                ]);
+            }
+
+            $normalizedSelected = UpdateProfileRequest::normalizePhilippineMobile((string) $contactRow->phone_number);
+            if ($normalizedSelected === '' || preg_match('/^09\d{9}$/', $normalizedSelected) !== 1) {
+                throw ValidationException::withMessages([
+                    'contact_number_id' => ['The selected contact number is invalid.'],
+                ]);
+            }
+            $selectedContactPhone = $normalizedSelected;
+        }
+
         $deliveryFeeCents = Money::toCents((string) config('salo.orders.flat_delivery_fee', '49.00'));
         $maxQty = max(1, (int) config('salo.orders.max_item_quantity', 50));
 
@@ -122,8 +145,6 @@ class CheckoutService
                         ->where('ua.user_id', $user->user_id)
                         ->where('ua.address_id', $addressId)
                         ->first([
-                            'ua.recipient_name',
-                            'ua.recipient_phone',
                             'a.address_id',
                             'a.street',
                             'a.house_number',
@@ -150,8 +171,16 @@ class CheckoutService
                         if (! $coverage['supported']) {
                             $groupErrors["groups.{$gIdx}.address_id"][] = $coverage['reason'];
                         } else {
-                            $contactPhone = UpdateProfileRequest::normalizePhilippineMobile(
-                                (string) ($addressRow->recipient_phone ?: $user->phone_number ?: '')
+                            $fallbackPhone = $user->phone_number;
+                            if (! $fallbackPhone) {
+                                $fallbackPhone = DB::table('user_contact_numbers')
+                                    ->where('user_id', $user->user_id)
+                                    ->orderByDesc('is_default')
+                                    ->orderBy('contact_id')
+                                    ->value('phone_number');
+                            }
+                            $contactPhone = $selectedContactPhone ?? UpdateProfileRequest::normalizePhilippineMobile(
+                                (string) ($fallbackPhone ?: '')
                             );
                             if ($contactPhone === '' || preg_match('/^09\d{9}$/', $contactPhone) !== 1) {
                                 $groupErrors["groups.{$gIdx}.address_id"][] = 'A valid contact phone number is required for delivery orders.';
@@ -166,9 +195,14 @@ class CheckoutService
                                     $addressRow->postal_code,
                                 ]);
 
+                                $accountHolderName = trim("{$user->first_name} {$user->last_name}");
+                                if ($accountHolderName === '') {
+                                    $accountHolderName = (string) $user->username;
+                                }
+
                                 $addressSnapshot = [
                                     'address_id' => (int) $addressRow->address_id,
-                                    'recipient_name' => $addressRow->recipient_name ?: trim("{$user->first_name} {$user->last_name}"),
+                                    'recipient_name' => mb_substr($accountHolderName, 0, 150),
                                     'phone' => $contactPhone,
                                     'address_text' => implode(', ', $addressParts),
                                     'latitude' => $addressRow->latitude,

@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../../../components/common/Button';
 import { Card, CardBody } from '../../../components/common/Card';
 import { StateView as GlobalStateView } from '../../../components/feedback';
+import { RatingSummaryCard, ReviewList } from '../../../components/reviews';
+import { MOCK_RIDER_REVIEWS } from '../../../mocks/reviewsAndFeaturedMock';
+import { computeMockRatingSummary } from '../../../utils/reviewDisplayUtils';
 import PageHeader from '../components/PageHeader';
 import riderService from '../../../services/riderService';
 import { useAuth } from '../../../hooks/useAuth';
@@ -32,6 +35,13 @@ export default function RiderProfilePage() {
   const [saveError, setSaveError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [saveSuccess, setSaveSuccess] = useState('');
+  const [reviewDateRange, setReviewDateRange] = useState({ key: 'all', days: null });
+  const [reviewStarFilter, setReviewStarFilter] = useState('all');
+
+  const riderRatingSummary = useMemo(
+    () => computeMockRatingSummary(MOCK_RIDER_REVIEWS.filter((r) => r.rider_id === 8), reviewDateRange.days),
+    [reviewDateRange.days],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -329,6 +339,26 @@ export default function RiderProfilePage() {
             </form>
           </CardBody>
         </Card>
+      </div>
+
+      {/* ── Rider Ratings & Delivery Reviews (Mock UI Phase) ── */}
+      <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <RatingSummaryCard
+          title="Delivery Ratings & Reviews"
+          subtitle="Independent customer ratings for your completed deliveries (mock preview data)"
+          averageRating={riderRatingSummary.averageRating}
+          totalCount={riderRatingSummary.totalCount}
+          distribution={riderRatingSummary.distribution}
+          dateRangeKey={reviewDateRange.key}
+          onDateRangeChange={(key, days) => setReviewDateRange({ key, days })}
+        />
+        <ReviewList
+          reviews={riderRatingSummary.eligibleReviews}
+          starFilter={reviewStarFilter}
+          onStarFilterChange={setReviewStarFilter}
+          emptyTitle="No delivery reviews yet"
+          emptyDescription="Customer ratings from completed deliveries will appear here."
+        />
       </div>
     </div>
   );

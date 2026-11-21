@@ -166,8 +166,6 @@ CREATE TABLE user_addresses (
     address_id           BIGINT UNSIGNED NOT NULL,
     address_label        VARCHAR(50)     NOT NULL COMMENT 'Home, Work, School, Other',
     is_default           TINYINT(1)      NOT NULL DEFAULT 0,
-    recipient_name       VARCHAR(150)    NULL COMMENT 'Recipient name for this saved address',
-    recipient_phone      VARCHAR(30)     NULL,
     default_user_key     BIGINT UNSIGNED GENERATED ALWAYS AS (IF(is_default = 1, user_id, NULL)) STORED COMMENT 'user_id when default, else NULL; UNIQUE = one default per user',
     created_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -819,6 +817,7 @@ CREATE TABLE orders (
     updated_at               TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (order_id),
     UNIQUE KEY uk_orders_review_ref (order_id, restaurant_id, customer_id),
+    UNIQUE KEY uk_orders_id_customer (order_id, customer_id),
     UNIQUE KEY uk_orders_reference (order_reference),
     KEY idx_orders_checkout (checkout_id),
     KEY idx_orders_restaurant (restaurant_id),
@@ -981,6 +980,7 @@ CREATE TABLE deliveries (
     updated_at               TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (delivery_id),
     UNIQUE KEY uk_deliveries_order (order_id),
+    UNIQUE KEY uk_deliveries_review_ref (delivery_id, order_id, rider_id),
     KEY idx_deliveries_rider (rider_id),
     KEY idx_deliveries_status (delivery_status),
     CONSTRAINT fk_deliveries_order FOREIGN KEY (order_id) REFERENCES orders (order_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
@@ -1126,6 +1126,15 @@ CREATE TABLE reviews (
     rating               TINYINT UNSIGNED NOT NULL,
     comment              TEXT            NULL,
     is_visible           TINYINT(1)      NOT NULL DEFAULT 1,
+    moderation_status    ENUM('published','flagged','hidden','removed') NOT NULL DEFAULT 'published',
+    counts_toward_rating TINYINT(1)      NOT NULL DEFAULT 1 COMMENT '1 = eligible for rating and featured calculations; 0 = excluded',
+    flagged_at           TIMESTAMP       NULL DEFAULT NULL,
+    flagged_by           BIGINT UNSIGNED NULL,
+    flag_reason          VARCHAR(255)    NULL,
+    moderated_by         BIGINT UNSIGNED NULL,
+    moderated_at         TIMESTAMP       NULL DEFAULT NULL,
+    moderation_action    ENUM('none','approved','flagged','hidden','restored','removed') NOT NULL DEFAULT 'none',
+    moderation_reason    VARCHAR(500)    NULL,
     created_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (review_id),
@@ -1133,10 +1142,32 @@ CREATE TABLE reviews (
     KEY idx_reviews_restaurant (restaurant_id),
     KEY idx_reviews_customer (customer_id),
     KEY idx_reviews_order_ref (order_id, restaurant_id, customer_id),
+    KEY idx_reviews_restaurant_eligible_created (restaurant_id, counts_toward_rating, is_visible, created_at),
+    KEY idx_reviews_restaurant_rating (restaurant_id, counts_toward_rating, rating),
+    KEY idx_reviews_moderation_status (moderation_status, created_at),
+    KEY idx_reviews_eligible_created (counts_toward_rating, is_visible, created_at),
+    KEY idx_reviews_flagged_by (flagged_by),
+    KEY idx_reviews_moderated_by (moderated_by),
     CONSTRAINT fk_reviews_customer FOREIGN KEY (customer_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
-    CONSTRAINT fk_reviews_restaurant FOREIGN KEY (restaurant_id) REFERENCES restaurants (restaurant_id) ON DELETE CASCADE ON UPDATE RESTRICT,
+    CONSTRAINT fk_reviews_restaurant FOREIGN KEY (restaurant_id) REFERENCES restaurants (restaurant_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_reviews_order FOREIGN KEY (order_id, restaurant_id, customer_id) REFERENCES orders (order_id, restaurant_id, customer_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
-    CONSTRAINT chk_reviews_rating CHECK (rating BETWEEN 1 AND 5)
+    CONSTRAINT fk_reviews_flagged_by FOREIGN KEY (flagged_by) REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE RESTRICT,
+    CONSTRAINT fk_reviews_moderated_by FOREIGN KEY (moderated_by) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT chk_reviews_rating CHECK (rating BETWEEN 1 AND 5),
+    CONSTRAINT chk_reviews_visibility_eligibility CHECK (
+        (moderation_status NOT IN ('hidden','removed') OR (is_visible = 0 AND counts_toward_rating = 0))
+        AND (is_visible = 1 OR counts_toward_rating = 0)
+    ),
+    CONSTRAINT chk_reviews_flagged CHECK (moderation_status <> 'flagged' OR flagged_at IS NOT NULL),
+    CONSTRAINT chk_reviews_moderated CHECK (
+        moderation_status NOT IN ('hidden','removed')
+        OR (
+            moderated_by IS NOT NULL
+            AND moderated_at IS NOT NULL
+            AND moderation_reason IS NOT NULL
+            AND CHAR_LENGTH(TRIM(moderation_reason)) > 0
+        )
+    )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------
@@ -1475,7 +1506,143 @@ CREATE TABLE account_lifecycle_requests (
     CONSTRAINT fk_alr_reviewer FOREIGN KEY (reviewed_by_user_id) REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Total tables: 48
+-- ----------------------------------------------------------------------------
+-- 49. RIDER REVIEWS (Independent customer reviews for completed deliveries)
+-- Composite FKs guarantee the delivery belongs to the order, the rider was
+-- assigned to that delivery, and the customer placed that order.
+-- ----------------------------------------------------------------------------
+CREATE TABLE rider_reviews (
+    rider_review_id      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    customer_id          BIGINT UNSIGNED NOT NULL,
+    rider_id             BIGINT UNSIGNED NOT NULL,
+    order_id             BIGINT UNSIGNED NOT NULL,
+    delivery_id          BIGINT UNSIGNED NOT NULL,
+    rating               TINYINT UNSIGNED NOT NULL,
+    comment              TEXT            NULL,
+    is_visible           TINYINT(1)      NOT NULL DEFAULT 1,
+    moderation_status    ENUM('published','flagged','hidden','removed') NOT NULL DEFAULT 'published',
+    counts_toward_rating TINYINT(1)      NOT NULL DEFAULT 1 COMMENT '1 = eligible for rider rating calculations; 0 = excluded',
+    flagged_at           TIMESTAMP       NULL DEFAULT NULL,
+    flagged_by           BIGINT UNSIGNED NULL,
+    flag_reason          VARCHAR(255)    NULL,
+    moderated_by         BIGINT UNSIGNED NULL,
+    moderated_at         TIMESTAMP       NULL DEFAULT NULL,
+    moderation_action    ENUM('none','approved','flagged','hidden','restored','removed') NOT NULL DEFAULT 'none',
+    moderation_reason    VARCHAR(500)    NULL,
+    created_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (rider_review_id),
+    UNIQUE KEY uk_rider_reviews_delivery (delivery_id),
+    UNIQUE KEY uk_rider_reviews_order (order_id),
+    KEY idx_rider_reviews_rider_eligible_created (rider_id, counts_toward_rating, is_visible, created_at),
+    KEY idx_rider_reviews_rider_rating (rider_id, counts_toward_rating, rating),
+    KEY idx_rider_reviews_customer (customer_id),
+    KEY idx_rider_reviews_order_customer (order_id, customer_id),
+    KEY idx_rider_reviews_delivery_ref (delivery_id, order_id, rider_id),
+    KEY idx_rider_reviews_moderation_status (moderation_status, created_at),
+    KEY idx_rider_reviews_flagged_by (flagged_by),
+    KEY idx_rider_reviews_moderated_by (moderated_by),
+    CONSTRAINT fk_rider_reviews_customer FOREIGN KEY (customer_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_rider_reviews_rider FOREIGN KEY (rider_id) REFERENCES riders (rider_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_rider_reviews_order_customer FOREIGN KEY (order_id, customer_id) REFERENCES orders (order_id, customer_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_rider_reviews_delivery FOREIGN KEY (delivery_id, order_id, rider_id) REFERENCES deliveries (delivery_id, order_id, rider_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_rider_reviews_flagged_by FOREIGN KEY (flagged_by) REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE RESTRICT,
+    CONSTRAINT fk_rider_reviews_moderated_by FOREIGN KEY (moderated_by) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT chk_rider_reviews_rating CHECK (rating BETWEEN 1 AND 5),
+    CONSTRAINT chk_rider_reviews_visibility_eligibility CHECK (
+        (moderation_status NOT IN ('hidden','removed') OR (is_visible = 0 AND counts_toward_rating = 0))
+        AND (is_visible = 1 OR counts_toward_rating = 0)
+    ),
+    CONSTRAINT chk_rider_reviews_flagged CHECK (moderation_status <> 'flagged' OR flagged_at IS NOT NULL),
+    CONSTRAINT chk_rider_reviews_moderated CHECK (
+        moderation_status NOT IN ('hidden','removed')
+        OR (
+            moderated_by IS NOT NULL
+            AND moderated_at IS NOT NULL
+            AND moderation_reason IS NOT NULL
+            AND CHAR_LENGTH(TRIM(moderation_reason)) > 0
+        )
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
+-- 50. FEATURED RESTAURANT WEEKS (Historical Featured Restaurant of the Week)
+-- Preserves evaluation snapshots and audit trail. active_week_start_key
+-- enforces at most one active selection per weekly period while retaining
+-- superseded/cancelled historical rows.
+-- ----------------------------------------------------------------------------
+CREATE TABLE featured_restaurant_weeks (
+    featured_week_id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    restaurant_id               BIGINT UNSIGNED NOT NULL,
+    feature_start_date          DATE            NOT NULL COMMENT 'Inclusive start date of the weekly feature period',
+    feature_end_date            DATE            NOT NULL COMMENT 'Inclusive end date of the weekly feature period',
+    evaluation_start_at         DATETIME        NOT NULL COMMENT 'Start of rolling evaluation period (e.g. 30 days prior)',
+    evaluation_end_at           DATETIME        NOT NULL COMMENT 'End of rolling evaluation period',
+    evaluation_review_count     INT UNSIGNED    NOT NULL COMMENT 'v: eligible restaurant reviews within evaluation period',
+    raw_average_rating          DECIMAL(5,4)    NOT NULL COMMENT 'R: raw average eligible rating within evaluation period',
+    bayesian_score              DECIMAL(6,4)    NOT NULL COMMENT 'Bayesian-adjusted score = (v/(v+m))*R + (m/(v+m))*C',
+    platform_baseline_rating    DECIMAL(5,4)    NOT NULL COMMENT 'C: platform-wide baseline average rating used at selection time',
+    min_review_threshold        INT UNSIGNED    NOT NULL COMMENT 'm: minimum qualifying review threshold used at selection time',
+    last_eligible_review_at     TIMESTAMP       NULL DEFAULT NULL COMMENT 'Tie-breaker #4: most recent eligible review timestamp in window',
+    selection_method            ENUM('automatic','admin_override') NOT NULL DEFAULT 'automatic',
+    selection_status            ENUM('active','superseded','cancelled') NOT NULL DEFAULT 'active',
+    active_week_start_key       DATE GENERATED ALWAYS AS (IF(selection_status = 'active', feature_start_date, NULL)) STORED COMMENT 'feature_start_date when active, else NULL; UNIQUE = one active selection per week',
+    supersedes_featured_week_id BIGINT UNSIGNED NULL COMMENT 'Points to the prior weekly record replaced by an admin override',
+    selected_at                 TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    selected_by                 BIGINT UNSIGNED NULL COMMENT 'NULL for automatic selection; admin user_id for override',
+    override_reason             VARCHAR(500)    NULL COMMENT 'Required when selection_method = admin_override',
+    created_at                  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (featured_week_id),
+    UNIQUE KEY uk_featured_weeks_active_start (active_week_start_key),
+    UNIQUE KEY uk_featured_weeks_supersedes (supersedes_featured_week_id),
+    KEY idx_featured_weeks_period (feature_start_date, feature_end_date, selection_status),
+    KEY idx_featured_weeks_restaurant (restaurant_id, feature_start_date),
+    KEY idx_featured_weeks_selected_by (selected_by),
+    CONSTRAINT fk_featured_weeks_restaurant FOREIGN KEY (restaurant_id) REFERENCES restaurants (restaurant_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_featured_weeks_supersedes FOREIGN KEY (supersedes_featured_week_id) REFERENCES featured_restaurant_weeks (featured_week_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_featured_weeks_selected_by FOREIGN KEY (selected_by) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT chk_featured_weeks_feature_dates CHECK (feature_end_date >= feature_start_date),
+    CONSTRAINT chk_featured_weeks_eval_dates CHECK (evaluation_end_at > evaluation_start_at),
+    CONSTRAINT chk_featured_weeks_ratings CHECK (
+        raw_average_rating BETWEEN 0 AND 5
+        AND bayesian_score BETWEEN 0 AND 5
+        AND platform_baseline_rating BETWEEN 0 AND 5
+    ),
+    CONSTRAINT chk_featured_weeks_threshold CHECK (min_review_threshold > 0),
+    CONSTRAINT chk_featured_weeks_auto_qualifies CHECK (
+        selection_method <> 'automatic' OR evaluation_review_count >= min_review_threshold
+    ),
+    CONSTRAINT chk_featured_weeks_override CHECK (
+        selection_method <> 'admin_override'
+        OR (
+            selected_by IS NOT NULL
+            AND override_reason IS NOT NULL
+            AND CHAR_LENGTH(TRIM(override_reason)) > 0
+        )
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
+-- 51. PLATFORM SETTINGS (Maintainable key-value policy configuration)
+-- ----------------------------------------------------------------------------
+CREATE TABLE platform_settings (
+    setting_key   VARCHAR(100)    NOT NULL,
+    setting_value VARCHAR(255)    NOT NULL,
+    value_type    ENUM('integer','decimal','boolean','string','json') NOT NULL DEFAULT 'string',
+    setting_group VARCHAR(50)     NOT NULL,
+    description   VARCHAR(255)    NULL,
+    updated_by    BIGINT UNSIGNED NULL,
+    created_at    TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (setting_key),
+    KEY idx_platform_settings_group (setting_group),
+    KEY idx_platform_settings_updated_by (updated_by),
+    CONSTRAINT fk_platform_settings_updated_by FOREIGN KEY (updated_by) REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE RESTRICT,
+    CONSTRAINT chk_platform_settings_key CHECK (CHAR_LENGTH(TRIM(setting_key)) > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Total tables: 51
 -- ============================================================================
 -- Location hierarchy:
 --   provinces → cities → barangays → addresses  (Philippines only)

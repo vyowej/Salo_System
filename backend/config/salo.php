@@ -66,4 +66,22 @@ return [
             'Inventory Manager',
         ],
     ],
+
+    'reviews' => [
+        // Default fallback values; runtime policy overrides live in platform_settings.
+        'min_rating' => 1,
+        'max_rating' => 5,
+        'flagged_counts_toward_rating' => filter_var(env('SALO_FLAGGED_REVIEWS_COUNT', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
+    'featured_restaurant' => [
+        // Default fallback values; runtime policy overrides live in platform_settings.
+        'min_review_threshold' => max(1, (int) env('SALO_FEATURED_MIN_REVIEWS', 10)),
+        'evaluation_period_days' => max(1, (int) env('SALO_FEATURED_EVALUATION_DAYS', 30)),
+        'feature_period_days' => max(1, (int) env('SALO_FEATURED_PERIOD_DAYS', 7)),
+        'week_start_day' => (string) env('SALO_FEATURED_WEEK_START_DAY', 'monday'),
+        'fallback_baseline_rating' => (float) env('SALO_FEATURED_FALLBACK_BASELINE', 4.0),
+        'min_platform_reviews_for_baseline' => max(1, (int) env('SALO_FEATURED_MIN_PLATFORM_REVIEWS', 10)),
+        'auto_selection_enabled' => filter_var(env('SALO_FEATURED_AUTO_SELECTION', true), FILTER_VALIDATE_BOOLEAN),
+    ],
 ];

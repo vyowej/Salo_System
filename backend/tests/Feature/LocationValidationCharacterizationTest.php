@@ -151,14 +151,13 @@ class LocationValidationCharacterizationTest extends TestCase
             ->assertJsonPath('data.service_area.is_active', false);
     }
 
-    public function test_customer_address_store_and_update_validation_and_recipient_phone_normalization(): void
+    public function test_customer_address_store_and_update_validation_and_ignores_legacy_recipient_fields(): void
     {
         $customer = $this->makeUser('customer');
 
         $this->postJson('/api/customer/addresses', [])->assertStatus(401);
 
         $invalidStore = $this->actingAs($customer)->postJson('/api/customer/addresses', [
-            'recipient_phone' => '12345',
             'postal_code' => '123',
             'latitude' => 95,
             'longitude' => 185,
@@ -174,32 +173,18 @@ class LocationValidationCharacterizationTest extends TestCase
                 'city',
                 'barangay',
                 'street',
-                'recipient_phone',
                 'postal_code',
                 'latitude',
                 'longitude',
                 'gps_accuracy',
                 'is_default',
-            ])
-            ->assertJsonPath('errors.recipient_phone.0', 'Enter a valid mobile number, like 09171234567.');
+            ]);
 
-        // Invalid +63 length stays invalid after normalization and returns custom message
-        $this->actingAs($customer)->postJson('/api/customer/addresses', [
-            'label' => 'Home',
-            'province' => 'Misamis Oriental',
-            'city' => 'Cagayan de Oro City',
-            'barangay' => 'Carmen',
-            'street' => '123 Rizal St',
-            'recipient_phone' => '+63917123456',
-        ])->assertStatus(422)
-            ->assertJsonValidationErrors(['recipient_phone'])
-            ->assertJsonPath('errors.recipient_phone.0', 'Enter a valid mobile number, like 09171234567.');
-
-        // Valid +63 phone with spaces/dashes normalizes to 09171234567
-        $storeNormalized = $this->actingAs($customer)->postJson('/api/customer/addresses', [
+        // Legacy recipient_name / recipient_phone fields are ignored on store
+        $storeRes = $this->actingAs($customer)->postJson('/api/customer/addresses', [
             'label' => 'Home',
             'recipient_name' => 'Juan Dela Cruz',
-            'recipient_phone' => '+63 917-123-4567',
+            'recipient_phone' => 'invalid-phone-ignored',
             'province' => 'Misamis Oriental',
             'city' => 'Cagayan de Oro City',
             'barangay' => 'Carmen',
@@ -207,56 +192,37 @@ class LocationValidationCharacterizationTest extends TestCase
             'postal_code' => '9000',
             'is_default' => true,
         ]);
-        $storeNormalized->assertStatus(201)
+        $storeRes->assertStatus(201)
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.address.recipient_phone', '09171234567');
+            ->assertJsonMissingPath('data.address.recipient_name')
+            ->assertJsonMissingPath('data.address.recipient_phone');
 
-        $addressId = (int) $storeNormalized->json('data.address.id');
+        $addressId = (int) $storeRes->json('data.address.id');
 
-        // Whitespace-only recipient_phone normalizes to null before validation and passes nullable rule
-        $storeWhitespacePhone = $this->actingAs($customer)->postJson('/api/customer/addresses', [
-            'label' => 'Alt',
-            'recipient_phone' => '   ',
-            'province' => 'Misamis Oriental',
-            'city' => 'Cagayan de Oro City',
-            'barangay' => 'Carmen',
-            'street' => '456 Mabini St',
-        ]);
-        $storeWhitespacePhone->assertStatus(201)
-            ->assertJsonPath('data.address.recipient_phone', '');
-        $this->assertDatabaseHas('user_addresses', [
-            'user_address_id' => (int) $storeWhitespacePhone->json('data.address.id'),
-            'recipient_phone' => null,
-        ]);
-
-        // Update allows partial payload (sometimes rules)
+        // Update allows partial payload (sometimes rules) and ignores legacy recipient fields
         $this->actingAs($customer)->patchJson("/api/customer/addresses/{$addressId}", [
             'label' => 'Office',
-            'recipient_phone' => '+63 (918) 222-3333',
+            'recipient_name' => 'Ignored Name',
+            'recipient_phone' => '08171234567',
         ])->assertStatus(200)
             ->assertJsonPath('data.address.label', 'Office')
-            ->assertJsonPath('data.address.recipient_phone', '09182223333');
+            ->assertJsonMissingPath('data.address.recipient_name')
+            ->assertJsonMissingPath('data.address.recipient_phone');
 
-        // Empty string recipient_phone on update normalizes to null
-        $this->actingAs($customer)->patchJson("/api/customer/addresses/{$addressId}", [
-            'recipient_phone' => '',
-        ])->assertStatus(200)
-            ->assertJsonPath('data.address.recipient_phone', '');
-        $this->assertDatabaseHas('user_addresses', [
-            'user_address_id' => $addressId,
-            'recipient_phone' => null,
-        ]);
+        // Listing returns addresses without recipient fields
+        $this->actingAs($customer)->getJson('/api/customer/addresses')
+            ->assertStatus(200)
+            ->assertJsonMissingPath('data.addresses.0.recipient_name')
+            ->assertJsonMissingPath('data.addresses.0.recipient_phone');
 
         // Invalid partial update
         $this->actingAs($customer)->patchJson("/api/customer/addresses/{$addressId}", [
-            'recipient_phone' => '08171234567',
             'postal_code' => 'ABC1',
             'latitude' => -91,
             'gps_accuracy' => 100001,
         ])->assertStatus(422)
             ->assertJsonPath('success', false)
-            ->assertJsonValidationErrors(['recipient_phone', 'postal_code', 'latitude', 'gps_accuracy'])
-            ->assertJsonPath('errors.recipient_phone.0', 'Enter a valid mobile number, like 09171234567.');
+            ->assertJsonValidationErrors(['postal_code', 'latitude', 'gps_accuracy']);
     }
 
     public function test_restaurant_location_and_coverage_validation_and_authorization(): void

@@ -26,8 +26,10 @@ class AccountContactController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $this->normalizeInput($request);
+
         $validated = $request->validate([
-            'label' => ['sometimes', 'string', 'max:40'],
+            'label' => ['sometimes', 'required', 'string', 'max:40'],
             'phone_number' => ['required', 'string', 'regex:'.self::PH_MOBILE_REGEX],
             'is_default' => ['sometimes', 'boolean'],
         ], [
@@ -45,9 +47,11 @@ class AccountContactController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
+        $this->normalizeInput($request);
+
         $validated = $request->validate([
-            'label' => ['sometimes', 'string', 'max:40'],
-            'phone_number' => ['sometimes', 'string', 'regex:'.self::PH_MOBILE_REGEX],
+            'label' => ['sometimes', 'required', 'string', 'max:40'],
+            'phone_number' => ['sometimes', 'required', 'string', 'regex:'.self::PH_MOBILE_REGEX],
             'is_default' => ['sometimes', 'boolean'],
         ], [
             'phone_number.regex' => 'Enter a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX).',
@@ -59,6 +63,20 @@ class AccountContactController extends Controller
             data: ['contact_number' => $contact],
             message: 'Contact number updated.',
         );
+    }
+
+    private function normalizeInput(Request $request): void
+    {
+        $merge = [];
+        if ($request->has('phone_number') && is_string($request->input('phone_number'))) {
+            $merge['phone_number'] = preg_replace('/[\s\-().]+/', '', trim($request->input('phone_number'))) ?? '';
+        }
+        if ($request->has('label') && is_string($request->input('label'))) {
+            $merge['label'] = trim($request->input('label'));
+        }
+        if ($merge !== []) {
+            $request->merge($merge);
+        }
     }
 
     public function setDefault(Request $request, int $id): JsonResponse

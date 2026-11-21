@@ -155,10 +155,6 @@ export default function AddressesPage() {
                         </Badge>
                       )}
                     </div>
-
-                    <div className="salo-address-contact">
-                      <span>{address.recipientName}</span> · <span>{address.mobileNumber || address.phone}</span>
-                    </div>
                   </div>
 
                   <p className="salo-address-full-text">

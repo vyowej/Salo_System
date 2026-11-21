@@ -300,15 +300,9 @@ export function RoleOnboardingModal({
     setAddressError('');
     setSaving(true);
 
-    const normalizedRecipientPhone = normalizePhilippineMobile(
-      addressPayload.mobileNumber || addressPayload.phone || savedPhoneValue || user?.phone_number || '',
-    );
-
     try {
       await locationApiService.createCustomerAddress({
         label: addressPayload.label || 'Home',
-        recipient_name: addressPayload.recipientName || user?.name || user?.username || '',
-        recipient_phone: normalizedRecipientPhone || null,
         province: addressPayload.province,
         city: addressPayload.city,
         barangay: addressPayload.barangay,
@@ -409,8 +403,6 @@ export function RoleOnboardingModal({
 
   const prefilledAddressInitialData = {
     label: 'Home',
-    recipientName: user?.name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || '',
-    mobileNumber: savedPhoneValue || user?.phone_number || user?.phone || '',
     isDefault: true,
   };
 

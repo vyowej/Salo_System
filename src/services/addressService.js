@@ -24,16 +24,12 @@ function notifySubscribers() {
 
 export function mapBackendAddress(raw) {
   if (!raw) return null;
-  const phone = raw.recipient_phone || raw.mobileNumber || raw.phone || '';
   return {
     id: raw.id,
     addressId: raw.address_id ?? raw.addressId ?? null,
     country: raw.country || 'Philippines',
     label: raw.label || 'Home',
     isDefault: Boolean(raw.is_default ?? raw.isDefault),
-    recipientName: raw.recipient_name ?? raw.recipientName ?? '',
-    mobileNumber: phone,
-    phone,
     province: raw.province || '',
     city: raw.city || '',
     barangay: raw.barangay || '',
@@ -54,8 +50,6 @@ export function mapBackendAddress(raw) {
 export function toBackendAddressPayload(data = {}) {
   return {
     label: (data.label || 'Home').trim(),
-    recipient_name: data.recipientName ? String(data.recipientName).trim() : null,
-    recipient_phone: (data.mobileNumber || data.phone || '').trim() || null,
     province: (data.province || '').trim(),
     city: (data.city || '').trim(),
     barangay: (data.barangay || '').trim(),

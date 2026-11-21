@@ -1,0 +1,123 @@
+.salo-order-review-section {
+  background: var(--bg-primary, #FFFFFF);
+  border: 1px solid var(--border-primary, #E8DFD5);
+  border-radius: var(--card-radius, 18px);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.salo-order-review-section__heading {
+  margin: 0;
+  font-family: var(--font-heading, 'Fraunces', Georgia, serif);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--salo-brown, #5B3A29);
+}
+
+.salo-order-review-section__desc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-muted, #737373);
+}
+
+.salo-order-review-section__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.salo-order-review-card {
+  background: var(--salo-cream, #FFF8F0);
+  border: 1px solid rgba(91, 58, 41, 0.12);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.salo-order-review-card.is-submitted {
+  background: var(--salo-green-light, #EEF4EB);
+  border-color: rgba(107, 143, 91, 0.35);
+}
+
+.salo-order-review-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.salo-order-review-card__eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--salo-orange, #D65A2E);
+}
+
+.salo-order-review-card__title {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--salo-brown, #5B3A29);
+}
+
+.salo-order-review-card__sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-muted, #737373);
+}
+
+.salo-order-review-card__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid var(--border-primary, #E8DFD5);
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+  background: #FFFFFF;
+}
+
+.salo-order-review-card__textarea:focus {
+  outline: 2px solid var(--salo-orange, #D65A2E);
+  border-color: transparent;
+}
+
+.salo-order-review-card__error {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--salo-error, #B84040);
+}
+
+.salo-order-review-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.salo-order-review-card__hint {
+  font-size: 11px;
+  color: var(--text-muted, #737373);
+}
+
+.salo-order-review-card__quote {
+  margin: 0;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--salo-brown, #5B3A29);
+}
+
+.salo-order-review-card__muted {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted, #737373);
+}

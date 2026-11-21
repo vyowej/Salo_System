@@ -3,7 +3,7 @@
  * Communicates with Laravel cookie-session authentication endpoints (/api/auth/*).
  */
 
-import apiClient, { clearCsrfCache } from './apiClient';
+import apiClient, { clearCsrfCache } from './apiClient.js';
 
 let inFlightCurrentUserPromise = null;
 let currentUserRequestGeneration = 0;

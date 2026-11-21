@@ -68,12 +68,14 @@ export default function ContactNumberFormModal({
   );
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setFormData(buildInitialState(initialData, existingContacts));
       setErrors({});
       setSubmitError('');
+      setSubmitting(false);
     }
   }, [isOpen, initialData, existingContacts]);
 
@@ -109,6 +111,7 @@ export default function ContactNumberFormModal({
         ? formData.customLabel.trim()
         : formData.label;
 
+    setSubmitting(true);
     try {
       await onSave?.({
         label: resolvedLabel,
@@ -117,7 +120,18 @@ export default function ContactNumberFormModal({
       });
       onClose?.();
     } catch (err) {
-      setSubmitError(err?.message || 'Unable to save contact number.');
+      const phoneErr = Array.isArray(err?.errors?.phone_number)
+        ? err.errors.phone_number[0]
+        : err?.errors?.phone_number;
+      const labelErr = Array.isArray(err?.errors?.label)
+        ? err.errors.label[0]
+        : err?.errors?.label;
+      if (phoneErr) {
+        setErrors((prev) => ({ ...prev, phoneNumber: phoneErr }));
+      }
+      setSubmitError(labelErr || phoneErr || err?.message || 'Unable to save contact number.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -129,10 +143,10 @@ export default function ContactNumberFormModal({
       size="sm"
       footer={(
         <div className="salo-contact-form__footer">
-          <Button type="button" variant="ghost" size="md" onClick={onClose}>
+          <Button type="button" variant="ghost" size="md" onClick={onClose} disabled={submitting}>
             Cancel
           </Button>
-          <Button type="submit" form="salo-contact-number-form" variant="primary" size="md">
+          <Button type="submit" form="salo-contact-number-form" variant="primary" size="md" loading={submitting} disabled={submitting}>
             {isEditing ? 'Save Changes' : 'Save Number'}
           </Button>
         </div>

@@ -111,8 +111,6 @@ class LocationSystemTest extends TestCase
         // Save address inside active service area
         $res1 = $this->actingAs($customer)->postJson('/api/customer/addresses', [
             'label' => 'Home',
-            'recipient_name' => 'Juan Dela Cruz',
-            'recipient_phone' => '09171234567',
             'province' => 'Misamis Oriental',
             'city' => 'Cagayan de Oro City',
             'barangay' => 'Carmen',

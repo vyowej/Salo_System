@@ -51,6 +51,8 @@ export default function CheckoutPage() {
   const {
     contactNumbers,
     defaultContactNumber,
+    loading: contactsLoading,
+    error: contactsError,
     addContactNumber,
   } = useContactNumbers();
 
@@ -130,8 +132,8 @@ export default function CheckoutPage() {
   );
   const hasInvalidDeliveryNotes = !notesValidation.isValid;
 
-  const handleSaveNewContact = (payload) => {
-    const created = addContactNumber(payload);
+  const handleSaveNewContact = async (payload) => {
+    const created = await addContactNumber(payload);
     if (created?.id) {
       setSelectedContactId(created.id);
     }
@@ -255,6 +257,7 @@ export default function CheckoutPage() {
         orderNotesBySubOrder,
         idempotencyKey: idempotencyKeyRef.current,
         expectedTotalsByRestaurant,
+        contactNumberId: hasDeliverySubOrders && selectedContact?.id ? selectedContact.id : null,
       });
 
       const checkout = await customerService.placeCheckoutOrder(submittedPayload);
@@ -499,9 +502,6 @@ export default function CheckoutPage() {
                               {group.deliveryAddress.label}
                             </strong>
                             {group.deliveryAddress.isDefault && <Badge variant="success" size="sm">Default</Badge>}
-                            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-                              · {group.deliveryAddress.recipientName} ({group.deliveryAddress.mobileNumber || group.deliveryAddress.phone})
-                            </span>
                           </div>
                           <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                             {[
@@ -692,7 +692,24 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              {contactNumbers.length === 0 ? (
+              {contactsError && (
+                <div role="alert" style={{
+                  marginBottom: 'var(--space-2)',
+                  padding: 'var(--space-2) var(--space-3)',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--status-error-bg)',
+                  color: 'var(--status-error-text)',
+                  fontSize: 'var(--font-size-xs)',
+                }}>
+                  {contactsError}
+                </div>
+              )}
+
+              {contactsLoading && contactNumbers.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                  Loading saved contact numbers...
+                </p>
+              ) : contactNumbers.length === 0 ? (
                 <div style={{
                   padding: 'var(--space-3)',
                   borderRadius: 'var(--radius-md)',

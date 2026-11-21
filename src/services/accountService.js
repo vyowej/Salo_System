@@ -3,8 +3,8 @@
  * Communicates with /api/account/* endpoints for profile, password, and partner applications.
  */
 
-import apiClient from './apiClient';
-import { normalizeUser } from './authService';
+import apiClient from './apiClient.js';
+import { normalizeUser } from './authService.js';
 
 export const accountService = {
   async updateProfile(profileData) {

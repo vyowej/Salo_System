@@ -127,6 +127,8 @@
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
   text-align: left;
   cursor: pointer;
 }
@@ -139,6 +141,7 @@
 .customer-topbar-address-option.manage {
   margin-top: var(--space-1);
   border-top: 1px solid var(--border-primary);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
   color: var(--accent);
   font-weight: var(--font-weight-semibold);
 }

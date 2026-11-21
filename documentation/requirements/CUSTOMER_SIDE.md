@@ -505,8 +505,6 @@ Suggested address labels:
 
 The address form should support applicable structured information:
 
-- Recipient Name
-- Contact Number
 - Region
 - Province
 - City or Municipality

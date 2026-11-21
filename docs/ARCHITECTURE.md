@@ -95,7 +95,7 @@ The 4 paginated listing methods (`listUsers`, `listRestaurants`, `listRiders`, `
 Inline `$request->validate(...)` blocks across the 5 Locations controllers (`AdminServiceAreaController`, `CustomerAddressController`, `RestaurantLocationController`, `LocationLookupController`, and `TrackingController`) were extracted into 8 `FormRequest` classes under `backend/app/Features/Locations/Requests/`:
 
 - `StoreServiceAreaRequest` / `UpdateServiceAreaRequest`
-- `StoreCustomerAddressRequest` / `UpdateCustomerAddressRequest` (preserving `prepareForValidation()` `recipient_phone` normalization via `UpdateProfileRequest::normalizePhilippineMobile()`)
+- `StoreCustomerAddressRequest` / `UpdateCustomerAddressRequest`
 - `UpdateRestaurantLocationRequest` / `UpdateRestaurantCoverageRequest`
 - `ValidateServiceAreaRequest`
 - `RecordRiderLocationRequest`

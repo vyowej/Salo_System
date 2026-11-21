@@ -63,8 +63,6 @@ class CheckoutOrderTest extends TestCase
             'user_id' => $user->user_id,
             'address_id' => $addressId,
             'address_label' => $isDefault ? 'Home' : 'Work',
-            'recipient_name' => "{$user->first_name} {$user->last_name}",
-            'recipient_phone' => '+639171234567',
             'is_default' => $isDefault ? 1 : 0,
             'created_at' => now(),
             'updated_at' => now(),
@@ -554,10 +552,6 @@ class CheckoutOrderTest extends TestCase
         ]);
 
         $addressId = $this->createPlatformAreaAndUserAddress($buyerWithoutPhone, 'Quezon City', 'Diliman', true);
-        DB::table('user_addresses')
-            ->where('user_id', $buyerWithoutPhone->user_id)
-            ->where('address_id', $addressId)
-            ->update(['recipient_phone' => null]);
 
         $rest = $this->createOpenRestaurant('Phone Check Resto');
         $item = $this->createMenuItem($rest, 'Adobo', '180.00');
@@ -867,5 +861,45 @@ class CheckoutOrderTest extends TestCase
         $this->assertSame('Extra Cheese', $detail['items'][1]['add_ons'][0]['name']);
         $this->assertEquals(35.00, $detail['items'][1]['add_ons'][0]['price']);
         $this->assertEquals(155.00, $detail['items'][1]['line_total']);
+    }
+
+    public function test_checkout_places_delivery_order_using_account_holder_name_and_phone_without_address_recipient_fields(): void
+    {
+        $buyer = User::create([
+            'username' => 'elena_'.random_int(10000, 99999),
+            'first_name' => 'Elena',
+            'last_name' => 'Reyes',
+            'phone_number' => '+639178889900',
+            'email' => 'elena_'.random_int(10000, 99999).'@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'active',
+        ]);
+        $addressId = $this->createPlatformAreaAndUserAddress($buyer, 'Quezon City', 'Diliman', true);
+
+        $rest = $this->createOpenRestaurant('Snapshot Resto');
+        $item = $this->createMenuItem($rest, 'Sinigang', '200.00');
+
+        $response = $this->actingAs($buyer)->postJson('/api/customer/checkout', [
+            'payment_method' => 'cod',
+            'idempotency_key' => 'idem-acct-snapshot-'.random_int(10000, 99999),
+            'groups' => [[
+                'restaurant_id' => $rest,
+                'fulfillment' => 'delivery',
+                'address_id' => $addressId,
+                'expected_total' => 249.00,
+                'items' => [['menu_item_id' => $item, 'quantity' => 1]],
+            ]],
+        ]);
+
+        $response->assertStatus(201);
+        $orderId = (int) $response->json('data.checkout.orders.0.order_id');
+
+        $this->assertDatabaseHas('orders', [
+            'order_id' => $orderId,
+            'delivery_address_id' => $addressId,
+            'delivery_recipient_name' => 'Elena Reyes',
+            'delivery_phone' => '09178889900',
+        ]);
     }
 }
