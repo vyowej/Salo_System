@@ -1,19 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AdminLayout from '../../../layouts/AdminLayout';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
+import { StateView } from '../../../components/feedback';
 import { StatCard, Tabs } from '../components';
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { StarRating } from '../../../components/reviews';
-import {
-  MOCK_FEATURED_CANDIDATES,
-  MOCK_FEATURED_RESTAURANT_WEEKS,
-  MOCK_MODERATION_AUDIT_LOGS,
-  MOCK_PLATFORM_SETTINGS,
-  MOCK_RESTAURANT_REVIEWS,
-  MOCK_RIDER_REVIEWS,
-} from '../../../mocks/reviewsAndFeaturedMock';
+import reviewService from '../../../services/reviewService';
 import {
   formatFeaturePeriod,
   formatModerationStatusLabel,
@@ -28,45 +22,89 @@ export default function AdminContentPage() {
 
   const [activeTab, setActiveTab] = useState('moderation');
 
-  // ── Review Moderation State (Mock UI Phase) ────────────────
+  // ── Review Moderation State ────────────────────────────────
   const [reviewScope, setReviewScope] = useState('restaurant');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [restaurantReviews, setRestaurantReviews] = useState(() => MOCK_RESTAURANT_REVIEWS);
-  const [riderReviews, setRiderReviews] = useState(() => MOCK_RIDER_REVIEWS);
-  const [auditLogs, setAuditLogs] = useState(() => MOCK_MODERATION_AUDIT_LOGS);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const [reviewsResp, setReviewsResp] = useState({ items: [], counts: {}, pagination: {} });
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewsError, setReviewsError] = useState('');
 
   const [moderationModal, setModerationModal] = useState(null);
   const [moderationReason, setModerationReason] = useState('');
   const [moderationError, setModerationError] = useState('');
+  const [moderating, setModerating] = useState(false);
 
-  // ── Featured Restaurant & Settings State (Mock UI Phase) ───
-  const [featuredWeeks, setFeaturedWeeks] = useState(() => MOCK_FEATURED_RESTAURANT_WEEKS);
-  const [settings, setSettings] = useState(() => MOCK_PLATFORM_SETTINGS);
-  const [settingsSavedMsg, setSettingsSavedMsg] = useState('');
+  // ── Featured Restaurant & Settings State ───────────────────
+  const [featuredOverview, setFeaturedOverview] = useState({
+    active_week: null,
+    ranking: null,
+    history: [],
+    audit_logs: [],
+  });
+  const [featuredLoading, setFeaturedLoading] = useState(false);
+  const [settings, setSettings] = useState({});
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState('');
+  const [settingsError, setSettingsError] = useState('');
+
   const [overrideTarget, setOverrideTarget] = useState(null);
   const [overrideReason, setOverrideReason] = useState('');
   const [overrideError, setOverrideError] = useState('');
+  const [overriding, setOverriding] = useState(false);
+  const [evaluating, setEvaluating] = useState(false);
+  const [evalMessage, setEvalMessage] = useState('');
 
-  const activeReviews = reviewScope === 'restaurant' ? restaurantReviews : riderReviews;
+  const loadAdminReviews = useCallback(async () => {
+    setReviewsLoading(true);
+    setReviewsError('');
+    try {
+      const data = await reviewService.getAdminReviews({
+        type: reviewScope,
+        status: statusFilter,
+        search: searchTerm.trim(),
+        page,
+        per_page: 20,
+      });
+      setReviewsResp(data);
+    } catch (err) {
+      setReviewsError(err?.message || 'Unable to load reviews.');
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [reviewScope, statusFilter, searchTerm, page]);
 
-  const filteredReviews = useMemo(() => {
-    return activeReviews.filter((r) => {
-      if (statusFilter === 'all') return true;
-      return r.moderation_status === statusFilter;
-    });
-  }, [activeReviews, statusFilter]);
+  const loadFeaturedAndSettings = useCallback(async () => {
+    setFeaturedLoading(true);
+    try {
+      const [overview, policy] = await Promise.all([
+        reviewService.getAdminFeaturedOverview(),
+        reviewService.getAdminReviewSettings(),
+      ]);
+      setFeaturedOverview(overview);
+      setSettings(policy);
+    } catch {
+      // Handled gracefully
+    } finally {
+      setFeaturedLoading(false);
+    }
+  }, []);
 
-  const flaggedTotal = useMemo(
-    () =>
-      restaurantReviews.filter((r) => r.moderation_status === 'flagged').length +
-      riderReviews.filter((r) => r.moderation_status === 'flagged').length,
-    [restaurantReviews, riderReviews],
-  );
+  useEffect(() => {
+    loadAdminReviews();
+  }, [loadAdminReviews]);
 
-  const activeFeaturedWeek = useMemo(
-    () => featuredWeeks.find((w) => w.selection_status === 'active') || featuredWeeks[0] || null,
-    [featuredWeeks],
-  );
+  useEffect(() => {
+    loadFeaturedAndSettings();
+  }, [loadFeaturedAndSettings]);
+
+  const counts = reviewsResp?.counts || {};
+  const flaggedTotal = Number(counts.flagged_total ?? 0);
+  const activeFeaturedWeek = featuredOverview?.active_week || null;
+  const candidates = featuredOverview?.ranking?.candidates || [];
+  const history = featuredOverview?.history || [];
+  const auditLogs = featuredOverview?.audit_logs || [];
 
   const openModerationModal = (review, nextAction) => {
     setModerationModal({ review, nextAction });
@@ -74,9 +112,9 @@ export default function AdminContentPage() {
     setModerationError('');
   };
 
-  const handleConfirmModeration = (e) => {
+  const handleConfirmModeration = async (e) => {
     e.preventDefault();
-    if (!moderationModal) return;
+    if (!moderationModal || moderating) return;
     const { review, nextAction } = moderationModal;
     const requiresReason = nextAction === 'hidden' || nextAction === 'removed';
     if (requiresReason && !moderationReason.trim()) {
@@ -84,115 +122,85 @@ export default function AdminContentPage() {
       return;
     }
 
-    const isPublished = nextAction === 'published';
-    const nowIso = new Date().toISOString();
-    const updater = (list) =>
-      list.map((item) => {
-        const itemId = item.review_id ?? item.rider_review_id;
-        const targetId = review.review_id ?? review.rider_review_id;
-        if (itemId !== targetId) return item;
-        return {
-          ...item,
-          moderation_status: nextAction,
-          is_visible: isPublished,
-          counts_toward_rating: isPublished,
-          moderated_by: 1,
-          moderated_at: nowIso,
-          moderation_action: isPublished ? 'restored' : nextAction,
-          moderation_reason: moderationReason.trim() || 'Reviewed and approved by admin.',
-        };
-      });
+    const actionMap = {
+      published: 'restore',
+      hidden: 'hide',
+      removed: 'remove',
+    };
 
-    if (reviewScope === 'restaurant') {
-      setRestaurantReviews(updater);
-    } else {
-      setRiderReviews(updater);
-    }
-
-    setAuditLogs((prev) => [
-      {
-        log_id: Date.now(),
-        actor_name: 'Admin (Preview)',
-        action: `review.${isPublished ? 'restored' : nextAction}`,
-        entity_type: reviewScope === 'restaurant' ? 'restaurant_review' : 'rider_review',
-        entity_id: String(review.review_id ?? review.rider_review_id),
-        reason: moderationReason.trim() || 'Approved by administrator.',
-        created_at: nowIso,
-      },
-      ...prev,
-    ]);
-
-    setModerationModal(null);
-    setModerationReason('');
+    setModerating(true);
     setModerationError('');
+    try {
+      await reviewService.moderateAdminReview(reviewScope, review.id, {
+        action: actionMap[nextAction] || nextAction,
+        reason: moderationReason.trim(),
+      });
+      setModerationModal(null);
+      setModerationReason('');
+      await Promise.all([loadAdminReviews(), loadFeaturedAndSettings()]);
+    } catch (err) {
+      setModerationError(err?.message || 'Unable to moderate review.');
+    } finally {
+      setModerating(false);
+    }
   };
 
-  const handleConfirmOverride = (e) => {
+  const handleRunEvaluation = async () => {
+    if (evaluating) return;
+    setEvaluating(true);
+    setEvalMessage('');
+    try {
+      const res = await reviewService.evaluateFeaturedNow();
+      setEvalMessage(res?.message || 'Evaluation completed.');
+      await loadFeaturedAndSettings();
+    } catch (err) {
+      setEvalMessage(err?.message || 'Unable to run evaluation.');
+    } finally {
+      setEvaluating(false);
+    }
+  };
+
+  const handleConfirmOverride = async (e) => {
     e.preventDefault();
-    if (!overrideTarget) return;
+    if (!overrideTarget || overriding) return;
     if (!overrideReason.trim()) {
       setOverrideError('An override reason is required for auditability.');
       return;
     }
 
-    const nowIso = new Date().toISOString();
-    const currentActive = featuredWeeks.find((w) => w.selection_status === 'active');
-    const newId = Math.max(...featuredWeeks.map((w) => w.featured_week_id), 300) + 1;
-
-    setFeaturedWeeks((prev) => [
-      {
-        featured_week_id: newId,
-        restaurant_id: overrideTarget.restaurant_id,
-        restaurant_name: overrideTarget.restaurant_name,
-        cuisine: overrideTarget.cuisine,
-        address: 'Metro Manila',
-        cover_photo: '/images/landing/food-gathering.png',
-        feature_start_date: currentActive?.feature_start_date || '2026-11-16',
-        feature_end_date: currentActive?.feature_end_date || '2026-11-22',
-        evaluation_start_at: currentActive?.evaluation_start_at || '2026-10-17T00:00:00+08:00',
-        evaluation_end_at: currentActive?.evaluation_end_at || '2026-11-15T23:59:59+08:00',
-        evaluation_review_count: overrideTarget.evaluation_review_count,
-        raw_average_rating: overrideTarget.raw_average_rating,
-        bayesian_score: overrideTarget.bayesian_score,
-        platform_baseline_rating: overrideTarget.platform_baseline_rating,
-        min_review_threshold: overrideTarget.min_review_threshold,
-        last_eligible_review_at: overrideTarget.last_eligible_review_at,
-        selection_method: 'admin_override',
-        selection_status: 'active',
-        supersedes_featured_week_id: currentActive?.featured_week_id || null,
-        selected_at: nowIso,
-        selected_by: 'Admin (Preview)',
-        override_reason: overrideReason.trim(),
-      },
-      ...prev.map((w) =>
-        w.featured_week_id === currentActive?.featured_week_id
-          ? { ...w, selection_status: 'superseded' }
-          : w,
-      ),
-    ]);
-
-    setAuditLogs((prev) => [
-      {
-        log_id: Date.now(),
-        actor_name: 'Admin (Preview)',
-        action: 'featured_restaurant.override',
-        entity_type: 'featured_restaurant_week',
-        entity_id: String(newId),
-        reason: overrideReason.trim(),
-        created_at: nowIso,
-      },
-      ...prev,
-    ]);
-
-    setOverrideTarget(null);
-    setOverrideReason('');
+    setOverriding(true);
     setOverrideError('');
+    try {
+      await reviewService.overrideFeaturedRestaurant({
+        restaurantId: overrideTarget.restaurant_id,
+        reason: overrideReason.trim(),
+      });
+      setOverrideTarget(null);
+      setOverrideReason('');
+      await loadFeaturedAndSettings();
+    } catch (err) {
+      setOverrideError(err?.message || 'Unable to override featured restaurant.');
+    } finally {
+      setOverriding(false);
+    }
   };
 
-  const handleSaveSettings = (e) => {
+  const handleSaveSettings = async (e) => {
     e.preventDefault();
-    setSettingsSavedMsg('Policy settings updated in local UI preview state.');
-    setTimeout(() => setSettingsSavedMsg(''), 3500);
+    if (settingsSaving) return;
+    setSettingsSaving(true);
+    setSettingsMsg('');
+    setSettingsError('');
+    try {
+      const updated = await reviewService.updateAdminReviewSettings(settings);
+      setSettings(updated);
+      setSettingsMsg('Policy settings saved and active.');
+      await loadFeaturedAndSettings();
+    } catch (err) {
+      setSettingsError(err?.message || 'Unable to save policy settings.');
+    } finally {
+      setSettingsSaving(false);
+    }
   };
 
   return (
@@ -203,7 +211,7 @@ export default function AdminContentPage() {
             Reviews Moderation &amp; Featured Restaurant
           </h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Manage restaurant &amp; rider review moderation, weekly Bayesian featured selections, and policy thresholds (Mock UI Phase).
+            Manage restaurant &amp; rider review moderation, weekly Bayesian featured selections, and policy thresholds.
           </p>
         </div>
 
@@ -216,18 +224,18 @@ export default function AdminContentPage() {
           />
           <StatCard
             label="Published Restaurant Reviews"
-            value={restaurantReviews.filter((r) => r.moderation_status === 'published').length}
+            value={counts.published_restaurant ?? 0}
             hint="Eligible for rating & Featured"
           />
           <StatCard
             label="Published Rider Reviews"
-            value={riderReviews.filter((r) => r.moderation_status === 'published').length}
+            value={counts.published_rider ?? 0}
             hint="Eligible for rider ratings"
           />
           <StatCard
             label="Featured This Week"
             value={activeFeaturedWeek?.restaurant_name || 'None'}
-            hint={activeFeaturedWeek ? formatFeaturePeriod(activeFeaturedWeek.feature_start_date, activeFeaturedWeek.feature_end_date) : ''}
+            hint={activeFeaturedWeek ? formatFeaturePeriod(activeFeaturedWeek.feature_start_date, activeFeaturedWeek.feature_end_date) : 'No active selection'}
           />
         </div>
 
@@ -248,16 +256,22 @@ export default function AdminContentPage() {
                 <button
                   type="button"
                   className={`admin-rf-pill${reviewScope === 'restaurant' ? ' is-active' : ''}`}
-                  onClick={() => setReviewScope('restaurant')}
+                  onClick={() => {
+                    setReviewScope('restaurant');
+                    setPage(1);
+                  }}
                 >
-                  Restaurant Reviews ({restaurantReviews.length})
+                  Restaurant Reviews
                 </button>
                 <button
                   type="button"
                   className={`admin-rf-pill${reviewScope === 'rider' ? ' is-active' : ''}`}
-                  onClick={() => setReviewScope('rider')}
+                  onClick={() => {
+                    setReviewScope('rider');
+                    setPage(1);
+                  }}
                 >
-                  Rider Reviews ({riderReviews.length})
+                  Rider Reviews
                 </button>
               </div>
 
@@ -267,43 +281,67 @@ export default function AdminContentPage() {
                     key={st}
                     type="button"
                     className={`admin-rf-pill${statusFilter === st ? ' is-active' : ''}`}
-                    onClick={() => setStatusFilter(st)}
+                    onClick={() => {
+                      setStatusFilter(st);
+                      setPage(1);
+                    }}
                   >
                     {st === 'all' ? 'All Statuses' : formatModerationStatusLabel(st)}
                   </button>
                 ))}
               </div>
+
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search comment, order ref, name…"
+                aria-label="Search reviews"
+                style={{
+                  border: '1px solid var(--border-primary)',
+                  borderRadius: 999,
+                  padding: '6px 14px',
+                  fontSize: 13,
+                  minWidth: 210,
+                }}
+              />
             </div>
 
-            <div className="admin-rf-table-wrap">
-              <table className="admin-rf-table">
-                <thead>
-                  <tr>
-                    <th>ID / Order</th>
-                    <th>{reviewScope === 'restaurant' ? 'Restaurant' : 'Rider'}</th>
-                    <th>Customer &amp; Rating</th>
-                    <th>Comment &amp; Notes</th>
-                    <th>Status &amp; Eligibility</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredReviews.map((r) => {
-                    const id = r.review_id ?? r.rider_review_id;
-                    return (
-                      <tr key={id}>
+            {reviewsLoading ? (
+              <StateView state="loading" title="Loading reviews…" />
+            ) : reviewsError ? (
+              <StateView state="error" title="Could not load reviews" errorDescription={reviewsError} onRetry={loadAdminReviews} />
+            ) : (reviewsResp.items || []).length === 0 ? (
+              <StateView state="empty" title="No reviews match the current filter" description="Try another status or search query." />
+            ) : (
+              <div className="admin-rf-table-wrap">
+                <table className="admin-rf-table">
+                  <thead>
+                    <tr>
+                      <th>ID / Order</th>
+                      <th>{reviewScope === 'restaurant' ? 'Restaurant' : 'Rider'}</th>
+                      <th>Customer &amp; Rating</th>
+                      <th>Comment &amp; Notes</th>
+                      <th>Status &amp; Eligibility</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(reviewsResp.items || []).map((r) => (
+                      <tr key={r.id}>
                         <td>
-                          <strong>#{id}</strong>
+                          <strong>#{r.id}</strong>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                            {r.order_reference}
+                            {r.order_reference || '—'}
                           </div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                             {formatReviewDate(r.created_at)}
                           </div>
                         </td>
-                        <td>
-                          <strong>{reviewScope === 'restaurant' ? r.restaurant_name : r.rider_name}</strong>
-                        </td>
+                        <td><strong>{r.target_name}</strong></td>
                         <td>
                           <div>{r.customer_name}</div>
                           <StarRating value={r.rating} readOnly size="sm" />
@@ -332,44 +370,66 @@ export default function AdminContentPage() {
                         <td>
                           <div className="admin-rf-actions">
                             {r.moderation_status !== 'published' && (
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => openModerationModal(r, 'published')}
-                              >
+                              <Button variant="secondary" size="sm" onClick={() => openModerationModal(r, 'published')}>
                                 Approve / Restore
                               </Button>
                             )}
                             {r.moderation_status !== 'hidden' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openModerationModal(r, 'hidden')}
-                              >
+                              <Button variant="outline" size="sm" onClick={() => openModerationModal(r, 'hidden')}>
                                 Hide
                               </Button>
                             )}
                             {r.moderation_status !== 'removed' && (
-                              <Button
-                                variant="danger-outline"
-                                size="sm"
-                                onClick={() => openModerationModal(r, 'removed')}
-                              >
+                              <Button variant="danger-outline" size="sm" onClick={() => openModerationModal(r, 'removed')}>
                                 Remove
                               </Button>
                             )}
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {(reviewsResp.pagination?.total ?? 0) > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  paddingTop: 4,
+                }}
+                aria-label="Reviews pagination"
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={(reviewsResp.pagination?.current_page ?? page) <= 1 || reviewsLoading}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Page {reviewsResp.pagination?.current_page ?? page} of {reviewsResp.pagination?.last_page ?? 1} · {reviewsResp.pagination?.total ?? 0} total
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={(reviewsResp.pagination?.current_page ?? page) >= (reviewsResp.pagination?.last_page ?? 1) || reviewsLoading}
+                  onClick={() => setPage((p) => Math.min(reviewsResp.pagination?.last_page ?? p + 1, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
 
             <div style={{ marginTop: 8 }}>
               <h3 style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--salo-brown)' }}>
-                Recent Moderation &amp; Selection Audit Trail (audit_logs preview)
+                Recent Moderation &amp; Selection Audit Trail
               </h3>
               <div className="admin-rf-table-wrap">
                 <table className="admin-rf-table">
@@ -383,12 +443,12 @@ export default function AdminContentPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {auditLogs.slice(0, 6).map((log) => (
+                    {auditLogs.slice(0, 8).map((log) => (
                       <tr key={log.log_id}>
                         <td>{log.actor_name}</td>
                         <td><code>{log.action}</code></td>
                         <td>{log.entity_type} #{log.entity_id}</td>
-                        <td>{log.reason}</td>
+                        <td>{log.reason || '—'}</td>
                         <td>{formatReviewDate(log.created_at)}</td>
                       </tr>
                     ))}
@@ -399,23 +459,30 @@ export default function AdminContentPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18, marginTop: 16 }}>
-            {activeFeaturedWeek && (
-              <div className="admin-rf-panel">
-                <div className="admin-rf-featured-hero">
-                  <div>
-                    <Badge variant="warning" size="sm">
-                      Active Weekly Feature · {formatFeaturePeriod(activeFeaturedWeek.feature_start_date, activeFeaturedWeek.feature_end_date)}
-                    </Badge>
-                    <h2 style={{ margin: '8px 0 4px', fontFamily: 'var(--font-heading)', color: 'var(--salo-brown)' }}>
-                      {activeFeaturedWeek.restaurant_name}
-                    </h2>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
-                      Selection Method: <strong>{activeFeaturedWeek.selection_method === 'admin_override' ? 'Admin Override' : 'Automatic (Bayesian)'}</strong>
-                      {activeFeaturedWeek.override_reason ? ` — ${activeFeaturedWeek.override_reason}` : ''}
-                    </p>
-                  </div>
+            <div className="admin-rf-panel">
+              <div className="admin-rf-toolbar">
+                <div>
+                  <h2 style={{ margin: 0, fontFamily: 'var(--font-heading)', color: 'var(--salo-brown)', fontSize: 20 }}>
+                    {activeFeaturedWeek ? activeFeaturedWeek.restaurant_name : 'No Active Featured Restaurant This Week'}
+                  </h2>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+                    {activeFeaturedWeek
+                      ? `${formatFeaturePeriod(activeFeaturedWeek.feature_start_date, activeFeaturedWeek.feature_end_date)} · Method: ${activeFeaturedWeek.selection_method === 'admin_override' ? 'Admin Override' : 'Automatic (Bayesian)'}`
+                      : 'Run automatic selection or override with an eligible active restaurant.'}
+                  </p>
                 </div>
+                <Button variant="secondary" size="sm" onClick={handleRunEvaluation} loading={evaluating} disabled={evaluating || featuredLoading}>
+                  {evaluating ? 'Evaluating…' : 'Run Weekly Evaluation'}
+                </Button>
+              </div>
 
+              {evalMessage && (
+                <div style={{ padding: '8px 12px', borderRadius: 10, background: 'var(--salo-cream)', fontSize: 13 }}>
+                  {evalMessage}
+                </div>
+              )}
+
+              {activeFeaturedWeek && (
                 <div className="admin-rf-metrics">
                   <div className="admin-rf-metric">
                     <span>Bayesian Score</span>
@@ -438,13 +505,13 @@ export default function AdminContentPage() {
                     <strong>{activeFeaturedWeek.min_review_threshold}</strong>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="admin-rf-panel">
               <div>
                 <h3 style={{ margin: 0, fontSize: 16, color: 'var(--salo-brown)' }}>
-                  30-Day Bayesian Ranking Candidates (Tie-Break Ordered)
+                  Bayesian Ranking Candidates (Tie-Break Ordered)
                 </h3>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
                   Formula: Score = (v / (v + m)) × R + (m / (v + m)) × C · Qualification requires v ≥ m.
@@ -464,7 +531,9 @@ export default function AdminContentPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {MOCK_FEATURED_CANDIDATES.map((c, idx) => (
+                    {candidates.length === 0 ? (
+                      <tr><td colSpan={7}>No active restaurants have eligible reviews in the current evaluation window.</td></tr>
+                    ) : candidates.map((c, idx) => (
                       <tr key={c.restaurant_id}>
                         <td><strong>#{idx + 1}</strong></td>
                         <td>
@@ -472,8 +541,8 @@ export default function AdminContentPage() {
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.cuisine}</div>
                         </td>
                         <td>{c.evaluation_review_count}</td>
-                        <td>{c.raw_average_rating.toFixed(4)}</td>
-                        <td><strong>{c.bayesian_score.toFixed(4)}</strong></td>
+                        <td>{Number(c.raw_average_rating).toFixed(4)}</td>
+                        <td><strong>{Number(c.bayesian_score).toFixed(4)}</strong></td>
                         <td>
                           <Badge variant={c.qualifies ? 'success' : 'default'} size="sm">
                             {c.qualifies ? `Qualified (≥ ${c.min_review_threshold})` : `Below Threshold (< ${c.min_review_threshold})`}
@@ -502,7 +571,7 @@ export default function AdminContentPage() {
 
             <div className="admin-rf-panel">
               <h3 style={{ margin: 0, fontSize: 16, color: 'var(--salo-brown)' }}>
-                Historical Weekly Featured Records (featured_restaurant_weeks)
+                Historical Weekly Featured Records
               </h3>
               <div className="admin-rf-table-wrap">
                 <table className="admin-rf-table">
@@ -517,16 +586,15 @@ export default function AdminContentPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {featuredWeeks.map((w) => (
+                    {history.length === 0 ? (
+                      <tr><td colSpan={6}>No featured restaurant history recorded yet.</td></tr>
+                    ) : history.map((w) => (
                       <tr key={w.featured_week_id}>
                         <td>{formatFeaturePeriod(w.feature_start_date, w.feature_end_date)}</td>
                         <td><strong>{w.restaurant_name}</strong></td>
                         <td>{w.selection_method === 'admin_override' ? 'Admin Override' : 'Automatic'}</td>
                         <td>
-                          <Badge
-                            variant={w.selection_status === 'active' ? 'success' : 'default'}
-                            size="sm"
-                          >
+                          <Badge variant={w.selection_status === 'active' ? 'success' : 'default'} size="sm">
                             {w.selection_status}
                           </Badge>
                         </td>
@@ -545,20 +613,25 @@ export default function AdminContentPage() {
               <div className="admin-rf-toolbar">
                 <div>
                   <h3 style={{ margin: 0, fontSize: 16, color: 'var(--salo-brown)' }}>
-                    Featured &amp; Review Policy Settings (platform_settings)
+                    Featured &amp; Review Policy Settings
                   </h3>
                   <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                    Configurable thresholds and evaluation windows (saved locally in preview mode).
+                    Persisted in platform_settings and applied to all rating and weekly selection calculations.
                   </p>
                 </div>
-                <Button type="submit" variant="primary" size="sm">
-                  Save Policy Settings
+                <Button type="submit" variant="primary" size="sm" loading={settingsSaving} disabled={settingsSaving}>
+                  {settingsSaving ? 'Saving…' : 'Save Policy Settings'}
                 </Button>
               </div>
 
-              {settingsSavedMsg && (
+              {settingsMsg && (
                 <div style={{ padding: '8px 12px', borderRadius: 10, background: 'var(--salo-green-light)', fontSize: 13 }}>
-                  {settingsSavedMsg}
+                  {settingsMsg}
+                </div>
+              )}
+              {settingsError && (
+                <div style={{ padding: '8px 12px', borderRadius: 10, background: '#FDECEC', color: 'var(--salo-error)', fontSize: 13 }} role="alert">
+                  {settingsError}
                 </div>
               )}
 
@@ -568,7 +641,7 @@ export default function AdminContentPage() {
                   <input
                     type="number"
                     min={1}
-                    value={settings['featured_restaurant.min_review_threshold']}
+                    value={settings['featured_restaurant.min_review_threshold'] ?? 10}
                     onChange={(e) =>
                       setSettings((p) => ({ ...p, 'featured_restaurant.min_review_threshold': Number(e.target.value) }))
                     }
@@ -580,7 +653,7 @@ export default function AdminContentPage() {
                   <input
                     type="number"
                     min={1}
-                    value={settings['featured_restaurant.evaluation_period_days']}
+                    value={settings['featured_restaurant.evaluation_period_days'] ?? 30}
                     onChange={(e) =>
                       setSettings((p) => ({ ...p, 'featured_restaurant.evaluation_period_days': Number(e.target.value) }))
                     }
@@ -592,11 +665,25 @@ export default function AdminContentPage() {
                   <input
                     type="number"
                     min={1}
-                    value={settings['featured_restaurant.feature_period_days']}
+                    value={settings['featured_restaurant.feature_period_days'] ?? 7}
                     onChange={(e) =>
                       setSettings((p) => ({ ...p, 'featured_restaurant.feature_period_days': Number(e.target.value) }))
                     }
                   />
+                </label>
+
+                <label className="admin-rf-field">
+                  Week Start Day
+                  <select
+                    value={settings['featured_restaurant.week_start_day'] ?? 'monday'}
+                    onChange={(e) =>
+                      setSettings((p) => ({ ...p, 'featured_restaurant.week_start_day': e.target.value }))
+                    }
+                  >
+                    {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((d) => (
+                      <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+                    ))}
+                  </select>
                 </label>
 
                 <label className="admin-rf-field">
@@ -606,11 +693,49 @@ export default function AdminContentPage() {
                     step="0.1"
                     min={1}
                     max={5}
-                    value={settings['featured_restaurant.fallback_baseline_rating']}
+                    value={settings['featured_restaurant.fallback_baseline_rating'] ?? 4.0}
                     onChange={(e) =>
                       setSettings((p) => ({ ...p, 'featured_restaurant.fallback_baseline_rating': Number(e.target.value) }))
                     }
                   />
+                </label>
+
+                <label className="admin-rf-field">
+                  Min Platform Reviews for Live Baseline
+                  <input
+                    type="number"
+                    min={1}
+                    value={settings['featured_restaurant.min_platform_reviews_for_baseline'] ?? 10}
+                    onChange={(e) =>
+                      setSettings((p) => ({ ...p, 'featured_restaurant.min_platform_reviews_for_baseline': Number(e.target.value) }))
+                    }
+                  />
+                </label>
+
+                <label className="admin-rf-field">
+                  Automatic Weekly Selection
+                  <select
+                    value={settings['featured_restaurant.auto_selection_enabled'] ? '1' : '0'}
+                    onChange={(e) =>
+                      setSettings((p) => ({ ...p, 'featured_restaurant.auto_selection_enabled': e.target.value === '1' }))
+                    }
+                  >
+                    <option value="1">Enabled</option>
+                    <option value="0">Disabled</option>
+                  </select>
+                </label>
+
+                <label className="admin-rf-field">
+                  Flagged Reviews Count Toward Rating
+                  <select
+                    value={settings['reviews.flagged_counts_toward_rating'] ? '1' : '0'}
+                    onChange={(e) =>
+                      setSettings((p) => ({ ...p, 'reviews.flagged_counts_toward_rating': e.target.value === '1' }))
+                    }
+                  >
+                    <option value="0">Disabled (Excluded)</option>
+                    <option value="1">Enabled (Included)</option>
+                  </select>
                 </label>
               </div>
             </form>
@@ -620,7 +745,7 @@ export default function AdminContentPage() {
         {/* Moderation Action Modal */}
         <Modal
           isOpen={Boolean(moderationModal)}
-          onClose={() => setModerationModal(null)}
+          onClose={() => !moderating && setModerationModal(null)}
           title={`Confirm Review Action: ${moderationModal ? formatModerationStatusLabel(moderationModal.nextAction) : ''}`}
           size="sm"
         >
@@ -637,6 +762,7 @@ export default function AdminContentPage() {
                 if (moderationError) setModerationError('');
               }}
               placeholder="Enter moderation reason (required for hiding/removing)..."
+              disabled={moderating}
             />
             {moderationError && (
               <p style={{ margin: 0, fontSize: 12, color: 'var(--salo-error)' }} role="alert">
@@ -644,11 +770,11 @@ export default function AdminContentPage() {
               </p>
             )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setModerationModal(null)}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setModerationModal(null)} disabled={moderating}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" size="sm">
-                Confirm
+              <Button type="submit" variant="primary" size="sm" loading={moderating} disabled={moderating}>
+                {moderating ? 'Saving…' : 'Confirm'}
               </Button>
             </div>
           </form>
@@ -657,7 +783,7 @@ export default function AdminContentPage() {
         {/* Admin Override Modal */}
         <Modal
           isOpen={Boolean(overrideTarget)}
-          onClose={() => setOverrideTarget(null)}
+          onClose={() => !overriding && setOverrideTarget(null)}
           title={`Override Featured Restaurant: ${overrideTarget?.restaurant_name || ''}`}
           size="sm"
         >
@@ -674,6 +800,7 @@ export default function AdminContentPage() {
                 if (overrideError) setOverrideError('');
               }}
               placeholder="Provide a required reason for overriding this week's selection..."
+              disabled={overriding}
             />
             {overrideError && (
               <p style={{ margin: 0, fontSize: 12, color: 'var(--salo-error)' }} role="alert">
@@ -681,11 +808,11 @@ export default function AdminContentPage() {
               </p>
             )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setOverrideTarget(null)}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setOverrideTarget(null)} disabled={overriding}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" size="sm">
-                Confirm Override
+              <Button type="submit" variant="primary" size="sm" loading={overriding} disabled={overriding}>
+                {overriding ? 'Overriding…' : 'Confirm Override'}
               </Button>
             </div>
           </form>

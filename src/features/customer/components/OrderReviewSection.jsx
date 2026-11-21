@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import { StarRating } from '../../../components/reviews';
+import reviewService from '../../../services/reviewService';
 import './OrderReviewSection.css';
 
 function SingleTargetReviewCard({
@@ -9,23 +10,25 @@ function SingleTargetReviewCard({
   title,
   subtitle,
   submittedReview,
+  submitting,
+  submitError,
   onSubmit,
 }) {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
-  const [error, setError] = useState('');
+  const [localError, setLocalError] = useState('');
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
+    if (submitting) return;
     if (rating < 1 || rating > 5) {
-      setError('Please select a star rating from 1 to 5.');
+      setLocalError('Please select a star rating from 1 to 5.');
       return;
     }
-    setError('');
+    setLocalError('');
     onSubmit({
       rating,
       comment: comment.trim() || null,
-      created_at: new Date().toISOString(),
     });
   };
 
@@ -49,6 +52,8 @@ function SingleTargetReviewCard({
     );
   }
 
+  const displayError = localError || submitError;
+
   return (
     <form className="salo-order-review-card" onSubmit={handleFormSubmit} noValidate>
       <div className="salo-order-review-card__head">
@@ -65,7 +70,7 @@ function SingleTargetReviewCard({
           value={rating}
           onChange={(val) => {
             setRating(val);
-            if (error) setError('');
+            if (localError) setLocalError('');
           }}
           size="lg"
           showLabel
@@ -81,20 +86,21 @@ function SingleTargetReviewCard({
         onChange={(e) => setComment(e.target.value)}
         placeholder="Share optional feedback about your experience..."
         aria-label={`Optional comment for ${title}`}
+        disabled={submitting}
       />
 
-      {error && (
+      {displayError && (
         <p className="salo-order-review-card__error" role="alert">
-          {error}
+          {displayError}
         </p>
       )}
 
       <div className="salo-order-review-card__footer">
         <span className="salo-order-review-card__hint">
-          Preview mode — saved locally in UI state
+          Verified order feedback
         </span>
-        <Button type="submit" variant="primary" size="sm">
-          Submit Review
+        <Button type="submit" variant="primary" size="sm" loading={submitting} disabled={submitting}>
+          {submitting ? 'Submitting…' : 'Submit Review'}
         </Button>
       </div>
     </form>
@@ -102,17 +108,73 @@ function SingleTargetReviewCard({
 }
 
 export default function OrderReviewSection({
+  orderId,
   restaurantName = 'Restaurant',
   riderName = null,
   isDelivery = false,
   isEligible = false,
 }) {
-  const [restaurantReview, setRestaurantReview] = useState(null);
-  const [riderReview, setRiderReview] = useState(null);
+  const [statusData, setStatusData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [submittingRest, setSubmittingRest] = useState(false);
+  const [submittingRider, setSubmittingRider] = useState(false);
+  const [restError, setRestError] = useState('');
+  const [riderError, setRiderError] = useState('');
+
+  const loadStatus = useCallback(async () => {
+    if (!orderId || !isEligible) return;
+    setLoading(true);
+    setLoadError('');
+    try {
+      const data = await reviewService.getOrderReviewStatus(orderId);
+      setStatusData(data);
+    } catch (err) {
+      setLoadError(err?.message || 'Unable to load review status.');
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId, isEligible]);
+
+  useEffect(() => {
+    loadStatus();
+  }, [loadStatus]);
 
   if (!isEligible) {
     return null;
   }
+
+  const canShowRestaurant = Boolean(statusData?.can_review_restaurant || statusData?.restaurant_review);
+  const canShowRider = Boolean(
+    (isDelivery || statusData?.order_type === 'delivery') &&
+    (statusData?.can_review_rider || statusData?.rider_review),
+  );
+
+  const handleSubmitRestaurant = async (payload) => {
+    setSubmittingRest(true);
+    setRestError('');
+    try {
+      await reviewService.submitRestaurantReview(orderId, payload);
+      await loadStatus();
+    } catch (err) {
+      setRestError(err?.message || 'Unable to submit restaurant review.');
+    } finally {
+      setSubmittingRest(false);
+    }
+  };
+
+  const handleSubmitRider = async (payload) => {
+    setSubmittingRider(true);
+    setRiderError('');
+    try {
+      await reviewService.submitRiderReview(orderId, payload);
+      await loadStatus();
+    } catch (err) {
+      setRiderError(err?.message || 'Unable to submit rider review.');
+    } finally {
+      setSubmittingRider(false);
+    }
+  };
 
   return (
     <section className="salo-order-review-section" aria-label="Rate your order experience">
@@ -125,25 +187,43 @@ export default function OrderReviewSection({
         </div>
       </div>
 
-      <div className="salo-order-review-section__grid">
-        <SingleTargetReviewCard
-          eyebrow="Restaurant Review"
-          title={restaurantName}
-          subtitle="How was the food quality, packaging, and order accuracy?"
-          submittedReview={restaurantReview}
-          onSubmit={setRestaurantReview}
-        />
+      {loading && !statusData ? (
+        <p className="salo-order-review-card__muted">Checking review eligibility…</p>
+      ) : loadError ? (
+        <p className="salo-order-review-card__error" role="alert">{loadError}</p>
+      ) : (
+        <div className="salo-order-review-section__grid">
+          {canShowRestaurant && (
+            <SingleTargetReviewCard
+              eyebrow="Restaurant Review"
+              title={statusData?.restaurant_name || restaurantName}
+              subtitle="How was the food quality, packaging, and order accuracy?"
+              submittedReview={statusData?.restaurant_review || null}
+              submitting={submittingRest}
+              submitError={restError}
+              onSubmit={handleSubmitRestaurant}
+            />
+          )}
 
-        {isDelivery && (
-          <SingleTargetReviewCard
-            eyebrow="Rider Review"
-            title={riderName ? `Rider: ${riderName}` : 'Your Delivery Rider'}
-            subtitle="How was the delivery speed, communication, and handoff?"
-            submittedReview={riderReview}
-            onSubmit={setRiderReview}
-          />
-        )}
-      </div>
+          {canShowRider && (
+            <SingleTargetReviewCard
+              eyebrow="Rider Review"
+              title={
+                statusData?.rider?.first_name
+                  ? `Rider: ${statusData.rider.first_name}`
+                  : riderName
+                    ? `Rider: ${riderName}`
+                    : 'Your Delivery Rider'
+              }
+              subtitle="How was the delivery speed, communication, and handoff?"
+              submittedReview={statusData?.rider_review || null}
+              submitting={submittingRider}
+              submitError={riderError}
+              onSubmit={handleSubmitRider}
+            />
+          )}
+        </div>
+      )}
     </section>
   );
 }

@@ -13,11 +13,7 @@ import MenuItemCard from '../components/MenuItemCard';
 import OrderPanel from '../components/OrderPanel';
 import MobileOrderBar from '../components/MobileOrderBar';
 import { RatingSummaryCard, ReviewList } from '../../../components/reviews';
-import {
-  MOCK_FEATURED_RESTAURANT_WEEKS,
-  MOCK_RESTAURANT_REVIEWS,
-} from '../../../mocks/reviewsAndFeaturedMock';
-import { computeMockRatingSummary } from '../../../utils/reviewDisplayUtils';
+import reviewService from '../../../services/reviewService';
 import { useMenuSearch } from '../hooks/useMenuSearch';
 import { useScrollSpy } from '../hooks/useScrollSpy';
 import './RestaurantDetailPage.css';
@@ -59,6 +55,12 @@ export default function RestaurantDetailPage() {
   const [manualActiveTab, setManualActiveTab] = useState(null);
   const [reviewDateRange, setReviewDateRange] = useState({ key: 'all', days: null });
   const [reviewStarFilter, setReviewStarFilter] = useState('all');
+  const [reviewsData, setReviewsData] = useState({
+    rating_summary: { average_rating: null, total_count: 0, distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } },
+    reviews: [],
+    is_featured_this_week: false,
+  });
+  const [reviewsLoading, setReviewsLoading] = useState(false);
 
   // ── Data fetching ──────────────────────────────────────────
   const fetchRest = useCallback(async () => {
@@ -129,26 +131,33 @@ export default function RestaurantDetailPage() {
     });
   }, [restaurant, categories]);
 
-  const activeFeaturedWeek = useMemo(
-    () => MOCK_FEATURED_RESTAURANT_WEEKS.find((w) => w.selection_status === 'active') || null,
-    [],
-  );
+  useEffect(() => {
+    if (!restaurant?.id) return;
+    let active = true;
+    setReviewsLoading(true);
+    reviewService.getRestaurantReviews(restaurant.id, {
+      days: reviewDateRange.days,
+      rating: reviewStarFilter,
+      per_page: 20,
+    })
+      .then((data) => {
+        if (active && data) {
+          setReviewsData(data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setReviewsLoading(false);
+      });
+    return () => { active = false; };
+  }, [restaurant?.id, reviewDateRange.days, reviewStarFilter]);
 
-  const isFeaturedThisWeek = Boolean(
-    restaurant && activeFeaturedWeek && String(restaurant.id) === String(activeFeaturedWeek.restaurant_id),
-  );
-
-  const mockRestaurantReviews = useMemo(() => {
-    const matched = MOCK_RESTAURANT_REVIEWS.filter(
-      (r) => String(r.restaurant_id) === String(restaurant?.id || ''),
-    );
-    return matched.length > 0 ? matched : MOCK_RESTAURANT_REVIEWS.filter((r) => r.restaurant_id === 1);
-  }, [restaurant]);
-
-  const mockRatingSummary = useMemo(
-    () => computeMockRatingSummary(mockRestaurantReviews, reviewDateRange.days),
-    [mockRestaurantReviews, reviewDateRange.days],
-  );
+  const isFeaturedThisWeek = Boolean(reviewsData?.is_featured_this_week);
+  const ratingSummary = reviewsData?.rating_summary || {
+    average_rating: null,
+    total_count: 0,
+    distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+  };
 
   const allMenuItems = useMemo(
     () => categoryGroups.flatMap((g) => g.items),
@@ -535,7 +544,7 @@ export default function RestaurantDetailPage() {
       </div>{/* /restaurant-menu-section */}
 
       {/* ══════════════════════════════════════════════════════
-          REVIEWS & RATINGS SECTION (Mock UI Phase)
+          REVIEWS & RATINGS SECTION
           ══════════════════════════════════════════════════════ */}
       <section style={{ marginTop: 'var(--space-8)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }} aria-labelledby="restaurant-reviews-title">
         <h2 id="restaurant-reviews-title" className="section-title" style={{ margin: 0 }}>
@@ -543,15 +552,15 @@ export default function RestaurantDetailPage() {
         </h2>
         <RatingSummaryCard
           title={`${restaurant.name} Ratings`}
-          subtitle="Verified customer reviews (mock preview data)"
-          averageRating={mockRatingSummary.averageRating}
-          totalCount={mockRatingSummary.totalCount}
-          distribution={mockRatingSummary.distribution}
+          subtitle={reviewsLoading ? 'Loading verified reviews…' : 'Based on verified, published customer reviews'}
+          averageRating={ratingSummary.average_rating}
+          totalCount={ratingSummary.total_count}
+          distribution={ratingSummary.distribution}
           dateRangeKey={reviewDateRange.key}
           onDateRangeChange={(key, days) => setReviewDateRange({ key, days })}
         />
         <ReviewList
-          reviews={mockRatingSummary.eligibleReviews}
+          reviews={reviewsData.reviews || []}
           starFilter={reviewStarFilter}
           onStarFilterChange={setReviewStarFilter}
           emptyTitle="No reviews match this filter"

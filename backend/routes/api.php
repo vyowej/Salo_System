@@ -28,6 +28,11 @@ use App\Features\Restaurants\Controllers\RestaurantApplicationController;
 use App\Features\Restaurants\Controllers\RestaurantChangeRequestController;
 use App\Features\Restaurants\Controllers\RestaurantController;
 use App\Features\Restaurants\Controllers\StaffInvitationController;
+use App\Features\Reviews\Controllers\AdminReviewController;
+use App\Features\Reviews\Controllers\CustomerReviewController;
+use App\Features\Reviews\Controllers\OwnerReviewController;
+use App\Features\Reviews\Controllers\PublicReviewController;
+use App\Features\Reviews\Controllers\RiderReviewController;
 use App\Features\Riders\Controllers\RiderApplicationController;
 use App\Features\Riders\Controllers\RiderChangeRequestController;
 use App\Features\Riders\Controllers\RiderController;
@@ -138,6 +143,8 @@ Route::prefix('rider')->middleware('auth')->group(function (): void {
         Route::post('/deliveries/{orderId}/accept', [RiderDeliveryController::class, 'accept'])->whereNumber('orderId');
         Route::post('/deliveries/{orderId}/picked-up', [RiderDeliveryController::class, 'pickedUp'])->whereNumber('orderId');
         Route::post('/deliveries/{orderId}/delivered', [RiderDeliveryController::class, 'delivered'])->whereNumber('orderId');
+
+        Route::get('/reviews', [RiderReviewController::class, 'index']);
     });
 });
 
@@ -153,6 +160,10 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
     Route::get('/orders', [CustomerOrderController::class, 'index']);
     Route::get('/orders/{id}', [CustomerOrderController::class, 'show'])->whereNumber('id');
     Route::post('/orders/{id}/cancel', [CustomerOrderController::class, 'cancel'])->whereNumber('id');
+
+    Route::get('/orders/{id}/reviews', [CustomerReviewController::class, 'showOrderReviews'])->whereNumber('id');
+    Route::post('/orders/{id}/reviews/restaurant', [CustomerReviewController::class, 'storeRestaurantReview'])->whereNumber('id');
+    Route::post('/orders/{id}/reviews/rider', [CustomerReviewController::class, 'storeRiderReview'])->whereNumber('id');
 });
 
 Route::prefix('restaurant')->middleware('auth')->group(function (): void {
@@ -211,6 +222,9 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::post('/orders/{id}/prepare', [RestaurantOrderController::class, 'prepare'])->whereNumber('id');
         Route::post('/orders/{id}/ready', [RestaurantOrderController::class, 'ready'])->whereNumber('id');
         Route::post('/orders/{id}/complete', [RestaurantOrderController::class, 'complete'])->whereNumber('id');
+
+        Route::get('/reviews', [OwnerReviewController::class, 'index']);
+        Route::post('/reviews/{reviewId}/flag', [OwnerReviewController::class, 'flag'])->whereNumber('reviewId');
     });
 });
 
@@ -247,6 +261,17 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
 
     Route::get('/lifecycle-requests', [AdminSettingsRequestController::class, 'lifecycleRequests']);
     Route::post('/lifecycle-requests/{id}/decision', [AdminSettingsRequestController::class, 'decideLifecycleRequest'])->whereNumber('id');
+
+    Route::get('/reviews', [AdminReviewController::class, 'index']);
+    Route::post('/reviews/{type}/{id}/moderate', [AdminReviewController::class, 'moderate'])
+        ->whereIn('type', ['restaurant', 'rider'])
+        ->whereNumber('id');
+    Route::get('/reviews/settings', [AdminReviewController::class, 'getSettings']);
+    Route::put('/reviews/settings', [AdminReviewController::class, 'updateSettings']);
+
+    Route::get('/featured-restaurants', [AdminReviewController::class, 'featuredOverview']);
+    Route::post('/featured-restaurants/evaluate', [AdminReviewController::class, 'evaluateFeatured']);
+    Route::post('/featured-restaurants/override', [AdminReviewController::class, 'overrideFeatured']);
 });
 
 Route::prefix('locations')->middleware('throttle:120,1')->group(function (): void {
@@ -258,10 +283,12 @@ Route::prefix('locations')->middleware('throttle:120,1')->group(function (): voi
 });
 
 Route::middleware('throttle:60,1')->group(function (): void {
+    Route::get('/featured-restaurant', [PublicReviewController::class, 'featuredRestaurant']);
     Route::get('/restaurant-categories', [RestaurantController::class, 'categories']);
     Route::get('/restaurants', [RestaurantController::class, 'index']);
     Route::get('/restaurants/{id}', [RestaurantController::class, 'show'])->whereNumber('id');
     Route::get('/restaurants/{id}/menu', [RestaurantController::class, 'menu'])->whereNumber('id');
+    Route::get('/restaurants/{id}/reviews', [PublicReviewController::class, 'restaurantReviews'])->whereNumber('id');
 });
 
 if (app()->environment('testing')) {

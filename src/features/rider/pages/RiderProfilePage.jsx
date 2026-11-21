@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../../../components/common/Button';
 import { Card, CardBody } from '../../../components/common/Card';
 import { StateView as GlobalStateView } from '../../../components/feedback';
 import { RatingSummaryCard, ReviewList } from '../../../components/reviews';
-import { MOCK_RIDER_REVIEWS } from '../../../mocks/reviewsAndFeaturedMock';
-import { computeMockRatingSummary } from '../../../utils/reviewDisplayUtils';
+import reviewService from '../../../services/reviewService';
 import PageHeader from '../components/PageHeader';
 import riderService from '../../../services/riderService';
 import { useAuth } from '../../../hooks/useAuth';
@@ -37,11 +36,37 @@ export default function RiderProfilePage() {
   const [saveSuccess, setSaveSuccess] = useState('');
   const [reviewDateRange, setReviewDateRange] = useState({ key: 'all', days: null });
   const [reviewStarFilter, setReviewStarFilter] = useState('all');
+  const [riderFeedback, setRiderFeedback] = useState({
+    rating_summary: { average_rating: null, total_count: 0, distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } },
+    reviews: [],
+  });
+  const [reviewsLoading, setReviewsLoading] = useState(false);
 
-  const riderRatingSummary = useMemo(
-    () => computeMockRatingSummary(MOCK_RIDER_REVIEWS.filter((r) => r.rider_id === 8), reviewDateRange.days),
-    [reviewDateRange.days],
-  );
+  const loadRiderFeedback = useCallback(async () => {
+    setReviewsLoading(true);
+    try {
+      const data = await reviewService.getRiderFeedback({
+        days: reviewDateRange.days,
+        rating: reviewStarFilter,
+        per_page: 20,
+      });
+      if (data) setRiderFeedback(data);
+    } catch {
+      // Keep graceful empty state if rider profile is not active yet
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [reviewDateRange.days, reviewStarFilter]);
+
+  useEffect(() => {
+    loadRiderFeedback();
+  }, [loadRiderFeedback]);
+
+  const riderRatingSummary = riderFeedback?.rating_summary || {
+    average_rating: null,
+    total_count: 0,
+    distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -341,19 +366,19 @@ export default function RiderProfilePage() {
         </Card>
       </div>
 
-      {/* ── Rider Ratings & Delivery Reviews (Mock UI Phase) ── */}
+      {/* ── Rider Ratings & Delivery Reviews ── */}
       <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <RatingSummaryCard
           title="Delivery Ratings & Reviews"
-          subtitle="Independent customer ratings for your completed deliveries (mock preview data)"
-          averageRating={riderRatingSummary.averageRating}
-          totalCount={riderRatingSummary.totalCount}
+          subtitle={reviewsLoading ? 'Loading delivery ratings…' : 'Independent customer ratings for your completed deliveries'}
+          averageRating={riderRatingSummary.average_rating}
+          totalCount={riderRatingSummary.total_count}
           distribution={riderRatingSummary.distribution}
           dateRangeKey={reviewDateRange.key}
           onDateRangeChange={(key, days) => setReviewDateRange({ key, days })}
         />
         <ReviewList
-          reviews={riderRatingSummary.eligibleReviews}
+          reviews={riderFeedback.reviews || []}
           starFilter={reviewStarFilter}
           onStarFilterChange={setReviewStarFilter}
           emptyTitle="No delivery reviews yet"

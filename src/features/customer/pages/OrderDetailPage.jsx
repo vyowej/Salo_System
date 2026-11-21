@@ -773,6 +773,7 @@ export default function OrderDetailPage() {
           </div>
 
           <OrderReviewSection
+            orderId={order.id}
             restaurantName={activeSub?.restaurantName || 'Restaurant'}
             riderName={tracking?.rider?.name || order.riderFirstName || null}
             isDelivery={fulfillment === 'delivery'}

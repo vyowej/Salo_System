@@ -2,6 +2,7 @@
 
 namespace App\Features\Restaurants\Services;
 
+use App\Features\Reviews\Services\ReviewAggregationService;
 use App\Models\User;
 use App\Support\FileStorageService;
 use App\Support\SqlLike;
@@ -32,6 +33,7 @@ class RestaurantService
     public function __construct(
         private readonly AvailabilityService $availabilityService,
         private readonly FileStorageService $fileStorageService,
+        private readonly ReviewAggregationService $reviewAggregationService,
     ) {}
 
     /**
@@ -595,20 +597,7 @@ class RestaurantService
      */
     private function loadRatingSummariesForRestaurants(array $restaurantIds): Collection
     {
-        if ($restaurantIds === []) {
-            return collect();
-        }
-
-        return DB::table('reviews')
-            ->whereIn('restaurant_id', $restaurantIds)
-            ->where('is_visible', 1)
-            ->groupBy('restaurant_id')
-            ->get([
-                'restaurant_id',
-                DB::raw('AVG(rating) as average_rating'),
-                DB::raw('COUNT(*) as review_count'),
-            ])
-            ->keyBy('restaurant_id');
+        return $this->reviewAggregationService->getBatchRestaurantRatingSummaries($restaurantIds);
     }
 
     /**

@@ -12,7 +12,7 @@ import HeroCarousel from '../components/HeroCarousel';
 import FeatureStrip from '../components/FeatureStrip';
 import CategoryChips from '../components/CategoryChips';
 import { FeaturedRestaurantBanner } from '../../../components/reviews';
-import { MOCK_FEATURED_RESTAURANT_WEEKS } from '../../../mocks/reviewsAndFeaturedMock';
+import reviewService from '../../../services/reviewService';
 import RoleOnboardingModal from '../../../components/onboarding/RoleOnboardingModal';
 import { useRoleOnboarding } from '../../../hooks/useRoleOnboarding';
 import './CustomerDashboard.css';
@@ -162,6 +162,7 @@ export default function CustomerDashboard() {
   const [search, setSearch] = useState(() => new URLSearchParams(location.search).get('q') || '');
   const [activeOrders, setActiveOrders] = useState([]);
   const [upcomingReservations, setUpcomingReservations] = useState([]);
+  const [featuredRestaurant, setFeaturedRestaurant] = useState(null);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -207,6 +208,9 @@ export default function CustomerDashboard() {
     setFavoriteIds(customerService.getFavoriteRestaurants());
     setActiveOrders(customerService.getOrders());
     setUpcomingReservations(customerService.getReservations());
+    reviewService.getFeaturedRestaurant()
+      .then((featured) => setFeaturedRestaurant(featured))
+      .catch(() => setFeaturedRestaurant(null));
   }, []);
 
   useEffect(() => {
@@ -273,10 +277,10 @@ export default function CustomerDashboard() {
           }}
         />
 
-        {/* ── Featured Restaurant of the Week (Mock UI Phase) ── */}
-        {isDefaultExploreView && (
+        {/* ── Featured Restaurant of the Week ── */}
+        {isDefaultExploreView && featuredRestaurant && (
           <FeaturedRestaurantBanner
-            featured={MOCK_FEATURED_RESTAURANT_WEEKS.find((w) => w.selection_status === 'active')}
+            featured={featuredRestaurant}
             onViewRestaurant={(featured) => navigate(`/customer/restaurants/${featured.restaurant_id}`)}
             onReserveTable={(featured) => navigate(`/customer/restaurants/${featured.restaurant_id}?tab=reserve`)}
           />

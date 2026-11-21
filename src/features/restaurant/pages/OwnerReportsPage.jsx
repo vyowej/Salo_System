@@ -1,45 +1,50 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import OwnerLayout from '../../../layouts/OwnerLayout';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
+import { StateView } from '../../../components/feedback';
 import { RatingSummaryCard, ReviewList } from '../../../components/reviews';
-import {
-  MOCK_FEATURED_RESTAURANT_WEEKS,
-  MOCK_RESTAURANT_REVIEWS,
-} from '../../../mocks/reviewsAndFeaturedMock';
-import {
-  computeMockRatingSummary,
-  formatFeaturePeriod,
-} from '../../../utils/reviewDisplayUtils';
+import reviewService from '../../../services/reviewService';
+import { formatFeaturePeriod } from '../../../utils/reviewDisplayUtils';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 
 export default function OwnerReportsPage() {
   const { selectedRestaurantId, selectedRestaurant } = useRestaurantAccess();
 
-  const [reviews, setReviews] = useState(() => MOCK_RESTAURANT_REVIEWS);
+  const [feedback, setFeedback] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [dateRange, setDateRange] = useState({ key: 'all', days: null });
   const [starFilter, setStarFilter] = useState('all');
+
   const [flagTarget, setFlagTarget] = useState(null);
   const [flagReason, setFlagReason] = useState('');
   const [flagError, setFlagError] = useState('');
+  const [flagging, setFlagging] = useState(false);
 
-  const restaurantReviews = useMemo(() => {
-    const matched = reviews.filter(
-      (r) => String(r.restaurant_id) === String(selectedRestaurantId || ''),
-    );
-    return matched.length > 0 ? matched : reviews.filter((r) => r.restaurant_id === 1);
-  }, [reviews, selectedRestaurantId]);
+  const loadFeedback = useCallback(async () => {
+    if (!selectedRestaurantId) return;
+    setLoading(true);
+    setError('');
+    try {
+      const data = await reviewService.getOwnerRestaurantFeedback({
+        restaurant_id: selectedRestaurantId,
+        days: dateRange.days,
+        rating: starFilter,
+        per_page: 25,
+      });
+      setFeedback(data);
+    } catch (err) {
+      setError(err?.message || 'Unable to load restaurant reviews.');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedRestaurantId, dateRange.days, starFilter]);
 
-  const summary = useMemo(
-    () => computeMockRatingSummary(restaurantReviews, dateRange.days),
-    [restaurantReviews, dateRange.days],
-  );
-
-  const featuredRecord = useMemo(
-    () => MOCK_FEATURED_RESTAURANT_WEEKS.find((w) => w.selection_status === 'active') || null,
-    [],
-  );
+  useEffect(() => {
+    loadFeedback();
+  }, [loadFeedback]);
 
   const handleOpenFlag = (review) => {
     setFlagTarget(review);
@@ -47,31 +52,35 @@ export default function OwnerReportsPage() {
     setFlagError('');
   };
 
-  const handleSubmitFlag = (e) => {
+  const handleSubmitFlag = async (e) => {
     e.preventDefault();
+    if (flagging || !flagTarget) return;
     if (!flagReason.trim()) {
       setFlagError('Please provide a reason for flagging this review.');
       return;
     }
 
-    setReviews((prev) =>
-      prev.map((item) =>
-        item.review_id === flagTarget.review_id
-          ? {
-              ...item,
-              moderation_status: 'flagged',
-              counts_toward_rating: false,
-              flagged_at: new Date().toISOString(),
-              flag_reason: flagReason.trim(),
-              moderation_action: 'flagged',
-            }
-          : item,
-      ),
-    );
-    setFlagTarget(null);
-    setFlagReason('');
+    setFlagging(true);
     setFlagError('');
+    try {
+      await reviewService.flagReview(flagTarget.review_id, flagReason.trim());
+      setFlagTarget(null);
+      setFlagReason('');
+      await loadFeedback();
+    } catch (err) {
+      setFlagError(err?.message || 'Unable to flag review.');
+    } finally {
+      setFlagging(false);
+    }
   };
+
+  const summary = feedback?.rating_summary || {
+    average_rating: null,
+    total_count: 0,
+    distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+  };
+  const reviews = feedback?.reviews || [];
+  const featuredRecord = feedback?.featured_week || null;
 
   return (
     <OwnerLayout>
@@ -82,7 +91,7 @@ export default function OwnerReportsPage() {
               Ratings &amp; Customer Reviews
             </h1>
             <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-muted)' }}>
-              {selectedRestaurant?.name || 'Your kitchen'} · Verified review insights &amp; Featured status (mock UI preview).
+              {feedback?.restaurant?.restaurant_name || selectedRestaurant?.name || 'Your kitchen'} · Verified customer review insights &amp; Featured status.
             </p>
           </div>
           {featuredRecord && (
@@ -92,40 +101,48 @@ export default function OwnerReportsPage() {
           )}
         </div>
 
-        <RatingSummaryCard
-          title="Overall Restaurant Rating"
-          subtitle="Calculated from published, eligible reviews only (moderated/flagged excluded)"
-          averageRating={summary.averageRating}
-          totalCount={summary.totalCount}
-          distribution={summary.distribution}
-          dateRangeKey={dateRange.key}
-          onDateRangeChange={(key, days) => setDateRange({ key, days })}
-        />
+        {loading && !feedback ? (
+          <StateView state="loading" title="Loading restaurant ratings and reviews…" />
+        ) : error && !feedback ? (
+          <StateView state="error" title="Could not load reviews" errorDescription={error} onRetry={loadFeedback} />
+        ) : (
+          <>
+            <RatingSummaryCard
+              title="Overall Restaurant Rating"
+              subtitle="Calculated from published, eligible reviews only (moderated/flagged excluded)"
+              averageRating={summary.average_rating}
+              totalCount={summary.total_count}
+              distribution={summary.distribution}
+              dateRangeKey={dateRange.key}
+              onDateRangeChange={(key, days) => setDateRange({ key, days })}
+            />
 
-        <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }} aria-label="Customer reviews">
-          <h2 style={{ margin: 0, fontSize: 18, color: 'var(--salo-brown)' }}>
-            Customer Feedback ({summary.allMatchingDateReviews.length})
-          </h2>
-          <ReviewList
-            reviews={summary.allMatchingDateReviews}
-            starFilter={starFilter}
-            onStarFilterChange={setStarFilter}
-            showModerationBadge
-            onFlagReview={handleOpenFlag}
-            emptyTitle="No reviews in this period"
-            emptyDescription="Customer ratings and comments for completed orders will appear here."
-          />
-        </section>
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }} aria-label="Customer reviews">
+              <h2 style={{ margin: 0, fontSize: 18, color: 'var(--salo-brown)' }}>
+                Customer Feedback ({feedback?.pagination?.total ?? reviews.length})
+              </h2>
+              <ReviewList
+                reviews={reviews}
+                starFilter={starFilter}
+                onStarFilterChange={setStarFilter}
+                showModerationBadge
+                onFlagReview={handleOpenFlag}
+                emptyTitle="No reviews in this period"
+                emptyDescription="Customer ratings and comments for completed orders will appear here."
+              />
+            </section>
+          </>
+        )}
 
         <Modal
           isOpen={Boolean(flagTarget)}
-          onClose={() => setFlagTarget(null)}
+          onClose={() => !flagging && setFlagTarget(null)}
           title="Flag Review for Admin Moderation"
           size="sm"
         >
           <form onSubmit={handleSubmitFlag} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
-              Flagged reviews are queued for SALO administrator review and excluded from rating calculations pending review.
+              Flagged reviews are queued for SALO administrator review and handled according to platform rating eligibility policy.
             </p>
             <textarea
               rows={3}
@@ -135,6 +152,7 @@ export default function OwnerReportsPage() {
                 if (flagError) setFlagError('');
               }}
               placeholder="Explain why this review should be moderated (e.g., spam, abusive language, wrong order)..."
+              disabled={flagging}
               style={{
                 width: '100%',
                 boxSizing: 'border-box',
@@ -151,11 +169,11 @@ export default function OwnerReportsPage() {
               </p>
             )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setFlagTarget(null)}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setFlagTarget(null)} disabled={flagging}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" size="sm">
-                Submit Flag
+              <Button type="submit" variant="primary" size="sm" loading={flagging} disabled={flagging}>
+                {flagging ? 'Submitting…' : 'Submit Flag'}
               </Button>
             </div>
           </form>
