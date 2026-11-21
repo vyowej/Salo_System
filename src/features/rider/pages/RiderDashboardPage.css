@@ -668,6 +668,7 @@
   display: grid;
   place-items: center;
   background: var(--accent-subtle);
+  color: var(--accent);
   font-size: 18px;
   flex-shrink: 0;
 }

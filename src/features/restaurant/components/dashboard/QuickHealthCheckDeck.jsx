@@ -169,7 +169,12 @@ function SlideVisualFallback({ slideId }) {
       <div className="r7-health-visual-fallback is-ops" aria-hidden="true">
         <span className="r7-health-orb r7-health-orb--1" />
         <span className="r7-health-orb r7-health-orb--2" />
-        <span className="r7-health-visual-badge">🧾</span>
+        <span className="r7-health-visual-badge">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+            <rect x="9" y="3" width="6" height="4" rx="1" />
+          </svg>
+        </span>
       </div>
     );
   }
@@ -177,7 +182,11 @@ function SlideVisualFallback({ slideId }) {
     <div className="r7-health-visual-fallback is-inv" aria-hidden="true">
       <span className="r7-health-orb r7-health-orb--1" />
       <span className="r7-health-orb r7-health-orb--2" />
-      <span className="r7-health-visual-badge">📦</span>
+      <span className="r7-health-visual-badge">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        </svg>
+      </span>
     </div>
   );
 }
