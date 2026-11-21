@@ -4,6 +4,7 @@ import OwnerLayout from '../../../layouts/OwnerLayout';
 import ownerService from '../../../services/ownerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
+import WarningDialog from '../../../components/common/WarningDialog';
 import { EmptyState, ErrorState, LoadingSpinner } from '../../../components/feedback';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import { normalizeMenuCategories, normalizeMenuItem } from '../menu/menuData';
@@ -48,6 +49,7 @@ export default function OwnerInventoryPage() {
   const [history, setHistory] = useState([]);
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [warning, setWarning] = useState('');
 
   const can = (permission) => access.canAccess([permission]);
 
@@ -109,7 +111,7 @@ export default function OwnerInventoryPage() {
   const alertCounts = useMemo(() => getInventoryMenuAlertCounts(menuItems), [menuItems]);
 
   const runAction = async (action, successMessage = '') => {
-    setError('');
+    setWarning('');
     setStatusMessage('');
     setSaving(true);
     try {
@@ -119,7 +121,7 @@ export default function OwnerInventoryPage() {
         setStatusMessage(successMessage);
       }
     } catch (actionError) {
-      setError(actionError?.message || INVENTORY_MENU_DISPLAY.errors.save);
+      setWarning(actionError?.message || INVENTORY_MENU_DISPLAY.errors.save);
     } finally {
       setSaving(false);
     }
@@ -215,7 +217,7 @@ export default function OwnerInventoryPage() {
       setHistory(ownerService.getInventoryMovements(restaurantId, item.id));
       setHistoryItem(item.id);
     } catch (historyError) {
-      setError(historyError.message || INVENTORY_MENU_DISPLAY.errors.history);
+      setWarning(historyError.message || INVENTORY_MENU_DISPLAY.errors.history);
     }
   };
 
@@ -251,7 +253,6 @@ export default function OwnerInventoryPage() {
           </div>
         )}
 
-        {error && <div className="owner-inventory-error" role="alert">{error}</div>}
         {statusMessage && <div className="owner-inventory-success" role="status">{statusMessage}</div>}
         {loading ? <LoadingSpinner size="lg" label={INVENTORY_MENU_DISPLAY.page.loading} />
           : error && menuItems.length === 0 ? <ErrorState title={INVENTORY_MENU_DISPLAY.page.loadErrorTitle} description={error} onRetry={loadInventory} />
@@ -567,6 +568,12 @@ export default function OwnerInventoryPage() {
               </>
             )}
       </div>
+      <WarningDialog
+        open={Boolean(warning)}
+        title="Inventory Warning"
+        message={warning}
+        onClose={() => setWarning('')}
+      />
     </OwnerLayout>
   );
 }

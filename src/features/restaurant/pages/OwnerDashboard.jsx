@@ -4,6 +4,7 @@ import OwnerLayout from '../../../layouts/OwnerLayout';
 import ownerService from '../../../services/ownerService';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
+import WarningDialog from '../../../components/common/WarningDialog';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import { ErrorState, LoadingSpinner } from '../../../components/feedback';
 import SetupChecklistCard from '../components/SetupChecklistCard';
@@ -18,6 +19,7 @@ import {
 import StatCard from '../components/dashboard/OwnerDashboardStatCard';
 import OwnerDashboardReservationsSection from '../components/dashboard/OwnerDashboardReservationsSection';
 import OwnerDashboardMenuHealthSection from '../components/dashboard/OwnerDashboardMenuHealthSection';
+import QuickHealthCheckDeck from '../components/dashboard/QuickHealthCheckDeck';
 import './team/r7Dashboard.css';
 
 // ── Main Dashboard ───────────────────────────────────────────────
@@ -33,6 +35,7 @@ export default function OwnerDashboard() {
   const [recentOrders, setRecentOrders] = useState([]);
   const [upcomingReservations, setUpcomingReservations] = useState([]);
   const [restaurant, setRestaurant] = useState(null);
+  const [warning, setWarning] = useState('');
   const [summary, setSummary] = useState(null);
   const [summaryWarnings, setSummaryWarnings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -128,7 +131,7 @@ export default function OwnerDashboard() {
       }
       await loadDashboard();
     } catch (actionError) {
-      setError(actionError?.message || 'Unable to update order status.');
+      setWarning(actionError?.message || 'Unable to update order status.');
     }
   }
 
@@ -187,20 +190,11 @@ export default function OwnerDashboard() {
         />
       </div>
 
-      <section className="r7-dashboard-additions" aria-label="Additional restaurant summaries">
-        <div className="r7-dashboard-additions-heading"><div><p className="r7-eyebrow">QUICK HEALTH CHECK</p><h2 className="section-title">More at a glance</h2></div><span>Live summaries</span></div>
-        <div className="r7-dashboard-summary-grid">
-          <StatCard label="Today's Sales" value={formatPeso(stats.todayRevenue)} sub="Open sales reports" tone="gold" icon="₱" to="/owner/reports" />
-          <StatCard label="This Week" value={formatPeso(summary?.weeklyRevenue ?? 0)} sub="Sales total · open reports" tone="gold" icon="↗" to="/owner/reports" />
-          <StatCard label="This Month" value={formatPeso(summary?.monthlyRevenue ?? 0)} sub="Sales total · open reports" tone="gold" icon="▦" to="/owner/reports" />
-          <StatCard label="Pending Orders" value={stats.pendingOrders} sub="Review orders needing a decision" tone="orange" icon="!" to="/owner/orders" />
-          <StatCard label="Today's Reservations" value={summary?.todayReservations ?? 0} sub="Reservations scheduled today" tone="green" icon="⌂" to="/owner/reservations" />
-          <StatCard label="Available Tables" value={summary?.availableTables ?? '—'} sub="Current table availability" tone="green" icon="▤" to="/owner/tables" />
-          <StatCard label="Low-Stock Items" value={summary?.lowStockItems ?? '—'} sub={summary?.lowStockItems > 0 ? 'Review items needing attention' : 'Inventory summary'} tone="brown" icon="⚠" iconState="warning" to="/owner/inventory" />
-          <StatCard label="Sold-Out Items" value={summary?.soldOutItems ?? '—'} sub="Menu items with zero tracked stock" tone="brown" icon="∅" iconState="danger" to="/owner/menu" />
-        </div>
-        {summaryWarnings.length > 0 && <p className="r7-dashboard-warning" role="status">Some live summary values are unavailable for this account: {summaryWarnings.join(', ')}.</p>}
-      </section>
+      <QuickHealthCheckDeck
+        stats={stats}
+        summary={summary}
+        summaryWarnings={summaryWarnings}
+      />
 
       {/* ── Live Orders Quick Strip ───────────────────── */}
       <section style={{ marginBottom: 'var(--space-8)' }}>
@@ -401,6 +395,13 @@ export default function OwnerDashboard() {
       <OwnerDashboardReservationsSection upcomingReservations={upcomingReservations} />
 
       <OwnerDashboardMenuHealthSection stats={stats} />
+
+      <WarningDialog
+        open={Boolean(warning)}
+        title="Order Warning"
+        message={warning}
+        onClose={() => setWarning('')}
+      />
     </OwnerLayout>
   );
 }

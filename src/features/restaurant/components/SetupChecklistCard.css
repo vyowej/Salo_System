@@ -1,26 +1,31 @@
 .salo-owner-setup-card {
-  margin-bottom: var(--space-6, 24px);
-  padding: var(--space-5, 20px);
+  margin-bottom: var(--space-5, 20px);
+  padding: var(--space-4, 16px) var(--space-5, 20px);
   background: var(--surface-primary, #FFFFFF);
   border: 1px solid var(--border-primary, #E5E7EB);
   border-radius: var(--radius-lg, 12px);
   box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
   display: flex;
   flex-direction: column;
-  gap: var(--space-4, 16px);
+  gap: var(--space-3, 12px);
 }
 
 .salo-owner-setup-card__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-4, 16px);
+  gap: var(--space-3, 12px);
   flex-wrap: wrap;
 }
 
+.salo-owner-setup-card__heading {
+  min-width: 0;
+  flex: 1 1 280px;
+}
+
 .salo-owner-setup-card__eyebrow {
-  margin: 0 0 4px;
-  font-size: 11px;
+  margin: 0;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -30,13 +35,13 @@
 .salo-owner-setup-card__title-row {
   display: flex;
   align-items: center;
-  gap: var(--space-3, 12px);
+  gap: var(--space-2, 8px);
   flex-wrap: wrap;
 }
 
 .salo-owner-setup-card__title {
   margin: 0;
-  font-size: var(--font-size-lg, 18px);
+  font-size: var(--font-size-md, 16px);
   font-weight: 700;
   color: var(--text-primary, #171717);
 }
@@ -44,9 +49,9 @@
 .salo-owner-setup-card__progress-pill {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
+  padding: 2px 9px;
   border-radius: 999px;
-  font-size: var(--font-size-xs, 12px);
+  font-size: var(--font-size-xs, 11px);
   font-weight: 600;
   color: var(--card-brand-brown, #55301C);
   background: var(--card-gold-bg, rgba(223, 160, 62, 0.14));
@@ -54,23 +59,54 @@
 }
 
 .salo-owner-setup-card__subtitle {
-  margin: 4px 0 0;
-  font-size: var(--font-size-sm, 14px);
+  margin: 2px 0 0;
+  font-size: var(--font-size-xs, 12px);
   color: var(--text-secondary, #4B5563);
-  line-height: 1.5;
+  line-height: 1.4;
+}
+
+.salo-owner-setup-card__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  flex-shrink: 0;
+}
+
+.salo-owner-setup-card__toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-primary, #E5E7EB);
+  background: var(--surface-secondary, #F8F9FA);
+  color: var(--accent, #F36B2B);
+  font-size: var(--font-size-xs, 12px);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.salo-owner-setup-card__toggle:hover {
+  background: var(--surface-tertiary, #F1F3F5);
+  border-color: var(--accent, #F36B2B);
+}
+
+.salo-owner-setup-card__toggle:focus-visible {
+  outline: 2px solid var(--accent, #F36B2B);
+  outline-offset: 2px;
 }
 
 .salo-owner-setup-card__dismiss {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   border-radius: var(--radius-md, 8px);
   border: 1px solid var(--border-primary, #E5E7EB);
   background: var(--surface-secondary, #F8F9FA);
   color: var(--text-secondary, #4B5563);
-  font-size: var(--font-size-xs, 12px);
-  font-weight: 600;
   cursor: pointer;
   transition: background-color 150ms ease, color 150ms ease;
 }
@@ -87,7 +123,7 @@
 
 .salo-owner-setup-card__bar {
   width: 100%;
-  height: 6px;
+  height: 5px;
   border-radius: 999px;
   background: var(--surface-secondary, #F1F3F5);
   overflow: hidden;
@@ -98,6 +134,49 @@
   border-radius: 999px;
   background: var(--salo-green, #2E7D32);
   transition: width 220ms ease;
+}
+
+.salo-owner-setup-card__compact-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+}
+
+.salo-owner-setup-card__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--surface-secondary, #F8F9FA);
+  border: 1px solid var(--border-primary, #E5E7EB);
+  color: var(--text-primary, #171717);
+  font-size: var(--font-size-xs, 12px);
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.salo-owner-setup-card__chip:hover {
+  border-color: var(--accent, #F36B2B);
+  background: var(--surface-primary, #FFFFFF);
+}
+
+.salo-owner-setup-card__chip:focus-visible {
+  outline: 2px solid var(--accent, #F36B2B);
+  outline-offset: 2px;
+}
+
+.salo-owner-setup-card__chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent, #F36B2B);
+  flex-shrink: 0;
+}
+
+.salo-owner-setup-card__chip-arrow {
+  color: var(--accent, #F36B2B);
 }
 
 .salo-owner-setup-card__list {

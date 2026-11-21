@@ -4,6 +4,7 @@ import ownerService from '../../../services/ownerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
+import WarningDialog from '../../../components/common/WarningDialog';
 import { EmptyState, ErrorState, LoadingSpinner } from '../../../components/feedback';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 
@@ -92,6 +93,7 @@ export default function OwnerOrdersPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [dateFilter, setDateFilter] = useState('');
@@ -161,7 +163,7 @@ export default function OwnerOrdersPage() {
   function showActionDialog(order, action) {
     setPendingAction({ order, ...action });
     setActionReason('');
-    setError('');
+    setWarning('');
   }
 
   async function submitAction() {
@@ -171,16 +173,16 @@ export default function OwnerOrdersPage() {
       : type === 'reject' ? 'orders.reject'
         : 'orders.preparation.update';
     if (!access.canAccess([permission])) {
-      setError('You do not have permission to perform this order action.');
+      setWarning('You do not have permission to perform this order action.');
       return;
     }
     if (type === 'reject' && !actionReason.trim()) {
-      setError('Enter a rejection reason before submitting.');
+      setWarning('Enter a rejection reason before submitting.');
       return;
     }
 
     setSaving(true);
-    setError('');
+    setWarning('');
     try {
       let updated = null;
       if (type === 'accept') {
@@ -202,7 +204,7 @@ export default function OwnerOrdersPage() {
       setActionReason('');
       await reload();
     } catch (actionError) {
-      setError(actionError.message || 'Unable to update this order.');
+      setWarning(actionError.message || 'Unable to update this order.');
     } finally {
       setSaving(false);
     }
@@ -224,8 +226,6 @@ export default function OwnerOrdersPage() {
           {actionRequiredCount} order{actionRequiredCount === 1 ? '' : 's'} need action
         </div>
       </header>
-
-      {error && <div className="form-error" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
 
       <section aria-label="Order filters" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: 10, marginBottom: 'var(--space-4)' }}>
         <input aria-label="Search order reference or customer" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reference, status, or customer" style={controlStyle} />
@@ -451,6 +451,12 @@ export default function OwnerOrdersPage() {
           </label>
         )}
       </Modal>
+      <WarningDialog
+        open={Boolean(warning)}
+        title="Order Warning"
+        message={warning}
+        onClose={() => setWarning('')}
+      />
     </OwnerLayout>
   );
 }

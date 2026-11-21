@@ -25,6 +25,7 @@ export function SetupChecklistCard({
   const [dismissed, setDismissed] = useState(() =>
     isSetupChecklistDismissed(userId, restaurantId),
   );
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     setDismissed(isSetupChecklistDismissed(userId, restaurantId));
@@ -57,6 +58,7 @@ export function SetupChecklistCard({
     total: checklist.totalCount,
   });
   const percent = Math.round((checklist.completedCount / checklist.totalCount) * 100);
+  const remainingItems = checklist.items.filter((item) => !item.done);
 
   const handleDismiss = () => {
     dismissSetupChecklist(userId, restaurantId);
@@ -65,13 +67,13 @@ export function SetupChecklistCard({
 
   return (
     <section
-      className="salo-owner-setup-card"
+      className={`salo-owner-setup-card ${expanded ? 'is-expanded' : ''}`.trim()}
       aria-labelledby="salo-owner-setup-checklist-title"
     >
       <div className="salo-owner-setup-card__header">
-        <div>
-          <p className="salo-owner-setup-card__eyebrow">{cardCopy.eyebrow}</p>
+        <div className="salo-owner-setup-card__heading">
           <div className="salo-owner-setup-card__title-row">
+            <span className="salo-owner-setup-card__eyebrow">{cardCopy.eyebrow}</span>
             <h2 id="salo-owner-setup-checklist-title" className="salo-owner-setup-card__title">
               {cardCopy.title}
             </h2>
@@ -79,21 +81,36 @@ export function SetupChecklistCard({
               {progressText}
             </span>
           </div>
-          <p className="salo-owner-setup-card__subtitle">{cardCopy.subtitle}</p>
+          <p className="salo-owner-setup-card__subtitle">
+            {remainingItems.length > 0
+              ? `Finish ${remainingItems.length} remaining ${remainingItems.length === 1 ? 'step' : 'steps'} to complete your partner setup.`
+              : cardCopy.subtitle}
+          </p>
         </div>
 
-        <button
-          type="button"
-          className="salo-owner-setup-card__dismiss"
-          onClick={handleDismiss}
-          aria-label={cardCopy.dismissAriaLabel}
-        >
-          <span>{cardCopy.dismissLabel}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+        <div className="salo-owner-setup-card__actions">
+          <button
+            type="button"
+            className="salo-owner-setup-card__toggle"
+            onClick={() => setExpanded((current) => !current)}
+            aria-expanded={expanded}
+          >
+            {expanded ? 'View less' : 'View more'}
+          </button>
+
+          <button
+            type="button"
+            className="salo-owner-setup-card__dismiss"
+            onClick={handleDismiss}
+            aria-label={cardCopy.dismissAriaLabel}
+            title={cardCopy.dismissLabel}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div
@@ -110,40 +127,56 @@ export function SetupChecklistCard({
         />
       </div>
 
-      <ul className="salo-owner-setup-card__list">
-        {checklist.items.map((item) => (
-          <li
-            key={item.id}
-            className={`salo-owner-setup-card__item ${item.done ? 'is-done' : ''}`.trim()}
-          >
-            <div className="salo-owner-setup-card__item-left">
-              <span
-                className={`salo-owner-setup-card__check ${item.done ? 'is-done' : ''}`.trim()}
-                aria-hidden="true"
-              >
-                {item.done ? (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                ) : (
-                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <circle cx="12" cy="12" r="5" />
-                  </svg>
-                )}
-              </span>
-              <div className="salo-owner-setup-card__item-copy">
-                <strong>{item.label}</strong>
-                <span>{item.description}</span>
-              </div>
-            </div>
-
-            <Link to={item.href} className="salo-owner-setup-card__link">
-              <span>{item.done ? cardCopy.doneLabel : (item.ctaLabel || cardCopy.actionLabel)}</span>
-              <span aria-hidden="true">→</span>
+      {!expanded ? (
+        <div className="salo-owner-setup-card__compact-list">
+          {remainingItems.map((item) => (
+            <Link
+              key={item.id}
+              to={item.href}
+              className="salo-owner-setup-card__chip"
+            >
+              <span className="salo-owner-setup-card__chip-dot" aria-hidden="true" />
+              <span className="salo-owner-setup-card__chip-label">{item.label}</span>
+              <span className="salo-owner-setup-card__chip-arrow" aria-hidden="true">→</span>
             </Link>
-          </li>
-        ))}
-      </ul>
+          ))}
+        </div>
+      ) : (
+        <ul className="salo-owner-setup-card__list">
+          {checklist.items.map((item) => (
+            <li
+              key={item.id}
+              className={`salo-owner-setup-card__item ${item.done ? 'is-done' : ''}`.trim()}
+            >
+              <div className="salo-owner-setup-card__item-left">
+                <span
+                  className={`salo-owner-setup-card__check ${item.done ? 'is-done' : ''}`.trim()}
+                  aria-hidden="true"
+                >
+                  {item.done ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <circle cx="12" cy="12" r="5" />
+                    </svg>
+                  )}
+                </span>
+                <div className="salo-owner-setup-card__item-copy">
+                  <strong>{item.label}</strong>
+                  <span>{item.description}</span>
+                </div>
+              </div>
+
+              <Link to={item.href} className="salo-owner-setup-card__link">
+                <span>{item.done ? cardCopy.doneLabel : (item.ctaLabel || cardCopy.actionLabel)}</span>
+                <span aria-hidden="true">→</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

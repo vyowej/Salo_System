@@ -5,6 +5,7 @@ import ownerService from '../../../services/ownerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
+import WarningDialog from '../../../components/common/WarningDialog';
 import ImageUploader from '../../../components/common/ImageUploader';
 import RestaurantImage from '../../customer/components/RestaurantImage';
 import { EmptyState, ErrorState, LoadingSpinner } from '../../../components/feedback';
@@ -76,6 +77,7 @@ export default function OwnerMenuPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
@@ -147,11 +149,11 @@ export default function OwnerMenuPage() {
     navigate(location.pathname, { replace: true, state: null });
     const requestedItem = menuItems.find((item) => item.id === requestedItemId);
     if (!requestedItem) {
-      setError(INVENTORY_MENU_DISPLAY.labels.menuEditNotFound);
+      setWarning(INVENTORY_MENU_DISPLAY.labels.menuEditNotFound);
       return;
     }
     if (!canEditMenuForm) {
-      setError(INVENTORY_MENU_DISPLAY.labels.menuEditPermission);
+      setWarning(INVENTORY_MENU_DISPLAY.labels.menuEditPermission);
       return;
     }
     openEditItem(requestedItem);
@@ -173,7 +175,7 @@ export default function OwnerMenuPage() {
 
   function openAddItem() {
     if (!categories.length) {
-      setError('Create a menu category before adding an item.');
+      setWarning('Create a menu category before adding an item.');
       return;
     }
     setEditingItem(null);
@@ -223,11 +225,11 @@ export default function OwnerMenuPage() {
       return;
     }
     if (editingItem && !canEditForm()) {
-      setError('You do not have permission to edit this menu item.');
+      setWarning('You do not have permission to edit this menu item.');
       return;
     }
     if (!editingItem && !access.canAccess(['menu.items.create', 'menu.pricing.manage'])) {
-      setError('Creating a menu item requires both item creation and pricing permissions.');
+      setWarning('Creating a menu item requires both item creation and pricing permissions.');
       return;
     }
 
@@ -270,7 +272,9 @@ export default function OwnerMenuPage() {
         setFormErrors(mapped);
       }
       const firstErr = Object.values(mapped)[0];
-      setError(firstErr || saveError.message || 'Unable to save the menu item.');
+      if (!firstErr) {
+        setWarning(saveError.message || 'Unable to save the menu item.');
+      }
     } finally {
       setSaving(false);
     }
@@ -286,20 +290,20 @@ export default function OwnerMenuPage() {
 
   async function updateAvailability(item, availability) {
     if (!access.canAccess(['menu.availability.manage'])) {
-      setError('You do not have permission to change availability.');
+      setWarning('You do not have permission to change availability.');
       return;
     }
     try {
       await ownerService.updateMenuItemAvailability(selectedRestaurantId, item.id, availability);
       await loadMenu();
     } catch (updateError) {
-      setError(updateError.message || 'Unable to update availability.');
+      setWarning(updateError.message || 'Unable to update availability.');
     }
   }
 
   async function removeMenuItem(id) {
     if (!access.canAccess(['menu.items.delete'])) {
-      setError('You do not have permission to remove menu items.');
+      setWarning('You do not have permission to remove menu items.');
       return;
     }
     try {
@@ -308,13 +312,13 @@ export default function OwnerMenuPage() {
       await loadMenu();
     } catch (deleteError) {
       setDeleteId(null);
-      setError(deleteError.message || 'Unable to remove the menu item.');
+      setWarning(deleteError.message || 'Unable to remove the menu item.');
     }
   }
 
   async function saveCategories(nextCategories) {
     if (!access.canAccess(['menu.categories.manage'])) {
-      setError('You do not have permission to manage menu categories.');
+      setWarning('You do not have permission to manage menu categories.');
       return false;
     }
     try {
@@ -323,10 +327,9 @@ export default function OwnerMenuPage() {
         await ownerService.reorderMenuCategories(selectedRestaurantId, orderedIds);
       }
       await loadMenu();
-      setError('');
       return true;
     } catch (saveError) {
-      setError(saveError.message || 'Unable to save menu categories.');
+      setWarning(saveError.message || 'Unable to save menu categories.');
       return false;
     }
   }
@@ -336,12 +339,12 @@ export default function OwnerMenuPage() {
     if (saving) return;
     const name = categoryName.trim();
     if (!name) {
-      setError('Enter a category name.');
+      setWarning('Enter a category name.');
       return;
     }
     if (categories.some((category) => category.name.toLowerCase() === name.toLowerCase()
       && category.id !== editingCategoryId)) {
-      setError('A category with that name already exists.');
+      setWarning('A category with that name already exists.');
       return;
     }
     setSaving(true);
@@ -356,7 +359,7 @@ export default function OwnerMenuPage() {
       await loadMenu();
     } catch (saveError) {
       const msg = saveError?.errors?.category_name?.[0] || saveError.message || 'Unable to save category.';
-      setError(msg);
+      setWarning(msg);
     } finally {
       setSaving(false);
     }
@@ -372,7 +375,7 @@ export default function OwnerMenuPage() {
       await loadMenu();
     } catch (deleteError) {
       setDeleteCategory(null);
-      setError(deleteError.message || 'Unable to remove the category.');
+      setWarning(deleteError.message || 'Unable to remove the category.');
     } finally {
       setSaving(false);
     }
@@ -399,7 +402,7 @@ export default function OwnerMenuPage() {
       await ownerService.restoreMenuItem(selectedRestaurantId, id);
       await loadMenu();
     } catch (restoreError) {
-      setError(restoreError.message || 'Unable to restore the menu item.');
+      setWarning(restoreError.message || 'Unable to restore the menu item.');
     }
   }
 
@@ -408,7 +411,7 @@ export default function OwnerMenuPage() {
       await ownerService.restoreMenuCategory(selectedRestaurantId, id);
       await loadMenu();
     } catch (restoreError) {
-      setError(restoreError.message || 'Unable to restore the category.');
+      setWarning(restoreError.message || 'Unable to restore the category.');
     }
   }
 
@@ -458,8 +461,6 @@ export default function OwnerMenuPage() {
           <Button variant="primary" size="md" onClick={openAddItem}>+ Add New Item</Button>
         </div>
       )}
-
-      {error && <div className="form-error" role="alert" style={{ marginBottom: 'var(--space-4)' }}>{error}</div>}
 
       <MenuPublishBar
         publishStatus={publishStatus}
@@ -710,6 +711,12 @@ export default function OwnerMenuPage() {
           </Field>
         )}
       </Modal>
+      <WarningDialog
+        open={Boolean(warning)}
+        title="Menu Warning"
+        message={warning}
+        onClose={() => setWarning('')}
+      />
     </OwnerLayout>
   );
 }

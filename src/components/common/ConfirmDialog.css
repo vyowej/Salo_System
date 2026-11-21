@@ -34,6 +34,26 @@
   gap: var(--space-2);
 }
 
+.warning-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.warning-dialog-icon {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--status-warning-bg, rgba(245, 158, 11, 0.14));
+  color: var(--status-warning-text, #b45309);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+}
+
 .confirm-dialog-title {
   margin: 0;
   color: var(--text-primary);
