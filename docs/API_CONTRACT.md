@@ -281,3 +281,13 @@ Updates platform-wide commercial rules: default commission %, base delivery fees
 | `404 Not Found` | Resource ID does not exist | Renders EmptyState / ErrorState component |
 | `422 Unprocessable`| Form validation failure | Renders inline error helper text under input fields |
 | `500 Server Error` | Backend exception | Shows retry feedback banner with support hotline |
+| `503 Service Unavailable` | External public-image storage (Google Drive) unreachable or quota/credentials error | Shows retry/support banner; no half-saved DB records |
+
+---
+
+## 8. Public Media Proxy (`/api/media`)
+
+### `GET /api/media/images/{fileId}` (Public, throttled `600/min`)
+Streams a public restaurant or menu image stored in Google Drive (`gdrive:{fileId}`) with read-through disk caching on private local storage (`drive-cache/`).
+- **Constraints:** `{fileId}` must match `[A-Za-z0-9_-]{10,128}` and `gdrive:{fileId}` must be referenced by `restaurants.logo_image`, `restaurants.cover_image`, or `menu_items.photo_image` (otherwise `404`).
+- **Response Headers:** `Content-Type` (`image/jpeg|png|webp`), `Cache-Control: public, max-age=31536000, immutable`, `ETag`, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`, `Content-Security-Policy: default-src 'none'`. Supports `If-None-Match` (`304 Not Modified`).

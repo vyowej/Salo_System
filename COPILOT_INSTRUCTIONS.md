@@ -32,15 +32,15 @@ Use the following technologies:
 - **Database:** MySQL
 - **API:** RESTful API
 - **Styling:** Follow the existing frontend styling conventions and installed libraries.
-- **Image and File Storage:** Local application storage.
+- **Image and File Storage:** Private files (application documents, proof of delivery) use local storage only; public images (restaurant logo, cover photo, menu item photos) support local storage (default) or the approved Google Drive store via backend proxy.
 
-Do not introduce a different framework, database, cloud storage provider, or major dependency without explicit approval.
+Do not introduce a different framework, database, unapproved cloud storage provider, or major dependency without explicit approval.
 
 ### Important storage requirement
 
-SALO uses local application storage for uploaded images and files.
+SALO uses local application storage for private files and supports local storage (default) or the approved Google Drive integration for public images only.
 
-- Do not implement Amazon S3 or another cloud storage provider.
+- Do not implement Amazon S3, Firebase Storage, Cloudinary, or another unapproved cloud storage provider.
 - Do not introduce AWS dependencies or configuration unless explicitly approved.
 - Follow Laravel's existing local filesystem configuration.
 - Validate uploaded files and enforce appropriate file size and type restrictions.

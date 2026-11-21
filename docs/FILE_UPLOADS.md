@@ -1,12 +1,16 @@
-# SALO File Uploads & Local Storage Architecture
+# SALO File Uploads & Storage Architecture
 
 ## 1. Overview
 
-SALO uses **local application storage only** (`backend/config/filesystems.php`) with strict separation between **public** storefront assets and **private** application/compliance documents.
+SALO separates **public** storefront assets from **private** application/compliance documents:
 
-| Classification | Disk | Root Directory | DB Value Stored | Access Method |
+- **Private files** (application permits, IDs, rider documents, future proof of delivery) always use **local application storage only** (`local` disk) behind backend authorization.
+- **Public images** (restaurant logo, cover photo, menu item photos) use the `PublicImageStore` abstraction configured via `PUBLIC_IMAGE_STORAGE` (`local` by default, or `google_drive` when enabled).
+
+| Classification | Driver / Disk | Location | DB Value Stored | Access Method |
 | --- | --- | --- | --- | --- |
-| **Public** (restaurant logo, cover photo, menu item photos) | `public` | `backend/storage/app/public/` | Relative path only (e.g. `restaurants/{id}/{uuid}.png`) | Resolved to `{APP_URL}/storage/{path}` |
+| **Public (Local driver, default)** | `local` (`public` disk) | `backend/storage/app/public/` | Relative path only (e.g. `restaurants/{id}/{uuid}.png`) | Resolved to `{APP_URL}/storage/{path}` |
+| **Public (Drive driver)** | `google_drive` | Dedicated app-created Drive folder | `gdrive:{fileId}` | Resolved to `{APP_URL}/api/media/images/{fileId}` (backend proxy + `drive-cache`) |
 | **Private** (restaurant & rider application documents) | `local` | `backend/storage/app/private/` | Relative path only (e.g. `applications/restaurant/{id}/{uuid}.pdf`) | Protected backend stream route `/api/applications/documents/{documentId}/file` |
 
 ---
@@ -28,6 +32,9 @@ SALO uses **local application storage only** (`backend/config/filesystems.php`) 
 - `GET /api/applications/documents/{documentId}/file` (`auth` middleware)
   - Streams private files with `Cache-Control: private, no-store, max-age=0` and `X-Content-Type-Options: nosniff`.
   - **Authorization:** Permitted only for `admin`, the uploader (`uploaded_by`), the application's `applicant_user_id`, or an owner in `restaurant_owners`. All others receive `403 Forbidden`.
+- `GET /api/media/images/{fileId}` (public, `throttle:600,1`)
+  - Streams public Drive-stored images (`gdrive:{fileId}`) only if referenced by `restaurants.logo_image`, `restaurants.cover_image`, or `menu_items.photo_image` (otherwise `404`).
+  - Uses a read-through cache in `backend/storage/app/private/drive-cache/` when `GOOGLE_DRIVE_PROXY_CACHE=true`, with `Cache-Control: public, max-age=31536000, immutable`, `ETag`, `X-Content-Type-Options: nosniff`, and `Content-Security-Policy: default-src 'none'`.
 
 ---
 
@@ -41,7 +48,8 @@ SALO uses **local application storage only** (`backend/config/filesystems.php`) 
 - **Filename & extension hardening:**
   - Rejects executable extensions (`.php`, `.phtml`, `.exe`, `.sh`, `.js`, `.svg`, `.html`, etc.) anywhere in the filename and rejects double extensions (e.g., `shell.php.jpg`, `fake.jpg.png`).
   - Generates unpredictable UUID filenames (`Str::uuid()`) using the canonical extension from the verified MIME type.
-- **Safe replacement:** `FileStorageService::replacePublicImage()` stores the new file first and deletes the old file only if no database record still references it.
+- **Safe replacement:** `FileStorageService::replacePublicImage()` (and the owner media/menu update flows) stores the new image first (on local disk or Google Drive via `PublicImageStore`), commits the DB update, and deletes the old file only if no database record still references it.
+- **Failure handling:** If Google Drive is unreachable, rate-limited, over quota, or has invalid credentials, `ImageStorageUnavailableException` returns `503` via `ApiResponse::error` and no half-saved DB record is committed. There is no silent fallback to local disk.
 - **Oversized POST handling:** `PostTooLargeException` on `/api/*` returns a `413` JSON error (`ApiResponse::error`) instead of failing silently.
 
 ---
@@ -61,12 +69,28 @@ max_file_uploads=20
 Restart Apache in the XAMPP Control Panel after editing `php.ini`.
 
 ### Storage Symlink (`storage:link`)
-Public files are served via `backend/public/storage` -> `backend/storage/app/public`. To create or verify the link:
+When using the `local` public image driver (`PUBLIC_IMAGE_STORAGE=local`), public files are served via `backend/public/storage` -> `backend/storage/app/public`. To create or verify the link:
 
 ```powershell
 cd backend
 php artisan storage:link
 ```
+
+### Google Drive Public Image Configuration (`backend/.env`)
+See [DRIVE_SETUP.md](./DRIVE_SETUP.md) for the step-by-step Google Cloud setup. Keys in `backend/.env` (never commit values or expose them in `VITE_*` variables):
+
+- `PUBLIC_IMAGE_STORAGE` (`local` default, or `google_drive`)
+- `GOOGLE_DRIVE_CLIENT_ID`
+- `GOOGLE_DRIVE_CLIENT_SECRET`
+- `GOOGLE_DRIVE_REFRESH_TOKEN`
+- `GOOGLE_DRIVE_PUBLIC_FOLDER_ID`
+- `GOOGLE_DRIVE_TIMEOUT_SECONDS` (default `20`)
+- `GOOGLE_DRIVE_PROXY_CACHE` (`true` default)
+
+Artisan commands:
+- `php artisan salo:drive:init-folder` — creates the dedicated Drive folder and prints its ID.
+- `php artisan salo:images:migrate-to-drive --dry-run` — previews migrating local public images to Drive (never deletes local files).
+- `php artisan salo:drive:orphans` — read-only report of Drive files in the folder not referenced by any DB row.
 
 ---
 

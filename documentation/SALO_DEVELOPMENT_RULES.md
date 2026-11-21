@@ -53,7 +53,7 @@ Backend dependency manager - Composer
 Frontend/backend communication - REST API
 API data format - JSON
 Version control - Git and GitHub
-Image and file storage - Local storage only
+Image and file storage - Public images: Google Drive (approved exception, via backend proxy) or local fallback; private files: local storage only
 
 2.1 Technology restrictions
 1.  React must be used for the frontend.
@@ -73,7 +73,8 @@ Image and file storage - Local storage only
     history.
 11. Do not introduce Docker, PostgreSQL, MongoDB, Firebase, AWS, cloud
     storage, another backend framework, or another frontend framework
-    without explicit approval.
+    without explicit approval (except the approved Google Drive exception
+    for public images; see `docs/DRIVE_STORAGE_PLAN.md`).
 12. Do not introduce a new framework, library, service, or major
     dependency merely because it is convenient. Explain its purpose,
     alternatives, security implications, and effect on the existing
@@ -627,10 +628,15 @@ must not confirm their own remittance to the platform.
     approval.
 
 
-16. Image and File Storage --- Local Only
-1.  Store all application-uploaded images and files locally.
-2.  Use Laravel's local storage facilities where appropriate.
-3.  Do not use AWS S3, Firebase Storage, Cloudinary, or any external
+16. Image and File Storage --- Private Local Only; Approved Drive for Public Images
+1.  Store all private application documents and sensitive files (permits,
+    IDs, rider documents, proof of delivery) locally on the backend's
+    private disk behind authorization. Public images (restaurant logo,
+    cover photo, menu item photos) may use the approved Google Drive
+    store (served via the backend proxy) or local storage as configured.
+2.  Use Laravel's local storage facilities for private files and local
+    public-image fallback where appropriate.
+3.  Do not use AWS S3, Firebase Storage, Cloudinary, or any other external
     cloud file-storage service without explicit approval.
 4.  Separate public files, such as approved restaurant/menu images, from
     private files, such as rider documents and proof of delivery.
@@ -646,9 +652,11 @@ must not confirm their own remittance to the platform.
 12. Define replacement, deletion, and retention rules.
 13. Do not delete a file still referenced by historical or active
     records without an approved process.
-14. Document storage paths and backup requirements.
-15. Do not claim local storage is backed up unless a backup process has
-    actually been configured and verified.
+14. Document storage paths, the dedicated Google Drive public-images
+    folder, and backup requirements.
+15. Do not claim local storage or Google Drive is a verified backup of
+    SALO data unless a backup process has actually been configured and
+    verified.
 
 
 17. Security and Data Privacy
@@ -814,7 +822,9 @@ Every development task should report:
 6.  Keep backend business logic organized and reusable.
 7.  Avoid unnecessary code duplication.
 8.  Do not add caching infrastructure or external services without
-    approval.
+    approval (except the approved filesystem image proxy cache in
+    `drive-cache` on private local storage for Google Drive public
+    images).
 9.  Optimize images and other uploaded assets appropriately.
 10. Do not sacrifice security or data integrity for performance
     shortcuts.
