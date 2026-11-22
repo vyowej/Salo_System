@@ -153,6 +153,7 @@ export function normalizeReservation(raw) {
     cancellationReason: raw.cancellation_reason ?? raw.cancellationReason ?? null,
     rejectionReason: raw.rejection_reason ?? raw.rejectionReason ?? null,
     rejectedAt: raw.rejected_at ?? raw.rejectedAt ?? null,
+    expiresAt: raw.expires_at ?? raw.expiresAt ?? null,
     approvedAt: raw.approved_at ?? raw.approvedAt ?? null,
     confirmedAt: raw.confirmed_at ?? raw.confirmedAt ?? null,
     arrivedAt: raw.arrived_at ?? raw.arrivedAt ?? null,

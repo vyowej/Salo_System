@@ -55,6 +55,7 @@ export function normalizeAdminReservation(row = {}) {
     cancellation_reason: row.cancellation_reason || null,
     rejection_reason: row.rejection_reason || null,
     created_at: row.created_at ?? null,
+    expiresAt: row.expires_at ?? row.expiresAt ?? null,
     status_history: Array.isArray(row.status_history) ? row.status_history : [],
     customer_history: row.customer_history ?? null,
     restaurant_settings: row.restaurant_settings ?? null,

@@ -556,6 +556,9 @@ All owner reservation endpoints require session authentication (`auth`), `role:o
 | `TOO_EARLY` | `409` | Marking arrived/seated more than `seating_early_minutes` (60m) before start |
 | `RESERVATION_ENDED` | `409` | Marking arrived/seated after `reservation_end` |
 | `NO_SHOW_TOO_EARLY` | `409` | Marking no-show before `start + no_show_grace_minutes` (15m) |
+| `RESERVATION_EXPIRED` | `409` | Reservation expired before action (swept lazily to `expired`) |
+
+**Payload addition:** All customer, owner, and admin reservation payloads include `expires_at` (`Asia/Manila` ISO timestamp for `pending` and `awaiting_payment`, `null` otherwise).
 
 **Customer Notifications Emitted (`workspace = 'customer'`, `related_entity_type = 'reservation'`):**
 - `approve` → `reservation_confirmed` or `reservation_awaiting_payment`

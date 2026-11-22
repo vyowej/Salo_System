@@ -6,6 +6,7 @@ import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
 import { StateView } from '../../../components/feedback';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
+import { formatTimeUntilExpiry } from '../../../utils/reservationExpiryUtils';
 import './OwnerReservationsPage.css';
 
 const STATUS_BADGE_MAP = {
@@ -613,6 +614,11 @@ export default function OwnerReservationsPage() {
       await loadReservations(true);
     } catch (err) {
       setDepositError(err?.message || 'Unable to update deposit status.');
+      if (err?.code === 'RESERVATION_EXPIRED') {
+        showToastMessage('error', err.message);
+        setDepositModal(null);
+        await loadReservations(true);
+      }
     } finally {
       setBusyActionId(null);
     }
@@ -1237,6 +1243,18 @@ export default function OwnerReservationsPage() {
                                     </span>
                                     <span>·</span>
                                     <span>👥 {res.partySize}</span>
+                                    {(res.statusCode === 'pending' || res.statusCode === 'awaiting_payment') && res.expiresAt && (() => {
+                                      const exp = formatTimeUntilExpiry(res.expiresAt);
+                                      if (!exp) return null;
+                                      return (
+                                        <>
+                                          <span>·</span>
+                                          <span style={{ color: exp.expired ? '#b91c1c' : '#b45309', fontWeight: 600 }}>
+                                            {exp.expired ? 'Expired' : `Expires in ${exp.label}`}
+                                          </span>
+                                        </>
+                                      );
+                                    })()}
                                     <span>·</span>
                                     <span>
                                       🪑 {res.tableName ? `Table ${res.tableName}` : 'Unassigned'}

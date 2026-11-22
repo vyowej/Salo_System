@@ -63,6 +63,9 @@ All notification endpoints require cookie-session authentication (`auth` middlew
 | Reservation deposit received | `customer` | `reservation_deposit_received` | Reservation customer (when marked paid without status transition) | `reservation` |
 | Reservation deposit waived | `customer` | `reservation_deposit_waived` | Reservation customer | `reservation` |
 | Reservation deposit refunded | `customer` | `reservation_deposit_refunded` | Reservation customer (includes refunded amount) | `reservation` |
+| Reservation expired | `customer`, `restaurant` | `reservation_expired` | Customer always; restaurant handlers also notified on `awaiting_payment` expiry | `reservation` |
+| Reservation expiring soon | `restaurant` | `reservation_expiring_soon` | Restaurant owner(s) + active reservation-handler staff (`expiry_warning_sent_at` once-only guard) | `reservation` |
+| Reservation upcoming reminder | `customer` | `reservation_reminder` | Confirmed reservation customer inside lead window (`reminder_sent_at` once-only guard) | `reservation` |
 | Reservation dining area changed | `customer` | `reservation_table_changed` | Reservation customer (emitted when dining area changes) | `reservation` |
 
 ---

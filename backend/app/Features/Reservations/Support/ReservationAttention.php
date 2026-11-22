@@ -50,11 +50,9 @@ class ReservationAttention
                     ?? 120),
             );
             $warningMinutes = max(5, (int) config('salo.reservations.pending_expiring_warning_minutes', 30));
-            $createdCarbon = CarbonImmutable::parse((string) $row->created_at, 'Asia/Manila');
-            $expiresAt = $createdCarbon->addMinutes($expiryMinutes);
-            $warningAt = $expiresAt->subMinutes($warningMinutes);
+            $expiresAt = ReservationExpiry::expiresAt($row, $expiryMinutes);
 
-            if ($manilaNow->greaterThanOrEqualTo($warningAt)) {
+            if ($expiresAt !== null && $manilaNow->greaterThanOrEqualTo($expiresAt->subMinutes($warningMinutes))) {
                 return self::PENDING_EXPIRING;
             }
         }

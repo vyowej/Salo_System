@@ -5,6 +5,7 @@ import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
+import { formatTimeUntilExpiry } from '../../../utils/reservationExpiryUtils';
 import './CustomerRecords.css';
 import './CustomerReservationsPage.css';
 
@@ -700,6 +701,29 @@ export default function ReservationsPage() {
                         {res.specialRequests && (
                           <div className="customer-reservation-card__note" style={{ padding: '8px 20px', fontSize: 12, color: 'var(--text-secondary)' }}>
                             <strong>Note to restaurant:</strong> {res.specialRequests}
+                          </div>
+                        )}
+
+                        {(res.statusCode === 'pending' || res.statusCode === 'awaiting_payment') && res.expiresAt && (() => {
+                          const expiryInfo = formatTimeUntilExpiry(res.expiresAt);
+                          if (!expiryInfo) return null;
+                          return (
+                            <div style={{ padding: '4px 20px 8px', fontSize: 12, color: expiryInfo.expired ? '#b91c1c' : '#92400e', fontWeight: 600 }}>
+                              {expiryInfo.expired
+                                ? 'Request expired'
+                                : res.statusCode === 'awaiting_payment'
+                                  ? `Deposit due — expires in ${expiryInfo.label}`
+                                  : `Waiting for the restaurant · request expires in ${expiryInfo.label}`}
+                            </div>
+                          );
+                        })()}
+
+                        {res.statusCode === 'expired' && (
+                          <div style={{ padding: '6px 20px', fontSize: 12, color: '#991b1b', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                            <span>Expired — the restaurant didn&apos;t confirm in time</span>
+                            <Link to={`/customer/restaurants/${res.restaurantId || ''}`} style={{ fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>
+                              Book another time →
+                            </Link>
                           </div>
                         )}
 

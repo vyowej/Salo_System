@@ -249,7 +249,7 @@ class OwnerReservationTest extends TestCase
         $tSmall = $this->insertTable($restaurantId, 'G-03', 2, 1, 'Indoor', true);
         $tArchived = $this->insertTable($restaurantId, 'G-04', 4, 1, 'Indoor', false);
 
-        // 1. Approve past reservation -> 409 RESERVATION_PASSED
+        // 1. Approve past pending reservation -> swept to expired -> 409 RESERVATION_EXPIRED
         $pastId = $this->insertReservation(
             $restaurantId,
             $t1,
@@ -264,9 +264,33 @@ class OwnerReservationTest extends TestCase
             ->withHeader('X-Restaurant-Id', (string) $restaurantId)
             ->postJson("/api/restaurant/reservations/{$pastId}/approve")
             ->assertStatus(409)
-            ->assertJsonPath('code', 'RESERVATION_PASSED');
+            ->assertJsonPath('code', 'RESERVATION_EXPIRED');
 
-        // 2. Stale pending whose table was taken by a confirmed booking -> 409 SLOT_TAKEN
+        // 2a. Expired pending (2h ago > 60m expiry) -> lazy sweep returns 409 RESERVATION_EXPIRED
+        $expiredPendingId = $this->insertReservation(
+            $restaurantId,
+            $t1,
+            $customer1->user_id,
+            'SALO-RES-20261123-EXP1',
+            '2026-11-24 18:00:00',
+            '2026-11-24 19:30:00',
+            4,
+            ReservationStatus::PENDING,
+            '0.00',
+            'none',
+            '2026-11-23 08:00:00', // 2h ago > 60m expiry
+        );
+        $this->actingAs($owner)
+            ->withHeader('X-Restaurant-Id', (string) $restaurantId)
+            ->postJson("/api/restaurant/reservations/{$expiredPendingId}/approve")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'RESERVATION_EXPIRED');
+        $this->assertDatabaseHas('reservations', [
+            'reservation_id' => $expiredPendingId,
+            'reservation_status' => ReservationStatus::EXPIRED,
+        ]);
+
+        // 2b. Active pending whose table was taken by a confirmed booking -> 409 SLOT_TAKEN
         $stalePendingId = $this->insertReservation(
             $restaurantId,
             $t1,
@@ -278,7 +302,7 @@ class OwnerReservationTest extends TestCase
             ReservationStatus::PENDING,
             '0.00',
             'none',
-            '2026-11-23 08:00:00', // 2h ago > 60m expiry
+            '2026-11-23 09:30:00', // 30m ago < 60m expiry
         );
         $this->insertReservation(
             $restaurantId,

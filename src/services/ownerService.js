@@ -264,6 +264,7 @@ export function normalizeOwnerReservation(raw) {
     seatedAt: raw.seated_at ?? raw.seatedAt ?? null,
     completedAt: raw.completed_at ?? raw.completedAt ?? null,
     expiredAt: raw.expired_at ?? raw.expiredAt ?? null,
+    expiresAt: raw.expires_at ?? raw.expiresAt ?? null,
     noShowMarkedAt: raw.no_show_marked_at ?? raw.noShowMarkedAt ?? null,
     noShowMarkedBy: raw.no_show_marked_by ?? raw.noShowMarkedBy ?? null,
     createdAt: raw.created_at ?? raw.createdAt ?? null,

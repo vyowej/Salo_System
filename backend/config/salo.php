@@ -167,6 +167,12 @@ return [
         'seating_early_minutes' => max(0, (int) env('SALO_RESERVATION_SEATING_EARLY_MINUTES', 60)),
         'overdue_seated_minutes' => max(0, (int) env('SALO_RESERVATION_OVERDUE_SEATED_MINUTES', 60)),
         'pending_expiring_warning_minutes' => max(5, (int) env('SALO_RESERVATION_PENDING_EXPIRING_WARNING_MINUTES', 30)),
+        // Unpaid awaiting_payment reservations expire after this many minutes (capped by reservation_start).
+        'awaiting_payment_expiry_minutes' => max(15, (int) env('SALO_RESERVATION_AWAITING_PAYMENT_EXPIRY_MINUTES', 1440)),
+        // Confirmed reservations receive a reminder this many minutes before reservation_start.
+        'reminder_lead_minutes' => max(15, (int) env('SALO_RESERVATION_REMINDER_LEAD_MINUTES', 120)),
+        // Chunk size for scheduled expiry and warning sweeps.
+        'expiry_command_batch_size' => max(10, (int) env('SALO_RESERVATION_EXPIRY_BATCH_SIZE', 200)),
         'max_active_pending_per_customer' => max(1, (int) env('SALO_RESERVATION_MAX_ACTIVE_PENDING', 3)),
         'suggested_slot_window' => max(1, (int) env('SALO_RESERVATION_SUGGESTED_SLOT_WINDOW', 3)),
         // Optional buffer minutes added to the end of existing reservations when checking table overlap.

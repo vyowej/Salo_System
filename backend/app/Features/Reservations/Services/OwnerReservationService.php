@@ -29,6 +29,7 @@ class OwnerReservationService
         private readonly ReservationStatusHistoryRecorder $historyRecorder,
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
+        private readonly ReservationExpiryService $expiryService,
     ) {}
 
     /**
@@ -246,7 +247,14 @@ class OwnerReservationService
             'reservations.view',
         );
 
-        return $this->loadOwnerFormattedDetail($user, $restaurant, $reservationId, $now);
+        $manilaNow = $this->toManilaImmutable($now);
+        $this->expiryService->expireDue(
+            now: $manilaNow,
+            restaurantId: (int) $restaurant->restaurant_id,
+            reservationId: $reservationId,
+        );
+
+        return $this->loadOwnerFormattedDetail($user, $restaurant, $reservationId, $manilaNow);
     }
 
     public function approve(
@@ -266,6 +274,12 @@ class OwnerReservationService
         $manilaNow = $this->toManilaImmutable($now);
 
         $depositRequired = (bool) ($restaurant->reservation_deposit_required ?? false);
+
+        $this->expiryService->expireDue(
+            now: $manilaNow,
+            restaurantId: $targetRestaurantId,
+            reservationId: $reservationId,
+        );
 
         return DB::transaction(function () use (
             $user,
@@ -288,6 +302,13 @@ class OwnerReservationService
             }
 
             $currentStatus = (string) $row->reservation_status;
+            if ($currentStatus === ReservationStatus::EXPIRED) {
+                throw new ReservationBookingException(
+                    errorCode: 'RESERVATION_EXPIRED',
+                    message: 'This reservation request has expired and can no longer be approved or changed.',
+                    statusCode: 409,
+                );
+            }
             $requiresDepositPayment = $depositRequired
                 && (float) ($row->deposit_amount ?? 0) > 0
                 && (string) ($row->deposit_status ?? 'none') === 'pending';
@@ -498,6 +519,12 @@ class OwnerReservationService
         $targetRestaurantId = (int) $restaurant->restaurant_id;
         $manilaNow = $this->toManilaImmutable($now);
 
+        $this->expiryService->expireDue(
+            now: $manilaNow,
+            restaurantId: $targetRestaurantId,
+            reservationId: $reservationId,
+        );
+
         DB::transaction(function () use (
             $restaurant,
             $targetRestaurantId,
@@ -522,6 +549,14 @@ class OwnerReservationService
             $depositAmount = (float) ($row->deposit_amount ?? 0);
             $currentDepositStatus = (string) ($row->deposit_status ?? 'none');
             $currentStatus = (string) $row->reservation_status;
+
+            if ($currentStatus === ReservationStatus::EXPIRED) {
+                throw new ReservationBookingException(
+                    errorCode: 'RESERVATION_EXPIRED',
+                    message: 'This reservation request has expired and can no longer be approved or changed.',
+                    statusCode: 409,
+                );
+            }
 
             if ($depositAmount <= 0 || $currentDepositStatus === 'none') {
                 throw new ReservationBookingException(
@@ -963,6 +998,12 @@ class OwnerReservationService
         $targetRestaurantId = (int) $restaurant->restaurant_id;
         $manilaNow = $this->toManilaImmutable($now);
 
+        $this->expiryService->expireDue(
+            now: $manilaNow,
+            restaurantId: $targetRestaurantId,
+            reservationId: $reservationId,
+        );
+
         return DB::transaction(function () use (
             $user,
             $restaurant,
@@ -990,6 +1031,14 @@ class OwnerReservationService
                 ReservationStatus::CONFIRMED,
                 ReservationStatus::ARRIVED,
             ];
+
+            if ($currentStatus === ReservationStatus::EXPIRED) {
+                throw new ReservationBookingException(
+                    errorCode: 'RESERVATION_EXPIRED',
+                    message: 'This reservation request has expired and can no longer be approved or changed.',
+                    statusCode: 409,
+                );
+            }
 
             if (! in_array($currentStatus, $reassignableStatuses, true)) {
                 throw new ReservationBookingException(
@@ -1138,6 +1187,12 @@ class OwnerReservationService
         $targetRestaurantId = (int) $restaurant->restaurant_id;
         $manilaNow = $this->toManilaImmutable($now);
 
+        $this->expiryService->expireDue(
+            now: $manilaNow,
+            restaurantId: $targetRestaurantId,
+            reservationId: $reservationId,
+        );
+
         return DB::transaction(function () use (
             $restaurant,
             $targetRestaurantId,
@@ -1163,6 +1218,13 @@ class OwnerReservationService
             }
 
             $currentStatus = (string) $row->reservation_status;
+            if ($currentStatus === ReservationStatus::EXPIRED) {
+                throw new ReservationBookingException(
+                    errorCode: 'RESERVATION_EXPIRED',
+                    message: 'This reservation request has expired and can no longer be approved or changed.',
+                    statusCode: 409,
+                );
+            }
             if ($currentStatus === $toStatus) {
                 return $this->loadOwnerFormattedDetail($actor, $restaurant, $reservationId, $manilaNow);
             }
@@ -1453,6 +1515,7 @@ class OwnerReservationService
         CarbonImmutable $manilaNow,
         ?array $statusHistory = null,
     ): array {
+        $row->reservation_pending_expiry_minutes = (int) ($restaurant->reservation_pending_expiry_minutes ?? 120);
         $allowedActions = $this->computeAllowedActions($row, $permissions, $manilaNow);
         $allowedDepositActions = $this->computeAllowedDepositActions($row, $permissions);
         $attention = $this->computeAttentionFlag($row, $restaurant, $manilaNow);

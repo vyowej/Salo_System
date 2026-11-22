@@ -33,6 +33,9 @@ const NOTIFICATION_TYPE_TITLES = {
   reservation_deposit_received: 'Reservation deposit received',
   reservation_deposit_waived: 'Reservation deposit waived',
   reservation_deposit_refunded: 'Reservation deposit refunded',
+  reservation_expired: 'Reservation request expired',
+  reservation_expiring_soon: 'Reservation expiring soon',
+  reservation_reminder: 'Upcoming table reservation reminder',
 };
 
 export function isValidWorkspace(workspace) {

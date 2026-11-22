@@ -157,6 +157,14 @@ class ReservationFormatter
             'seated_at' => OrderTimestampFormatter::toManilaIso($data->seated_at ?? null),
             'completed_at' => OrderTimestampFormatter::toManilaIso($data->completed_at ?? null),
             'expired_at' => OrderTimestampFormatter::toManilaIso($data->expired_at ?? null),
+            'expires_at' => OrderTimestampFormatter::toManilaIso(
+                ReservationExpiry::expiresAt(
+                    $data,
+                    isset($data->reservation_pending_expiry_minutes)
+                        ? (int) $data->reservation_pending_expiry_minutes
+                        : null,
+                ),
+            ),
             'no_show_marked_at' => OrderTimestampFormatter::toManilaIso($data->no_show_marked_at ?? null),
             'no_show_marked_by' => isset($data->no_show_marked_by) && $data->no_show_marked_by !== null
                 ? (int) $data->no_show_marked_by

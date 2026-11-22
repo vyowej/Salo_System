@@ -3,6 +3,7 @@
 namespace App\Features\Reservations\Services;
 
 use App\Features\Orders\Support\OrderTimestampFormatter;
+use App\Features\Reservations\Support\ReservationExpiry;
 use App\Features\Reservations\Support\ReservationStatus;
 use App\Features\Restaurants\Services\AvailabilityService;
 use Carbon\Carbon;
@@ -715,22 +716,13 @@ class ReservationAvailabilityService
         $candidateIds = $candidateTables->pluck('table_id')->map(static fn ($id): int => (int) $id)->all();
         $effectiveOverlapStart = $manilaStart->subMinutes($turnoverBufferMinutes)->format('Y-m-d H:i:s');
         $endStr = $manilaEnd->format('Y-m-d H:i:s');
-        $stalePendingCutoff = $manilaNow->subMinutes($pendingExpiryMinutes)->format('Y-m-d H:i:s');
-
-        $nonPendingBlocking = array_values(array_diff(ReservationStatus::BLOCKING, [ReservationStatus::PENDING]));
 
         $overlapQuery = DB::table('reservations')
             ->where('restaurant_id', $restaurantId)
             ->whereIn('table_id', $candidateIds)
+            ->whereIn('reservation_status', ReservationStatus::BLOCKING)
             ->where('reservation_start', '<', $endStr)
-            ->where('reservation_end', '>', $effectiveOverlapStart)
-            ->where(static function ($q) use ($nonPendingBlocking, $stalePendingCutoff): void {
-                $q->whereIn('reservation_status', $nonPendingBlocking)
-                    ->orWhere(static function ($pendingQ) use ($stalePendingCutoff): void {
-                        $pendingQ->where('reservation_status', ReservationStatus::PENDING)
-                            ->where('created_at', '>=', $stalePendingCutoff);
-                    });
-            });
+            ->where('reservation_end', '>', $effectiveOverlapStart);
 
         if ($excludeReservationId !== null) {
             $overlapQuery->where('reservation_id', '!=', $excludeReservationId);
@@ -741,6 +733,15 @@ class ReservationAvailabilityService
         }
 
         $bookedTableIds = $overlapQuery
+            ->get([
+                'table_id',
+                'reservation_status',
+                'reservation_start',
+                'created_at',
+                'approved_at',
+                'updated_at',
+            ])
+            ->reject(static fn (object $row): bool => ReservationExpiry::isExpired($row, $manilaNow, $pendingExpiryMinutes))
             ->pluck('table_id')
             ->map(static fn ($id): int => (int) $id)
             ->flip()
@@ -1365,28 +1366,24 @@ class ReservationAvailabilityService
     ): Collection {
         $effectiveStartStr = $windowStart->subMinutes($turnoverBufferMinutes)->format('Y-m-d H:i:s');
         $endStr = $windowEnd->format('Y-m-d H:i:s');
-        $stalePendingCutoff = $manilaNow->subMinutes($pendingExpiryMinutes)->format('Y-m-d H:i:s');
-        $nonPendingBlocking = array_values(array_diff(ReservationStatus::BLOCKING, [ReservationStatus::PENDING]));
 
         return DB::table('reservations')
             ->where('restaurant_id', $restaurantId)
             ->whereNotNull('table_id')
+            ->whereIn('reservation_status', ReservationStatus::BLOCKING)
             ->where('reservation_start', '<', $endStr)
             ->where('reservation_end', '>', $effectiveStartStr)
-            ->where(static function ($q) use ($nonPendingBlocking, $stalePendingCutoff): void {
-                $q->whereIn('reservation_status', $nonPendingBlocking)
-                    ->orWhere(static function ($pendingQ) use ($stalePendingCutoff): void {
-                        $pendingQ->where('reservation_status', ReservationStatus::PENDING)
-                            ->where('created_at', '>=', $stalePendingCutoff);
-                    });
-            })
             ->get([
                 'reservation_id',
                 'table_id',
                 'reservation_start',
                 'reservation_end',
                 'reservation_status',
+                'created_at',
+                'approved_at',
+                'updated_at',
             ])
+            ->reject(static fn (object $res): bool => ReservationExpiry::isExpired($res, $manilaNow, $pendingExpiryMinutes))
             ->map(static function (object $res): object {
                 $res->start_carbon = CarbonImmutable::parse((string) $res->reservation_start, self::TIMEZONE);
                 $res->end_carbon = CarbonImmutable::parse((string) $res->reservation_end, self::TIMEZONE);

@@ -4,6 +4,7 @@ namespace App\Features\Reservations\Services;
 
 use App\Features\Notifications\Services\NotificationService;
 use App\Features\Reservations\Support\ReservationBookingException;
+use App\Features\Reservations\Support\ReservationExpiry;
 use App\Features\Reservations\Support\ReservationFormatter;
 use App\Features\Reservations\Support\ReservationReferenceGenerator;
 use App\Features\Reservations\Support\ReservationStatus;
@@ -32,6 +33,7 @@ class CustomerReservationService
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
         private readonly FileStorageService $fileStorageService,
+        private readonly ReservationExpiryService $expiryService,
     ) {}
 
     /**
@@ -555,6 +557,11 @@ class CustomerReservationService
         $customerId = (int) $user->user_id;
         $manilaNow = $this->toManilaImmutable($now);
 
+        $this->expiryService->expireDue(
+            now: $manilaNow,
+            reservationId: $reservationId,
+        );
+
         $row = $this->baseCustomerReservationQuery($customerId)
             ->where('res.reservation_id', $reservationId)
             ->first();
@@ -591,6 +598,11 @@ class CustomerReservationService
             ? mb_substr(trim($reason), 0, 255)
             : null;
 
+        $this->expiryService->expireDue(
+            now: $manilaNow,
+            reservationId: $reservationId,
+        );
+
         DB::transaction(function () use (
             $customerId,
             $reservationId,
@@ -616,6 +628,14 @@ class CustomerReservationService
                 ReservationStatus::AWAITING_PAYMENT,
                 ReservationStatus::CONFIRMED,
             ];
+
+            if ($currentStatus === ReservationStatus::EXPIRED) {
+                throw new ReservationBookingException(
+                    errorCode: 'INVALID_TRANSITION',
+                    message: 'This reservation request has already expired.',
+                    statusCode: 409,
+                );
+            }
 
             if (
                 ! ReservationStatus::canTransition($currentStatus, ReservationStatus::CANCELLED)
@@ -776,30 +796,32 @@ class CustomerReservationService
         $startStr = $start->format('Y-m-d H:i:s');
         $endStr = $end->format('Y-m-d H:i:s');
         $nowStr = $manilaNow->format('Y-m-d H:i:s');
-        $nonPendingBlocking = array_values(array_diff(ReservationStatus::BLOCKING, [ReservationStatus::PENDING]));
 
-        // (a) Customer cannot hold two blocking reservations whose time windows overlap at ANY restaurant
+        // (a) Customer cannot hold two non-expired blocking reservations whose time windows overlap at ANY restaurant
         $overlapQuery = DB::table('reservations as res')
             ->join('restaurants as r', 'r.restaurant_id', '=', 'res.restaurant_id')
             ->where('res.customer_id', $customerId)
+            ->whereIn('res.reservation_status', ReservationStatus::BLOCKING)
             ->where('res.reservation_start', '<', $endStr)
-            ->where('res.reservation_end', '>', $startStr)
-            ->where(static function ($q) use ($nonPendingBlocking, $nowStr): void {
-                $q->whereIn('res.reservation_status', $nonPendingBlocking)
-                    ->orWhere(static function ($pendingQ) use ($nowStr): void {
-                        $pendingQ->where('res.reservation_status', ReservationStatus::PENDING)
-                            ->whereRaw(
-                                'TIMESTAMPADD(MINUTE, COALESCE(r.reservation_pending_expiry_minutes, 120), res.created_at) >= ?',
-                                [$nowStr]
-                            );
-                    });
-            });
+            ->where('res.reservation_end', '>', $startStr);
 
         if ($lockForUpdate) {
             $overlapQuery->lockForUpdate();
         }
 
-        if ($overlapQuery->exists()) {
+        $hasOverlap = $overlapQuery
+            ->get([
+                'res.reservation_id',
+                'res.reservation_status',
+                'res.reservation_start',
+                'res.created_at',
+                'res.approved_at',
+                'res.updated_at',
+                'r.reservation_pending_expiry_minutes',
+            ])
+            ->contains(static fn (object $row): bool => ! ReservationExpiry::isExpired($row, $manilaNow));
+
+        if ($hasOverlap) {
             throw new ReservationBookingException(
                 errorCode: 'OVERLAPPING_BOOKING',
                 message: 'You already have another active reservation during this time window.',
@@ -807,24 +829,29 @@ class CustomerReservationService
             );
         }
 
-        // (b) Customer cannot have more than max_active_pending_per_customer active pending reservations
+        // (b) Customer cannot have more than max_active_pending_per_customer non-expired pending reservations
         $maxPending = max(1, (int) config('salo.reservations.max_active_pending_per_customer', 3));
 
         $pendingQuery = DB::table('reservations as res')
             ->join('restaurants as r', 'r.restaurant_id', '=', 'res.restaurant_id')
             ->where('res.customer_id', $customerId)
             ->where('res.reservation_status', ReservationStatus::PENDING)
-            ->where('res.reservation_end', '>', $nowStr)
-            ->whereRaw(
-                'TIMESTAMPADD(MINUTE, COALESCE(r.reservation_pending_expiry_minutes, 120), res.created_at) >= ?',
-                [$nowStr]
-            );
+            ->where('res.reservation_end', '>', $nowStr);
 
         if ($lockForUpdate) {
             $pendingQuery->lockForUpdate();
         }
 
-        $activePendingCount = $pendingQuery->count();
+        $activePendingCount = $pendingQuery
+            ->get([
+                'res.reservation_id',
+                'res.reservation_status',
+                'res.reservation_start',
+                'res.created_at',
+                'r.reservation_pending_expiry_minutes',
+            ])
+            ->reject(static fn (object $row): bool => ReservationExpiry::isExpired($row, $manilaNow))
+            ->count();
         if ($activePendingCount >= $maxPending) {
             throw new ReservationBookingException(
                 errorCode: 'TOO_MANY_PENDING',
@@ -882,6 +909,7 @@ class CustomerReservationService
                 'r.contact_phone as restaurant_phone',
                 'r.reservation_notes',
                 'r.reservation_cancellation_cutoff_minutes',
+                'r.reservation_pending_expiry_minutes',
                 'a.street as restaurant_street',
                 'b.barangay_name as restaurant_barangay',
                 'c.city_name as restaurant_city',

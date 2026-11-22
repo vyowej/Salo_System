@@ -2,6 +2,7 @@
 
 namespace App\Features\Admin\Services;
 
+use App\Features\Reservations\Services\ReservationExpiryService;
 use App\Features\Reservations\Support\ReservationAttention;
 use App\Features\Reservations\Support\ReservationFormatter;
 use App\Features\Reservations\Support\ReservationStatus;
@@ -13,6 +14,10 @@ use Illuminate\Support\Facades\DB;
 class AdminReservationService
 {
     private const TIMEZONE = 'Asia/Manila';
+
+    public function __construct(
+        private readonly ReservationExpiryService $expiryService,
+    ) {}
 
     /**
      * Return paginated platform-wide reservations with search, status/group/deposit/attention/restaurant/date filters,
@@ -380,6 +385,12 @@ class AdminReservationService
      */
     public function getReservationDetail(int $reservationId): ?array
     {
+        $manilaNow = CarbonImmutable::now(self::TIMEZONE);
+        $this->expiryService->expireDue(
+            now: $manilaNow,
+            reservationId: $reservationId,
+        );
+
         $row = DB::table('reservations as r')
             ->join('restaurants as rest', 'rest.restaurant_id', '=', 'r.restaurant_id')
             ->join('users as u', 'u.user_id', '=', 'r.customer_id')
