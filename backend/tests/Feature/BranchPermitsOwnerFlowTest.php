@@ -174,11 +174,18 @@ class BranchPermitsOwnerFlowTest extends TestCase
         $rootId = $this->createRootRestaurant($owner);
         $this->addManager($rootId, $staffManager, $owner);
 
-        // Invalid file type
+        // Invalid file type and spoofed .pdf extension with plain text content
         $this->actingAs($owner)
             ->withHeader('X-Restaurant-Id', (string) $rootId)
             ->postJson('/api/restaurant/branches', array_merge($this->branchPayload('BadFile'), [
                 'mayors_permit' => UploadedFile::fake()->create('script.txt', 10, 'text/plain'),
+            ]))
+            ->assertStatus(422);
+
+        $this->actingAs($owner)
+            ->withHeader('X-Restaurant-Id', (string) $rootId)
+            ->postJson('/api/restaurant/branches', array_merge($this->branchPayload('SpoofedPdf'), [
+                'mayors_permit' => UploadedFile::fake()->createWithContent('spoofed.pdf', 'plain text not a pdf'),
             ]))
             ->assertStatus(422);
 
@@ -283,10 +290,40 @@ class BranchPermitsOwnerFlowTest extends TestCase
             ->assertStatus(200)
             ->assertJsonPath('data.permit.permit_status', 'pending_review');
 
-        // 3. Different payload while pending_review -> 409
+        // 3. Different payload while pending_review (different file OR exemption) -> 409
         $this->actingAs($owner)
             ->postJson("/api/restaurant/branches/{$branchId}/permit", [
                 'mayors_permit' => $this->fakePdf('different.pdf', 'v2-different'),
+            ])
+            ->assertStatus(409);
+
+        $this->actingAs($owner)
+            ->postJson("/api/restaurant/branches/{$branchId}/permit", [
+                'is_required_locally' => false,
+                'exemption_reason' => 'Switching from file to exemption while pending review.',
+            ])
+            ->assertStatus(409);
+
+        // 3b. Exemption idempotent retry -> 200; different exemption text -> 409
+        $exBranchRes = $this->actingAs($owner)
+            ->withHeader('X-Restaurant-Id', (string) $rootId)
+            ->post('/api/restaurant/branches', array_merge($this->branchPayload('ExRetry'), [
+                'is_required_locally' => 0,
+                'exemption_reason' => 'Exempt kiosk under LGU barangay rules.',
+            ]))->assertStatus(201);
+        $exBranchId = (int) $exBranchRes->json('data.branch.restaurant_id');
+
+        $this->actingAs($owner)
+            ->postJson("/api/restaurant/branches/{$exBranchId}/permit", [
+                'is_required_locally' => false,
+                'exemption_reason' => 'Exempt kiosk under LGU barangay rules.',
+            ])
+            ->assertStatus(200);
+
+        $this->actingAs($owner)
+            ->postJson("/api/restaurant/branches/{$exBranchId}/permit", [
+                'is_required_locally' => false,
+                'exemption_reason' => 'Different exemption reason text should conflict.',
             ])
             ->assertStatus(409);
 
@@ -390,6 +427,21 @@ class BranchPermitsOwnerFlowTest extends TestCase
         $this->actingAs($outsider)
             ->get("/api/restaurant/branches/{$branchId}/permit/file")
             ->assertStatus(403);
+
+        // Root restaurant (no branch_permits row) -> 404 (not 500)
+        $this->actingAs($owner)
+            ->get("/api/restaurant/branches/{$rootId}/permit/file")
+            ->assertStatus(404);
+
+        // Branch permit without a file (pending_submission) -> 404 (not 500)
+        $noFileRes = $this->actingAs($owner)
+            ->withHeader('X-Restaurant-Id', (string) $rootId)
+            ->post('/api/restaurant/branches', $this->branchPayload('NoFileYet'))
+            ->assertStatus(201);
+        $noFileBranchId = (int) $noFileRes->json('data.branch.restaurant_id');
+        $this->actingAs($owner)
+            ->get("/api/restaurant/branches/{$noFileBranchId}/permit/file")
+            ->assertStatus(404);
     }
 
     public function test_fail_closed_visibility_publish_checkout_transition_and_owner_only_fields(): void
@@ -566,14 +618,27 @@ class BranchPermitsOwnerFlowTest extends TestCase
         $this->assertArrayNotHasKey('permit_status', $meRoot);
         $this->assertSame('rejected', $meChild['permit_status'] ?? null);
 
-        // Staff/Manager does NOT see permit fields on any branch
-        $mgrBranches = $this->actingAs($manager)->getJson('/api/restaurant/branches')->json('data.branches');
-        $mgrChild = collect($mgrBranches)->firstWhere('restaurant_id', $childId);
-        $this->assertArrayNotHasKey('permit_status', $mgrChild);
+        // Staff/Manager and non-manager Staff do NOT see permit fields on any branch
+        $cashier = $this->createUser('customer', 'cashier');
+        DB::table('restaurant_staff')->insert([
+            'restaurant_id' => $childId,
+            'user_id' => $cashier->user_id,
+            'invited_by' => $owner->user_id,
+            'staff_position' => 'Cashier',
+            'staff_status' => 'active',
+            'invited_at' => now(),
+            'responded_at' => now(),
+        ]);
 
-        $mgrMe = $this->actingAs($manager)->getJson('/api/auth/me')->json('data.user.restaurant_staff_assignments');
-        $mgrMeChild = collect($mgrMe)->firstWhere('restaurant_id', $childId);
-        $this->assertNotNull($mgrMeChild);
-        $this->assertArrayNotHasKey('permit_status', $mgrMeChild);
+        foreach ([$manager, $cashier] as $staffUser) {
+            $staffBranches = $this->actingAs($staffUser)->getJson('/api/restaurant/branches')->json('data.branches');
+            $staffChild = collect($staffBranches)->firstWhere('restaurant_id', $childId);
+            $this->assertArrayNotHasKey('permit_status', $staffChild);
+
+            $staffMe = $this->actingAs($staffUser)->getJson('/api/auth/me')->json('data.user.restaurant_staff_assignments');
+            $staffMeChild = collect($staffMe)->firstWhere('restaurant_id', $childId);
+            $this->assertNotNull($staffMeChild);
+            $this->assertArrayNotHasKey('permit_status', $staffMeChild);
+        }
     }
 }

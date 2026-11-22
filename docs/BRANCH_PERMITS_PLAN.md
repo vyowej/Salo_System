@@ -219,3 +219,20 @@ Permit-1 schema and integrity checks are implemented on `salo_test` only (`salo_
 - Updated `OwnerBranchService::listAccessibleBranches()` and `User::resolveRoleContext()` to expose `permit_status`, `is_required_locally`, `review_note`, and `uploaded_at` only to owners on non-root branches.
 - Updated `PublicRestaurantVisibility::applyVisibleRestaurantScope()` and `MenuPublishService::buildPublishStatusForRestaurant()` with fail-closed `branch_permits` checks for non-root branches.
 - Added `BranchPermitsOwnerFlowTest.php` covering creation, re-upload matrix, file streaming authorization, visibility/publish/checkout guards, and status transitions.
+
+## Permit-2b implemented (salo_test only)
+- Extended `BranchPermitService::transitionStatus()` with `pending_submission` admin transition guard (`409`), `reopen` / `start_review` guards, `waive` `is_required_locally=false` guard (`422`), `review_note` min-length (`10–500` chars) validation (`422`) for `reject`/`request-info`/`waive`/`reopen`, and `file_path` + `reviewed_by` audit logging.
+- Added `AdminBranchPermitService` and `AdminBranchPermitController` + routes under `/api/admin/branch-permits*` (`index`, `show`, `file`, `start-review`, `approve`, `reject`, `request-info`, `waive`, `reopen`), blocking self-review (`403`) and dispatching `branch_permit_approved` / `_rejected` / `_info_requested` / `_waived` / `_reopened` notifications to owners (or applicant if application not yet approved) without file paths.
+- Updated `AdminManagementService::listRestaurants()` to return `permit_status` and `is_required_locally` (batched root derived read-only status from `application_documents`, `'not_submitted'` when none; non-root from `branch_permits`, 0 N+1).
+- Updated `RestaurantApplicationService::loadApplicationBranches()` to include additive `permit_id`, `permit_status`, `permit_is_required_locally`, `permit_exemption_reason`, and `permit_review_note` on `branches[]`.
+
+### Admin Review Transition Table
+| Current Status | `start-review` (`under_review`) | `approve` (`approved`) | `reject` (`rejected`, note 10–500) | `request-info` (`additional_info_required`, note 10–500) | `waive` (`waived`, `is_required_locally=false`, note 10–500) | `reopen` (`under_review`, note 10–500) |
+|---|---|---|---|---|---|---|
+| `pending_submission` | `409` | `409` | `409` | `409` | `409` | `409` |
+| `pending_review` | `200` | `200` | `200` | `200` | `200` (or `422`) | `409` |
+| `under_review` | `409` | `200` | `200` | `200` | `200` (or `422`) | `409` |
+| `additional_info_required` | `200` | `200` | `200` | `409` | `200` (or `422`) | `409` |
+| `rejected` | `200` | `200` | `409` | `409` | `200` (or `422`) | `409` |
+| `approved` | `409` | `409` | `200` (unpublishes) | `200` (unpublishes) | `409` | `200` (unpublishes) |
+| `waived` | `409` | `409` | `200` (unpublishes) | `200` (unpublishes) | `409` | `200` (unpublishes) |

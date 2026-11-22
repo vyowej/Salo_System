@@ -6,7 +6,15 @@
  */
 
 import apiClient from './apiClient.js';
-import publicRestaurantService from './publicRestaurantService.js';
+import publicRestaurantService, {
+  normalizeReservationInfo,
+  normalizeReservationSlot,
+  normalizeReservationDayAvailability,
+  normalizeReservationMonthDay,
+  normalizeReservationMonthOverview,
+  normalizeAvailableReservationTable,
+  normalizeReservationSlotTables,
+} from './publicRestaurantService.js';
 import addressService from './addressService.js';
 import locationApiService from './locationApiService.js';
 
@@ -114,7 +122,24 @@ export const customerService = {
     return [];
   },
 
-  // Reservations (Category B: no customer reservations backend endpoint yet)
+  // Reservations availability & lookup (backed by /api/restaurants/{id}/reservation-*)
+  async getReservationInfo(restaurantId) {
+    return publicRestaurantService.getReservationInfo(restaurantId);
+  },
+
+  async getReservationMonthOverview(restaurantId, month, partySize) {
+    return publicRestaurantService.getReservationMonthOverview(restaurantId, month, partySize);
+  },
+
+  async getReservationAvailability(restaurantId, date, partySize, diningArea = '') {
+    return publicRestaurantService.getReservationAvailability(restaurantId, date, partySize, diningArea);
+  },
+
+  async getReservationTables(restaurantId, start, partySize, diningArea = '') {
+    return publicRestaurantService.getReservationTables(restaurantId, start, partySize, diningArea);
+  },
+
+  // Reservations (Category B: customer booking/list endpoints implemented in Phase 4)
   getReservations() {
     return [];
   },
@@ -128,6 +153,16 @@ export const customerService = {
   getNotifications() {
     return [];
   },
+};
+
+export {
+  normalizeReservationInfo,
+  normalizeReservationSlot,
+  normalizeReservationDayAvailability,
+  normalizeReservationMonthDay,
+  normalizeReservationMonthOverview,
+  normalizeAvailableReservationTable,
+  normalizeReservationSlotTables,
 };
 
 export default customerService;

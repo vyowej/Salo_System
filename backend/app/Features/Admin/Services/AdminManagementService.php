@@ -167,6 +167,7 @@ class AdminManagementService
             ->join('barangays as brgy', 'brgy.barangay_id', '=', 'addr.barangay_id')
             ->join('cities as c', 'c.city_id', '=', 'brgy.city_id')
             ->leftJoin('restaurant_applications as ra', 'ra.restaurant_id', '=', 'rest.restaurant_id')
+            ->leftJoin('branch_permits as bp', 'bp.restaurant_id', '=', 'rest.restaurant_id')
             ->select([
                 'rest.restaurant_id', 'rest.restaurant_name', 'rest.registered_name',
                 'rest.parent_restaurant_id', 'rest.brand_restaurant_id', 'rest.branch_name',
@@ -175,7 +176,9 @@ class AdminManagementService
                 'rest.offers_delivery', 'rest.offers_pickup', 'rest.offers_dine_in',
                 'rest.accepts_reservations', 'rest.restaurant_status', 'rest.is_published', 'rest.last_published_at', 'rest.created_at',
                 'addr.street', 'brgy.barangay_name', 'c.city_name as zone',
-                'ra.reference_number', 'ra.application_status',
+                'ra.restaurant_application_id', 'ra.reference_number', 'ra.application_status',
+                'bp.permit_status as branch_permit_status',
+                'bp.is_required_locally as branch_is_required_locally',
             ]);
 
         $this->applyLikeSearch($query, $search, [
@@ -201,6 +204,23 @@ class AdminManagementService
                 ->groupBy('brand_restaurant_id')
                 ->pluck('total', 'brand_restaurant_id');
 
+        $rootAppIds = collect($items)
+            ->filter(fn (object $item): bool => $item->parent_restaurant_id === null && $item->restaurant_application_id !== null)
+            ->map(fn (object $item): int => (int) $item->restaurant_application_id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $rootDocsByAppId = $rootAppIds === []
+            ? collect()
+            : DB::table('application_documents')
+                ->whereIn('restaurant_application_id', $rootAppIds)
+                ->where('document_code', 'mayors_permit')
+                ->orderByDesc('document_id')
+                ->get(['restaurant_application_id', 'document_status'])
+                ->unique('restaurant_application_id')
+                ->keyBy('restaurant_application_id');
+
         foreach ($items as $item) {
             $brandId = (int) ($item->brand_restaurant_id ?? $item->restaurant_id);
             $item->brand_restaurant_id = $brandId;
@@ -209,6 +229,27 @@ class AdminManagementService
             $item->branch_count = max(1, (int) ($branchCounts->get($brandId) ?? 1));
             $item->logo_image = $this->fileStorageService->publicUrl($item->logo_image);
             $item->cover_image = $this->fileStorageService->publicUrl($item->cover_image);
+
+            if ($item->is_main_branch) {
+                $doc = $item->restaurant_application_id !== null
+                    ? $rootDocsByAppId->get((int) $item->restaurant_application_id)
+                    : null;
+                $item->permit_status = match ($doc?->document_status) {
+                    'verified' => 'approved',
+                    'rejected' => 'rejected',
+                    'pending' => 'pending_review',
+                    'under_review' => 'under_review',
+                    default => 'not_submitted',
+                };
+                $item->is_required_locally = true;
+            } else {
+                $item->permit_status = $item->branch_permit_status ?? 'pending_submission';
+                $item->is_required_locally = $item->branch_is_required_locally !== null
+                    ? (bool) $item->branch_is_required_locally
+                    : true;
+            }
+
+            unset($item->branch_permit_status, $item->branch_is_required_locally);
         }
         $this->attachPrimaryOwnersToRestaurants($items);
 

@@ -103,21 +103,44 @@ class BranchPermitService
         User $actor,
         ?string $note,
         Request $request,
+        ?string $action = null,
     ): object {
         $cleanNote = $note !== null && trim($note) !== '' ? mb_substr(trim($note), 0, 500) : null;
-        if (in_array($targetStatus, [self::STATUS_REJECTED, self::STATUS_ADDITIONAL_INFO_REQUIRED, self::STATUS_WAIVED], true) && $cleanNote === null) {
+        $noteRequired = $action === 'reopen'
+            || in_array($targetStatus, [self::STATUS_REJECTED, self::STATUS_ADDITIONAL_INFO_REQUIRED, self::STATUS_WAIVED], true);
+
+        if ($noteRequired && ($cleanNote === null || mb_strlen($cleanNote) < 10)) {
             throw ValidationException::withMessages([
-                'review_note' => ['A review note is required for this status transition.'],
+                'review_note' => ['A review note of at least 10 characters is required for this status transition.'],
             ]);
         }
 
-        return DB::transaction(function () use ($permitId, $targetStatus, $actor, $cleanNote, $request): object {
+        return DB::transaction(function () use ($permitId, $targetStatus, $actor, $cleanNote, $request, $action): object {
             $permit = DB::table('branch_permits')->where('permit_id', $permitId)->lockForUpdate()->first();
             if (! $permit) {
                 throw new NotFoundHttpException('Branch permit record not found.');
             }
 
             $currentStatus = (string) $permit->permit_status;
+
+            if ($currentStatus === self::STATUS_PENDING_SUBMISSION) {
+                throw new ConflictHttpException('Cannot review a branch permit before the owner submits a permit or exemption.');
+            }
+
+            if ($action === 'reopen' && ! $this->isVerifiedStatus($currentStatus)) {
+                throw new ConflictHttpException("Only approved or waived branch permits can be reopened (current: {$currentStatus}).");
+            }
+
+            if ($action === 'start_review' && $this->isVerifiedStatus($currentStatus)) {
+                throw new ConflictHttpException("Cannot start review on an already {$currentStatus} permit; use reopen with a review note.");
+            }
+
+            if ($targetStatus === self::STATUS_WAIVED && (bool) $permit->is_required_locally) {
+                throw ValidationException::withMessages([
+                    'is_required_locally' => ['A branch permit can only be waived when the owner declared that a local permit is not required.'],
+                ]);
+            }
+
             $allowed = self::ALLOWED_TRANSITIONS[$currentStatus] ?? [];
             if (! in_array($targetStatus, $allowed, true)) {
                 throw new ConflictHttpException("Cannot transition branch permit from {$currentStatus} to {$targetStatus}.");
@@ -143,16 +166,19 @@ class BranchPermitService
 
             $this->auditLogService->record(
                 actorUserId: (int) $actor->user_id,
-                action: 'branch_permit_status_updated',
+                action: $action ? "branch_permit_{$action}" : 'branch_permit_status_updated',
                 entityType: 'branch_permits',
                 entityId: $permitId,
                 oldValues: [
                     'permit_status' => $currentStatus,
                     'review_note' => $permit->review_note,
+                    'file_path' => $permit->file_path,
                 ],
                 newValues: [
                     'permit_status' => $targetStatus,
                     'review_note' => $cleanNote,
+                    'file_path' => $permit->file_path,
+                    'reviewed_by' => (int) $actor->user_id,
                     'restaurant_id' => $permit->restaurant_id ? (int) $permit->restaurant_id : null,
                 ],
                 reason: $cleanNote,

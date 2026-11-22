@@ -6,6 +6,7 @@ use App\Features\Account\Controllers\AccountLifecycleController;
 use App\Features\Account\Controllers\AccountSettingsController;
 use App\Features\Account\Controllers\AccountStaffInvitationController;
 use App\Features\Admin\Controllers\AdminApplicationController;
+use App\Features\Admin\Controllers\AdminBranchPermitController;
 use App\Features\Admin\Controllers\AdminManagementController;
 use App\Features\Admin\Controllers\AdminOrderController;
 use App\Features\Admin\Controllers\AdminSettingsRequestController;
@@ -22,6 +23,7 @@ use App\Features\Notifications\Controllers\NotificationController;
 use App\Features\Orders\Controllers\CustomerOrderController;
 use App\Features\Orders\Controllers\RestaurantOrderController;
 use App\Features\Reservations\Controllers\OwnerTableController;
+use App\Features\Reservations\Controllers\ReservationAvailabilityController;
 use App\Features\Restaurants\Controllers\OwnerBranchController;
 use App\Features\Restaurants\Controllers\OwnerInventoryController;
 use App\Features\Restaurants\Controllers\OwnerMenuController;
@@ -268,6 +270,16 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::get('/restaurants', [AdminManagementController::class, 'restaurants']);
     Route::patch('/restaurants/{id}/status', [AdminManagementController::class, 'updateRestaurantStatus'])->whereNumber('id');
 
+    Route::get('/branch-permits', [AdminBranchPermitController::class, 'index']);
+    Route::get('/branch-permits/{permitId}', [AdminBranchPermitController::class, 'show'])->whereNumber('permitId');
+    Route::get('/branch-permits/{permitId}/file', [AdminBranchPermitController::class, 'file'])->whereNumber('permitId');
+    Route::post('/branch-permits/{permitId}/start-review', [AdminBranchPermitController::class, 'startReview'])->whereNumber('permitId');
+    Route::post('/branch-permits/{permitId}/approve', [AdminBranchPermitController::class, 'approve'])->whereNumber('permitId');
+    Route::post('/branch-permits/{permitId}/reject', [AdminBranchPermitController::class, 'reject'])->whereNumber('permitId');
+    Route::post('/branch-permits/{permitId}/request-info', [AdminBranchPermitController::class, 'requestInfo'])->whereNumber('permitId');
+    Route::post('/branch-permits/{permitId}/waive', [AdminBranchPermitController::class, 'waive'])->whereNumber('permitId');
+    Route::post('/branch-permits/{permitId}/reopen', [AdminBranchPermitController::class, 'reopen'])->whereNumber('permitId');
+
     Route::get('/riders', [AdminManagementController::class, 'riders']);
     Route::post('/riders/{id}/activate', [AdminManagementController::class, 'activateRider'])->whereNumber('id');
     Route::patch('/riders/{id}/status', [AdminManagementController::class, 'updateRiderStatus'])->whereNumber('id');
@@ -315,6 +327,10 @@ Route::middleware('throttle:60,1')->group(function (): void {
     Route::get('/restaurants/{id}', [RestaurantController::class, 'show'])->whereNumber('id');
     Route::get('/restaurants/{id}/menu', [RestaurantController::class, 'menu'])->whereNumber('id');
     Route::get('/restaurants/{id}/reviews', [PublicReviewController::class, 'restaurantReviews'])->whereNumber('id');
+    Route::get('/restaurants/{id}/reservation-info', [ReservationAvailabilityController::class, 'info'])->whereNumber('id');
+    Route::get('/restaurants/{id}/reservation-availability/month', [ReservationAvailabilityController::class, 'month'])->whereNumber('id');
+    Route::get('/restaurants/{id}/reservation-availability', [ReservationAvailabilityController::class, 'day'])->whereNumber('id');
+    Route::get('/restaurants/{id}/reservation-availability/tables', [ReservationAvailabilityController::class, 'tables'])->whereNumber('id');
 });
 
 if (app()->environment('testing')) {

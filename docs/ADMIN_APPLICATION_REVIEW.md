@@ -74,3 +74,12 @@ Verify the target database (`DB_DATABASE` in `backend/.env` or `--env=testing` f
 - **Required-document checklist lock:** Currently manual admin judgment; no programmatic block if an optional document is unverified.
 - **Review SLAs, auto-expiry, & commission assignment:** Manual decisions only; no auto-approval, timers, or commission configuration during review.
 - **Applicant & Admin notifications:** In-app notifications are recorded inside the review transaction (see [NOTIFICATIONS.md](./NOTIFICATIONS.md)). Email/SMS/push providers remain future work.
+
+## Branch Permits Admin Review (Permit-2b)
+- `GET /api/admin/applications/restaurant/{id}` includes additive `branches[].permit_id`, `branches[].permit_status`, `branches[].permit_is_required_locally`, `branches[].permit_exemption_reason`, and `branches[].permit_review_note` for materialized (and linked) branches.
+- `GET /api/admin/restaurants` includes `permit_status` and `is_required_locally` on every row: non-root branches read directly from `branch_permits`, while root restaurants derive a read-only `permit_status` from the latest `mayors_permit` row in `application_documents` (`verified` → `approved`, `rejected` → `rejected`, `pending` → `pending_review`, `under_review` → `under_review`, none → `not_submitted`; `is_required_locally = true`).
+- Dedicated admin branch permit endpoints (`role:admin`, self-review blocked with `403`):
+  - `GET /api/admin/branch-permits` (`status`, `search`, `submitted_date`, `per_page`)
+  - `GET /api/admin/branch-permits/{permitId}` (detail + `review_note` + `file_url` only if a file exists)
+  - `GET /api/admin/branch-permits/{permitId}/file` (private stream)
+  - `POST /api/admin/branch-permits/{permitId}/start-review | approve | reject | request-info | waive | reopen` (`reject`, `request-info`, `waive`, `reopen` require `review_note` of 10–500 chars; `waive` requires `is_required_locally = false` else `422`; invalid/stale transitions return `409`; leaving `approved`/`waived` sets `restaurants.is_published = 0` in the same transaction; approving does not publish).

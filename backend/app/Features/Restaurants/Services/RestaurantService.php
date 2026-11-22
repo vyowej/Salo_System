@@ -117,6 +117,11 @@ class RestaurantService
             'rb',
         );
 
+        $activeTablesSub = DB::table('restaurant_tables as rt')
+            ->whereColumn('rt.restaurant_id', 'r.restaurant_id')
+            ->where('rt.is_active', 1)
+            ->selectRaw('COUNT(*)');
+
         $this->visibility->applyVisibleRestaurantScope($query, 'r')
             ->select([
                 'r.restaurant_id', 'r.restaurant_name', 'r.branch_name', 'r.brand_restaurant_id', 'r.business_type', 'r.description',
@@ -124,7 +129,8 @@ class RestaurantService
                 'r.offers_dine_in', 'r.accepts_reservations', 'r.accepting_orders',
                 'r.accepting_reservations', 'r.created_at', 'b.barangay_name', 'c.city_name',
             ])
-            ->selectSub($branchCountSub, 'visible_branch_count');
+            ->selectSub($branchCountSub, 'visible_branch_count')
+            ->selectSub($activeTablesSub, 'active_tables_count');
 
         $this->applyPublicListSearchAndCategory($query, $filters);
 
@@ -220,6 +226,9 @@ class RestaurantService
                 'dine_in' => (bool) $row->offers_dine_in,
                 'reservations' => (bool) $row->accepts_reservations,
             ],
+            'can_reserve' => (bool) $row->accepts_reservations
+                && (bool) $row->accepting_reservations
+                && ((int) ($row->active_tables_count ?? 0) > 0),
             'availability' => $availability,
         ];
 
@@ -246,8 +255,13 @@ class RestaurantService
             ->join('provinces as p', 'p.province_id', '=', 'c.province_id')
             ->where('r.restaurant_id', $restaurantId);
 
+        $activeTablesSub = DB::table('restaurant_tables as rt')
+            ->whereColumn('rt.restaurant_id', 'r.restaurant_id')
+            ->where('rt.is_active', 1)
+            ->selectRaw('COUNT(*)');
+
         $row = $this->visibility->applyVisibleRestaurantScope($query, 'r')
-            ->first([
+            ->select([
                 'r.restaurant_id',
                 'r.restaurant_name',
                 'r.branch_name',
@@ -264,6 +278,15 @@ class RestaurantService
                 'r.accepts_reservations',
                 'r.accepting_orders',
                 'r.accepting_reservations',
+                'r.reservation_min_notice_hours',
+                'r.reservation_max_party_size',
+                'r.reservation_notes',
+                'r.reservation_duration_minutes',
+                'r.reservation_max_advance_days',
+                'r.reservation_cancellation_cutoff_minutes',
+                'r.reservation_deposit_required',
+                'r.reservation_deposit_amount',
+                'r.reservation_service_fee',
                 'a.street',
                 'a.building_name',
                 'a.landmark',
@@ -271,7 +294,9 @@ class RestaurantService
                 'b.barangay_name',
                 'c.city_name',
                 'p.province_name',
-            ]);
+            ])
+            ->selectSub($activeTablesSub, 'active_tables_count')
+            ->first();
 
         if (! $row) {
             throw new NotFoundHttpException('Restaurant not found.');
@@ -420,6 +445,18 @@ class RestaurantService
                 'dine_in' => (bool) $row->offers_dine_in,
                 'reservations' => (bool) $row->accepts_reservations,
             ],
+            'can_reserve' => (bool) $row->accepts_reservations
+                && (bool) $row->accepting_reservations
+                && ((int) ($row->active_tables_count ?? 0) > 0),
+            'reservation_min_notice_hours' => (int) ($row->reservation_min_notice_hours ?? 2),
+            'reservation_max_party_size' => (int) ($row->reservation_max_party_size ?? 8),
+            'reservation_notes' => $row->reservation_notes,
+            'reservation_duration_minutes' => (int) ($row->reservation_duration_minutes ?? config('salo.reservations.default_duration_minutes', 90)),
+            'reservation_max_advance_days' => (int) ($row->reservation_max_advance_days ?? 30),
+            'reservation_cancellation_cutoff_minutes' => (int) ($row->reservation_cancellation_cutoff_minutes ?? 120),
+            'reservation_deposit_required' => (bool) ($row->reservation_deposit_required ?? false),
+            'reservation_deposit_amount' => number_format((float) ($row->reservation_deposit_amount ?? 0), 2, '.', ''),
+            'reservation_service_fee' => number_format((float) ($row->reservation_service_fee ?? 0), 2, '.', ''),
             'availability' => $availability,
             'operating_hours' => $hours->map(fn (object $h): array => [
                 'day_of_week' => (int) $h->day_of_week,

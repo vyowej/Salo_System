@@ -57,6 +57,10 @@ function mapRestaurantListItem(raw) {
     coverPhoto: raw.cover_path || null,
     address: raw.short_address || '',
     offers: raw.offers || { delivery: false, pickup: false, dine_in: false, reservations: false },
+    canReserve:
+      raw.can_reserve !== undefined
+        ? Boolean(raw.can_reserve)
+        : Boolean(raw.availability?.can_reserve ?? (raw.offers?.reservations && raw.availability?.accepting_reservations)),
     availability: raw.availability || {
       is_open: false,
       status_label: 'Closed',
@@ -190,7 +194,21 @@ export const publicRestaurantService = {
         delivery: Boolean(raw.offers?.delivery),
         pickup: Boolean(raw.offers?.pickup),
         dineIn: Boolean(raw.offers?.dine_in),
+        reservations: Boolean(raw.offers?.reservations),
       },
+      canReserve:
+        raw.can_reserve !== undefined
+          ? Boolean(raw.can_reserve)
+          : Boolean(raw.availability?.can_reserve ?? (raw.offers?.reservations && raw.availability?.accepting_reservations)),
+      reservationMinNoticeHours: Number(raw.reservation_min_notice_hours ?? 2),
+      reservationMaxPartySize: Number(raw.reservation_max_party_size ?? 8),
+      reservationNotes: raw.reservation_notes ?? null,
+      reservationDurationMinutes: Number(raw.reservation_duration_minutes ?? 90),
+      reservationMaxAdvanceDays: Number(raw.reservation_max_advance_days ?? 30),
+      reservationCancellationCutoffMinutes: Number(raw.reservation_cancellation_cutoff_minutes ?? 120),
+      reservationDepositRequired: Boolean(raw.reservation_deposit_required ?? false),
+      reservationDepositAmount: Number(raw.reservation_deposit_amount ?? 0),
+      reservationServiceFee: Number(raw.reservation_service_fee ?? 0),
       operatingSchedule: {
         acceptingOrders: Boolean(raw.availability?.accepting_orders),
         acceptingReservations: Boolean(raw.availability?.accepting_reservations),
@@ -201,6 +219,205 @@ export const publicRestaurantService = {
       menu,
     };
   },
+
+  async getReservationInfo(restaurantId) {
+    const response = await apiClient.get(
+      `/restaurants/${encodeURIComponent(restaurantId)}/reservation-info`,
+      { skipAuthInvalidEvent: true },
+    );
+    return normalizeReservationInfo(response?.data ?? null);
+  },
+
+  async getReservationMonthOverview(restaurantId, month, partySize) {
+    const query = new URLSearchParams();
+    if (month !== undefined && month !== null) query.set('month', String(month));
+    if (partySize !== undefined && partySize !== null) query.set('party_size', String(partySize));
+    const qs = query.toString();
+
+    const response = await apiClient.get(
+      `/restaurants/${encodeURIComponent(restaurantId)}/reservation-availability/month${qs ? `?${qs}` : ''}`,
+      { skipAuthInvalidEvent: true },
+    );
+    return normalizeReservationMonthOverview(response?.data ?? null);
+  },
+
+  async getReservationAvailability(restaurantId, date, partySize, diningArea = '') {
+    const query = new URLSearchParams();
+    if (date !== undefined && date !== null) query.set('date', String(date));
+    if (partySize !== undefined && partySize !== null) query.set('party_size', String(partySize));
+    if (diningArea && String(diningArea).trim() && diningArea !== 'all') {
+      query.set('dining_area', String(diningArea).trim());
+    }
+    const qs = query.toString();
+
+    const response = await apiClient.get(
+      `/restaurants/${encodeURIComponent(restaurantId)}/reservation-availability${qs ? `?${qs}` : ''}`,
+      { skipAuthInvalidEvent: true },
+    );
+    return normalizeReservationDayAvailability(response?.data ?? null);
+  },
+
+  async getReservationTables(restaurantId, start, partySize, diningArea = '') {
+    const query = new URLSearchParams();
+    if (start !== undefined && start !== null) query.set('start', String(start));
+    if (partySize !== undefined && partySize !== null) query.set('party_size', String(partySize));
+    if (diningArea && String(diningArea).trim() && diningArea !== 'all') {
+      query.set('dining_area', String(diningArea).trim());
+    }
+    const qs = query.toString();
+
+    const response = await apiClient.get(
+      `/restaurants/${encodeURIComponent(restaurantId)}/reservation-availability/tables${qs ? `?${qs}` : ''}`,
+      { skipAuthInvalidEvent: true },
+    );
+    return normalizeReservationSlotTables(response?.data ?? null);
+  },
 };
+
+export function normalizeReservationInfo(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  return {
+    restaurantId: Number(raw.restaurant_id ?? raw.restaurantId ?? 0),
+    restaurantName: raw.restaurant_name ?? raw.restaurantName ?? '',
+    bookable: Boolean(raw.bookable ?? false),
+    canReserve: Boolean(raw.can_reserve ?? raw.canReserve ?? false),
+    reasonCode: raw.reason_code ?? raw.reasonCode ?? null,
+    message: raw.message ?? '',
+    offersDineIn: Boolean(raw.offers_dine_in ?? raw.offersDineIn ?? false),
+    acceptsReservations: Boolean(raw.accepts_reservations ?? raw.acceptsReservations ?? false),
+    acceptingReservations: Boolean(raw.accepting_reservations ?? raw.acceptingReservations ?? false),
+    isOpen: Boolean(raw.is_open ?? raw.isOpen ?? false),
+    statusLabel: raw.status_label ?? raw.statusLabel ?? 'Closed',
+    temporarilyUnavailable: Boolean(raw.temporarily_unavailable ?? raw.temporarilyUnavailable ?? false),
+    closureReason: raw.closure_reason ?? raw.closureReason ?? null,
+    reservationMinNoticeHours: Number(raw.reservation_min_notice_hours ?? raw.reservationMinNoticeHours ?? 2),
+    reservationMaxPartySize: Number(raw.reservation_max_party_size ?? raw.reservationMaxPartySize ?? 8),
+    effectiveMaxPartySize: Number(raw.effective_max_party_size ?? raw.effectiveMaxPartySize ?? raw.reservation_max_party_size ?? 8),
+    smallestMinPartySize: Number(raw.smallest_min_party_size ?? raw.smallestMinPartySize ?? 1),
+    reservationNotes: raw.reservation_notes ?? raw.reservationNotes ?? null,
+    reservationDurationMinutes: Number(raw.reservation_duration_minutes ?? raw.reservationDurationMinutes ?? 90),
+    reservationMaxAdvanceDays: Number(raw.reservation_max_advance_days ?? raw.reservationMaxAdvanceDays ?? 30),
+    reservationCancellationCutoffMinutes: Number(
+      raw.reservation_cancellation_cutoff_minutes ?? raw.reservationCancellationCutoffMinutes ?? 120,
+    ),
+    reservationAutoConfirm: Boolean(raw.reservation_auto_confirm ?? raw.reservationAutoConfirm ?? false),
+    reservationDepositRequired: Boolean(raw.reservation_deposit_required ?? raw.reservationDepositRequired ?? false),
+    reservationDepositAmount: Number(raw.reservation_deposit_amount ?? raw.reservationDepositAmount ?? 0),
+    reservationServiceFee: Number(raw.reservation_service_fee ?? raw.reservationServiceFee ?? 0),
+    slotIntervalMinutes: Number(raw.slot_interval_minutes ?? raw.slotIntervalMinutes ?? 30),
+    diningAreas: Array.isArray(raw.dining_areas ?? raw.diningAreas)
+      ? (raw.dining_areas ?? raw.diningAreas).filter(Boolean)
+      : [],
+    activeTableCount: Number(raw.active_table_count ?? raw.activeTableCount ?? 0),
+    largestTableCapacity: Number(raw.largest_table_capacity ?? raw.largestTableCapacity ?? 0),
+  };
+}
+
+export function normalizeReservationSlot(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  return {
+    start: raw.start ?? null,
+    end: raw.end ?? null,
+    time: raw.time ?? null,
+    timeLabel: raw.time_label ?? raw.timeLabel ?? '',
+    available: Boolean(raw.available ?? false),
+    availableTableCount: Number(raw.available_table_count ?? raw.availableTableCount ?? 0),
+    reasonCode: raw.reason_code ?? raw.reasonCode ?? null,
+    diningAreasAvailable: Array.isArray(raw.dining_areas_available ?? raw.diningAreasAvailable)
+      ? (raw.dining_areas_available ?? raw.diningAreasAvailable).filter(Boolean)
+      : [],
+  };
+}
+
+export function normalizeReservationDayAvailability(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  return {
+    restaurantId: Number(raw.restaurant_id ?? raw.restaurantId ?? 0),
+    date: raw.date ?? '',
+    partySize: Number(raw.party_size ?? raw.partySize ?? 0),
+    diningArea: raw.dining_area ?? raw.diningArea ?? null,
+    durationMinutes: Number(raw.duration_minutes ?? raw.durationMinutes ?? 90),
+    bookable: Boolean(raw.bookable ?? false),
+    isClosed: Boolean(raw.is_closed ?? raw.isClosed ?? false),
+    closureReason: raw.closure_reason ?? raw.closureReason ?? null,
+    totalSlots: Number(raw.total_slots ?? raw.totalSlots ?? 0),
+    availableSlots: Number(raw.available_slots ?? raw.availableSlots ?? 0),
+    firstAvailableSlot: raw.first_available_slot ?? raw.firstAvailableSlot ?? null,
+    reasonCode: raw.reason_code ?? raw.reasonCode ?? null,
+    message: raw.message ?? '',
+    slots: Array.isArray(raw.slots) ? raw.slots.map(normalizeReservationSlot).filter(Boolean) : [],
+  };
+}
+
+export function normalizeReservationMonthDay(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  return {
+    date: raw.date ?? '',
+    status: raw.status ?? 'unavailable',
+    availableSlots: Number(raw.available_slots ?? raw.availableSlots ?? 0),
+    totalSlots: Number(raw.total_slots ?? raw.totalSlots ?? 0),
+    reasonCode: raw.reason_code ?? raw.reasonCode ?? null,
+  };
+}
+
+export function normalizeReservationMonthOverview(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  return {
+    restaurantId: Number(raw.restaurant_id ?? raw.restaurantId ?? 0),
+    month: raw.month ?? '',
+    partySize: Number(raw.party_size ?? raw.partySize ?? 0),
+    bookable: Boolean(raw.bookable ?? false),
+    reasonCode: raw.reason_code ?? raw.reasonCode ?? null,
+    message: raw.message ?? '',
+    days: Array.isArray(raw.days) ? raw.days.map(normalizeReservationMonthDay).filter(Boolean) : [],
+  };
+}
+
+export function normalizeAvailableReservationTable(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const capacity = Number(raw.seating_capacity ?? raw.capacity ?? 0);
+  const tableId = Number(raw.table_id ?? raw.tableId ?? raw.id ?? 0);
+
+  return {
+    tableId,
+    id: tableId,
+    tableName: String(raw.table_name ?? raw.tableName ?? ''),
+    capacity,
+    seatingCapacity: capacity,
+    minPartySize: Number(raw.min_party_size ?? raw.minPartySize ?? 1),
+    diningArea: raw.dining_area ?? raw.diningArea ?? null,
+    description: raw.description ?? null,
+  };
+}
+
+export function normalizeReservationSlotTables(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  return {
+    restaurantId: Number(raw.restaurant_id ?? raw.restaurantId ?? 0),
+    start: raw.start ?? null,
+    end: raw.end ?? null,
+    partySize: Number(raw.party_size ?? raw.partySize ?? 0),
+    diningArea: raw.dining_area ?? raw.diningArea ?? null,
+    durationMinutes: Number(raw.duration_minutes ?? raw.durationMinutes ?? 90),
+    bookable: Boolean(raw.bookable ?? false),
+    reasonCode: raw.reason_code ?? raw.reasonCode ?? null,
+    message: raw.message ?? '',
+    availableTables: Array.isArray(raw.available_tables ?? raw.availableTables)
+      ? (raw.available_tables ?? raw.availableTables).map(normalizeAvailableReservationTable).filter(Boolean)
+      : [],
+    suggestedAlternatives: Array.isArray(raw.suggested_alternatives ?? raw.suggestedAlternatives)
+      ? (raw.suggested_alternatives ?? raw.suggestedAlternatives)
+          .map((alt) => normalizeReservationSlot({ ...alt, available: true }))
+          .filter(Boolean)
+      : [],
+  };
+}
 
 export default publicRestaurantService;

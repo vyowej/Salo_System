@@ -254,3 +254,220 @@ Archives a table (`is_active = 0`, `table_status = 'archived'`) and records an `
 ### `POST /api/restaurant/tables/{id}/reactivate` (`tables.manageAvailability`)
 
 Reactivates an archived table (`is_active = 1`) and records an `owner_table_reactivated` audit log entry. Idempotent (`200`) if already active.
+
+---
+
+## Public Reservation Availability & Policy Endpoints (`/api/restaurants/{id}/reservation-*`)
+
+All endpoints below are public (no login required), rate-limited (`throttle:60,1`), and operate in `Asia/Manila`.
+- Unknown, non-`active`, or unpublished (`is_published = 0`) restaurants return `404`.
+- Malformed query parameters return `422` with validation errors.
+- Well-formed requests where booking is not possible for a business/policy reason return HTTP `200` with `bookable: false`, `reason_code`, and a user-facing `message`.
+
+### Extended `GET /api/restaurants/{id}` & `GET /api/restaurants` Reservation Fields
+
+- `GET /api/restaurants` and `GET /api/restaurants/{id}` now include additive `can_reserve` (`accepts_reservations && accepting_reservations && active_tables_count > 0`, computed via a single scalar subquery without extra per-row queries) and `availability.can_reserve`.
+- `GET /api/restaurants/{id}` additionally returns:
+  - `reservation_min_notice_hours` (int)
+  - `reservation_max_party_size` (int)
+  - `reservation_notes` (string|null)
+  - `reservation_duration_minutes` (int)
+  - `reservation_max_advance_days` (int)
+  - `reservation_cancellation_cutoff_minutes` (int)
+  - `reservation_deposit_required` (bool)
+  - `reservation_deposit_amount` (`"0.00"`)
+  - `reservation_service_fee` (`"0.00"`)
+
+### Reason Codes
+
+| `reason_code` | Meaning |
+| --- | --- |
+| `RESTAURANT_UNAVAILABLE` | Restaurant is not active or not published. |
+| `RESERVATIONS_NOT_OFFERED` | Restaurant does not offer table reservations (`accepts_reservations = 0`). |
+| `NOT_ACCEPTING` | Restaurant has temporarily paused reservations (`accepting_reservations = 0`). |
+| `NO_TABLES` | Restaurant has no active tables (`is_active = 1`). |
+| `PARTY_TOO_LARGE` | Requested `party_size` is `< 1`, exceeds `reservation_max_party_size`, or exceeds `largest_table_capacity`. |
+| `PAST_TIME` | Requested date/time is in the past (`< now` in `Asia/Manila`). |
+| `TOO_SOON` | Requested start time is within `reservation_min_notice_hours` (`< now + min_notice_hours`). |
+| `TOO_FAR_AHEAD` | Requested date exceeds `today + reservation_max_advance_days`. |
+| `CLOSED` | Requested date is in `restaurant_closures`, has `is_closed = 1`, or `[start, end]` falls outside operating periods. |
+| `FULLY_BOOKED` | Suitable tables exist for the party size/area, but all are booked in the requested window. |
+| `NO_FIT` | No active table matches `[min_party_size, seating_capacity]` (and optional `dining_area`) for the requested party size. |
+
+### `GET /api/restaurants/{id}/reservation-info`
+
+Returns the restaurant's reservation policy settings, live open/accepting status, distinct `dining_areas` from active tables, `active_table_count`, and `largest_table_capacity`.
+
+**Example Response (`200` — Not Accepting Reservations):**
+```json
+{
+  "success": true,
+  "message": "This restaurant is temporarily not accepting new reservations.",
+  "data": {
+    "restaurant_id": 1,
+    "restaurant_name": "Dalisay Heritage Grill & Bistro",
+    "bookable": false,
+    "can_reserve": false,
+    "reason_code": "NOT_ACCEPTING",
+    "message": "This restaurant is temporarily not accepting new reservations.",
+    "offers_dine_in": true,
+    "accepts_reservations": true,
+    "accepting_reservations": false,
+    "is_open": true,
+    "status_label": "Open",
+    "temporarily_unavailable": false,
+    "closure_reason": null,
+    "reservation_min_notice_hours": 2,
+    "reservation_max_party_size": 8,
+    "effective_max_party_size": 8,
+    "smallest_min_party_size": 1,
+    "reservation_notes": "Smart casual dress code.",
+    "reservation_duration_minutes": 90,
+    "reservation_max_advance_days": 30,
+    "reservation_cancellation_cutoff_minutes": 120,
+    "reservation_auto_confirm": false,
+    "reservation_deposit_required": false,
+    "reservation_deposit_amount": "0.00",
+    "reservation_service_fee": "0.00",
+    "slot_interval_minutes": 30,
+    "dining_areas": ["Indoor", "Outdoor", "Terrace"],
+    "active_table_count": 6,
+    "largest_table_capacity": 8
+  }
+}
+```
+
+### `GET /api/restaurants/{id}/reservation-availability/month?month=YYYY-MM&party_size=N`
+
+Computes calendar-month availability using ONE tables query and ONE blocking-reservations query for the month range.
+- Each day has `status`: `available` | `limited` (`available_slots <= 25%` of `total_slots`) | `full` | `closed` | `unavailable`.
+
+**Example Response (`200`):**
+```json
+{
+  "success": true,
+  "message": "Monthly reservation availability retrieved.",
+  "data": {
+    "restaurant_id": 1,
+    "month": "2026-11",
+    "party_size": 4,
+    "bookable": true,
+    "reason_code": null,
+    "message": "Monthly reservation availability retrieved.",
+    "days": [
+      { "date": "2026-11-22", "status": "unavailable", "available_slots": 0, "total_slots": 6, "reason_code": "TOO_SOON" },
+      { "date": "2026-11-23", "status": "available", "available_slots": 5, "total_slots": 6, "reason_code": null },
+      { "date": "2026-11-24", "status": "limited", "available_slots": 1, "total_slots": 6, "reason_code": null },
+      { "date": "2026-11-25", "status": "full", "available_slots": 0, "total_slots": 6, "reason_code": "FULLY_BOOKED" },
+      { "date": "2026-11-26", "status": "closed", "available_slots": 0, "total_slots": 0, "reason_code": "CLOSED" }
+    ]
+  }
+}
+```
+
+### `GET /api/restaurants/{id}/reservation-availability?date=YYYY-MM-DD&party_size=N[&dining_area=...]`
+
+Returns generated candidate slots and a day-level summary using ONE tables query and ONE blocking-reservations query.
+
+**Example Response (`200` — Available Slots):**
+```json
+{
+  "success": true,
+  "message": "Available reservation times retrieved.",
+  "data": {
+    "restaurant_id": 1,
+    "date": "2026-11-24",
+    "party_size": 4,
+    "dining_area": null,
+    "duration_minutes": 90,
+    "bookable": true,
+    "is_closed": false,
+    "closure_reason": null,
+    "total_slots": 2,
+    "available_slots": 1,
+    "first_available_slot": "2026-11-24T18:30:00+08:00",
+    "reason_code": null,
+    "message": "Available reservation times retrieved.",
+    "slots": [
+      {
+        "start": "2026-11-24T18:00:00+08:00",
+        "end": "2026-11-24T19:30:00+08:00",
+        "time": "18:00",
+        "time_label": "6:00 PM",
+        "available": false,
+        "available_table_count": 0,
+        "reason_code": "FULLY_BOOKED",
+        "dining_areas_available": []
+      },
+      {
+        "start": "2026-11-24T18:30:00+08:00",
+        "end": "2026-11-24T20:00:00+08:00",
+        "time": "18:30",
+        "time_label": "6:30 PM",
+        "available": true,
+        "available_table_count": 2,
+        "reason_code": null,
+        "dining_areas_available": ["Indoor", "Terrace"]
+      }
+    ]
+  }
+}
+```
+
+**Example Response (`200` — Closed Day):**
+```json
+{
+  "success": true,
+  "message": "The restaurant is closed on 2026-11-26 (Private Event Buyout).",
+  "data": {
+    "restaurant_id": 1,
+    "date": "2026-11-26",
+    "party_size": 4,
+    "dining_area": null,
+    "duration_minutes": 90,
+    "bookable": false,
+    "is_closed": true,
+    "closure_reason": "Private Event Buyout",
+    "total_slots": 0,
+    "available_slots": 0,
+    "first_available_slot": null,
+    "reason_code": "CLOSED",
+    "message": "The restaurant is closed on 2026-11-26 (Private Event Buyout).",
+    "slots": []
+  }
+}
+```
+
+### `GET /api/restaurants/{id}/reservation-availability/tables?start=YYYY-MM-DDTHH:MM&party_size=N[&dining_area=...]`
+
+Validates a specific start time slot and returns `available_tables` ordered best-fit first (`seating_capacity ASC, dining_area ASC, table_name ASC`), or `suggested_alternatives` (nearest available slots on the same date, up to `config('salo.reservations.suggested_slot_window')`) when the slot is full.
+
+**Example Response (`200` — Fully Booked Slot with Suggested Alternatives):**
+```json
+{
+  "success": true,
+  "message": "All suitable tables are already reserved for this time slot.",
+  "data": {
+    "restaurant_id": 1,
+    "start": "2026-11-24T18:00:00+08:00",
+    "end": "2026-11-24T19:30:00+08:00",
+    "party_size": 4,
+    "dining_area": null,
+    "duration_minutes": 90,
+    "bookable": false,
+    "reason_code": "FULLY_BOOKED",
+    "message": "All suitable tables are already reserved for this time slot.",
+    "available_tables": [],
+    "suggested_alternatives": [
+      {
+        "start": "2026-11-24T18:30:00+08:00",
+        "end": "2026-11-24T20:00:00+08:00",
+        "time": "18:30",
+        "time_label": "6:30 PM",
+        "available_table_count": 2,
+        "dining_areas_available": ["Indoor", "Terrace"]
+      }
+    ]
+  }
+}
+```

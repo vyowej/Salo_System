@@ -185,6 +185,14 @@ Submits a consolidated multi-restaurant checkout.
   }
   ```
 
+### `GET /api/restaurants/{id}/reservation-info` & `/reservation-availability*` (Public, `throttle:60,1`)
+Public reservation availability engine (`Asia/Manila`):
+- `GET /api/restaurants/{id}/reservation-info` — returns reservation policies, live open/accepting status, `dining_areas`, `active_table_count`, `largest_table_capacity`, and `can_reserve`.
+- `GET /api/restaurants/{id}/reservation-availability/month?month=YYYY-MM&party_size=N` — returns per-day availability (`available` | `limited` | `full` | `closed` | `unavailable`), `available_slots`, `total_slots`, and `reason_code`.
+- `GET /api/restaurants/{id}/reservation-availability?date=YYYY-MM-DD&party_size=N[&dining_area=...]` — returns candidate time slots (`start`, `end`, `time_label`, `available`, `available_table_count`, `reason_code`, `dining_areas_available`) and day summary.
+- `GET /api/restaurants/{id}/reservation-availability/tables?start=YYYY-MM-DDTHH:MM&party_size=N[&dining_area=...]` — returns best-fit `available_tables` for a specific slot, or `suggested_alternatives` when the slot is full.
+- Reason codes: `RESTAURANT_UNAVAILABLE`, `RESERVATIONS_NOT_OFFERED`, `NOT_ACCEPTING`, `NO_TABLES`, `PARTY_TOO_LARGE`, `PAST_TIME`, `TOO_SOON`, `TOO_FAR_AHEAD`, `CLOSED`, `FULLY_BOOKED`, `NO_FIT`.
+
 ### `POST /api/customer/reservations` (Protected)
 Submits a table reservation request with refundable dining deposit.
 - **Request Body:**

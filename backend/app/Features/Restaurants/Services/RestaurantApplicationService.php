@@ -906,6 +906,8 @@ class RestaurantApplicationService
             ->join('barangays as brgy', 'brgy.barangay_id', '=', 'addr.barangay_id')
             ->join('cities as c', 'c.city_id', '=', 'brgy.city_id')
             ->join('provinces as p', 'p.province_id', '=', 'c.province_id')
+            ->leftJoin('branch_permits as bp_rest', 'bp_rest.restaurant_id', '=', 'rab.created_branch_restaurant_id')
+            ->leftJoin('branch_permits as bp_app', 'bp_app.application_branch_id', '=', 'rab.application_branch_id')
             ->where('rab.restaurant_application_id', $applicationId)
             ->orderBy('rab.sort_order')
             ->orderBy('rab.application_branch_id')
@@ -925,6 +927,11 @@ class RestaurantApplicationService
                 'brgy.barangay_name',
                 'c.city_name',
                 'p.province_name',
+                DB::raw('COALESCE(bp_rest.permit_id, bp_app.permit_id) as permit_id'),
+                DB::raw('COALESCE(bp_rest.permit_status, bp_app.permit_status) as permit_status'),
+                DB::raw('COALESCE(bp_rest.is_required_locally, bp_app.is_required_locally) as permit_is_required_locally'),
+                DB::raw('COALESCE(bp_rest.exemption_reason, bp_app.exemption_reason) as permit_exemption_reason'),
+                DB::raw('COALESCE(bp_rest.review_note, bp_app.review_note) as permit_review_note'),
             ])
             ->get()
             ->map(fn ($b): array => [
@@ -933,6 +940,11 @@ class RestaurantApplicationService
                 'contact_phone' => $b->contact_phone,
                 'sort_order' => (int) $b->sort_order,
                 'created_branch_restaurant_id' => $b->created_branch_restaurant_id !== null ? (int) $b->created_branch_restaurant_id : null,
+                'permit_id' => $b->permit_id !== null ? (int) $b->permit_id : null,
+                'permit_status' => $b->permit_status,
+                'permit_is_required_locally' => $b->permit_is_required_locally !== null ? (bool) $b->permit_is_required_locally : null,
+                'permit_exemption_reason' => $b->permit_exemption_reason,
+                'permit_review_note' => $b->permit_review_note,
                 'address' => [
                     'province' => $b->province_name,
                     'city' => $b->city_name,

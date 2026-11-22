@@ -166,6 +166,8 @@ return [
         'no_show_grace_minutes' => max(0, (int) env('SALO_RESERVATION_NO_SHOW_GRACE_MINUTES', 15)),
         'max_active_pending_per_customer' => max(1, (int) env('SALO_RESERVATION_MAX_ACTIVE_PENDING', 3)),
         'suggested_slot_window' => max(1, (int) env('SALO_RESERVATION_SUGGESTED_SLOT_WINDOW', 3)),
+        // Optional buffer minutes added to the end of existing reservations when checking table overlap.
+        'turnover_buffer_minutes' => max(0, (int) env('SALO_RESERVATION_TURNOVER_BUFFER_MINUTES', 0)),
         'reference_prefix' => 'SALO-RES',
         'handler_positions' => $positionsWithPermission('reservations.view'),
         'transitions' => [

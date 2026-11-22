@@ -165,3 +165,17 @@ All endpoints below honor the **`X-Restaurant-Id` header** via `WorkspaceAccessR
 - `GET /api/restaurant/branches/{id}/permit/file`: streams the stored private permit file; accessible only to owners of the branch's business and active admins (`403` for staff/managers/other businesses).
 - `GET /api/restaurant/branches` and `GET /api/auth/me`: include `permit_status`, `is_required_locally`, `review_note`, and `uploaded_at` only on non-root branches where the authenticated user is an owner (omitted for staff and root branches).
 - Fail-closed guards: non-root branches without an `approved` or `waived` `branch_permits` row are excluded from public restaurant listings, detail `siblings[]`, cart/checkout, and cannot be published (`422` blocker `"Branch Mayor's / Business Permit must be verified or waived before publishing."`). Transitioning a branch permit away from `approved` or `waived` resets `restaurants.is_published = 0` in the same transaction.
+
+## Admin Branch Permits Review (Permit-2b)
+- Admin endpoints (`auth`, `role:admin`, self-review blocked `403`):
+  - `GET /api/admin/branch-permits`: paginated queue (`status`, `search`, `submitted_date`, `per_page`).
+  - `GET /api/admin/branch-permits/{permitId}`: detail with `review_note`, `has_file`, and `file_url` (only when a file exists).
+  - `GET /api/admin/branch-permits/{permitId}/file`: admin-only private file stream (`404` when missing).
+  - `POST /api/admin/branch-permits/{permitId}/start-review`: `pending_review` / `additional_info_required` / `rejected` → `under_review` (`409` from `pending_submission`, `approved`, `waived`).
+  - `POST /api/admin/branch-permits/{permitId}/approve`: `pending_review` / `under_review` / `additional_info_required` / `rejected` → `approved` (does **not** set `is_published = 1`).
+  - `POST /api/admin/branch-permits/{permitId}/reject`: requires `review_note` (10–500 chars) → `rejected` (unpublishes if leaving `approved`/`waived`).
+  - `POST /api/admin/branch-permits/{permitId}/request-info`: requires `review_note` (10–500 chars) → `additional_info_required` (unpublishes if leaving `approved`/`waived`).
+  - `POST /api/admin/branch-permits/{permitId}/waive`: requires `is_required_locally = false` (else `422`) and `review_note` (10–500 chars) → `waived`.
+  - `POST /api/admin/branch-permits/{permitId}/reopen`: requires `approved` or `waived` (else `409`) and `review_note` (10–500 chars) → `under_review` (sets `is_published = 0`).
+- `GET /api/admin/restaurants`: includes `permit_status` and `is_required_locally` for all rows (non-root from `branch_permits`; root derived read-only from latest `mayors_permit` in `application_documents`, `'not_submitted'` when none).
+- Notifications (`branch_permit_approved`, `branch_permit_rejected`, `branch_permit_info_requested`, `branch_permit_waived`, `branch_permit_reopened`): sent to business owners (`workspace = 'restaurant'`), or to the applicant (`workspace = 'customer'`) when the branch's application is not yet approved; never include file paths.
