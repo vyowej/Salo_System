@@ -103,6 +103,126 @@ export function normalizeTable(raw) {
   };
 }
 
+const OWNER_RESERVATION_STATUS_LABELS = {
+  pending: 'Pending',
+  approved: 'Approved',
+  awaiting_payment: 'Awaiting Deposit',
+  confirmed: 'Confirmed',
+  arrived: 'Arrived',
+  seated: 'Seated',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  no_show: 'No-Show',
+  rejected: 'Rejected',
+  expired: 'Expired',
+};
+
+export function normalizeOwnerReservation(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const reservationId = Number(raw.reservation_id ?? raw.reservationId ?? raw.id ?? 0);
+  const reference = raw.reservation_reference ?? raw.reference ?? (reservationId ? `SALO-RES-${reservationId}` : '');
+  const rawStatus = String(raw.reservation_status ?? raw.status ?? 'pending').toLowerCase();
+  const statusLabel = raw.status_label ?? OWNER_RESERVATION_STATUS_LABELS[rawStatus] ?? 'Pending';
+
+  const tableObj = raw.table && typeof raw.table === 'object' ? raw.table : null;
+  const tableId = raw.table_id ?? tableObj?.table_id ?? raw.tableId ?? null;
+  const tableName = tableObj?.table_name ?? raw.table_name ?? raw.tableName ?? null;
+  const diningArea = tableObj?.dining_area ?? raw.dining_area ?? raw.diningArea ?? null;
+
+  const startIso = raw.reservation_start ?? raw.reservationStart ?? null;
+  const endIso = raw.reservation_end ?? raw.reservationEnd ?? null;
+  const dateStr = raw.reservation_date ?? raw.date ?? (startIso ? String(startIso).slice(0, 10) : '');
+  const timeStr = raw.reservation_time ?? raw.time ?? (startIso ? String(startIso).slice(11, 16) : '');
+  const partySize = Number(raw.number_of_guests ?? raw.party_size ?? raw.partySize ?? 0);
+
+  const guestHistoryRaw = raw.guest_history ?? raw.guestHistory ?? {};
+  const historyRaw = raw.status_history ?? raw.statusHistory ?? [];
+
+  return {
+    id: reservationId,
+    reservationId,
+    reference,
+    reservationReference: reference,
+    restaurantId: Number(raw.restaurant_id ?? raw.restaurantId ?? 0),
+    restaurantName: raw.restaurant_name ?? raw.restaurantName ?? '',
+    customerId: Number(raw.customer_id ?? raw.customerId ?? 0),
+    guestName: raw.contact_name ?? raw.contactName ?? raw.customer?.contact_name ?? 'Guest',
+    contactName: raw.contact_name ?? raw.contactName ?? raw.customer?.contact_name ?? 'Guest',
+    guestPhone: raw.contact_phone ?? raw.contactPhone ?? raw.customer?.contact_phone ?? null,
+    contactPhone: raw.contact_phone ?? raw.contactPhone ?? raw.customer?.contact_phone ?? null,
+    customerEmail: raw.customer_email ?? raw.customerEmail ?? raw.customer?.email ?? null,
+    tableId: tableId !== null ? Number(tableId) : null,
+    tableName,
+    diningArea,
+    table: tableId !== null
+      ? {
+          tableId: Number(tableId),
+          id: Number(tableId),
+          tableName: tableName || `#${tableId}`,
+          diningArea,
+          seatingCapacity: Number(tableObj?.seating_capacity ?? 0),
+          minPartySize: Number(tableObj?.min_party_size ?? 1),
+        }
+      : null,
+    reservationStart: startIso,
+    reservationEnd: endIso,
+    date: dateStr,
+    time: timeStr,
+    durationMinutes: Number(raw.duration_minutes ?? raw.durationMinutes ?? 90),
+    partySize,
+    numberOfGuests: partySize,
+    statusCode: rawStatus,
+    status: statusLabel,
+    statusLabel,
+    specialRequests: raw.special_requests ?? raw.specialRequests ?? null,
+    depositAmount: Number(raw.deposit_amount ?? raw.depositAmount ?? 0),
+    depositStatus: String(raw.deposit_status ?? raw.depositStatus ?? 'none').toLowerCase(),
+    serviceFee: Number(raw.service_fee ?? raw.serviceFee ?? 0),
+    isFeeRefundable: Boolean(raw.is_fee_refundable ?? raw.isFeeRefundable ?? true),
+    cancellationFee: Number(raw.cancellation_fee ?? raw.cancellationFee ?? 0),
+    cancelledBy: raw.cancelled_by ?? raw.cancelledBy ?? null,
+    cancelledAt: raw.cancelled_at ?? raw.cancelledAt ?? null,
+    cancellationReason: raw.cancellation_reason ?? raw.cancellationReason ?? null,
+    rejectionReason: raw.rejection_reason ?? raw.rejectionReason ?? null,
+    rejectedAt: raw.rejected_at ?? raw.rejectedAt ?? null,
+    approvedAt: raw.approved_at ?? raw.approvedAt ?? null,
+    confirmedAt: raw.confirmed_at ?? raw.confirmedAt ?? null,
+    arrivedAt: raw.arrived_at ?? raw.arrivedAt ?? null,
+    seatedAt: raw.seated_at ?? raw.seatedAt ?? null,
+    completedAt: raw.completed_at ?? raw.completedAt ?? null,
+    expiredAt: raw.expired_at ?? raw.expiredAt ?? null,
+    noShowMarkedAt: raw.no_show_marked_at ?? raw.noShowMarkedAt ?? null,
+    noShowMarkedBy: raw.no_show_marked_by ?? raw.noShowMarkedBy ?? null,
+    createdAt: raw.created_at ?? raw.createdAt ?? null,
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? null,
+    guestHistory: {
+      visits: Number(guestHistoryRaw.visits ?? 0),
+      noShows: Number(guestHistoryRaw.no_shows ?? guestHistoryRaw.noShows ?? 0),
+      cancellations: Number(guestHistoryRaw.cancellations ?? 0),
+    },
+    allowedActions: Array.isArray(raw.allowed_actions ?? raw.allowedActions)
+      ? (raw.allowed_actions ?? raw.allowedActions)
+      : [],
+    attention: raw.attention ?? null,
+    restaurantSettings: raw.restaurant_settings ?? raw.restaurantSettings ?? null,
+    statusHistory: Array.isArray(historyRaw)
+      ? historyRaw.map((entry) => ({
+          historyId: Number(entry.history_id ?? entry.historyId ?? 0),
+          fromStatus: entry.from_status ?? entry.fromStatus ?? null,
+          toStatus: entry.to_status ?? entry.toStatus ?? '',
+          toStatusLabel:
+            OWNER_RESERVATION_STATUS_LABELS[String(entry.to_status ?? entry.toStatus ?? '').toLowerCase()] ||
+            String(entry.to_status ?? entry.toStatus ?? ''),
+          changedByUserId: entry.changed_by_user_id ?? entry.changedByUserId ?? null,
+          changedByRole: entry.changed_by_role ?? entry.changedByRole ?? 'system',
+          note: entry.note ?? null,
+          createdAt: entry.created_at ?? entry.createdAt ?? null,
+        }))
+      : [],
+  };
+}
+
 export const ownerService = {
   async getSetupStatus(restaurantId) {
     const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
@@ -395,8 +515,107 @@ export const ownerService = {
     notAvailable('Resolving order cancellation');
   },
 
-  getReservations() {
-    return [];
+  async getReservations(restaurantId = null, params = {}) {
+    let resolvedRestaurantId = restaurantId;
+    let resolvedParams = params || {};
+    if (restaurantId && typeof restaurantId === 'object') {
+      resolvedParams = restaurantId;
+      resolvedRestaurantId = restaurantId.restaurantId ?? restaurantId.restaurant_id ?? null;
+    }
+
+    const sp = new URLSearchParams();
+    if (resolvedRestaurantId) sp.set('restaurant_id', String(resolvedRestaurantId));
+    if (resolvedParams.date) sp.set('date', String(resolvedParams.date));
+    if (resolvedParams.dateFrom ?? resolvedParams.date_from) {
+      sp.set('date_from', String(resolvedParams.dateFrom ?? resolvedParams.date_from));
+    }
+    if (resolvedParams.dateTo ?? resolvedParams.date_to) {
+      sp.set('date_to', String(resolvedParams.dateTo ?? resolvedParams.date_to));
+    }
+    if (resolvedParams.status && resolvedParams.status !== 'all') {
+      sp.set('status', String(resolvedParams.status));
+    }
+    if (resolvedParams.group && resolvedParams.group !== 'all') {
+      sp.set('group', String(resolvedParams.group));
+    }
+    if (resolvedParams.tableId ?? resolvedParams.table_id) {
+      sp.set('table_id', String(resolvedParams.tableId ?? resolvedParams.table_id));
+    }
+    const areaVal = resolvedParams.diningArea ?? resolvedParams.dining_area ?? '';
+    if (areaVal && areaVal !== 'all') {
+      sp.set('dining_area', String(areaVal));
+    }
+    if (resolvedParams.search && String(resolvedParams.search).trim()) {
+      sp.set('search', String(resolvedParams.search).trim());
+    }
+    if (resolvedParams.sort) sp.set('sort', String(resolvedParams.sort));
+    if (resolvedParams.page) sp.set('page', String(resolvedParams.page));
+    if (resolvedParams.perPage ?? resolvedParams.per_page) {
+      sp.set('per_page', String(resolvedParams.perPage ?? resolvedParams.per_page));
+    }
+
+    const qs = sp.toString();
+    const res = await apiClient.get(`/restaurant/reservations${qs ? `?${qs}` : ''}`);
+    const payload = res?.data ?? {};
+    const items = Array.isArray(payload.items)
+      ? payload.items.map(normalizeOwnerReservation).filter(Boolean)
+      : [];
+    const rawSummary = payload.summary ?? {};
+
+    return {
+      items,
+      reservations: items,
+      pagination: payload.pagination ?? {
+        current_page: 1,
+        per_page: Number(resolvedParams.perPage ?? resolvedParams.per_page ?? 20),
+        total: items.length,
+        last_page: 1,
+      },
+      summary: {
+        total: Number(rawSummary.total ?? items.length),
+        pending: Number(rawSummary.pending ?? 0),
+        confirmed: Number(rawSummary.confirmed ?? 0),
+        awaitingPayment: Number(rawSummary.awaiting_payment ?? 0),
+        inHouse: Number(rawSummary.in_house ?? 0),
+        completed: Number(rawSummary.completed ?? 0),
+        cancelledOrMissed: Number(rawSummary.cancelled_or_missed ?? 0),
+        expectedCovers: Number(rawSummary.expected_covers ?? 0),
+        pendingTotalUpcoming: Number(rawSummary.pending_total_upcoming ?? rawSummary.pending ?? 0),
+        pending_total_upcoming: Number(rawSummary.pending_total_upcoming ?? rawSummary.pending ?? 0),
+      },
+    };
+  },
+
+  async getReservationCalendar(restaurantId = null, month = '') {
+    const sp = new URLSearchParams();
+    if (restaurantId) sp.set('restaurant_id', String(restaurantId));
+    if (month) sp.set('month', String(month));
+    const qs = sp.toString();
+    const res = await apiClient.get(`/restaurant/reservations/calendar${qs ? `?${qs}` : ''}`);
+    const payload = res?.data ?? {};
+
+    return {
+      restaurantId: Number(payload.restaurant_id ?? restaurantId ?? 0),
+      month: payload.month ?? month,
+      days: Array.isArray(payload.days)
+        ? payload.days.map((d) => ({
+            date: d.date,
+            total: Number(d.total ?? 0),
+            pending: Number(d.pending ?? 0),
+            confirmed: Number(d.confirmed ?? 0),
+            inHouse: Number(d.in_house ?? 0),
+            completed: Number(d.completed ?? 0),
+            cancelledOrMissed: Number(d.cancelled_or_missed ?? 0),
+            covers: Number(d.covers ?? 0),
+          }))
+        : [],
+    };
+  },
+
+  async getReservation(restaurantId, id) {
+    const qs = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.get(`/restaurant/reservations/${encodeURIComponent(id)}${qs}`);
+    return normalizeOwnerReservation(res?.data?.reservation ?? null);
   },
 
   getReservationTables() {
@@ -556,12 +775,118 @@ export const ownerService = {
     return normalizeTable(res?.data?.table ?? null);
   },
 
-  updateReservationStatus() {
-    notAvailable('Updating reservation status');
+  async approveReservation(restaurantId, id, note = null) {
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      ...(note ? { note } : {}),
+    };
+    const res = await apiClient.post(`/restaurant/reservations/${encodeURIComponent(id)}/approve`, body);
+    return normalizeOwnerReservation(res?.data?.reservation ?? null);
   },
 
-  assignReservationTable() {
-    notAvailable('Assigning reservation table');
+  async rejectReservation(restaurantId, id, reason) {
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      reason,
+    };
+    const res = await apiClient.post(`/restaurant/reservations/${encodeURIComponent(id)}/reject`, body);
+    return normalizeOwnerReservation(res?.data?.reservation ?? null);
+  },
+
+  async confirmReservationDeposit(restaurantId, id, note = null) {
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      ...(note ? { note } : {}),
+    };
+    const res = await apiClient.post(`/restaurant/reservations/${encodeURIComponent(id)}/confirm-deposit`, body);
+    return normalizeOwnerReservation(res?.data?.reservation ?? null);
+  },
+
+  async markReservationArrived(restaurantId, id, note = null) {
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      ...(note ? { note } : {}),
+    };
+    const res = await apiClient.post(`/restaurant/reservations/${encodeURIComponent(id)}/arrived`, body);
+    return normalizeOwnerReservation(res?.data?.reservation ?? null);
+  },
+
+  async seatReservation(restaurantId, id, tableId = null, note = null) {
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      ...(tableId ? { table_id: Number(tableId) } : {}),
+      ...(note ? { note } : {}),
+    };
+    const res = await apiClient.post(`/restaurant/reservations/${encodeURIComponent(id)}/seat`, body);
+    return normalizeOwnerReservation(res?.data?.reservation ?? null);
+  },
+
+  async completeReservation(restaurantId, id, note = null) {
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      ...(note ? { note } : {}),
+    };
+    const res = await apiClient.post(`/restaurant/reservations/${encodeURIComponent(id)}/complete`, body);
+    return normalizeOwnerReservation(res?.data?.reservation ?? null);
+  },
+
+  async markReservationNoShow(restaurantId, id, note = null) {
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      ...(note ? { note } : {}),
+    };
+    const res = await apiClient.post(`/restaurant/reservations/${encodeURIComponent(id)}/no-show`, body);
+    return normalizeOwnerReservation(res?.data?.reservation ?? null);
+  },
+
+  async cancelReservation(restaurantId, id, reason) {
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      reason,
+    };
+    const res = await apiClient.post(`/restaurant/reservations/${encodeURIComponent(id)}/cancel`, body);
+    return normalizeOwnerReservation(res?.data?.reservation ?? null);
+  },
+
+  async assignReservationTable(restaurantId, id, tableId) {
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      table_id: Number(tableId),
+    };
+    const res = await apiClient.patch(`/restaurant/reservations/${encodeURIComponent(id)}/table`, body);
+    return normalizeOwnerReservation(res?.data?.reservation ?? null);
+  },
+
+  async updateReservationStatus(restaurantId, id, status, payload = {}) {
+    const normalized = String(status || '').trim().toLowerCase();
+    switch (normalized) {
+      case 'approve':
+      case 'approved':
+      case 'confirmed':
+        return this.approveReservation(restaurantId, id, payload.note ?? null);
+      case 'reject':
+      case 'rejected':
+        return this.rejectReservation(restaurantId, id, payload.reason ?? '');
+      case 'confirm_deposit':
+      case 'deposit_paid':
+        return this.confirmReservationDeposit(restaurantId, id, payload.note ?? null);
+      case 'arrived':
+        return this.markReservationArrived(restaurantId, id, payload.note ?? null);
+      case 'seat':
+      case 'seated':
+        return this.seatReservation(restaurantId, id, payload.tableId ?? payload.table_id ?? null, payload.note ?? null);
+      case 'complete':
+      case 'completed':
+        return this.completeReservation(restaurantId, id, payload.note ?? null);
+      case 'no_show':
+      case 'no-show':
+        return this.markReservationNoShow(restaurantId, id, payload.note ?? null);
+      case 'cancel':
+      case 'cancelled':
+        return this.cancelReservation(restaurantId, id, payload.reason ?? '');
+      default:
+        throw new Error(`Unsupported reservation status transition: ${status}`);
+    }
   },
 
   recordReservationPayment() {
@@ -704,6 +1029,26 @@ export const ownerService = {
   async createBranch(payload) {
     const res = await apiClient.post('/restaurant/branches', payload);
     return res?.data?.branch ?? null;
+  },
+
+  async submitBranchPermit(restaurantId, payload) {
+    const res = await apiClient.post(`/restaurant/branches/${restaurantId}/permit`, payload);
+    return res?.data?.permit ?? null;
+  },
+
+  async fetchBranchPermitFileBlob(restaurantId) {
+    const url = `${apiClient.getBaseUrl()}/restaurant/branches/${restaurantId}/permit/file`;
+    const res = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`Unable to load branch permit file (${res.status}).`);
+    }
+    return res.blob();
   },
 };
 

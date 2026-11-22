@@ -7,7 +7,9 @@ import LocationPickerModal from '../../../pages/BusinessApplication/components/L
 import ownerService from '../../../services/ownerService';
 import { useAuth } from '../../../hooks/useAuth';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
-import { BRANCH_WORKSPACE_COPY } from '../content/branchContent';
+import { BRANCH_PERMIT_COPY, BRANCH_WORKSPACE_COPY } from '../content/branchContent';
+import BranchPermitFields from './BranchPermitFields';
+import './BranchPermitPanel.css';
 import {
   buildCreateBranchPayload,
   createInitialAddBranchForm,
@@ -253,6 +255,36 @@ export default function AddBranchModal({ open, onClose, onCreated }) {
               <span>{BRANCH_WORKSPACE_COPY.addBranchCopyMenuLabel}</span>
             </label>
           </div>
+
+          <fieldset className="salo-add-branch-services">
+            <legend>{BRANCH_PERMIT_COPY.sectionTitle}</legend>
+            <HelperText>{BRANCH_PERMIT_COPY.sectionSubtitle}</HelperText>
+            <BranchPermitFields
+              idPrefix="add-branch-permit"
+              file={form.mayors_permit}
+              isRequiredLocally={form.is_required_locally}
+              exemptionReason={form.exemption_reason}
+              errors={errors}
+              disabled={submitting}
+              onFileChange={(nextFile) => {
+                setForm((prev) => ({ ...prev, mayors_permit: nextFile }));
+                setErrors((prev) => ({ ...prev, mayors_permit: undefined }));
+              }}
+              onToggleNotRequired={(nextRequired) => {
+                setForm((prev) => ({
+                  ...prev,
+                  is_required_locally: nextRequired,
+                  mayors_permit: nextRequired ? prev.mayors_permit : null,
+                }));
+                setErrors((prev) => ({ ...prev, mayors_permit: undefined, exemption_reason: undefined }));
+              }}
+              onExemptionChange={(nextText) => {
+                setForm((prev) => ({ ...prev, exemption_reason: nextText }));
+                setErrors((prev) => ({ ...prev, exemption_reason: undefined }));
+              }}
+              onClientFileError={(msg) => setErrors((prev) => ({ ...prev, mayors_permit: msg || undefined }))}
+            />
+          </fieldset>
         </form>
       </Modal>
 

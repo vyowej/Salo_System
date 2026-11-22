@@ -18,8 +18,18 @@ const CATEGORY_LABELS = {
   delivery: 'Delivery',
   invitation: 'Team invitation',
   application: 'Application',
+  branch_permit: 'Branch permit',
   rider: 'Rider account',
   system: 'Update',
+};
+
+const NOTIFICATION_TYPE_TITLES = {
+  branch_permit_submitted: 'Branch permit submitted for review',
+  branch_permit_approved: 'Branch permit approved',
+  branch_permit_rejected: 'Branch permit rejected',
+  branch_permit_info_requested: 'Branch permit needs more information',
+  branch_permit_waived: 'Branch permit requirement waived',
+  branch_permit_reopened: 'Branch permit reopened for review',
 };
 
 export function isValidWorkspace(workspace) {
@@ -39,9 +49,21 @@ export function getNotificationCategory(type) {
   if (code.startsWith('reservation_')) return 'reservation';
   if (code.startsWith('delivery_')) return 'delivery';
   if (code.startsWith('staff_invitation_')) return 'invitation';
+  if (code.startsWith('branch_permit_')) return 'branch_permit';
   if (code.includes('_application_')) return 'application';
   if (code.startsWith('rider_')) return 'rider';
   return 'system';
+}
+
+export function getNotificationTitle(notificationOrType) {
+  if (notificationOrType && typeof notificationOrType === 'object') {
+    const rawTitle = String(notificationOrType.title || '').trim();
+    if (rawTitle) return rawTitle;
+    const code = String(notificationOrType.type || '').toLowerCase();
+    return NOTIFICATION_TYPE_TITLES[code] || 'Notification';
+  }
+  const code = String(notificationOrType || '').toLowerCase();
+  return NOTIFICATION_TYPE_TITLES[code] || 'Notification';
 }
 
 export function getNotificationCategoryLabel(type) {
@@ -73,6 +95,9 @@ export function getNotificationRoute(notification) {
     if (entityType === 'restaurant_applications' || type.startsWith('restaurant_application_')) {
       return '/business-application/status';
     }
+    if (entityType === 'branch_permits' || type.startsWith('branch_permit_')) {
+      return '/business-application/status';
+    }
     if (entityType === 'rider_applications' || type.startsWith('rider_application_')) {
       return '/rider-application/status';
     }
@@ -91,6 +116,9 @@ export function getNotificationRoute(notification) {
     }
     if (entityType === 'restaurant_applications' || type.startsWith('restaurant_application_')) {
       return '/owner';
+    }
+    if (entityType === 'branch_permits' || type.startsWith('branch_permit_')) {
+      return '/owner/profile#branch-permit';
     }
     return WORKSPACE_FALLBACK_ROUTES.restaurant;
   }
@@ -112,7 +140,9 @@ export function getNotificationRoute(notification) {
     if (
       entityType === 'restaurant_applications'
       || entityType === 'rider_applications'
+      || entityType === 'branch_permits'
       || type.includes('_application_')
+      || type.startsWith('branch_permit_')
     ) {
       return '/admin/applications';
     }

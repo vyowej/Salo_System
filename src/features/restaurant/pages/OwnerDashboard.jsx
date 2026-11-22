@@ -21,6 +21,7 @@ import OwnerDashboardReservationsSection from '../components/dashboard/OwnerDash
 import OwnerDashboardMenuHealthSection from '../components/dashboard/OwnerDashboardMenuHealthSection';
 import QuickHealthCheckDeck from '../components/dashboard/QuickHealthCheckDeck';
 import { BRANCH_WORKSPACE_COPY } from '../content/branchContent';
+import { getBranchPermitMeta } from '../utils/branchWorkspaceUtils';
 import './team/r7Dashboard.css';
 
 // ── Main Dashboard ───────────────────────────────────────────────
@@ -77,10 +78,32 @@ export default function OwnerDashboard() {
           : 0,
       }));
 
-      const reservations = ownerService.getReservations(selectedRestaurantId);
       const localToday = new Date();
       const todayKey = toLocalDateKey(localToday);
+      const warnings = [];
+
+      let reservations = [];
+      let pendingTotalUpcoming = null;
+      const canViewReservations = access.canAccess(['reservations.view']);
+      if (canViewReservations) {
+        try {
+          const resResult = await ownerService.getReservations(selectedRestaurantId, {
+            date: todayKey,
+            perPage: 50,
+          });
+          reservations = Array.isArray(resResult) ? resResult : (resResult?.items || []);
+          if (typeof resResult?.summary?.pendingTotalUpcoming === 'number') {
+            pendingTotalUpcoming = resResult.summary.pendingTotalUpcoming;
+          }
+        } catch {
+          warnings.push('Reservations');
+        }
+      }
+
       const computed = computeDashboardStatsFromOrders(orders, reservations, localToday);
+      if (pendingTotalUpcoming !== null) {
+        computed.stats.pendingReservations = pendingTotalUpcoming;
+      }
 
       const nextSummary = {
         weeklyRevenue: computed.weeklyRevenue,
@@ -90,7 +113,6 @@ export default function OwnerDashboard() {
         lowStockItems: null,
         soldOutItems: null,
       };
-      const warnings = [];
       const canViewTables = access.canAccess(['tables.view']);
       if (canViewTables) {
         try {
@@ -223,6 +245,14 @@ export default function OwnerDashboard() {
                     <Badge variant={branch.restaurant_status === 'active' ? 'success' : 'warning'} size="sm">
                       {branch.restaurant_status}
                     </Badge>
+                    {access.isOwner && branch.parent_restaurant_id !== null && branch.permit_status && (() => {
+                      const permitMeta = getBranchPermitMeta(branch.permit_status);
+                      return permitMeta ? (
+                        <Badge variant={permitMeta.variant} size="sm">
+                          {permitMeta.label}
+                        </Badge>
+                      ) : null;
+                    })()}
                     <Badge variant={branch.is_published ? 'info' : 'neutral'} size="sm">
                       {branch.is_published ? BRANCH_WORKSPACE_COPY.switcherStatusPublished : BRANCH_WORKSPACE_COPY.switcherStatusDraft}
                     </Badge>

@@ -231,8 +231,20 @@ Returns merchant overview: today's gross revenue, active orders breakdown, pendi
 ### `GET /api/owner/menu` & `POST /api/owner/menu`
 CRUD operations for dish catalog, pricing, category taxonomy, and live availability toggling (`is_available: true|false`).
 
-### `GET /api/owner/reservations` & `PATCH /api/owner/reservations/{id}/status`
-Confirms or cancels table reservation requests, tracking guest deposit status.
+### `GET /api/restaurant/reservations*` & Action Endpoints (Protected: Owner / Permitted Staff)
+Calendar-first restaurant reservation management (`reservations.view`, `reservations.approve`, `reservations.reject`, `reservations.assignTables`, `reservations.updateStatus`, `reservations.manageArrival`):
+- `GET /api/restaurant/reservations?date=YYYY-MM-DD&status=&group=&table_id=&dining_area=&search=&sort=&page=&per_page=` — returns `{ items, pagination, summary }` with `guest_history`, `allowed_actions`, `attention`, and `pending_total_upcoming`.
+- `GET /api/restaurant/reservations/calendar?month=YYYY-MM` — per-day booking and cover counts.
+- `GET /api/restaurant/reservations/{id}` — owner detail with `status_history` and `restaurant_settings`.
+- `POST /api/restaurant/reservations/{id}/approve` — `pending` → `confirmed` or `awaiting_payment` (when deposit required).
+- `POST /api/restaurant/reservations/{id}/reject` — `pending` → `rejected` (`reason` required).
+- `POST /api/restaurant/reservations/{id}/confirm-deposit` — `awaiting_payment` → `confirmed` (`deposit_status = 'paid'`).
+- `POST /api/restaurant/reservations/{id}/arrived` — `confirmed` → `arrived`.
+- `POST /api/restaurant/reservations/{id}/seat` — `confirmed|arrived` → `seated` (optional `table_id`).
+- `POST /api/restaurant/reservations/{id}/complete` — `seated` → `completed`.
+- `POST /api/restaurant/reservations/{id}/no-show` — `confirmed|arrived` → `no_show` (after grace period).
+- `POST /api/restaurant/reservations/{id}/cancel` — `pending..arrived` → `cancelled` (`reason` required).
+- `PATCH /api/restaurant/reservations/{id}/table` — reassign table while `pending..arrived`.
 
 ### `GET /api/restaurant/tables` & `POST /api/restaurant/tables` & `PATCH /api/restaurant/tables/{id}`
 Restaurant table floor plan management (`tables.view`, `tables.add`, `tables.edit`, `tables.manageAvailability`):

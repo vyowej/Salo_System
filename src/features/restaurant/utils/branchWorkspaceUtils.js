@@ -1,3 +1,71 @@
+import {
+  BRANCH_PERMIT_ACCEPTED_MIMES,
+  BRANCH_PERMIT_COPY,
+  BRANCH_PERMIT_EXEMPTION_MAX_CHARS,
+  BRANCH_PERMIT_EXEMPTION_MIN_CHARS,
+  BRANCH_PERMIT_MAX_BYTES,
+  BRANCH_PERMIT_STATUS_META,
+} from '../content/branchContent.js';
+
+export function getBranchPermitMeta(permitStatus) {
+  if (!permitStatus) return null;
+  return BRANCH_PERMIT_STATUS_META[permitStatus] || null;
+}
+
+export function isBranchPermitEditable(permitStatus) {
+  return permitStatus === 'pending_submission'
+    || permitStatus === 'additional_info_required'
+    || permitStatus === 'rejected';
+}
+
+export function formatPermitFileSize(bytes) {
+  const num = Number(bytes);
+  if (!Number.isFinite(num) || num <= 0) return '0 B';
+  if (num < 1024) return `${num} B`;
+  if (num < 1024 * 1024) return `${(num / 1024).toFixed(1)} KB`;
+  return `${(num / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function validatePermitFile(file) {
+  if (!file) return BRANCH_PERMIT_COPY.fileRequiredError;
+  const mime = String(file.type || '').toLowerCase();
+  const ext = String(file.name || '').split('.').pop()?.toLowerCase() || '';
+  const validExt = ['pdf', 'jpg', 'jpeg', 'png'].includes(ext);
+  if (mime ? !BRANCH_PERMIT_ACCEPTED_MIMES.includes(mime) : !validExt) {
+    return BRANCH_PERMIT_COPY.fileTypeError;
+  }
+  if (Number(file.size) <= 0 || Number(file.size) > BRANCH_PERMIT_MAX_BYTES) {
+    return BRANCH_PERMIT_COPY.fileSizeError;
+  }
+  return null;
+}
+
+export function validateBranchPermitInput({
+  mayors_permit = null,
+  is_required_locally = true,
+  exemption_reason = '',
+} = {}) {
+  const errors = {};
+  const isRequired = is_required_locally !== false;
+
+  if (isRequired) {
+    const fileError = validatePermitFile(mayors_permit);
+    if (fileError) {
+      errors.mayors_permit = fileError;
+    }
+  } else {
+    const trimmed = String(exemption_reason || '').trim();
+    if (
+      trimmed.length < BRANCH_PERMIT_EXEMPTION_MIN_CHARS
+      || trimmed.length > BRANCH_PERMIT_EXEMPTION_MAX_CHARS
+    ) {
+      errors.exemption_reason = BRANCH_PERMIT_COPY.exemptionLengthError;
+    }
+  }
+
+  return errors;
+}
+
 export function createInitialAddBranchForm() {
   return {
     main_branch_name: '',
@@ -19,6 +87,9 @@ export function createInitialAddBranchForm() {
     accepts_reservations: false,
     copy_operating_hours: true,
     copy_menu: true,
+    is_required_locally: true,
+    exemption_reason: '',
+    mayors_permit: null,
   };
 }
 
@@ -74,6 +145,8 @@ export function validateAddBranchForm(form = {}, { rootHasNoBranchName = false }
     errors.offers_delivery = 'At least one service option (delivery, pickup, or dine-in) must be enabled.';
   }
 
+  Object.assign(errors, validateBranchPermitInput(form));
+
   return errors;
 }
 
@@ -117,7 +190,48 @@ export function buildCreateBranchPayload(form = {}, { rootHasNoBranchName = fals
     payload.longitude = Number(form.longitude);
   }
 
+  const isRequired = form.is_required_locally !== false;
+  if (!isRequired) {
+    payload.is_required_locally = false;
+    payload.exemption_reason = String(form.exemption_reason || '').trim();
+    return payload;
+  }
+
+  if (form.mayors_permit) {
+    const fd = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (typeof value === 'boolean') {
+        fd.append(key, value ? '1' : '0');
+      } else if (value !== null && value !== undefined) {
+        fd.append(key, String(value));
+      }
+    });
+    fd.append('mayors_permit', form.mayors_permit);
+    return fd;
+  }
+
   return payload;
+}
+
+export function buildSubmitBranchPermitPayload({
+  mayors_permit = null,
+  is_required_locally = true,
+  exemption_reason = '',
+} = {}) {
+  const isRequired = is_required_locally !== false;
+  if (!isRequired) {
+    return {
+      is_required_locally: false,
+      exemption_reason: String(exemption_reason || '').trim(),
+    };
+  }
+
+  const fd = new FormData();
+  fd.append('is_required_locally', '1');
+  if (mayors_permit) {
+    fd.append('mayors_permit', mayors_permit);
+  }
+  return fd;
 }
 
 export function mapAddBranchBackendErrors(error) {

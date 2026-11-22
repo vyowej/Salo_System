@@ -13,7 +13,9 @@ import locationApiService from '../../../services/locationApiService';
 import RestaurantCoverageSection from '../components/RestaurantCoverageSection';
 import RestaurantImage from '../../customer/components/RestaurantImage';
 import AddBranchModal from '../components/AddBranchModal';
+import BranchPermitPanel from '../components/BranchPermitPanel';
 import { BRANCH_WORKSPACE_COPY } from '../content/branchContent';
+import { getBranchPermitMeta } from '../utils/branchWorkspaceUtils';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import OperatingHoursEditor from './OperatingHoursEditor';
 import {
@@ -373,7 +375,17 @@ export default function OwnerProfilePage() {
         <header className="owner-profile-header">
           <div className="owner-profile-header-intro">
             <p className="owner-profile-eyebrow">Storefront Identity & Brand Settings</p>
-            <h1>{access.selectedRestaurant?.displayName || formData.name || 'Business Profile'}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              <h1>{access.selectedRestaurant?.displayName || formData.name || 'Business Profile'}</h1>
+              {access.isOwner && access.selectedRestaurant && !access.selectedRestaurant.isMainBranch && access.selectedRestaurant.permitStatus && (() => {
+                const permitMeta = getBranchPermitMeta(access.selectedRestaurant.permitStatus);
+                return permitMeta ? (
+                  <Badge variant={permitMeta.variant} size="sm">
+                    {permitMeta.label}
+                  </Badge>
+                ) : null;
+              })()}
+            </div>
             <p className="owner-profile-header-subtitle">
               Customize your public storefront details, upload your restaurant logo and cover photo, and configure delivery coverage.
             </p>
@@ -398,6 +410,13 @@ export default function OwnerProfilePage() {
           <p className="owner-profile-readonly" role="status">
             You have view-only access. An owner or authorized staff member must make profile changes.
           </p>
+        )}
+
+        {access.isOwner && access.selectedRestaurant && !access.selectedRestaurant.isMainBranch && (
+          <BranchPermitPanel
+            key={access.selectedRestaurant.id}
+            branch={access.selectedRestaurant}
+          />
         )}
 
         <div className="owner-profile-layout">

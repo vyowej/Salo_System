@@ -402,6 +402,17 @@ export function deriveBusinessSetupChecklist({
       });
     }
 
+    const hasPermitBlocker = publishBlockers.some((msg) => /Mayor's \/ Business Permit|branch permit/i.test(String(msg)));
+    if (
+      itemsConfig.branchPermit &&
+      (hasPermitBlocker || (backendStatus.branch_permit && typeof backendStatus.branch_permit.complete === 'boolean'))
+    ) {
+      derived.push({
+        ...itemsConfig.branchPermit,
+        done: !hasPermitBlocker && Boolean(backendStatus.branch_permit?.complete),
+      });
+    }
+
     if (backendStatus.publish && typeof backendStatus.publish.complete === 'boolean' && itemsConfig.publish) {
       derived.push({
         ...itemsConfig.publish,

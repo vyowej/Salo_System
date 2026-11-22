@@ -516,3 +516,53 @@ Returns a single reservation owned by the authenticated customer (`404` if not f
 
 Cancels a customer's reservation (`pending` cancellable until `reservation_start`; `approved`, `awaiting_payment`, and `confirmed` cancellable until `reservation_start - reservation_cancellation_cutoff_minutes`). Records status history, `customer_reservation_cancelled` audit log, and notifies restaurant reservation handlers (`reservation_cancelled_by_customer`).
 - **Error Responses:** `404` if not owned by the customer; `409` (`CANCELLATION_CUTOFF_PASSED` or `INVALID_STATUS_TRANSITION`).
+
+---
+
+## Owner & Staff Reservation Management (`/api/restaurant/reservations*`)
+
+All owner reservation endpoints require session authentication (`auth`), `role:owner,staff`, and workspace authorization via `WorkspaceAccessResolver::requireActiveAuthorizedRestaurantForReservations()`. Cross-tenant reservation IDs return `404` (never `403`).
+
+### Endpoints & Permissions
+
+| Method | Path | Permission | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/api/restaurant/reservations` | `reservations.view` | Paginated list + summary (`date`, `date_from`/`date_to`, `status`, `group`, `table_id`, `dining_area`, `search`, `sort`, `page`, `per_page`) |
+| `GET` | `/api/restaurant/reservations/calendar` | `reservations.view` | Per-day counts and expected covers for `month=YYYY-MM` |
+| `GET` | `/api/restaurant/reservations/{id}` | `reservations.view` | Full owner detail including `status_history` and `restaurant_settings` |
+| `POST` | `/api/restaurant/reservations/{id}/approve` | `reservations.approve` | Approve `pending` → `confirmed` (or `awaiting_payment` when deposit required & `deposit_status = 'pending'`) |
+| `POST` | `/api/restaurant/reservations/{id}/reject` | `reservations.reject` | Decline `pending` → `rejected` (`reason` required, 3–255 chars) |
+| `POST` | `/api/restaurant/reservations/{id}/confirm-deposit` | `reservations.updateStatus` | Confirm deposit (`awaiting_payment` → `confirmed`, `deposit_status = 'paid'`) |
+| `POST` | `/api/restaurant/reservations/{id}/arrived` | `reservations.manageArrival` | Mark `confirmed` → `arrived` (within `[start - 60m, end]`) |
+| `POST` | `/api/restaurant/reservations/{id}/seat` | `reservations.updateStatus` | Seat `confirmed` \| `arrived` → `seated` (optional `table_id` override) |
+| `POST` | `/api/restaurant/reservations/{id}/complete` | `reservations.updateStatus` | Complete `seated` → `completed` |
+| `POST` | `/api/restaurant/reservations/{id}/no-show` | `reservations.manageArrival` | Mark `confirmed` \| `arrived` → `no_show` (after `start + 15m` grace; sets `no_show_marked_at` + `no_show_marked_by`) |
+| `POST` | `/api/restaurant/reservations/{id}/cancel` | `reservations.updateStatus` | Cancel `pending` \| `approved` \| `awaiting_payment` \| `confirmed` \| `arrived` → `cancelled` (`reason` required) |
+| `PATCH` | `/api/restaurant/reservations/{id}/table` | `reservations.assignTables` | Reassign table while `pending`..`arrived` (`{ table_id }`) |
+
+### `allowed_actions` & `attention` Semantics
+
+- `allowed_actions`: Server-computed array of action keys (`approve`, `reject`, `confirm_deposit`, `arrived`, `seat`, `complete`, `no_show`, `reassign_table`, `cancel`) valid at the current Asia/Manila timestamp for the reservation's status AND the authenticated user's permissions.
+- `attention`: `null` | `pending_expiring` (pending within 30m of expiry) | `no_show_candidate` (confirmed/arrived at or past `start + 15m`) | `overdue_seated` (seated past `end + 60m`).
+
+### Error Codes & Customer Notifications
+
+| Error Code | HTTP | Trigger |
+| --- | --- | --- |
+| `INVALID_TRANSITION` | `409` | Action not valid from current status (including terminal statuses) |
+| `RESERVATION_PASSED` | `409` | Approving a reservation whose `reservation_start` is in the past |
+| `TABLE_UNAVAILABLE` | `409` | Table missing, archived, or does not fit party size |
+| `SLOT_TAKEN` | `409` | Target table already has an overlapping blocking reservation |
+| `TOO_EARLY` | `409` | Marking arrived/seated more than `seating_early_minutes` (60m) before start |
+| `RESERVATION_ENDED` | `409` | Marking arrived/seated after `reservation_end` |
+| `NO_SHOW_TOO_EARLY` | `409` | Marking no-show before `start + no_show_grace_minutes` (15m) |
+
+**Customer Notifications Emitted (`workspace = 'customer'`, `related_entity_type = 'reservation'`):**
+- `approve` → `reservation_confirmed` or `reservation_awaiting_payment`
+- `reject` → `reservation_rejected` (includes reason)
+- `confirm-deposit` → `reservation_confirmed`
+- `complete` → `reservation_completed`
+- `no-show` → `reservation_no_show`
+- `cancel` → `reservation_cancelled_by_restaurant` (includes reason)
+- `assignTable` → `reservation_table_changed` (only when `dining_area` changes)
+- `arrived` / `seat` → none

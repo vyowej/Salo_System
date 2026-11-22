@@ -164,6 +164,9 @@ return [
         'default_duration_minutes' => max(30, (int) env('SALO_RESERVATION_DURATION_MINUTES', 90)),
         'slot_interval_minutes' => max(15, (int) env('SALO_RESERVATION_SLOT_INTERVAL_MINUTES', 30)),
         'no_show_grace_minutes' => max(0, (int) env('SALO_RESERVATION_NO_SHOW_GRACE_MINUTES', 15)),
+        'seating_early_minutes' => max(0, (int) env('SALO_RESERVATION_SEATING_EARLY_MINUTES', 60)),
+        'overdue_seated_minutes' => max(0, (int) env('SALO_RESERVATION_OVERDUE_SEATED_MINUTES', 60)),
+        'pending_expiring_warning_minutes' => max(5, (int) env('SALO_RESERVATION_PENDING_EXPIRING_WARNING_MINUTES', 30)),
         'max_active_pending_per_customer' => max(1, (int) env('SALO_RESERVATION_MAX_ACTIVE_PENDING', 3)),
         'suggested_slot_window' => max(1, (int) env('SALO_RESERVATION_SUGGESTED_SLOT_WINDOW', 3)),
         // Optional buffer minutes added to the end of existing reservations when checking table overlap.

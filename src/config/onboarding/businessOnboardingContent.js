@@ -89,6 +89,13 @@ export const BUSINESS_ONBOARDING_CONTENT = {
           href: '/owner/profile',
           ctaLabel: 'Set Coverage',
         },
+        branchPermit: {
+          id: 'branch_permit',
+          label: 'Verify branch permit',
+          description: 'Submit and verify this branch\'s Mayor\'s / Business Permit (or local exemption) before publishing.',
+          href: '/owner/profile#branch-permit',
+          ctaLabel: 'Manage Permit',
+        },
         publish: {
           id: 'publish',
           label: 'Publish Your Restaurant',

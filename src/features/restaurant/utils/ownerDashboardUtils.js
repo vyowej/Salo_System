@@ -107,9 +107,16 @@ export function computeDashboardStatsFromOrders(orders = [], reservations = [], 
 export function getReservationStatusBadge(status) {
   const map = {
     Pending: 'warning',
+    Approved: 'info',
+    'Awaiting Deposit': 'warning',
     Confirmed: 'success',
-    Cancelled: 'default',
+    Arrived: 'info',
+    Seated: 'primary',
     Completed: 'success',
+    Cancelled: 'default',
+    'No-Show': 'error',
+    Rejected: 'error',
+    Expired: 'default',
   };
   return map[status] || 'default';
 }

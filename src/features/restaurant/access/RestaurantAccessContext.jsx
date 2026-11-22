@@ -37,6 +37,12 @@ export function resolveBackendAccessData(user) {
         isMainBranch,
         shortAddress: own.short_address || null,
         status: own.restaurant_status || 'active',
+        ...(!isMainBranch ? {
+          permitStatus: own.permit_status ?? 'pending_submission',
+          isRequiredLocally: own.is_required_locally !== undefined ? Boolean(own.is_required_locally) : true,
+          permitReviewNote: own.review_note ?? null,
+          permitUploadedAt: own.uploaded_at ?? null,
+        } : {}),
       });
     }
 

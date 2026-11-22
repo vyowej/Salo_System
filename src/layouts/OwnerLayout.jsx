@@ -12,6 +12,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog';
 import Modal from '../components/common/Modal';
 import AddBranchModal from '../features/restaurant/components/AddBranchModal';
 import { BRANCH_WORKSPACE_COPY } from '../features/restaurant/content/branchContent';
+import { getBranchPermitMeta } from '../features/restaurant/utils/branchWorkspaceUtils';
 import {
   OWNER_NAV_CONFIG,
   OWNER_SIDEBAR_COLLAPSED_KEY,
@@ -191,6 +192,14 @@ export default function OwnerLayout({ children }) {
                         <span className={`owner-branch-status-pill is-${String(branch.status || 'active').toLowerCase()}`}>
                           {branch.status || 'active'}
                         </span>
+                        {access.isOwner && !branch.isMainBranch && branch.permitStatus && (() => {
+                          const permitMeta = getBranchPermitMeta(branch.permitStatus);
+                          return permitMeta ? (
+                            <span className={`owner-branch-status-pill is-permit-${permitMeta.variant}`}>
+                              {permitMeta.label}
+                            </span>
+                          ) : null;
+                        })()}
                         {isCurrent && (
                           <span className="owner-branch-current-tag">
                             {BRANCH_WORKSPACE_COPY.switcherCurrentBadge}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
+import { BRANCH_PERMIT_COPY } from '../content/branchContent';
 import './MenuPublishBar.css';
 
 export function getPublishBadgeMeta(publishStatus) {
@@ -122,6 +123,14 @@ export default function MenuPublishBar({
                   {' '}
                   <Link to="/owner/profile" style={{ fontWeight: 700, textDecoration: 'underline' }}>
                     Set delivery coverage
+                  </Link>
+                </>
+              )}
+              {blockers.some((b) => /Mayor's \/ Business Permit|branch permit/i.test(String(b))) && (
+                <>
+                  {' '}
+                  <Link to="/owner/profile#branch-permit" style={{ fontWeight: 700, textDecoration: 'underline' }}>
+                    {BRANCH_PERMIT_COPY.publishBarActionLabel}
                   </Link>
                 </>
               )}

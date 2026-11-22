@@ -23,6 +23,7 @@ use App\Features\Notifications\Controllers\NotificationController;
 use App\Features\Orders\Controllers\CustomerOrderController;
 use App\Features\Orders\Controllers\RestaurantOrderController;
 use App\Features\Reservations\Controllers\CustomerReservationController;
+use App\Features\Reservations\Controllers\OwnerReservationController;
 use App\Features\Reservations\Controllers\OwnerTableController;
 use App\Features\Reservations\Controllers\ReservationAvailabilityController;
 use App\Features\Restaurants\Controllers\OwnerBranchController;
@@ -261,6 +262,19 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::patch('/tables/{id}', [OwnerTableController::class, 'update'])->whereNumber('id');
         Route::post('/tables/{id}/archive', [OwnerTableController::class, 'archive'])->whereNumber('id');
         Route::post('/tables/{id}/reactivate', [OwnerTableController::class, 'reactivate'])->whereNumber('id');
+
+        Route::get('/reservations', [OwnerReservationController::class, 'index']);
+        Route::get('/reservations/calendar', [OwnerReservationController::class, 'calendar']);
+        Route::get('/reservations/{id}', [OwnerReservationController::class, 'show'])->whereNumber('id');
+        Route::post('/reservations/{id}/approve', [OwnerReservationController::class, 'approve'])->whereNumber('id');
+        Route::post('/reservations/{id}/reject', [OwnerReservationController::class, 'reject'])->whereNumber('id');
+        Route::post('/reservations/{id}/confirm-deposit', [OwnerReservationController::class, 'confirmDeposit'])->whereNumber('id');
+        Route::post('/reservations/{id}/arrived', [OwnerReservationController::class, 'arrived'])->whereNumber('id');
+        Route::post('/reservations/{id}/seat', [OwnerReservationController::class, 'seat'])->whereNumber('id');
+        Route::post('/reservations/{id}/complete', [OwnerReservationController::class, 'complete'])->whereNumber('id');
+        Route::post('/reservations/{id}/no-show', [OwnerReservationController::class, 'noShow'])->whereNumber('id');
+        Route::post('/reservations/{id}/cancel', [OwnerReservationController::class, 'cancel'])->whereNumber('id');
+        Route::patch('/reservations/{id}/table', [OwnerReservationController::class, 'assignTable'])->whereNumber('id');
     });
 });
 

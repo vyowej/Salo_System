@@ -52,6 +52,15 @@ All notification endpoints require cookie-session authentication (`auth` middlew
 | Staff invitation cancelled | `customer` | `staff_invitation_cancelled` | Invitee user | `staff_invitation` |
 | Staff invitation accepted | `restaurant` | `staff_invitation_accepted` | Restaurant owner(s) | `staff_invitation` |
 | Staff invitation declined | `restaurant` | `staff_invitation_declined` | Restaurant owner(s) | `staff_invitation` |
+| Reservation requested | `restaurant` | `reservation_requested` | Restaurant owner(s) + active reservation-handler staff | `reservation` |
+| Reservation confirmed (auto-confirm / approve / deposit) | `customer` | `reservation_confirmed` | Reservation customer | `reservation` |
+| Reservation approved awaiting deposit | `customer` | `reservation_awaiting_payment` | Reservation customer | `reservation` |
+| Reservation rejected | `customer` | `reservation_rejected` | Reservation customer (includes rejection reason) | `reservation` |
+| Reservation completed | `customer` | `reservation_completed` | Reservation customer | `reservation` |
+| Reservation marked no-show | `customer` | `reservation_no_show` | Reservation customer | `reservation` |
+| Reservation cancelled by customer | `restaurant` | `reservation_cancelled_by_customer` | Restaurant owner(s) + active reservation-handler staff | `reservation` |
+| Reservation cancelled by restaurant | `customer` | `reservation_cancelled_by_restaurant` | Reservation customer (includes cancellation reason) | `reservation` |
+| Reservation dining area changed | `customer` | `reservation_table_changed` | Reservation customer (emitted when dining area changes) | `reservation` |
 
 ---
 

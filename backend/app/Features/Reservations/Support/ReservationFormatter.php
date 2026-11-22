@@ -195,6 +195,57 @@ class ReservationFormatter
     }
 
     /**
+     * Format a reservation row for the restaurant owner/staff workspace, adding status_label,
+     * guest_history, allowed_actions, and attention flags.
+     *
+     * @param  object|array<string, mixed>  $row
+     * @param  array<string, int>  $guestHistory
+     * @param  array<int, string>  $allowedActions
+     * @param  array<int, object|array<string, mixed>>|null  $statusHistory
+     * @return array<string, mixed>
+     */
+    public static function formatOwner(
+        object|array $row,
+        ?CarbonInterface $now = null,
+        ?int $cancellationCutoffMinutes = null,
+        ?array $statusHistory = null,
+        array $guestHistory = ['visits' => 0, 'no_shows' => 0, 'cancellations' => 0],
+        array $allowedActions = [],
+        ?string $attention = null,
+    ): array {
+        $base = self::format($row, $now, $cancellationCutoffMinutes, $statusHistory);
+        $status = (string) ($base['reservation_status'] ?? ReservationStatus::PENDING);
+
+        $statusLabels = [
+            ReservationStatus::PENDING => 'Pending',
+            ReservationStatus::APPROVED => 'Approved',
+            ReservationStatus::AWAITING_PAYMENT => 'Awaiting Deposit',
+            ReservationStatus::CONFIRMED => 'Confirmed',
+            ReservationStatus::ARRIVED => 'Arrived',
+            ReservationStatus::SEATED => 'Seated',
+            ReservationStatus::COMPLETED => 'Completed',
+            ReservationStatus::CANCELLED => 'Cancelled',
+            ReservationStatus::NO_SHOW => 'No-Show',
+            ReservationStatus::REJECTED => 'Rejected',
+            ReservationStatus::EXPIRED => 'Expired',
+        ];
+
+        $base['reference'] = $base['reservation_reference'];
+        $base['status'] = $status;
+        $base['status_label'] = $statusLabels[$status] ?? ucfirst($status);
+        $base['party_size'] = $base['number_of_guests'];
+        $base['guest_history'] = [
+            'visits' => (int) ($guestHistory['visits'] ?? 0),
+            'no_shows' => (int) ($guestHistory['no_shows'] ?? 0),
+            'cancellations' => (int) ($guestHistory['cancellations'] ?? 0),
+        ];
+        $base['allowed_actions'] = array_values($allowedActions);
+        $base['attention'] = $attention;
+
+        return $base;
+    }
+
+    /**
      * @param  object|array<string, mixed>  $entry
      * @return array<string, mixed>
      */
