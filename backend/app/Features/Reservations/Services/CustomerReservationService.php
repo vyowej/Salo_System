@@ -57,9 +57,24 @@ class CustomerReservationService
         $existing = DB::table('reservations')
             ->where('customer_id', $customerId)
             ->where('idempotency_key', $idempotencyKey)
-            ->first(['reservation_id']);
+            ->first(['reservation_id', 'restaurant_id', 'reservation_start', 'number_of_guests']);
 
         if ($existing) {
+            $reqStartStr = CarbonImmutable::parse((string) $validated['start'], self::TIMEZONE)
+                ->setTimezone(self::TIMEZONE)
+                ->format('Y-m-d H:i:s');
+            if (
+                (int) $existing->restaurant_id !== (int) $validated['restaurant_id']
+                || (string) $existing->reservation_start !== $reqStartStr
+                || (int) $existing->number_of_guests !== (int) $validated['party_size']
+            ) {
+                throw new ReservationBookingException(
+                    errorCode: 'IDEMPOTENCY_KEY_REUSED',
+                    message: 'This idempotency key was already used for a different reservation request.',
+                    statusCode: 409,
+                );
+            }
+
             return $this->getDetail($user, (int) $existing->reservation_id, $manilaNow);
         }
 
@@ -114,11 +129,16 @@ class CustomerReservationService
 
         $assignedDiningAreaDiffers = false;
 
+        $pendingExpiryMinutes = max(5, (int) ($settings['reservation_pending_expiry_minutes'] ?? 120));
+
         try {
             $reservationId = DB::transaction(function () use (
                 $user,
                 $customerId,
                 $restaurantId,
+                $restaurantRow,
+                $settings,
+                $pendingExpiryMinutes,
                 $idempotencyKey,
                 $manilaNow,
                 $manilaStart,
@@ -131,43 +151,15 @@ class CustomerReservationService
                 $request,
                 &$assignedDiningAreaDiffers,
             ): int {
-                // Re-load restaurant row and settings inside the transaction
-                $freshRestaurant = DB::table('restaurants')
-                    ->where('restaurant_id', $restaurantId)
-                    ->where('restaurant_status', 'active')
-                    ->where('is_published', 1)
-                    ->first();
-
-                if (! $freshRestaurant) {
-                    throw new NotFoundHttpException('Restaurant not found.');
-                }
-
-                $freshSettings = $this->availabilityService->getBookingSettings($restaurantId, $freshRestaurant);
-                $recheckError = $this->availabilityService->validateBookingWindow(
-                    settings: $freshSettings,
-                    start: $manilaStart,
-                    end: $manilaEnd,
-                    partySize: $partySize,
-                    now: $manilaNow,
-                );
-
-                if ($recheckError !== null) {
-                    throw new ReservationBookingException(
-                        errorCode: $recheckError['code'],
-                        message: $recheckError['message'],
-                        statusCode: 422,
-                    );
-                }
-
-                // Re-verify customer limits with row locking on customer's active reservations
-                $this->assertCustomerBookingLimits($customerId, $manilaStart, $manilaEnd, $manilaNow, true);
-
-                // Select and lock candidate table(s) BEFORE inserting
+                // Lock protocol step 1: acquire FOR UPDATE locks on candidate restaurant_tables
+                // in ascending table_id order BEFORE any plain SELECT so REPEATABLE READ
+                // never creates a stale snapshot.
                 if ($requestedTableId !== null) {
                     $lockedTable = DB::table('restaurant_tables')
                         ->where('table_id', $requestedTableId)
                         ->where('restaurant_id', $restaurantId)
                         ->where('is_active', 1)
+                        ->orderBy('table_id', 'asc')
                         ->lockForUpdate()
                         ->first();
 
@@ -183,7 +175,22 @@ class CustomerReservationService
                             statusCode: 409,
                         );
                     }
+                } else {
+                    DB::table('restaurant_tables')
+                        ->where('restaurant_id', $restaurantId)
+                        ->where('is_active', 1)
+                        ->where('min_party_size', '<=', $partySize)
+                        ->where('seating_capacity', '>=', $partySize)
+                        ->orderBy('table_id', 'asc')
+                        ->lockForUpdate()
+                        ->get(['table_id']);
+                }
 
+                // Lock protocol step 2: verify customer limits with row locking on customer's active reservations
+                $this->assertCustomerBookingLimits($customerId, $manilaStart, $manilaEnd, $manilaNow, true);
+
+                // Lock protocol step 3: select and lock candidate table(s) & overlapping reservations
+                if ($requestedTableId !== null) {
                     $availableForTable = $this->availabilityService->getAvailableTables(
                         restaurantId: $restaurantId,
                         start: $manilaStart,
@@ -194,6 +201,7 @@ class CustomerReservationService
                         lockForUpdate: true,
                         onlyTableId: $requestedTableId,
                         now: $manilaNow,
+                        pendingExpiryMinutes: $pendingExpiryMinutes,
                     );
 
                     if ($availableForTable->isEmpty()) {
@@ -227,6 +235,7 @@ class CustomerReservationService
                         lockForUpdate: true,
                         onlyTableId: null,
                         now: $manilaNow,
+                        pendingExpiryMinutes: $pendingExpiryMinutes,
                     );
 
                     if ($candidates->isEmpty() && $requestedDiningArea !== null) {
@@ -241,6 +250,7 @@ class CustomerReservationService
                             lockForUpdate: true,
                             onlyTableId: null,
                             now: $manilaNow,
+                            pendingExpiryMinutes: $pendingExpiryMinutes,
                         );
 
                         if ($fallbackCandidates->isNotEmpty()) {
@@ -287,14 +297,14 @@ class CustomerReservationService
                 $assignedTableId = (int) $assignedTable->table_id;
 
                 // Snapshot deposit, fee, contact info, and initial status
-                $depositRequired = (bool) $freshSettings['reservation_deposit_required'];
+                $depositRequired = (bool) $settings['reservation_deposit_required'];
                 $depositAmount = $depositRequired
-                    ? number_format((float) $freshSettings['reservation_deposit_amount'], 2, '.', '')
+                    ? number_format((float) $settings['reservation_deposit_amount'], 2, '.', '')
                     : '0.00';
                 $depositStatus = ($depositRequired && (float) $depositAmount > 0) ? 'pending' : 'none';
-                $serviceFee = number_format((float) $freshSettings['reservation_service_fee'], 2, '.', '');
+                $serviceFee = number_format((float) $settings['reservation_service_fee'], 2, '.', '');
 
-                $autoConfirm = (bool) $freshSettings['reservation_auto_confirm'] && ! $depositRequired;
+                $autoConfirm = (bool) $settings['reservation_auto_confirm'] && ! $depositRequired;
                 $initialStatus = $autoConfirm ? ReservationStatus::CONFIRMED : ReservationStatus::PENDING;
                 $nowStr = $manilaNow->format('Y-m-d H:i:s');
                 $confirmedAt = $autoConfirm ? $nowStr : null;
@@ -409,7 +419,7 @@ class CustomerReservationService
                         userId: $customerId,
                         workspace: 'customer',
                         type: 'reservation_confirmed',
-                        title: "Reservation Confirmed at {$freshSettings['restaurant_name']}",
+                        title: "Reservation Confirmed at {$settings['restaurant_name']}",
                         body: "Your table for {$partySize} guest(s) on {$formattedWhen} ({$reference}) has been automatically confirmed.",
                         relatedEntityType: 'reservation',
                         relatedEntityId: $id,
@@ -417,18 +427,38 @@ class CustomerReservationService
                 }
 
                 return $id;
-            });
+            }, 3);
         } catch (QueryException $e) {
             $sqlState = (string) ($e->errorInfo[0] ?? $e->getCode());
             $driverCode = (int) ($e->errorInfo[1] ?? 0);
+
+            if ($sqlState === '40001' || in_array($driverCode, [1205, 1213], true)) {
+                throw new ReservationBookingException(
+                    errorCode: 'TRY_AGAIN',
+                    message: 'High booking traffic on this table right now. Please try again.',
+                    statusCode: 409,
+                );
+            }
 
             if ($sqlState === '23000' && $driverCode === 1062) {
                 $raced = DB::table('reservations')
                     ->where('customer_id', $customerId)
                     ->where('idempotency_key', $idempotencyKey)
-                    ->first(['reservation_id']);
+                    ->first(['reservation_id', 'restaurant_id', 'reservation_start', 'number_of_guests']);
 
                 if ($raced) {
+                    if (
+                        (int) $raced->restaurant_id !== $restaurantId
+                        || (string) $raced->reservation_start !== $manilaStart->format('Y-m-d H:i:s')
+                        || (int) $raced->number_of_guests !== $partySize
+                    ) {
+                        throw new ReservationBookingException(
+                            errorCode: 'IDEMPOTENCY_KEY_REUSED',
+                            message: 'This idempotency key was already used for a different reservation request.',
+                            statusCode: 409,
+                        );
+                    }
+
                     return $this->getDetail($user, (int) $raced->reservation_id, $manilaNow);
                 }
             }

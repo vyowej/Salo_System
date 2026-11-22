@@ -176,7 +176,7 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
     Route::post('/reservations', [CustomerReservationController::class, 'store'])->middleware('throttle:20,1');
     Route::get('/reservations', [CustomerReservationController::class, 'index']);
     Route::get('/reservations/{id}', [CustomerReservationController::class, 'show'])->whereNumber('id');
-    Route::post('/reservations/{id}/cancel', [CustomerReservationController::class, 'cancel'])->whereNumber('id');
+    Route::post('/reservations/{id}/cancel', [CustomerReservationController::class, 'cancel'])->whereNumber('id')->middleware('throttle:30,1');
 });
 
 Route::prefix('restaurant')->middleware('auth')->group(function (): void {
@@ -195,7 +195,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::post('/profile/media', [OwnerProfileController::class, 'updateMedia']);
         Route::patch('/accepting-status', [OwnerProfileController::class, 'updateAcceptingStatus']);
         Route::get('/settings', [OwnerProfileController::class, 'settings']);
-        Route::patch('/settings', [OwnerProfileController::class, 'updateSettings']);
+        Route::patch('/settings', [OwnerProfileController::class, 'updateSettings'])->middleware('throttle:30,1');
 
         Route::get('/change-requests', [RestaurantChangeRequestController::class, 'index']);
         Route::post('/change-requests', [RestaurantChangeRequestController::class, 'store']);
@@ -258,25 +258,25 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::post('/reviews/{reviewId}/flag', [OwnerReviewController::class, 'flag'])->whereNumber('reviewId');
 
         Route::get('/tables', [OwnerTableController::class, 'index']);
-        Route::post('/tables', [OwnerTableController::class, 'store']);
+        Route::post('/tables', [OwnerTableController::class, 'store'])->middleware('throttle:60,1');
         Route::get('/tables/{id}', [OwnerTableController::class, 'show'])->whereNumber('id');
-        Route::patch('/tables/{id}', [OwnerTableController::class, 'update'])->whereNumber('id');
-        Route::post('/tables/{id}/archive', [OwnerTableController::class, 'archive'])->whereNumber('id');
-        Route::post('/tables/{id}/reactivate', [OwnerTableController::class, 'reactivate'])->whereNumber('id');
+        Route::patch('/tables/{id}', [OwnerTableController::class, 'update'])->whereNumber('id')->middleware('throttle:60,1');
+        Route::post('/tables/{id}/archive', [OwnerTableController::class, 'archive'])->whereNumber('id')->middleware('throttle:60,1');
+        Route::post('/tables/{id}/reactivate', [OwnerTableController::class, 'reactivate'])->whereNumber('id')->middleware('throttle:60,1');
 
         Route::get('/reservations', [OwnerReservationController::class, 'index']);
         Route::get('/reservations/calendar', [OwnerReservationController::class, 'calendar']);
         Route::get('/reservations/{id}', [OwnerReservationController::class, 'show'])->whereNumber('id');
-        Route::post('/reservations/{id}/approve', [OwnerReservationController::class, 'approve'])->whereNumber('id');
-        Route::post('/reservations/{id}/reject', [OwnerReservationController::class, 'reject'])->whereNumber('id');
-        Route::post('/reservations/{id}/confirm-deposit', [OwnerReservationController::class, 'confirmDeposit'])->whereNumber('id');
-        Route::post('/reservations/{id}/deposit', [OwnerReservationController::class, 'deposit'])->whereNumber('id');
-        Route::post('/reservations/{id}/arrived', [OwnerReservationController::class, 'arrived'])->whereNumber('id');
-        Route::post('/reservations/{id}/seat', [OwnerReservationController::class, 'seat'])->whereNumber('id');
-        Route::post('/reservations/{id}/complete', [OwnerReservationController::class, 'complete'])->whereNumber('id');
-        Route::post('/reservations/{id}/no-show', [OwnerReservationController::class, 'noShow'])->whereNumber('id');
-        Route::post('/reservations/{id}/cancel', [OwnerReservationController::class, 'cancel'])->whereNumber('id');
-        Route::patch('/reservations/{id}/table', [OwnerReservationController::class, 'assignTable'])->whereNumber('id');
+        Route::post('/reservations/{id}/approve', [OwnerReservationController::class, 'approve'])->whereNumber('id')->middleware('throttle:60,1');
+        Route::post('/reservations/{id}/reject', [OwnerReservationController::class, 'reject'])->whereNumber('id')->middleware('throttle:60,1');
+        Route::post('/reservations/{id}/confirm-deposit', [OwnerReservationController::class, 'confirmDeposit'])->whereNumber('id')->middleware('throttle:60,1');
+        Route::post('/reservations/{id}/deposit', [OwnerReservationController::class, 'deposit'])->whereNumber('id')->middleware('throttle:60,1');
+        Route::post('/reservations/{id}/arrived', [OwnerReservationController::class, 'arrived'])->whereNumber('id')->middleware('throttle:60,1');
+        Route::post('/reservations/{id}/seat', [OwnerReservationController::class, 'seat'])->whereNumber('id')->middleware('throttle:60,1');
+        Route::post('/reservations/{id}/complete', [OwnerReservationController::class, 'complete'])->whereNumber('id')->middleware('throttle:60,1');
+        Route::post('/reservations/{id}/no-show', [OwnerReservationController::class, 'noShow'])->whereNumber('id')->middleware('throttle:60,1');
+        Route::post('/reservations/{id}/cancel', [OwnerReservationController::class, 'cancel'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::patch('/reservations/{id}/table', [OwnerReservationController::class, 'assignTable'])->whereNumber('id')->middleware('throttle:60,1');
     });
 });
 

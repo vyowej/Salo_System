@@ -20,8 +20,13 @@ class StoreCustomerReservationRequest extends FormRequest
         foreach (['dining_area', 'contact_name', 'contact_phone', 'special_requests'] as $field) {
             if ($this->has($field)) {
                 $raw = $this->input($field);
-                $trimmed = is_string($raw) ? trim($raw) : $raw;
-                $updates[$field] = ($trimmed === '' || $trimmed === null) ? null : $trimmed;
+                if (is_string($raw)) {
+                    $clean = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $raw);
+                    $trimmed = trim((string) $clean);
+                    $updates[$field] = $trimmed === '' ? null : $trimmed;
+                } else {
+                    $updates[$field] = $raw;
+                }
             }
         }
 
@@ -50,7 +55,7 @@ class StoreCustomerReservationRequest extends FormRequest
             'table_id' => ['nullable', 'integer', 'min:1'],
             'dining_area' => ['nullable', 'string', 'max:100'],
             'contact_name' => ['nullable', 'string', 'max:150'],
-            'contact_phone' => ['nullable', 'string', 'max:30'],
+            'contact_phone' => ['nullable', 'string', 'max:30', 'regex:/^[0-9+\-\s()]{7,30}$/'],
             'special_requests' => ['nullable', 'string', 'max:500'],
             'idempotency_key' => ['required', 'string', 'min:8', 'max:64'],
         ];

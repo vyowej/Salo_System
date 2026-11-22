@@ -7,6 +7,16 @@ import Modal from '../../../components/common/Modal';
 import { StateView } from '../../../components/feedback';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import { formatTimeUntilExpiry } from '../../../utils/reservationExpiryUtils';
+
+function sanitizeTelHref(phone) {
+  const cleaned = String(phone || '').replace(/[^+\d]/g, '');
+  return cleaned ? `tel:${cleaned}` : '#';
+}
+
+function sanitizeMailtoHref(email) {
+  const cleaned = String(email || '').replace(/[\r\n\s<>]/g, '');
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned) ? `mailto:${cleaned}` : '#';
+}
 import './OwnerReservationsPage.css';
 
 const STATUS_BADGE_MAP = {
@@ -1472,14 +1482,14 @@ export default function OwnerReservationsPage() {
                   <strong>{detailRes.guestName}</strong>
                   {detailRes.guestPhone && (
                     <div>
-                      <a href={`tel:${detailRes.guestPhone}`} style={{ color: 'var(--accent)', fontSize: 12 }}>
+                      <a href={sanitizeTelHref(detailRes.guestPhone)} style={{ color: 'var(--accent)', fontSize: 12 }}>
                         📞 {detailRes.guestPhone}
                       </a>
                     </div>
                   )}
                   {detailRes.customerEmail && (
                     <div>
-                      <a href={`mailto:${detailRes.customerEmail}`} style={{ color: 'var(--accent)', fontSize: 12 }}>
+                      <a href={sanitizeMailtoHref(detailRes.customerEmail)} style={{ color: 'var(--accent)', fontSize: 12 }}>
                         ✉️ {detailRes.customerEmail}
                       </a>
                     </div>

@@ -382,23 +382,38 @@ class ReservationAvailabilityService
         );
 
         $slots = [];
+        $seenStarts = [];
+        $maxSlotsPerDay = 96;
+
         foreach ($resolvedSchedule['periods'] as $period) {
             /** @var CarbonImmutable $cursor */
             $cursor = $period['start'];
             /** @var CarbonImmutable $periodEnd */
             $periodEnd = $period['end'];
+            $maxEnd = $cursor->addHours(24);
+            if ($periodEnd->greaterThan($maxEnd)) {
+                $periodEnd = $maxEnd;
+            }
 
             while ($cursor->addMinutes($duration)->lessThanOrEqualTo($periodEnd)) {
-                $slotEnd = $cursor->addMinutes($duration);
+                if (count($slots) >= $maxSlotsPerDay) {
+                    break 2;
+                }
 
-                $slots[] = [
-                    'start' => $cursor,
-                    'end' => $slotEnd,
-                    'start_iso' => OrderTimestampFormatter::toManilaIso($cursor) ?? $cursor->toIso8601String(),
-                    'end_iso' => OrderTimestampFormatter::toManilaIso($slotEnd) ?? $slotEnd->toIso8601String(),
-                    'time' => $cursor->format('H:i'),
-                    'time_label' => $cursor->format('g:i A'),
-                ];
+                $startKey = $cursor->format('Y-m-d H:i');
+                if (! isset($seenStarts[$startKey])) {
+                    $seenStarts[$startKey] = true;
+                    $slotEnd = $cursor->addMinutes($duration);
+
+                    $slots[] = [
+                        'start' => $cursor,
+                        'end' => $slotEnd,
+                        'start_iso' => OrderTimestampFormatter::toManilaIso($cursor) ?? $cursor->toIso8601String(),
+                        'end_iso' => OrderTimestampFormatter::toManilaIso($slotEnd) ?? $slotEnd->toIso8601String(),
+                        'time' => $cursor->format('H:i'),
+                        'time_label' => $cursor->format('g:i A'),
+                    ];
+                }
 
                 $cursor = $cursor->addMinutes($step);
             }
@@ -661,17 +676,20 @@ class ReservationAvailabilityService
         bool $lockForUpdate = false,
         ?int $onlyTableId = null,
         ?CarbonInterface $now = null,
+        ?int $pendingExpiryMinutes = null,
     ): Collection {
         $manilaNow = $this->toManilaImmutable($now);
         $manilaStart = $this->toManilaImmutable($start);
         $manilaEnd = $this->toManilaImmutable($end);
 
-        $pendingExpiryMinutes = max(
-            5,
-            (int) (DB::table('restaurants')
-                ->where('restaurant_id', $restaurantId)
-                ->value('reservation_pending_expiry_minutes') ?? 120)
-        );
+        $resolvedPendingExpiryMinutes = $pendingExpiryMinutes !== null
+            ? max(5, $pendingExpiryMinutes)
+            : max(
+                5,
+                (int) (DB::table('restaurants')
+                    ->where('restaurant_id', $restaurantId)
+                    ->value('reservation_pending_expiry_minutes') ?? 120)
+            );
         $turnoverBufferMinutes = max(0, (int) config('salo.reservations.turnover_buffer_minutes', 0));
 
         $tableQuery = DB::table('restaurant_tables')
@@ -688,14 +706,15 @@ class ReservationAvailabilityService
             $tableQuery->where('table_id', $onlyTableId);
         }
 
-        $tableQuery
-            ->orderBy('seating_capacity', 'asc')
-            ->orderBy('dining_area', 'asc')
-            ->orderBy('table_name', 'asc')
-            ->orderBy('table_id', 'asc');
-
+        // Lock in deterministic ascending table_id order to prevent deadlocks
         if ($lockForUpdate) {
-            $tableQuery->lockForUpdate();
+            $tableQuery->orderBy('table_id', 'asc')->lockForUpdate();
+        } else {
+            $tableQuery
+                ->orderBy('seating_capacity', 'asc')
+                ->orderBy('dining_area', 'asc')
+                ->orderBy('table_name', 'asc')
+                ->orderBy('table_id', 'asc');
         }
 
         $candidateTables = $tableQuery->get([
@@ -741,15 +760,23 @@ class ReservationAvailabilityService
                 'approved_at',
                 'updated_at',
             ])
-            ->reject(static fn (object $row): bool => ReservationExpiry::isExpired($row, $manilaNow, $pendingExpiryMinutes))
+            ->reject(static fn (object $row): bool => ReservationExpiry::isExpired($row, $manilaNow, $resolvedPendingExpiryMinutes))
             ->pluck('table_id')
             ->map(static fn ($id): int => (int) $id)
             ->flip()
             ->all();
 
-        return $candidateTables
-            ->reject(static fn (object $table): bool => isset($bookedTableIds[(int) $table->table_id]))
-            ->values();
+        $available = $candidateTables
+            ->reject(static fn (object $table): bool => isset($bookedTableIds[(int) $table->table_id]));
+
+        if ($lockForUpdate) {
+            $available = $available->sort(static function (object $a, object $b): int {
+                return [(int) $a->seating_capacity, (string) ($a->dining_area ?? ''), (string) $a->table_name, (int) $a->table_id]
+                    <=> [(int) $b->seating_capacity, (string) ($b->dining_area ?? ''), (string) $b->table_name, (int) $b->table_id];
+            });
+        }
+
+        return $available->values();
     }
 
     /**

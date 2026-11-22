@@ -21,6 +21,7 @@ class ReservationFormatter
         ?CarbonInterface $now = null,
         ?int $cancellationCutoffMinutes = null,
         ?array $statusHistory = null,
+        bool $includeInternalActorIds = false,
     ): array {
         $data = is_array($row) ? (object) $row : $row;
 
@@ -166,9 +167,6 @@ class ReservationFormatter
                 ),
             ),
             'no_show_marked_at' => OrderTimestampFormatter::toManilaIso($data->no_show_marked_at ?? null),
-            'no_show_marked_by' => isset($data->no_show_marked_by) && $data->no_show_marked_by !== null
-                ? (int) $data->no_show_marked_by
-                : null,
             'created_at' => OrderTimestampFormatter::toManilaIso($data->created_at ?? null),
             'updated_at' => OrderTimestampFormatter::toManilaIso($data->updated_at ?? null),
             'can_cancel' => $canCancel,
@@ -193,9 +191,15 @@ class ReservationFormatter
             $formatted['assigned_dining_area_differs'] = (bool) $data->assigned_dining_area_differs;
         }
 
+        if ($includeInternalActorIds) {
+            $formatted['no_show_marked_by'] = isset($data->no_show_marked_by) && $data->no_show_marked_by !== null
+                ? (int) $data->no_show_marked_by
+                : null;
+        }
+
         if ($statusHistory !== null) {
             $formatted['status_history'] = array_values(array_map(
-                static fn (object|array $entry): array => self::formatHistoryEntry($entry),
+                static fn (object|array $entry): array => self::formatHistoryEntry($entry, $includeInternalActorIds),
                 $statusHistory,
             ));
         }
@@ -223,7 +227,7 @@ class ReservationFormatter
         ?string $attention = null,
         array $allowedDepositActions = [],
     ): array {
-        $base = self::format($row, $now, $cancellationCutoffMinutes, $statusHistory);
+        $base = self::format($row, $now, $cancellationCutoffMinutes, $statusHistory, true);
         $status = (string) ($base['reservation_status'] ?? ReservationStatus::PENDING);
 
         $statusLabels = [
@@ -292,7 +296,7 @@ class ReservationFormatter
         ?array $restaurantSettings = null,
     ): array {
         $data = is_array($row) ? (object) $row : $row;
-        $base = self::format($data, $now, $cancellationCutoffMinutes, $statusHistory);
+        $base = self::format($data, $now, $cancellationCutoffMinutes, $statusHistory, true);
         $status = (string) ($base['reservation_status'] ?? ReservationStatus::PENDING);
 
         $statusLabels = [
@@ -341,7 +345,7 @@ class ReservationFormatter
      * @param  object|array<string, mixed>  $entry
      * @return array<string, mixed>
      */
-    public static function formatHistoryEntry(object|array $entry): array
+    public static function formatHistoryEntry(object|array $entry, bool $includeInternalActorIds = false): array
     {
         $row = is_array($entry) ? (object) $entry : $entry;
         $actorName = trim(sprintf(
@@ -350,19 +354,24 @@ class ReservationFormatter
             (string) ($row->actor_last_name ?? ''),
         ));
 
-        return [
+        $result = [
             'history_id' => (int) ($row->history_id ?? 0),
             'reservation_id' => (int) ($row->reservation_id ?? 0),
             'from_status' => isset($row->from_status) && $row->from_status !== null ? (string) $row->from_status : null,
             'to_status' => (string) ($row->to_status ?? ''),
-            'changed_by_user_id' => isset($row->changed_by_user_id) && $row->changed_by_user_id !== null
-                ? (int) $row->changed_by_user_id
-                : null,
             'changed_by_role' => (string) ($row->changed_by_role ?? 'system'),
-            'actor_name' => $actorName !== '' ? $actorName : null,
             'note' => isset($row->note) && $row->note !== null ? (string) $row->note : null,
             'created_at' => OrderTimestampFormatter::toManilaIso($row->created_at ?? null),
         ];
+
+        if ($includeInternalActorIds) {
+            $result['changed_by_user_id'] = isset($row->changed_by_user_id) && $row->changed_by_user_id !== null
+                ? (int) $row->changed_by_user_id
+                : null;
+            $result['actor_name'] = $actorName !== '' ? $actorName : null;
+        }
+
+        return $result;
     }
 
     private static function parseManilaDateTime(mixed $value): ?CarbonImmutable

@@ -15,6 +15,7 @@ use App\Support\WorkspaceAccessResolver;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -281,7 +282,9 @@ class OwnerReservationService
             reservationId: $reservationId,
         );
 
-        return DB::transaction(function () use (
+        $pendingExpiryMinutes = max(5, (int) ($restaurant->reservation_pending_expiry_minutes ?? 120));
+
+        return $this->runLockedTransaction(function () use (
             $user,
             $restaurant,
             $targetRestaurantId,
@@ -290,6 +293,7 @@ class OwnerReservationService
             $request,
             $manilaNow,
             $depositRequired,
+            $pendingExpiryMinutes,
         ): array {
             $row = DB::table('reservations')
                 ->where('reservation_id', $reservationId)
@@ -380,6 +384,7 @@ class OwnerReservationService
                 lockForUpdate: true,
                 onlyTableId: $assignedTableId,
                 now: $manilaNow,
+                pendingExpiryMinutes: $pendingExpiryMinutes,
             );
 
             if ($available->isEmpty()) {
@@ -1004,7 +1009,9 @@ class OwnerReservationService
             reservationId: $reservationId,
         );
 
-        return DB::transaction(function () use (
+        $pendingExpiryMinutes = max(5, (int) ($restaurant->reservation_pending_expiry_minutes ?? 120));
+
+        return $this->runLockedTransaction(function () use (
             $user,
             $restaurant,
             $targetRestaurantId,
@@ -1012,7 +1019,17 @@ class OwnerReservationService
             $tableId,
             $request,
             $manilaNow,
+            $pendingExpiryMinutes,
         ): array {
+            // Lock protocol step 1: lock target restaurant_table BEFORE reservation row
+            $newTable = DB::table('restaurant_tables')
+                ->where('table_id', $tableId)
+                ->where('restaurant_id', $targetRestaurantId)
+                ->orderBy('table_id', 'asc')
+                ->lockForUpdate()
+                ->first();
+
+            // Lock protocol step 2: lock the reservation row scoped to restaurant
             $row = DB::table('reservations')
                 ->where('reservation_id', $reservationId)
                 ->where('restaurant_id', $targetRestaurantId)
@@ -1053,25 +1070,16 @@ class OwnerReservationService
                 return $this->loadOwnerFormattedDetail($user, $restaurant, $reservationId, $manilaNow);
             }
 
-            $newTable = DB::table('restaurant_tables')
-                ->where('table_id', $tableId)
-                ->where('restaurant_id', $targetRestaurantId)
-                ->lockForUpdate()
-                ->first();
-
-            if (! $newTable) {
-                throw new NotFoundHttpException('Table not found.');
-            }
-
             $partySize = (int) $row->number_of_guests;
             if (
-                (int) $newTable->is_active !== 1
+                ! $newTable
+                || (int) $newTable->is_active !== 1
                 || $partySize < max(1, (int) ($newTable->min_party_size ?? 1))
                 || $partySize > (int) $newTable->seating_capacity
             ) {
                 throw new ReservationBookingException(
                     errorCode: 'TABLE_UNAVAILABLE',
-                    message: "Table {$newTable->table_name} is archived or cannot accommodate {$partySize} guest(s).",
+                    message: 'The selected table is unavailable, archived, or cannot accommodate this party size.',
                     statusCode: 409,
                 );
             }
@@ -1089,6 +1097,7 @@ class OwnerReservationService
                 lockForUpdate: true,
                 onlyTableId: $tableId,
                 now: $manilaNow,
+                pendingExpiryMinutes: $pendingExpiryMinutes,
             );
 
             if ($available->isEmpty()) {
@@ -1738,6 +1747,34 @@ class OwnerReservationService
                 'rt.min_party_size',
                 'rt.is_active as table_is_active',
             ]);
+    }
+
+    /**
+     * Execute a locking transaction with bounded retry on MySQL deadlocks / lock-wait timeouts.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    private function runLockedTransaction(callable $callback): mixed
+    {
+        try {
+            return DB::transaction($callback, 3);
+        } catch (QueryException $e) {
+            $sqlState = (string) ($e->errorInfo[0] ?? $e->getCode());
+            $driverCode = (int) ($e->errorInfo[1] ?? 0);
+
+            if ($sqlState === '40001' || in_array($driverCode, [1205, 1213], true)) {
+                throw new ReservationBookingException(
+                    errorCode: 'TRY_AGAIN',
+                    message: 'High booking traffic on this reservation right now. Please try again.',
+                    statusCode: 409,
+                );
+            }
+
+            throw $e;
+        }
     }
 
     private function toManilaImmutable(?CarbonInterface $value = null): CarbonImmutable

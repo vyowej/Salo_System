@@ -248,6 +248,7 @@ Calendar-first restaurant reservation management (`reservations.view`, `reservat
 - `PATCH /api/restaurant/reservations/{id}/table` — reassign table while `pending..arrived`.
 - **Deposit policy:** Deposits are collected and refunded manually between guest and restaurant (no online payment gateway). Guest cancellations and no-shows leave paid deposits as `paid` unless the restaurant marks them `refunded`. `deposit_display_status` exposes `not_collected` for `pending` deposits on `rejected`/`expired`/`cancelled`/`no_show` bookings, and `allowed_deposit_actions` lists valid actions (`mark_paid`, `waive`, `refund`).
 - **Expiry automation:** Pending and `awaiting_payment` payloads expose `expires_at` (`Asia/Manila` ISO, `null` otherwise). Attempting owner actions on an expired request triggers a lazy sweep and returns `409 RESERVATION_EXPIRED`.
+- **Hardening & Throttles:** Customer `POST /reservations` (`20,1`), `POST /reservations/{id}/cancel` (`30,1`), owner `PATCH /settings` (`30,1`), owner `POST /reservations/{id}/cancel` (`30,1`), other owner table/reservation mutations (`60,1`), public availability (`60,1`). Reusing an `idempotency_key` with a different `restaurant_id`, `start`, or `party_size` returns `409 IDEMPOTENCY_KEY_REUSED`; exhausted deadlock retries return `409 TRY_AGAIN`.
 
 ### `GET /api/restaurant/tables` & `POST /api/restaurant/tables` & `PATCH /api/restaurant/tables/{id}`
 Restaurant table floor plan management (`tables.view`, `tables.add`, `tables.edit`, `tables.manageAvailability`):

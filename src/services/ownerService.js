@@ -691,24 +691,19 @@ export const ownerService = {
     return normalizeOwnerReservation(res?.data?.reservation ?? null);
   },
 
-  getReservationTables() {
-    return [];
+  async getReservationTables(restaurantId = null, dateKey = '', filters = {}) {
+    const res = await this.getTables(restaurantId, dateKey, filters);
+    return res?.items ?? [];
   },
 
-  getReservationTableOptions() {
-    return [];
+  async getReservationTableOptions(restaurantId = null) {
+    const res = await this.getTables(restaurantId, '', { status: 'active' });
+    return (res?.items ?? []).filter((t) => t.isActive);
   },
 
-  getDiningAreas() {
-    return [];
-  },
-
-  addDiningArea() {
-    notAvailable('Adding dining areas');
-  },
-
-  updateDiningArea() {
-    notAvailable('Updating dining areas');
+  async getDiningAreas(restaurantId = null) {
+    const res = await this.getTables(restaurantId);
+    return res?.diningAreas ?? [];
   },
 
   async getTables(restaurantId = null, dateKey = '', filters = {}) {
@@ -789,8 +784,9 @@ export const ownerService = {
     return normalizeTable(res?.data?.table ?? null);
   },
 
-  getTableSchedule() {
-    return [];
+  async getTableSchedule(restaurantId, tableId, dateKey = '') {
+    const table = await this.getTable(restaurantId, tableId, dateKey);
+    return table?.todayReservations ?? [];
   },
 
   async addTable(restaurantId, payload = {}) {
