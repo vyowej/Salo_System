@@ -166,6 +166,7 @@ class User extends Authenticatable
                 'r.brand_restaurant_id',
                 'r.restaurant_name',
                 'r.branch_name',
+                'r.restaurant_status',
                 'b.barangay_name',
                 'c.city_name',
                 'rs.staff_position',
@@ -195,6 +196,7 @@ class User extends Authenticatable
                     'display_name' => \App\Support\RestaurantBranchService::formatDisplayName((string) $row->restaurant_name, $row->branch_name),
                     'is_main_branch' => $parentId === null,
                     'short_address' => $shortAddress !== '' ? $shortAddress : null,
+                    'restaurant_status' => $row->restaurant_status,
                     'staff_position' => $row->staff_position,
                     'staff_status' => $row->staff_status,
                     'can_handle_orders' => self::isOrderHandlerPosition($row->staff_position),
@@ -255,6 +257,7 @@ class User extends Authenticatable
             'restaurant_staff_assignments' => $staffAssignments,
             'order_handler_positions' => array_values((array) config('salo.orders.handler_positions', [])),
             'menu_publisher_positions' => array_values((array) config('salo.menu.publisher_positions', [])),
+            'staff_positions' => array_values((array) config('salo.staff.positions', [])),
             'rider_profile' => $riderProfile,
         ];
 

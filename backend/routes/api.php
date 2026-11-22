@@ -194,6 +194,8 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::get('/staff', [StaffInvitationController::class, 'index']);
         Route::post('/staff/invitations', [StaffInvitationController::class, 'storeInvitation'])->middleware('throttle:20,1');
         Route::post('/staff/invitations/{id}/cancel', [StaffInvitationController::class, 'cancelInvitation'])->whereNumber('id');
+        Route::patch('/staff/{id}/position', [StaffInvitationController::class, 'updatePosition'])->whereNumber('id');
+        Route::delete('/staff/{id}', [StaffInvitationController::class, 'remove'])->whereNumber('id');
 
         Route::post('/branches', [OwnerBranchController::class, 'store']);
     });

@@ -21,11 +21,19 @@ export function normalizeStaffInvitation(raw) {
   const staffId = Number(raw.staff_id ?? raw.id ?? 0);
   const status = String(raw.status || raw.staff_status || 'pending').toLowerCase();
 
+  const restaurantName = String(raw.restaurant_name || 'Restaurant');
+  const branchName = raw.branch_name ? String(raw.branch_name) : null;
+  const displayName = String(
+    raw.display_name || (branchName ? `${restaurantName} — ${branchName}` : restaurantName),
+  );
+
   return {
     staff_id: staffId,
     id: staffId,
     restaurant_id: Number(raw.restaurant_id ?? 0),
-    restaurant_name: String(raw.restaurant_name || 'Restaurant'),
+    restaurant_name: restaurantName,
+    branch_name: branchName,
+    display_name: displayName,
     staff_position: String(raw.staff_position || ''),
     status,
     staff_status: String(raw.staff_status || ''),
@@ -104,10 +112,19 @@ export function normalizeRestaurantStaffMember(raw) {
   const staffId = Number(raw.staff_id ?? raw.id ?? 0);
   const status = String(raw.status || raw.staff_status || 'pending').toLowerCase();
 
+  const restaurantName = raw.restaurant_name ? String(raw.restaurant_name) : '';
+  const branchName = raw.branch_name ? String(raw.branch_name) : null;
+  const displayName = raw.display_name
+    ? String(raw.display_name)
+    : (restaurantName ? (branchName ? `${restaurantName} — ${branchName}` : restaurantName) : (branchName || ''));
+
   return {
     staff_id: staffId,
     id: staffId,
     restaurant_id: Number(raw.restaurant_id ?? 0),
+    restaurant_name: restaurantName,
+    branch_name: branchName,
+    display_name: displayName,
     user_id: Number(raw.user_id ?? 0),
     first_name: String(raw.first_name || ''),
     last_name: String(raw.last_name || ''),
@@ -124,8 +141,11 @@ export function normalizeRestaurantStaffMember(raw) {
   };
 }
 
-export async function getRestaurantStaff(restaurantId = null) {
-  const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+export async function getRestaurantStaff(restaurantId = null, { allBranches = false } = {}) {
+  const params = new URLSearchParams();
+  if (restaurantId) params.set('restaurant_id', String(restaurantId));
+  if (allBranches) params.set('all_branches', '1');
+  const query = params.toString() ? `?${params.toString()}` : '';
   const response = await apiClient.get(`/restaurant/staff${query}`);
   const data = response?.data || {};
   const rawStaff = Array.isArray(data.staff) ? data.staff : [];
@@ -133,6 +153,9 @@ export async function getRestaurantStaff(restaurantId = null) {
   return {
     restaurant_id: Number(data.restaurant_id ?? restaurantId ?? 0),
     restaurant_name: String(data.restaurant_name || ''),
+    branch_name: data.branch_name ?? null,
+    display_name: String(data.display_name || data.restaurant_name || ''),
+    all_branches: Boolean(data.all_branches),
     staff: rawStaff.map(normalizeRestaurantStaffMember).filter(Boolean),
   };
 }
@@ -173,6 +196,26 @@ export async function cancelStaffInvitation(staffId) {
   return response?.data ?? { staff_id: id, status: 'cancelled' };
 }
 
+export async function updateStaffPosition(staffId, staffPosition) {
+  const id = Number(staffId);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('A valid staff ID is required.');
+  }
+  const response = await apiClient.patch(`/restaurant/staff/${id}/position`, {
+    staff_position: staffPosition,
+  });
+  return normalizeRestaurantStaffMember(response?.data) ?? response?.data;
+}
+
+export async function removeStaffMember(staffId) {
+  const id = Number(staffId);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('A valid staff ID is required.');
+  }
+  const response = await apiClient.delete(`/restaurant/staff/${id}`);
+  return response?.data ?? { staff_id: id, status: 'inactive' };
+}
+
 export const staffInvitationService = {
   getStaffInvitations,
   acceptStaffInvitation,
@@ -181,6 +224,8 @@ export const staffInvitationService = {
   getRestaurantStaff,
   sendStaffInvitation,
   cancelStaffInvitation,
+  updateStaffPosition,
+  removeStaffMember,
 };
 
 export default staffInvitationService;

@@ -512,6 +512,22 @@ Phase 2b (`CLEAN-1(d)` staff permission map & menu route access) is complete:
 
 ---
 
+## Phase 5 implemented
+
+Phase 5 (Staff Per Branch — Backend + Frontend) is complete (`salo_test` only):
+
+1. **Per-Branch Staff Endpoints (`StaffInvitationService`, `StaffInvitationController`, `routes/api.php`):**
+   - `GET /api/restaurant/staff`: Scoped to the selected branch via `WorkspaceAccessResolver::requireActiveOwnedRestaurant`; supports `?all_branches=1` for owners to list staff across all branches of the business with `branch_name` and `display_name`.
+   - `POST /api/restaurant/staff/invitations`: Invites a user to the selected branch; rejects duplicate active/pending invitations on **that** branch with `422` while allowing separate invitations to sibling branches; blocks inviting any owner of the business (`brand_restaurant_id`).
+   - `POST /api/restaurant/staff/invitations/{id}/cancel`, `PATCH /api/restaurant/staff/{id}/position`, and `DELETE /api/restaurant/staff/{id}`: Owner-only, enforcing sibling-branch isolation when `X-Restaurant-Id`/`restaurant_id` is sent.
+2. **Notifications, Invitee Inbox, and Deactivated Branch Handling (`User.php`, `InvitationsInboxPage.jsx`, `RestaurantAccessContext.jsx`, `OwnerLayout.jsx`):**
+   - Notifications and `GET /api/account/staff-invitations` include `branch_name` and `display_name` (`"<restaurant_name> — <branch_name>"`).
+   - `User::resolveRoleContext()` includes `restaurant_status` on `restaurant_staff_assignments` and `staff_positions` on `/api/auth/me`. Staff with a deactivated branch automatically land on a remaining active branch; staff with no active branches see a clear unavailable-branch message in `OwnerLayout.jsx`.
+3. **Team & Staff UI (`TeamAndStaffPage.jsx`, `teamContent.js`, `staffInvitationService.js`):**
+   - Displays target branch badge (`Inviting to: ...`), canonical `staff_positions` dropdown, `Selected branch` / `All branches` toggle with branch badge, and position update + remove staff actions.
+
+---
+
 ## Approved Decisions Baseline (Decisions 1–7)
 
 1. **Decision 1 — Core Data Model:** **Option B** — Each branch is a `restaurants` row linked to the root row via `parent_restaurant_id` + plain `brand_restaurant_id` + `branch_name` (accepting duplicated business-level columns on child rows as a tradeoff), plus `restaurant_application_branches` for pending application branches, and copying `restaurant_owners` rows to each branch on creation/approval.

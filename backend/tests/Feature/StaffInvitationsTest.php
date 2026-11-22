@@ -168,7 +168,7 @@ class StaffInvitationsTest extends TestCase
             'staff_position' => 'Arbitrary Free Text',
         ])->assertStatus(422);
 
-        // Valid invite then duplicate -> 409
+        // Valid invite then duplicate -> 422
         $this->actingAs($owner)->postJson('/api/restaurant/staff/invitations', [
             'email' => $invitee->email,
             'staff_position' => 'Manager',
@@ -177,7 +177,7 @@ class StaffInvitationsTest extends TestCase
         $this->actingAs($owner)->postJson('/api/restaurant/staff/invitations', [
             'email' => $invitee->email,
             'staff_position' => 'Order Handler',
-        ])->assertStatus(409);
+        ])->assertStatus(422);
 
         // Inactive restaurant blocked -> 403
         $inactiveOwner = $this->createUser('customer', 'owni');

@@ -6,6 +6,7 @@ use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
 use App\Support\AuditLogService;
+use App\Support\RestaurantBranchService;
 use App\Support\WorkspaceAccessResolver;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -57,7 +58,7 @@ class StaffInvitationService
             return ['submitted' => true];
         }
 
-        $this->assertTargetUserInvitable($owner, $targetUser, $targetRestaurantId);
+        $this->assertTargetUserInvitable($owner, $targetUser, $restaurant);
 
         $expiryDays = max(1, (int) config('salo.staff.invitation_expiry_days', 7));
         $this->persistSentInvitation($owner, $restaurant, $targetRestaurantId, $targetUser, $canonicalPosition, $note, $expiryDays, $request);
@@ -84,19 +85,26 @@ class StaffInvitationService
         }
     }
 
-    private function assertTargetUserInvitable(User $owner, object $targetUser, int $restaurantId): void
+    private function assertTargetUserInvitable(User $owner, object $targetUser, object $restaurant): void
     {
         if ((int) $targetUser->user_id === (int) $owner->user_id) {
             throw ValidationException::withMessages(['username' => ['You cannot invite yourself as staff.']]);
         }
 
-        $isAlreadyOwner = DB::table('restaurant_owners')
-            ->where('restaurant_id', $restaurantId)
-            ->where('user_id', $targetUser->user_id)
+        $restaurantId = (int) $restaurant->restaurant_id;
+        $brandId = (int) ($restaurant->brand_restaurant_id ?? $restaurantId);
+
+        $isAlreadyOwner = DB::table('restaurant_owners as ro')
+            ->join('restaurants as r', 'r.restaurant_id', '=', 'ro.restaurant_id')
+            ->where('ro.user_id', $targetUser->user_id)
+            ->where(static function ($query) use ($restaurantId, $brandId): void {
+                $query->where('ro.restaurant_id', $restaurantId)
+                    ->orWhere('r.brand_restaurant_id', $brandId);
+            })
             ->exists();
 
         if ($isAlreadyOwner) {
-            throw ValidationException::withMessages(['username' => ['This user is already an owner of this restaurant.']]);
+            throw ValidationException::withMessages(['username' => ['This user is already an owner of this business.']]);
         }
     }
 
@@ -132,12 +140,13 @@ class StaffInvitationService
             );
 
             $inviterFirstName = trim((string) ($owner->first_name ?? '')) ?: 'An owner';
+            $displayName = RestaurantBranchService::formatDisplayName((string) $restaurant->restaurant_name, $restaurant->branch_name ?? null);
             $this->notificationService->notifyUser(
                 userId: (int) $targetUser->user_id,
                 workspace: 'customer',
                 type: 'staff_invitation_received',
-                title: "Staff invitation from {$restaurant->restaurant_name}",
-                body: "{$inviterFirstName} invited you to join {$restaurant->restaurant_name} as {$canonicalPosition}.",
+                title: "Staff invitation from {$displayName}",
+                body: "{$inviterFirstName} invited you to join {$displayName} as {$canonicalPosition}.",
                 relatedEntityType: 'staff_invitation',
                 relatedEntityId: $staffId,
             );
@@ -164,7 +173,9 @@ class StaffInvitationService
                 && ($existing->expires_at === null || Carbon::parse((string) $existing->expires_at)->gt($now));
 
             if ($isPendingAndValid || $existing->staff_status === self::STATUS_ACTIVE) {
-                throw new ConflictHttpException('This user already has an active or pending staff record for this restaurant.');
+                throw ValidationException::withMessages([
+                    'username' => ['This user already has an active or pending staff record for this branch.'],
+                ]);
             }
 
             $staffId = (int) $existing->staff_id;
@@ -188,29 +199,59 @@ class StaffInvitationService
     }
 
     /**
-     * List staff and invitations for an owned active restaurant.
+     * List staff and invitations for an owned active restaurant (or across all branches of the business).
      *
      * @return array<string, mixed>
      */
-    public function listRestaurantStaff(User $owner, ?int $restaurantId = null): array
+    public function listRestaurantStaff(User $owner, ?int $restaurantId = null, bool $allBranches = false): array
     {
         $restaurant = $this->requireOwnedActiveRestaurant($owner, $restaurantId);
         $targetRestaurantId = (int) $restaurant->restaurant_id;
+        $brandId = (int) ($restaurant->brand_restaurant_id ?? $targetRestaurantId);
         $now = now();
 
-        $rawRows = DB::table('restaurant_staff as rs')
+        $query = DB::table('restaurant_staff as rs')
+            ->join('restaurants as r', 'r.restaurant_id', '=', 'rs.restaurant_id')
             ->join('users as u', 'u.user_id', '=', 'rs.user_id')
             ->leftJoin('users as inv', 'inv.user_id', '=', 'rs.invited_by')
-            ->where('rs.restaurant_id', $targetRestaurantId)
             ->orderByDesc('rs.staff_id')
-            ->select(['rs.*', 'u.first_name', 'u.last_name', 'u.username', 'inv.first_name as invited_by_first_name'])
-            ->get();
+            ->select([
+                'rs.*',
+                'r.restaurant_name',
+                'r.branch_name',
+                'u.first_name',
+                'u.last_name',
+                'u.username',
+                'inv.first_name as invited_by_first_name',
+            ]);
+
+        if ($allBranches) {
+            $ownedBranchIds = DB::table('restaurant_owners as ro')
+                ->join('restaurants as r2', 'r2.restaurant_id', '=', 'ro.restaurant_id')
+                ->where('ro.user_id', $owner->user_id)
+                ->where(static function ($q) use ($brandId, $targetRestaurantId): void {
+                    $q->where('r2.brand_restaurant_id', $brandId)
+                        ->orWhere('r2.restaurant_id', $targetRestaurantId);
+                })
+                ->pluck('ro.restaurant_id')
+                ->map(static fn ($id): int => (int) $id)
+                ->all();
+
+            $query->whereIn('rs.restaurant_id', $ownedBranchIds !== [] ? $ownedBranchIds : [$targetRestaurantId]);
+        } else {
+            $query->where('rs.restaurant_id', $targetRestaurantId);
+        }
+
+        $rawRows = $query->get();
 
         $this->expireOverdueFromRows($rawRows, $now);
 
         return [
             'restaurant_id' => $targetRestaurantId,
             'restaurant_name' => $restaurant->restaurant_name,
+            'branch_name' => $restaurant->branch_name ?? null,
+            'display_name' => RestaurantBranchService::formatDisplayName((string) $restaurant->restaurant_name, $restaurant->branch_name ?? null),
+            'all_branches' => $allBranches,
             'staff' => $rawRows->map(fn (object $row): array => $this->formatRestaurantStaffRow($row))->values()->all(),
         ];
     }
@@ -228,7 +269,7 @@ class StaffInvitationService
                 throw new NotFoundHttpException('Staff invitation not found.');
             }
 
-            $restaurant = $this->requireOwnedActiveRestaurant($owner, (int) $row->restaurant_id);
+            $restaurant = $this->assertRowMatchesSelectedOwnedBranch($owner, (int) $row->restaurant_id);
             $now = now();
 
             if ($this->expireIfOverdueAndAssertPending($row, $staffId, $now, 'cancelled')) {
@@ -249,12 +290,13 @@ class StaffInvitationService
                 request: $request,
             );
 
+            $displayName = RestaurantBranchService::formatDisplayName((string) $restaurant->restaurant_name, $restaurant->branch_name ?? null);
             $this->notificationService->notifyUser(
                 userId: (int) $row->user_id,
                 workspace: 'customer',
                 type: 'staff_invitation_cancelled',
                 title: 'Staff invitation cancelled',
-                body: "Your staff invitation from {$restaurant->restaurant_name} ({$row->staff_position}) was cancelled.",
+                body: "Your staff invitation from {$displayName} ({$row->staff_position}) was cancelled.",
                 relatedEntityType: 'staff_invitation',
                 relatedEntityId: $staffId,
             );
@@ -267,6 +309,117 @@ class StaffInvitationService
         }
 
         return ['staff_id' => $staffId, 'status' => self::STATUS_CANCELLED];
+    }
+
+    /**
+     * Update a staff member's position on their assigned branch (owner only).
+     *
+     * @return array<string, mixed>
+     */
+    public function updateStaffPosition(User $owner, int $staffId, string $rawPosition, Request $request): array
+    {
+        $canonicalPosition = $this->normalizeAndValidatePosition($rawPosition);
+
+        return DB::transaction(function () use ($owner, $staffId, $canonicalPosition, $request): array {
+            $row = DB::table('restaurant_staff')->where('staff_id', $staffId)->lockForUpdate()->first();
+            if (! $row) {
+                throw new NotFoundHttpException('Staff member not found.');
+            }
+
+            $restaurant = $this->assertRowMatchesSelectedOwnedBranch($owner, (int) $row->restaurant_id);
+            if (! in_array($row->staff_status, [self::STATUS_ACTIVE, self::STATUS_INVITED], true)) {
+                throw new ConflictHttpException('Only active or pending staff members can have their position updated.');
+            }
+
+            $oldPosition = (string) $row->staff_position;
+            $now = now();
+
+            DB::table('restaurant_staff')->where('staff_id', $staffId)->update([
+                'staff_position' => $canonicalPosition,
+                'updated_at' => $now,
+            ]);
+
+            $this->auditLogService->record(
+                actorUserId: (int) $owner->user_id,
+                action: 'staff_position_updated',
+                entityType: 'restaurant_staff',
+                entityId: $staffId,
+                oldValues: ['staff_position' => $oldPosition],
+                newValues: ['staff_position' => $canonicalPosition, 'restaurant_id' => (int) $row->restaurant_id],
+                request: $request,
+            );
+
+            $updatedRow = DB::table('restaurant_staff as rs')
+                ->join('restaurants as r', 'r.restaurant_id', '=', 'rs.restaurant_id')
+                ->join('users as u', 'u.user_id', '=', 'rs.user_id')
+                ->leftJoin('users as inv', 'inv.user_id', '=', 'rs.invited_by')
+                ->where('rs.staff_id', $staffId)
+                ->select([
+                    'rs.*',
+                    'r.restaurant_name',
+                    'r.branch_name',
+                    'u.first_name',
+                    'u.last_name',
+                    'u.username',
+                    'inv.first_name as invited_by_first_name',
+                ])
+                ->first();
+
+            return $this->formatRestaurantStaffRow($updatedRow);
+        });
+    }
+
+    /**
+     * Remove an active staff member from a branch (owner only; sets staff_status = 'inactive').
+     *
+     * @return array<string, mixed>
+     */
+    public function removeStaff(User $owner, int $staffId, Request $request): array
+    {
+        return DB::transaction(function () use ($owner, $staffId, $request): array {
+            $row = DB::table('restaurant_staff')->where('staff_id', $staffId)->lockForUpdate()->first();
+            if (! $row) {
+                throw new NotFoundHttpException('Staff member not found.');
+            }
+
+            $restaurant = $this->assertRowMatchesSelectedOwnedBranch($owner, (int) $row->restaurant_id);
+            if ($row->staff_status !== self::STATUS_ACTIVE) {
+                throw new ConflictHttpException('Only active staff members can be removed.');
+            }
+
+            $now = now();
+            DB::table('restaurant_staff')->where('staff_id', $staffId)->update([
+                'staff_status' => 'inactive',
+                'updated_at' => $now,
+            ]);
+
+            $this->auditLogService->record(
+                actorUserId: (int) $owner->user_id,
+                action: 'staff_removed',
+                entityType: 'restaurant_staff',
+                entityId: $staffId,
+                oldValues: ['staff_status' => self::STATUS_ACTIVE, 'staff_position' => $row->staff_position],
+                newValues: ['staff_status' => 'inactive', 'restaurant_id' => (int) $row->restaurant_id],
+                request: $request,
+            );
+
+            $displayName = RestaurantBranchService::formatDisplayName((string) $restaurant->restaurant_name, $restaurant->branch_name ?? null);
+            $this->notificationService->notifyUser(
+                userId: (int) $row->user_id,
+                workspace: 'customer',
+                type: 'staff_removed',
+                title: 'Staff access removed',
+                body: "Your {$row->staff_position} access at {$displayName} has been removed.",
+                relatedEntityType: 'staff_invitation',
+                relatedEntityId: $staffId,
+            );
+
+            return [
+                'staff_id' => $staffId,
+                'restaurant_id' => (int) $row->restaurant_id,
+                'status' => 'inactive',
+            ];
+        });
     }
 
     /**
@@ -283,7 +436,7 @@ class StaffInvitationService
             ->leftJoin('users as inv', 'inv.user_id', '=', 'rs.invited_by')
             ->where('rs.user_id', $user->user_id)
             ->orderByDesc('rs.staff_id')
-            ->select(['rs.*', 'r.restaurant_name', 'r.restaurant_status', 'inv.first_name as invited_by_first_name'])
+            ->select(['rs.*', 'r.restaurant_name', 'r.branch_name', 'r.restaurant_status', 'inv.first_name as invited_by_first_name'])
             ->get();
 
         $this->expireOverdueFromRows($rawRows, $now);
@@ -308,7 +461,7 @@ class StaffInvitationService
 
             $restaurant = DB::table('restaurants')
                 ->where('restaurant_id', $row->restaurant_id)
-                ->first(['restaurant_id', 'restaurant_name', 'restaurant_status']);
+                ->first(['restaurant_id', 'restaurant_name', 'branch_name', 'restaurant_status']);
 
             if (! $restaurant || $restaurant->restaurant_status !== 'active') {
                 throw new ConflictHttpException('This restaurant is no longer active.');
@@ -328,13 +481,14 @@ class StaffInvitationService
                 request: $request,
             );
 
+            $displayName = RestaurantBranchService::formatDisplayName((string) $restaurant->restaurant_name, $restaurant->branch_name ?? null);
             $this->notifyOwnersOfInvitationResponse(
                 $user,
                 (int) $row->restaurant_id,
                 $staffId,
                 'staff_invitation_accepted',
                 'Staff invitation accepted',
-                "accepted the invitation to join {$restaurant->restaurant_name} as {$row->staff_position}.",
+                "accepted the invitation to join {$displayName} as {$row->staff_position}.",
             );
 
             return ['expired' => false, 'restaurant_id' => (int) $row->restaurant_id, 'staff_position' => $row->staff_position];
@@ -365,7 +519,12 @@ class StaffInvitationService
                 return ['expired' => true];
             }
 
-            $restaurantName = (string) (DB::table('restaurants')->where('restaurant_id', $row->restaurant_id)->value('restaurant_name') ?? 'the restaurant');
+            $restaurant = DB::table('restaurants')
+                ->where('restaurant_id', $row->restaurant_id)
+                ->first(['restaurant_name', 'branch_name']);
+            $displayName = $restaurant
+                ? RestaurantBranchService::formatDisplayName((string) $restaurant->restaurant_name, $restaurant->branch_name ?? null)
+                : 'the restaurant';
 
             DB::table('restaurant_staff')->where('staff_id', $staffId)->update([
                 'staff_status' => self::STATUS_DECLINED, 'responded_at' => $now, 'updated_at' => $now,
@@ -387,7 +546,7 @@ class StaffInvitationService
                 $staffId,
                 'staff_invitation_declined',
                 'Staff invitation declined',
-                "declined the invitation to join {$restaurantName} as {$row->staff_position}.",
+                "declined the invitation to join {$displayName} as {$row->staff_position}.",
             );
 
             return ['expired' => false];
@@ -405,6 +564,17 @@ class StaffInvitationService
         $resolver = $this->workspaceAccessResolver ?? app(WorkspaceAccessResolver::class);
 
         return $resolver->requireActiveOwnedRestaurant($owner, $restaurantId);
+    }
+
+    private function assertRowMatchesSelectedOwnedBranch(User $owner, int $rowRestaurantId): object
+    {
+        $resolver = $this->workspaceAccessResolver ?? app(WorkspaceAccessResolver::class);
+        $requestedId = $resolver->resolveRequestedRestaurantId(null);
+        if ($requestedId !== null && $requestedId !== $rowRestaurantId) {
+            abort(403, 'Forbidden: this staff record belongs to another branch.');
+        }
+
+        return $resolver->requireActiveOwnedRestaurant($owner, $rowRestaurantId);
     }
 
     private function normalizeAndValidatePosition(string $rawPosition): string
@@ -518,9 +688,17 @@ class StaffInvitationService
      */
     private function formatRestaurantStaffRow(object $row): array
     {
+        $restaurantName = isset($row->restaurant_name) ? (string) $row->restaurant_name : null;
+        $branchName = property_exists($row, 'branch_name') ? $row->branch_name : null;
+
         return [
             'staff_id' => (int) $row->staff_id,
             'restaurant_id' => (int) $row->restaurant_id,
+            'restaurant_name' => $restaurantName,
+            'branch_name' => $branchName,
+            'display_name' => $restaurantName !== null
+                ? RestaurantBranchService::formatDisplayName($restaurantName, $branchName)
+                : null,
             'user_id' => (int) $row->user_id,
             'first_name' => $row->first_name,
             'last_name' => $row->last_name,
@@ -542,10 +720,14 @@ class StaffInvitationService
      */
     private function formatAccountInvitationRow(object $row): array
     {
+        $branchName = property_exists($row, 'branch_name') ? $row->branch_name : null;
+
         return [
             'staff_id' => (int) $row->staff_id,
             'restaurant_id' => (int) $row->restaurant_id,
             'restaurant_name' => $row->restaurant_name,
+            'branch_name' => $branchName,
+            'display_name' => RestaurantBranchService::formatDisplayName((string) $row->restaurant_name, $branchName),
             'staff_position' => $row->staff_position,
             'status' => $this->mapExternalStatus((string) $row->staff_status),
             'staff_status' => $row->staff_status,

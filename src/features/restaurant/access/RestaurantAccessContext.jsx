@@ -53,7 +53,14 @@ export function resolveBackendAccessData(user) {
     };
   });
 
-  const staffMemberships = staffRows.map((st, idx) => {
+  const hasActiveStaffBranch = staffRows.some(
+    (st) => String(st.restaurant_status || 'active').toLowerCase() === 'active',
+  );
+  const effectiveStaffRows = ownershipRows.length === 0 && hasActiveStaffBranch
+    ? staffRows.filter((st) => String(st.restaurant_status || 'active').toLowerCase() === 'active')
+    : staffRows;
+
+  const staffMemberships = effectiveStaffRows.map((st, idx) => {
     const restId = String(st.restaurant_id);
     // Consume canonical server-provided permissions from /api/auth/me (CLEAN-1(d)).
     const permissions = Array.isArray(st.permissions) ? st.permissions : [];

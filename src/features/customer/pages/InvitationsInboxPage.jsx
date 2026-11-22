@@ -82,24 +82,26 @@ export default function InvitationsInboxPage() {
           reloadInvitationsFn: loadInvitations,
         });
 
+        const branchLabel = invitation.display_name || invitation.restaurant_name;
         if (result.userRefreshed) {
           setFeedback({
             tone: 'success',
-            message: `You accepted the staff invitation to ${invitation.restaurant_name} as ${invitation.staff_position}.`,
+            message: `You accepted the staff invitation to ${branchLabel} as ${invitation.staff_position}.`,
             needsRefreshRetry: false,
           });
         } else {
           setFeedback({
             tone: 'warning',
-            message: `You accepted the staff invitation to ${invitation.restaurant_name} as ${invitation.staff_position}, but we could not refresh your account roles yet.`,
+            message: `You accepted the staff invitation to ${branchLabel} as ${invitation.staff_position}, but we could not refresh your account roles yet.`,
             needsRefreshRetry: true,
           });
         }
       } else {
+        const branchLabel = invitation.display_name || invitation.restaurant_name;
         await staffInvitationService.declineStaffInvitation(invitation.id);
         setFeedback({
           tone: 'info',
-          message: `You declined the staff invitation from ${invitation.restaurant_name}.`,
+          message: `You declined the staff invitation from ${branchLabel}.`,
           needsRefreshRetry: false,
         });
         await loadInvitations();
@@ -198,7 +200,7 @@ export default function InvitationsInboxPage() {
                             </svg>
                           </span>
                           <span className="customer-invitation-type">STAFF INVITATION</span>
-                          <h2>{invitation.restaurant_name}</h2>
+                          <h2>{invitation.display_name || invitation.restaurant_name}</h2>
                         </div>
 
                         <Badge variant={badgeInfo.variant} size="sm">
@@ -267,7 +269,7 @@ export default function InvitationsInboxPage() {
       <ConfirmDialog
         open={Boolean(confirmTarget)}
         title="Accept staff invitation?"
-        message={confirmTarget ? `Accepting this invitation will add you to ${confirmTarget.restaurant_name} as ${confirmTarget.staff_position}.` : ''}
+        message={confirmTarget ? `Accepting this invitation will add you to ${confirmTarget.display_name || confirmTarget.restaurant_name} as ${confirmTarget.staff_position}.` : ''}
         confirmLabel="Accept invitation"
         cancelLabel="Cancel"
         onClose={() => setConfirmTarget(null)}

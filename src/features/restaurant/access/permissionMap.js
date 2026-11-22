@@ -120,6 +120,8 @@ export function buildRestaurantAccess(user, memberships, restaurants, selectedRe
   ]);
   const accessibleRestaurants = restaurants.filter((restaurant) => accessibleIds.has(restaurant.id));
   const selected = accessibleRestaurants.find((restaurant) => restaurant.id === selectedRestaurantId)
+    || accessibleRestaurants.find((restaurant) => restaurant.status === 'active' && restaurant.isMainBranch)
+    || accessibleRestaurants.find((restaurant) => restaurant.status === 'active')
     || accessibleRestaurants.find((restaurant) => restaurant.isMainBranch)
     || accessibleRestaurants[0]
     || null;

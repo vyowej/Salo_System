@@ -283,7 +283,7 @@ export default function OwnerLayout({ children }) {
           )}
           {selectedRestaurant && selectedRestaurant.status !== 'active' ? (
             <section
-              aria-label="Restaurant application status"
+              aria-label="Restaurant branch status"
               style={{
                 maxWidth: 640,
                 margin: '48px auto',
@@ -293,20 +293,38 @@ export default function OwnerLayout({ children }) {
                 background: 'var(--surface-primary)',
               }}
             >
-              <h2 style={{ margin: '0 0 8px' }}>Restaurant Workspace Pending Activation</h2>
-              <p style={{ margin: '0 0 16px', color: 'var(--text-secondary)' }}>
-                <strong>{selectedRestaurant.displayName || selectedRestaurant.name || 'Your restaurant'}</strong> currently has status{' '}
-                <strong>{selectedRestaurant.status}</strong>. The owner workspace is available once your restaurant
-                application is approved and active.
-              </p>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <Link to="/become-a-partner/status" className="salo-btn salo-btn--primary">
-                  View Application Status
-                </Link>
-                <Link to="/customer" className="salo-btn salo-btn--outline">
-                  Return to Customer Portal
-                </Link>
-              </div>
+              {access.isOwner ? (
+                <>
+                  <h2 style={{ margin: '0 0 8px' }}>Restaurant Workspace Pending Activation</h2>
+                  <p style={{ margin: '0 0 16px', color: 'var(--text-secondary)' }}>
+                    <strong>{selectedRestaurant.displayName || selectedRestaurant.name || 'Your restaurant'}</strong> currently has status{' '}
+                    <strong>{selectedRestaurant.status}</strong>. The owner workspace is available once your restaurant
+                    application is approved and active.
+                  </p>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <Link to="/become-a-partner/status" className="salo-btn salo-btn--primary">
+                      View Application Status
+                    </Link>
+                    <Link to="/customer" className="salo-btn salo-btn--outline">
+                      Return to Customer Portal
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 style={{ margin: '0 0 8px' }}>Branch Currently Unavailable</h2>
+                  <p style={{ margin: '0 0 16px', color: 'var(--text-secondary)' }}>
+                    <strong>{selectedRestaurant.displayName || selectedRestaurant.name || 'This branch'}</strong> currently has status{' '}
+                    <strong>{selectedRestaurant.status}</strong>. Your staff access is preserved, and workspace tools will
+                    be available once the branch is active again. Please contact the restaurant owner for assistance.
+                  </p>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <Link to="/customer" className="salo-btn salo-btn--outline">
+                      Return to Customer Portal
+                    </Link>
+                  </div>
+                </>
+              )}
             </section>
           ) : (
             <div key={selectedRestaurantId || 'default'} className="owner-branch-scope">

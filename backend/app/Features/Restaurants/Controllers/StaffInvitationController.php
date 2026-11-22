@@ -19,8 +19,9 @@ class StaffInvitationController extends Controller
     {
         $restaurantId = $request->query('restaurant_id');
         $parsedId = $restaurantId !== null && $restaurantId !== '' ? (int) $restaurantId : null;
+        $allBranches = filter_var($request->query('all_branches', false), FILTER_VALIDATE_BOOLEAN);
 
-        $data = $this->staffInvitationService->listRestaurantStaff($request->user(), $parsedId);
+        $data = $this->staffInvitationService->listRestaurantStaff($request->user(), $parsedId, $allBranches);
 
         return ApiResponse::success($data, 'Restaurant staff loaded.');
     }
@@ -42,5 +43,28 @@ class StaffInvitationController extends Controller
         $data = $this->staffInvitationService->cancelInvitation($request->user(), $id, $request);
 
         return ApiResponse::success($data, 'Staff invitation cancelled.');
+    }
+
+    public function updatePosition(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'staff_position' => ['required', 'string', 'max:100'],
+        ]);
+
+        $data = $this->staffInvitationService->updateStaffPosition(
+            $request->user(),
+            $id,
+            (string) $validated['staff_position'],
+            $request,
+        );
+
+        return ApiResponse::success($data, 'Staff position updated.');
+    }
+
+    public function remove(Request $request, int $id): JsonResponse
+    {
+        $data = $this->staffInvitationService->removeStaff($request->user(), $id, $request);
+
+        return ApiResponse::success($data, 'Staff member removed.');
     }
 }

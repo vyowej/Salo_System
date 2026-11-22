@@ -483,3 +483,135 @@ test('RestaurantAccessContext consumes server-provided permissions directly for 
     await server.close();
   }
 });
+
+test('Phase 5: deactivated branch fallback for staff, inbox branch display_name, and TeamAndStaffPage states', async () => {
+  const server = await createServer({
+    configFile: false,
+    root: fileURLToPath(new URL('../../../../', import.meta.url)),
+    plugins: [reactPlugin()],
+    server: { middlewareMode: true },
+    appType: 'custom',
+    logLevel: 'silent',
+  });
+
+  try {
+    const { resolveBackendAccessData } = await server.ssrLoadModule(
+      '/src/features/restaurant/access/RestaurantAccessContext.jsx',
+    );
+    const { buildRestaurantAccess } = await server.ssrLoadModule(
+      '/src/features/restaurant/access/permissionMap.js',
+    );
+    const { normalizeStaffInvitation } = await server.ssrLoadModule(
+      '/src/services/staffInvitationService.js',
+    );
+    const { default: AuthContext } = await server.ssrLoadModule('/src/contexts/AuthContext.jsx');
+    const { default: ThemeContext } = await server.ssrLoadModule('/src/contexts/ThemeContext.jsx');
+    const { RestaurantAccessProvider } = await server.ssrLoadModule(
+      '/src/features/restaurant/access/RestaurantAccessContext.jsx',
+    );
+    const { default: TeamAndStaffPage } = await server.ssrLoadModule(
+      '/src/features/restaurant/pages/TeamAndStaffPage.jsx',
+    );
+    const { MemoryRouter } = await import('react-router-dom');
+
+    // 1. Staff with 1 inactive branch and 1 active branch lands on the active branch (inactive omitted from switcher)
+    const staffTwoBranches = {
+      id: 88,
+      user_id: 88,
+      restaurant_ownerships: [],
+      restaurant_staff_assignments: [
+        {
+          staff_id: 1,
+          restaurant_id: 61,
+          restaurant_name: 'Salo Kitchen',
+          branch_name: 'Makati',
+          display_name: 'Salo Kitchen — Makati',
+          restaurant_status: 'inactive',
+          staff_position: 'Order Handler',
+          staff_status: 'active',
+          permissions: ['orders.view'],
+        },
+        {
+          staff_id: 2,
+          restaurant_id: 60,
+          restaurant_name: 'Salo Kitchen',
+          branch_name: 'Main',
+          display_name: 'Salo Kitchen — Main',
+          restaurant_status: 'active',
+          staff_position: 'Manager',
+          staff_status: 'active',
+          permissions: ['orders.view', 'menu.view', 'menu.publish'],
+        },
+      ],
+    };
+    const resolved = resolveBackendAccessData(staffTwoBranches);
+    assert.equal(resolved.restaurants.length, 1);
+    assert.equal(resolved.restaurants[0].id, '60');
+    const accessActive = buildRestaurantAccess({ id: 88 }, resolved.memberships, resolved.restaurants, '61');
+    assert.equal(accessActive.selectedRestaurantId, '60');
+
+    // 2. Staff with NO active branch keeps the inactive entry so OwnerLayout renders a clear unavailable message
+    const staffOnlyInactive = {
+      ...staffTwoBranches,
+      restaurant_staff_assignments: [staffTwoBranches.restaurant_staff_assignments[0]],
+    };
+    const resolvedInactive = resolveBackendAccessData(staffOnlyInactive);
+    assert.equal(resolvedInactive.restaurants.length, 1);
+    assert.equal(resolvedInactive.restaurants[0].status, 'inactive');
+
+    // 3. Invitation normalization preserves display_name with branch name
+    const normalizedInv = normalizeStaffInvitation({
+      staff_id: 5,
+      restaurant_id: 61,
+      restaurant_name: 'Salo Kitchen',
+      branch_name: 'Makati',
+      display_name: 'Salo Kitchen — Makati',
+      staff_position: 'Order Handler',
+      status: 'pending',
+    });
+    assert.equal(normalizedInv.display_name, 'Salo Kitchen — Makati');
+
+    // 4. TeamAndStaffPage renders target branch label and All branches toggle for multi-branch owner
+    const multiBranchOwner = {
+      id: 99,
+      user_id: 99,
+      staff_positions: ['Manager', 'Order Handler', 'Menu Manager'],
+      restaurant_ownerships: [
+        { restaurant_id: 60, restaurant_name: 'Salo Kitchen', branch_name: 'Main', display_name: 'Salo Kitchen — Main', restaurant_status: 'active' },
+        { restaurant_id: 61, restaurant_name: 'Salo Kitchen', branch_name: 'Makati', display_name: 'Salo Kitchen — Makati', restaurant_status: 'active' },
+      ],
+      restaurant_staff_assignments: [],
+    };
+    const teamHtml = renderToStaticMarkup(React.createElement(
+      MemoryRouter,
+      { initialEntries: ['/owner/team'] },
+      React.createElement(
+        ThemeContext.Provider,
+        { value: { theme: 'light', setTheme: () => {}, toggleTheme: () => {} } },
+        React.createElement(
+          AuthContext.Provider,
+          {
+            value: {
+              user: multiBranchOwner,
+              isAuthenticated: true,
+              loading: false,
+              roles: ['customer', 'owner'],
+              activeWorkspace: 'restaurant',
+              availableWorkspaces: ['restaurant'],
+              currentRole: 'restaurant',
+            },
+          },
+          React.createElement(
+            RestaurantAccessProvider,
+            null,
+            React.createElement(TeamAndStaffPage),
+          ),
+        ),
+      ),
+    ));
+    assert.match(teamHtml, /Inviting to: Salo Kitchen — Main/);
+    assert.match(teamHtml, /All branches/);
+  } finally {
+    await server.close();
+  }
+});
