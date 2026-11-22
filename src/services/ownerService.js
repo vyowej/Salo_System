@@ -541,6 +541,16 @@ export const ownerService = {
     const res = await apiClient.delete(`/restaurant/change-requests/${encodeURIComponent(requestId)}`);
     return res?.data?.request ?? null;
   },
+
+  async getBranches() {
+    const res = await apiClient.get('/restaurant/branches');
+    return Array.isArray(res?.data?.branches) ? res.data.branches : [];
+  },
+
+  async createBranch(payload) {
+    const res = await apiClient.post('/restaurant/branches', payload);
+    return res?.data?.branch ?? null;
+  },
 };
 
 export default ownerService;

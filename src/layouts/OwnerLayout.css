@@ -60,6 +60,175 @@
   outline-offset: 2px;
 }
 
+.owner-branch-switcher {
+  position: relative;
+}
+
+.owner-branch-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.owner-branch-trigger-copy {
+  display: grid;
+  line-height: 1.2;
+}
+
+.owner-branch-brand {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: var(--font-weight-semibold);
+}
+
+.owner-branch-current {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.owner-branch-caret {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.owner-branch-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  width: min(340px, 88vw);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.owner-branch-popover-list {
+  display: grid;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: var(--space-2);
+  gap: 4px;
+}
+
+.owner-branch-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.owner-branch-option:hover,
+.owner-branch-option:focus-visible {
+  background: var(--bg-secondary);
+}
+
+.owner-branch-option.is-current {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
+
+.owner-branch-option-main {
+  display: grid;
+  min-width: 0;
+}
+
+.owner-branch-option-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner-branch-option-addr {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.owner-branch-option-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.owner-branch-status-pill,
+.owner-branch-current-tag {
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+}
+
+.owner-branch-status-pill.is-active {
+  background: var(--status-success-bg);
+  color: var(--status-success-text);
+}
+
+.owner-branch-current-tag {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.owner-branch-popover-footer {
+  padding: var(--space-2);
+  border-top: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+}
+
+.owner-branch-add-btn {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.owner-branch-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--status-info-border, #bae6fd);
+  background: var(--status-info-bg, #eff6ff);
+  color: var(--status-info-text, #1e40af);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.owner-branch-notice button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+}
+
 .owner-access-page {
   min-height: 100dvh;
   display: grid;

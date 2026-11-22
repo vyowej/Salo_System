@@ -191,6 +191,16 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::get('/operating-hours', [OwnerProfileController::class, 'operatingHours']);
         Route::put('/operating-hours', [OwnerProfileController::class, 'updateOperatingHours']);
 
+        Route::get('/staff', [StaffInvitationController::class, 'index']);
+        Route::post('/staff/invitations', [StaffInvitationController::class, 'storeInvitation'])->middleware('throttle:20,1');
+        Route::post('/staff/invitations/{id}/cancel', [StaffInvitationController::class, 'cancelInvitation'])->whereNumber('id');
+
+        Route::post('/branches', [OwnerBranchController::class, 'store']);
+    });
+
+    Route::middleware('role:owner,staff')->group(function (): void {
+        Route::get('/branches', [OwnerBranchController::class, 'index']);
+
         Route::get('/menu/categories', [OwnerMenuController::class, 'categories']);
         Route::post('/menu/categories', [OwnerMenuController::class, 'storeCategory']);
         Route::put('/menu/categories/reorder', [OwnerMenuController::class, 'reorderCategories']);
@@ -205,16 +215,6 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::patch('/menu/items/{itemId}/availability', [OwnerMenuController::class, 'updateItemAvailability'])->whereNumber('itemId');
         Route::delete('/menu/items/{itemId}', [OwnerMenuController::class, 'destroyItem'])->whereNumber('itemId');
         Route::post('/menu/items/{itemId}/restore', [OwnerMenuController::class, 'restoreItem'])->whereNumber('itemId');
-
-        Route::get('/staff', [StaffInvitationController::class, 'index']);
-        Route::post('/staff/invitations', [StaffInvitationController::class, 'storeInvitation'])->middleware('throttle:20,1');
-        Route::post('/staff/invitations/{id}/cancel', [StaffInvitationController::class, 'cancelInvitation'])->whereNumber('id');
-
-        Route::post('/branches', [OwnerBranchController::class, 'store']);
-    });
-
-    Route::middleware('role:owner,staff')->group(function (): void {
-        Route::get('/branches', [OwnerBranchController::class, 'index']);
 
         Route::get('/menu/publish-status', [OwnerMenuPublishController::class, 'status']);
         Route::get('/menu/preview', [OwnerMenuPublishController::class, 'preview']);

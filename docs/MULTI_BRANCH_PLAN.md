@@ -467,6 +467,51 @@ Phase 4a backend branch listing, owner Add Branch creation, delivery-coverage pu
 
 ---
 
+## Phase 4b implemented
+
+Phase 4b frontend implementation is complete:
+
+1. **Branch Context & Centralized Header (`RestaurantAccessContext.jsx`, `permissionMap.js`, `branchContextStorage.js`, `apiClient.js`):**
+   - Builds the accessible branch list from `/api/auth/me` (`branch_name`, `display_name`, `is_main_branch`, `brand_restaurant_id`, `parent_restaurant_id`, `short_address`) and persists `selectedRestaurantId` per user in `localStorage` (`salo_selected_restaurant_<userId>`), falling back to the main branch (owners) or first assigned branch (staff).
+   - `apiClient.js` automatically sends `X-Restaurant-Id` on `/restaurant/*` requests (excluding `/restaurant/applications*`), and `locationApiService.getRestaurantLocationAndCoverage(restaurantId)` / `OwnerProfilePage.jsx` pass the active `restaurant_id`.
+2. **Branch Switcher & Workspace Scoping (`OwnerLayout.jsx`, `OwnerDashboard.jsx`, `OwnerOrdersPage.jsx`, `OwnerProfilePage.jsx`):**
+   - Replaced the basic topbar `<select>` with a branch switcher popover (hidden when only 1 branch exists) displaying brand + branch name, short address, status pill, `Current` badge, and an owner-only `+ Add branch` action.
+   - Keyed the workspace body by `selectedRestaurantId` so switching branches resets unsaved state and refetches page data cleanly.
+   - Added an **All Branches** summary card on `OwnerDashboard.jsx` via `GET /api/restaurant/branches` with one-click branch switching.
+3. **Add Branch Modal & Delivery Coverage Guidance (`AddBranchModal.jsx`, `branchWorkspaceUtils.js`, `branchContent.js`, `MenuPublishBar.jsx`, `onboardingService.js`):**
+   - Owners can add branches via `POST /api/restaurant/branches` with full address + map pin picker, service toggles, copy options, `main_branch_name` prompt when the root branch name is blank, and inline 422 error mapping.
+   - Surfaced `Set delivery coverage` in the setup checklist (`onboardingService.js`) and inline publish blocker guidance (`MenuPublishBar.jsx`) linking to `/owner/profile`.
+
+---
+
+## Phase 2b implemented
+
+Phase 2b (`CLEAN-1(d)` staff permission map & menu route access) is complete:
+
+1. **Canonical Config Source of Truth (`backend/config/salo.php`):**
+   - Added `salo.staff.position_permissions` and `salo.staff.all_permissions`. Derived `salo.orders.handler_positions`, `salo.inventory.manager_positions`, and `salo.menu.publisher_positions` directly from `position_permissions`.
+2. **Backend Role Context & Guards (`User.php`, `WorkspaceAccessResolver.php`, `OwnerMenuService.php`, `routes/api.php`):**
+   - `User::resolveRoleContext()` populates `permissions` on `restaurant_ownerships` and `restaurant_staff_assignments` while preserving `can_handle_orders` and `can_publish_menu` for backward compatibility.
+   - Added `WorkspaceAccessResolver::requireActiveAuthorizedRestaurantForMenuView()` (`owner`, `Manager`, `Menu Manager`, `Inventory Manager`) and `requireActiveAuthorizedRestaurantForMenuManage()` (`owner`, `Manager`, `Menu Manager`), and moved `/menu/categories*` and `/menu/items*` to `role:owner,staff`.
+3. **Frontend Consumption (`RestaurantAccessContext.jsx`, `permissionMap.js`):**
+   - `RestaurantAccessContext.jsx` consumes server-provided `permissions` from `/api/auth/me` directly without duplicating position-matching rules; sidebar navigation (`OWNER_NAV_ITEMS`) filters by those permissions.
+
+### `/api/restaurant/*` Endpoint Access Table
+
+| Endpoint Group | Route Middleware | Resolver Guard | Allowed Roles / Positions (Assigned Active Branch) |
+|---|---|---|---|
+| `/applications*` | `auth` | Applicant user | Any authenticated applicant |
+| `/setup-status`, `/profile*`, `/accepting-status`, `/settings`, `/change-requests*`, `/operating-hours`, `/staff*`, `POST /branches` | `role:owner` | `requireActiveOwnedRestaurant` | Owner only |
+| `GET/PATCH /location`, `PUT /coverage` | `role:owner,staff` | `requireActiveOwnedRestaurant` | Owner only (service-enforced) |
+| `GET /branches` | `role:owner,staff` | Assigned active branches | Owner, all active staff |
+| `GET /menu/categories`, `GET /menu/items` | `role:owner,staff` | `requireActiveAuthorizedRestaurantForMenuView` | Owner, `Manager`, `Menu Manager`, `Inventory Manager` |
+| `POST/PUT/PATCH/DELETE /menu/categories*`, `/menu/items*` | `role:owner,staff` | `requireActiveAuthorizedRestaurantForMenuManage` | Owner, `Manager`, `Menu Manager` |
+| `/menu/publish-status`, `/menu/preview`, `/menu/publish`, `/menu/unpublish`, `/menu/discard-changes` | `role:owner,staff` | `requireActiveAuthorizedRestaurantForMenuPublish` | Owner, `Manager` |
+| `/orders*`, `/reviews*` | `role:owner,staff` | `requireActiveAuthorizedRestaurantForOrders` | Owner, `Manager`, `Order Handler`, `Order Staff` |
+| `/inventory/config` | `role:owner,staff` | `requireActiveAuthorizedRestaurantForInventory` | Owner, `Manager`, `Inventory Manager` |
+
+---
+
 ## Approved Decisions Baseline (Decisions 1–7)
 
 1. **Decision 1 — Core Data Model:** **Option B** — Each branch is a `restaurants` row linked to the root row via `parent_restaurant_id` + plain `brand_restaurant_id` + `branch_name` (accepting duplicated business-level columns on child rows as a tradeoff), plus `restaurant_application_branches` for pending application branches, and copying `restaurant_owners` rows to each branch on creation/approval.

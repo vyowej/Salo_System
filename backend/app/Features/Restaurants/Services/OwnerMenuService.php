@@ -5,6 +5,7 @@ namespace App\Features\Restaurants\Services;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use App\Support\WorkspaceAccessResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,7 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 class OwnerMenuService
 {
     public function __construct(
-        private readonly OwnerProfileService $ownerProfileService,
+        private readonly WorkspaceAccessResolver $workspaceAccessResolver,
         private readonly FileStorageService $fileStorageService,
         private readonly AuditLogService $auditLogService,
     ) {}
@@ -24,7 +25,7 @@ class OwnerMenuService
      */
     public function listCategories(User $user, ?int $restaurantId = null): array
     {
-        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuView($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
 
         $counts = DB::table('menu_items')
@@ -62,7 +63,7 @@ class OwnerMenuService
      */
     public function createCategory(User $user, array $validated, ?int $restaurantId, Request $request): array
     {
-        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuManage($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
         $name = trim((string) $validated['category_name']);
 
@@ -114,7 +115,7 @@ class OwnerMenuService
      */
     public function updateCategory(User $user, int $categoryId, array $validated, ?int $restaurantId, Request $request): array
     {
-        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuManage($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
 
         $category = DB::table('menu_categories')
@@ -191,7 +192,7 @@ class OwnerMenuService
      */
     public function reorderCategories(User $user, array $orderedIds, ?int $restaurantId, Request $request): array
     {
-        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuManage($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
 
         $existingRows = DB::table('menu_categories')
@@ -243,7 +244,7 @@ class OwnerMenuService
 
     public function deleteCategory(User $user, int $categoryId, ?int $restaurantId, Request $request): void
     {
-        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuManage($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
 
         $category = DB::table('menu_categories')
@@ -298,7 +299,7 @@ class OwnerMenuService
      */
     public function restoreCategory(User $user, int $categoryId, ?int $restaurantId, Request $request): array
     {
-        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuManage($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
 
         $category = DB::table('menu_categories')
@@ -343,7 +344,7 @@ class OwnerMenuService
      */
     public function listItems(User $user, ?int $restaurantId = null): array
     {
-        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuView($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
 
         $categoriesById = DB::table('menu_categories')
@@ -404,7 +405,7 @@ class OwnerMenuService
      */
     public function createItem(User $user, array $validated, ?UploadedFile $photoFile, ?int $restaurantId, Request $request): array
     {
-        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuManage($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
         $categoryId = (int) $validated['menu_category_id'];
 
@@ -488,7 +489,7 @@ class OwnerMenuService
         ?int $restaurantId,
         Request $request,
     ): array {
-        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuManage($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
         $existing = $this->findOwnedMenuItem($itemId, $targetId);
 
@@ -638,7 +639,7 @@ class OwnerMenuService
 
     public function deleteItem(User $user, int $itemId, ?int $restaurantId, Request $request): void
     {
-        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuManage($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
         $existing = $this->findOwnedMenuItem($itemId, $targetId);
 
@@ -686,7 +687,7 @@ class OwnerMenuService
      */
     public function restoreItem(User $user, int $itemId, ?int $restaurantId, Request $request): array
     {
-        $restaurant = $this->ownerProfileService->requireActiveOwnedRestaurant($user, $restaurantId);
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuManage($user, $restaurantId);
         $targetId = (int) $restaurant->restaurant_id;
         $existing = $this->findOwnedMenuItem($itemId, $targetId);
 

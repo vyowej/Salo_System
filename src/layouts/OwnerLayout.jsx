@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useLogout } from '../hooks/useLogout';
@@ -10,6 +10,8 @@ import ProfileMenu from '../components/navigation/ProfileMenu';
 import SwitchAccountModal from '../components/navigation/SwitchAccountModal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import Modal from '../components/common/Modal';
+import AddBranchModal from '../features/restaurant/components/AddBranchModal';
+import { BRANCH_WORKSPACE_COPY } from '../features/restaurant/content/branchContent';
 import {
   OWNER_NAV_CONFIG,
   OWNER_SIDEBAR_COLLAPSED_KEY,
@@ -36,8 +38,32 @@ export default function OwnerLayout({ children }) {
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [addBranchOpen, setAddBranchOpen] = useState(false);
+  const [branchNotice, setBranchNotice] = useState('');
+  const branchSwitcherRef = useRef(null);
   const [pendingOrdersCount] = useState(0);
   const [pendingReservationsCount] = useState(0);
+
+  useEffect(() => {
+    if (!branchMenuOpen) return undefined;
+    const handleClickOutside = (event) => {
+      if (branchSwitcherRef.current && !branchSwitcherRef.current.contains(event.target)) {
+        setBranchMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setBranchMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [branchMenuOpen]);
 
   const selectedRestaurant = access.selectedRestaurant;
   const selectedRestaurantId = selectedRestaurant?.id;
@@ -112,23 +138,89 @@ export default function OwnerLayout({ children }) {
   });
 
   const hasMultipleRestaurants = access.restaurants.length > 1;
+  const currentBranchLabel = selectedRestaurant?.branchName || selectedRestaurant?.displayName || selectedRestaurant?.name || 'Workspace';
   const restaurantControl = selectedRestaurant ? (
     <div className="owner-topbar-controls">
       {hasMultipleRestaurants ? (
-        <select
-          className="owner-restaurant-select"
-          aria-label="Select restaurant"
-          value={access.selectedRestaurantId || ''}
-          onChange={(event) => access.selectRestaurant(event.target.value)}
-        >
-          {access.restaurants.map((restaurant) => (
-            <option key={restaurant.id} value={restaurant.id}>
-              {restaurant.name}
-            </option>
-          ))}
-        </select>
+        <div className="owner-branch-switcher" ref={branchSwitcherRef}>
+          <button
+            type="button"
+            className="owner-branch-trigger"
+            aria-haspopup="listbox"
+            aria-expanded={branchMenuOpen}
+            aria-label={BRANCH_WORKSPACE_COPY.switcherAriaLabel}
+            onClick={() => setBranchMenuOpen((prev) => !prev)}
+          >
+            <span className="owner-branch-trigger-copy">
+              <span className="owner-branch-brand">{selectedRestaurant.name}</span>
+              <span className="owner-branch-current">{currentBranchLabel}</span>
+            </span>
+            <span className="owner-branch-caret" aria-hidden="true">▾</span>
+          </button>
+
+          {branchMenuOpen && (
+            <div className="owner-branch-popover" role="listbox" aria-label={BRANCH_WORKSPACE_COPY.switcherAriaLabel}>
+              <div className="owner-branch-popover-list">
+                {access.restaurants.map((branch) => {
+                  const isCurrent = branch.id === access.selectedRestaurantId;
+                  return (
+                    <button
+                      key={branch.id}
+                      type="button"
+                      role="option"
+                      aria-selected={isCurrent}
+                      className={`owner-branch-option ${isCurrent ? 'is-current' : ''}`}
+                      onClick={() => {
+                        setBranchMenuOpen(false);
+                        if (!isCurrent) {
+                          setBranchNotice('');
+                          setAcceptingOrdersOverride(null);
+                          access.selectRestaurant(branch.id);
+                        }
+                      }}
+                    >
+                      <div className="owner-branch-option-main">
+                        <span className="owner-branch-option-name">
+                          {branch.branchName || branch.displayName || branch.name}
+                        </span>
+                        {branch.shortAddress && (
+                          <span className="owner-branch-option-addr">{branch.shortAddress}</span>
+                        )}
+                      </div>
+                      <div className="owner-branch-option-badges">
+                        <span className={`owner-branch-status-pill is-${String(branch.status || 'active').toLowerCase()}`}>
+                          {branch.status || 'active'}
+                        </span>
+                        {isCurrent && (
+                          <span className="owner-branch-current-tag">
+                            {BRANCH_WORKSPACE_COPY.switcherCurrentBadge}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {access.isOwner && (
+                <div className="owner-branch-popover-footer">
+                  <button
+                    type="button"
+                    className="owner-branch-add-btn"
+                    onClick={() => {
+                      setBranchMenuOpen(false);
+                      setAddBranchOpen(true);
+                    }}
+                  >
+                    {BRANCH_WORKSPACE_COPY.switcherAddBranchButton}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       ) : (
-        <span className="owner-restaurant-name">{selectedRestaurant.name}</span>
+        <span className="owner-restaurant-name">{selectedRestaurant.displayName || selectedRestaurant.name}</span>
       )}
 
       {access.canAccess(['business.hours.manage']) && (
@@ -183,6 +275,12 @@ export default function OwnerLayout({ children }) {
           )}
         />
         <main className="owner-content">
+          {branchNotice && (
+            <div className="owner-branch-notice" role="status">
+              <span>{branchNotice}</span>
+              <button type="button" onClick={() => setBranchNotice('')} aria-label="Dismiss notice">✕</button>
+            </div>
+          )}
           {selectedRestaurant && selectedRestaurant.status !== 'active' ? (
             <section
               aria-label="Restaurant application status"
@@ -197,7 +295,7 @@ export default function OwnerLayout({ children }) {
             >
               <h2 style={{ margin: '0 0 8px' }}>Restaurant Workspace Pending Activation</h2>
               <p style={{ margin: '0 0 16px', color: 'var(--text-secondary)' }}>
-                <strong>{selectedRestaurant.name || 'Your restaurant'}</strong> currently has status{' '}
+                <strong>{selectedRestaurant.displayName || selectedRestaurant.name || 'Your restaurant'}</strong> currently has status{' '}
                 <strong>{selectedRestaurant.status}</strong>. The owner workspace is available once your restaurant
                 application is approved and active.
               </p>
@@ -211,7 +309,9 @@ export default function OwnerLayout({ children }) {
               </div>
             </section>
           ) : (
-            children
+            <div key={selectedRestaurantId || 'default'} className="owner-branch-scope">
+              {children}
+            </div>
           )}
         </main>
       </div>
@@ -275,6 +375,14 @@ export default function OwnerLayout({ children }) {
       />
 
       <ConfirmDialog {...logoutDialogProps} />
+
+      {access.isOwner && (
+        <AddBranchModal
+          open={addBranchOpen}
+          onClose={() => setAddBranchOpen(false)}
+          onCreated={() => setBranchNotice(BRANCH_WORKSPACE_COPY.addBranchSuccessNote)}
+        />
+      )}
     </div>
   );
 }

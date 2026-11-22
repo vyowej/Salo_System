@@ -1,5 +1,126 @@
 <?php
 
+$allRestaurantPermissions = [
+    'business.profile.view',
+    'business.profile.edit',
+    'business.photos.manage',
+    'business.location.manage',
+    'business.hours.manage',
+    'menu.view',
+    'menu.categories.manage',
+    'menu.items.create',
+    'menu.items.edit',
+    'menu.items.delete',
+    'menu.photos.manage',
+    'menu.availability.manage',
+    'menu.pricing.manage',
+    'menu.addons.manage',
+    'menu.publish',
+    'orders.view',
+    'orders.accept',
+    'orders.reject',
+    'orders.preparation.update',
+    'orders.pickup.manage',
+    'orders.customer.view',
+    'reservations.view',
+    'reservations.approve',
+    'reservations.reject',
+    'reservations.assignTables',
+    'reservations.updateStatus',
+    'reservations.manageArrival',
+    'tables.view',
+    'tables.add',
+    'tables.edit',
+    'tables.manageAvailability',
+    'inventory.view',
+    'inventory.addStock',
+    'inventory.deductStock',
+    'inventory.adjustStock',
+    'inventory.viewHistory',
+    'promotions.view',
+    'promotions.create',
+    'promotions.edit',
+    'promotions.status.manage',
+    'reports.sales.view',
+    'reports.orders.view',
+    'reports.reservations.view',
+    'reports.inventory.view',
+    'activity.view',
+    'team.view',
+    'team.invite',
+    'team.permissions.manage',
+];
+
+$menuManagePermissions = [
+    'menu.view',
+    'menu.categories.manage',
+    'menu.items.create',
+    'menu.items.edit',
+    'menu.items.delete',
+    'menu.photos.manage',
+    'menu.availability.manage',
+    'menu.pricing.manage',
+    'menu.addons.manage',
+];
+
+$orderHandlerPermissions = [
+    'orders.view',
+    'orders.accept',
+    'orders.reject',
+    'orders.preparation.update',
+    'orders.pickup.manage',
+    'orders.customer.view',
+];
+
+$inventoryManagerPermissions = [
+    'inventory.view',
+    'inventory.addStock',
+    'inventory.deductStock',
+    'inventory.adjustStock',
+    'inventory.viewHistory',
+];
+
+$reservationHandlerPermissions = [
+    'reservations.view',
+    'reservations.approve',
+    'reservations.reject',
+    'reservations.assignTables',
+    'reservations.updateStatus',
+    'reservations.manageArrival',
+    'tables.view',
+    'tables.add',
+    'tables.edit',
+    'tables.manageAvailability',
+];
+
+/**
+ * Canonical single source of truth mapping restaurant_staff.staff_position
+ * to restaurant workspace permission keys (consumed by User::resolveRoleContext(),
+ * WorkspaceAccessResolver, and the frontend via /api/auth/me).
+ */
+$positionPermissions = [
+    'Manager' => array_values(array_unique(array_merge(
+        $menuManagePermissions,
+        ['menu.publish'],
+        $orderHandlerPermissions,
+        $inventoryManagerPermissions,
+    ))),
+    'Order Handler' => $orderHandlerPermissions,
+    'Order Staff' => $orderHandlerPermissions,
+    'Reservation Handler' => $reservationHandlerPermissions,
+    'Reservation Staff' => $reservationHandlerPermissions,
+    'Inventory Manager' => array_values(array_unique(array_merge(
+        $inventoryManagerPermissions,
+        ['menu.view'],
+    ))),
+    'Menu Manager' => $menuManagePermissions,
+];
+
+$positionsWithPermission = static fn (string $permission): array => array_keys(array_filter(
+    $positionPermissions,
+    static fn (array $perms): bool => in_array($permission, $perms, true),
+));
+
 return [
     'otp' => [
         'expiration_minutes' => (int) env('OTP_EXPIRATION_MINUTES', 10),
@@ -34,25 +155,15 @@ return [
         // Placeholder flat delivery fee per delivery sub-order (PHP). Pickup fee is always 0.00.
         'flat_delivery_fee' => (string) env('SALO_FLAT_DELIVERY_FEE', '49.00'),
         'max_item_quantity' => max(1, (int) env('SALO_MAX_ORDER_ITEM_QUANTITY', 50)),
-        // Allowed restaurant_staff.staff_position values for restaurant order handling (case-insensitive, trimmed).
-        'handler_positions' => [
-            'Manager',
-            'Order Handler',
-            'Order Staff',
-        ],
+        // Derived from staff.position_permissions (single source of truth).
+        'handler_positions' => $positionsWithPermission('orders.view'),
     ],
 
     'staff' => [
         'invitation_expiry_days' => max(1, (int) env('SALO_STAFF_INVITATION_EXPIRY_DAYS', 7)),
-        'positions' => [
-            'Manager',
-            'Order Handler',
-            'Order Staff',
-            'Reservation Handler',
-            'Reservation Staff',
-            'Inventory Manager',
-            'Menu Manager',
-        ],
+        'positions' => array_keys($positionPermissions),
+        'position_permissions' => $positionPermissions,
+        'all_permissions' => $allRestaurantPermissions,
     ],
 
     'inventory' => [
@@ -60,18 +171,13 @@ return [
             'manual',
             'on_completion',
         ],
-        // Allowed restaurant_staff.staff_position values for inventory management (case-insensitive, trimmed).
-        'manager_positions' => [
-            'Manager',
-            'Inventory Manager',
-        ],
+        // Derived from staff.position_permissions (single source of truth).
+        'manager_positions' => $positionsWithPermission('inventory.view'),
     ],
 
     'menu' => [
-        // Allowed restaurant_staff.staff_position values for publishing/unpublishing restaurant menus (case-insensitive, trimmed).
-        'publisher_positions' => [
-            'Manager',
-        ],
+        // Derived from staff.position_permissions (single source of truth).
+        'publisher_positions' => $positionsWithPermission('menu.publish'),
     ],
 
     'restaurants' => [

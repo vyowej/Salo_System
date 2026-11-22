@@ -4,6 +4,8 @@
  * Uses credentials: 'include' and never stores auth tokens in localStorage.
  */
 
+import { getActiveRestaurantIdHeader } from '../features/restaurant/access/branchContextStorage.js';
+
 const API_BASE_URL = (
   import.meta.env?.VITE_API_URL ||
   import.meta.env?.VITE_API_BASE_URL ||
@@ -115,6 +117,15 @@ async function executeFetch(endpoint, options, hasRetriedCsrf = false) {
     'X-Requested-With': 'XMLHttpRequest',
     ...headers,
   };
+
+  const normalizedEndpoint = String(endpoint || '').startsWith('/') ? String(endpoint) : `/${String(endpoint || '')}`;
+  const isRestaurantWorkspaceEndpoint =
+    normalizedEndpoint.startsWith('/restaurant/') &&
+    !normalizedEndpoint.startsWith('/restaurant/applications');
+  const activeRestaurantId = getActiveRestaurantIdHeader();
+  if (isRestaurantWorkspaceEndpoint && activeRestaurantId && !requestHeaders['X-Restaurant-Id']) {
+    requestHeaders['X-Restaurant-Id'] = activeRestaurantId;
+  }
 
   const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
 

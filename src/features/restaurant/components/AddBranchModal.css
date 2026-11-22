@@ -1,0 +1,77 @@
+.salo-add-branch-form {
+  display: grid;
+  gap: var(--space-4, 16px);
+}
+
+.salo-add-branch-alert {
+  padding: var(--space-3, 12px);
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  background: var(--status-danger-bg, #fef2f2);
+  color: var(--status-danger-text, #b91c1c);
+  font-size: var(--font-size-xs, 12px);
+  font-weight: 600;
+}
+
+.salo-add-branch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3, 12px);
+}
+
+.salo-add-branch-pin-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px);
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-secondary, #e5e7eb);
+  background: var(--surface-secondary, #f8f9fa);
+}
+
+.salo-add-branch-pin-meta {
+  margin: 4px 0 0;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-secondary, #525252);
+}
+
+.salo-add-branch-fieldset {
+  margin: 0;
+  padding: var(--space-3, 12px);
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-secondary, #e5e7eb);
+}
+
+.salo-add-branch-fieldset legend {
+  padding: 0 var(--space-1, 4px);
+  font-size: var(--font-size-xs, 12px);
+  font-weight: 700;
+  color: var(--text-secondary, #525252);
+}
+
+.salo-add-branch-checks,
+.salo-add-branch-copy-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4, 16px);
+}
+
+.salo-add-branch-checks label,
+.salo-add-branch-copy-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  font-size: var(--font-size-sm, 14px);
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .salo-add-branch-grid {
+    grid-template-columns: 1fr;
+  }
+  .salo-add-branch-pin-box {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

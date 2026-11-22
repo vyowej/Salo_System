@@ -108,6 +108,58 @@ class WorkspaceAccessResolver
     }
 
     /**
+     * Resolve and authorize an active restaurant for reading menu categories/items (owners, Manager, Menu Manager, Inventory Manager).
+     */
+    public function requireActiveAuthorizedRestaurantForMenuView(User $user, ?int $restaurantId = null): object
+    {
+        $resolvedId = $this->resolveRequestedRestaurantId($restaurantId);
+        $restaurant = $this->findOwnedOrStaffRestaurant(
+            user: $user,
+            restaurantId: $resolvedId,
+            positionCheck: static fn (?string $pos): bool => User::canViewMenuPosition($pos),
+        );
+
+        if (! $restaurant) {
+            abort(403, 'Forbidden: you are not authorized to view this restaurant menu.');
+        }
+
+        if ($restaurant->restaurant_status !== 'active') {
+            abort(
+                403,
+                "Restaurant menu viewing is only available for active restaurants (current status: {$restaurant->restaurant_status})."
+            );
+        }
+
+        return $restaurant;
+    }
+
+    /**
+     * Resolve and authorize an active restaurant for menu management (owners, Manager, Menu Manager).
+     */
+    public function requireActiveAuthorizedRestaurantForMenuManage(User $user, ?int $restaurantId = null): object
+    {
+        $resolvedId = $this->resolveRequestedRestaurantId($restaurantId);
+        $restaurant = $this->findOwnedOrStaffRestaurant(
+            user: $user,
+            restaurantId: $resolvedId,
+            positionCheck: static fn (?string $pos): bool => User::isMenuManagerPosition($pos),
+        );
+
+        if (! $restaurant) {
+            abort(403, 'Forbidden: you are not authorized to manage this restaurant menu.');
+        }
+
+        if ($restaurant->restaurant_status !== 'active') {
+            abort(
+                403,
+                "Restaurant menu management is only available for active restaurants (current status: {$restaurant->restaurant_status})."
+            );
+        }
+
+        return $restaurant;
+    }
+
+    /**
      * Resolve and authorize an active rider whose user account is also active.
      */
     public function requireActiveRider(

@@ -20,6 +20,7 @@ import StatCard from '../components/dashboard/OwnerDashboardStatCard';
 import OwnerDashboardReservationsSection from '../components/dashboard/OwnerDashboardReservationsSection';
 import OwnerDashboardMenuHealthSection from '../components/dashboard/OwnerDashboardMenuHealthSection';
 import QuickHealthCheckDeck from '../components/dashboard/QuickHealthCheckDeck';
+import { BRANCH_WORKSPACE_COPY } from '../content/branchContent';
 import './team/r7Dashboard.css';
 
 // ── Main Dashboard ───────────────────────────────────────────────
@@ -38,6 +39,7 @@ export default function OwnerDashboard() {
   const [warning, setWarning] = useState('');
   const [summary, setSummary] = useState(null);
   const [summaryWarnings, setSummaryWarnings] = useState([]);
+  const [branchesList, setBranchesList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -48,7 +50,7 @@ export default function OwnerDashboard() {
       const canViewCustomer = access.canAccess(['orders.customer.view']);
       const canOrderHandle = access.canAccess(['orders.view', 'orders.handle']);
 
-      const [profileResult, ordersResult] = await Promise.all([
+      const [profileResult, ordersResult, branchesResult] = await Promise.all([
         access.isOwner && selectedRestaurantId
           ? ownerService.getProfile(selectedRestaurantId).catch(() => null)
           : Promise.resolve(null),
@@ -59,7 +61,11 @@ export default function OwnerDashboard() {
               restaurantId: selectedRestaurantId,
             })
           : Promise.resolve({ orders: [] }),
+        access.restaurants.length > 1
+          ? ownerService.getBranches().catch(() => [])
+          : Promise.resolve([]),
       ]);
+      setBranchesList(Array.isArray(branchesResult) ? branchesResult : []);
 
       const rest = profileResult || access.selectedRestaurant || null;
       const rawOrders = Array.isArray(ordersResult?.orders) ? ordersResult.orders : [];
@@ -153,6 +159,83 @@ export default function OwnerDashboard() {
         isApprovedOwner={businessOnboarding.isApprovedOwner}
         checklist={businessOnboarding.businessChecklist}
       />
+
+      {access.restaurants.length > 1 && branchesList.length > 0 && (
+        <section
+          aria-label={BRANCH_WORKSPACE_COPY.allBranchesTitle}
+          style={{
+            marginBottom: 'var(--space-6)',
+            padding: 'var(--space-4)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-primary)',
+            background: 'var(--surface-primary)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 'var(--space-3)', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+            <div>
+              <h2 className="section-title" style={{ margin: 0 }}>{BRANCH_WORKSPACE_COPY.allBranchesTitle}</h2>
+              <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                {BRANCH_WORKSPACE_COPY.allBranchesSubtitle}
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+            {branchesList.map((branch) => {
+              const isCurrent = String(branch.restaurant_id) === String(selectedRestaurantId);
+              return (
+                <div
+                  key={branch.restaurant_id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 'var(--space-3)',
+                    flexWrap: 'wrap',
+                    padding: 'var(--space-3)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-secondary)',
+                    background: isCurrent ? 'var(--accent-subtle)' : 'var(--bg-secondary)',
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <strong style={{ fontSize: 'var(--font-size-sm)' }}>
+                      {branch.branch_name || branch.display_name}
+                    </strong>
+                    {branch.short_address && (
+                      <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                        {branch.short_address}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                    <Badge variant={branch.restaurant_status === 'active' ? 'success' : 'warning'} size="sm">
+                      {branch.restaurant_status}
+                    </Badge>
+                    <Badge variant={branch.is_published ? 'info' : 'neutral'} size="sm">
+                      {branch.is_published ? BRANCH_WORKSPACE_COPY.switcherStatusPublished : BRANCH_WORKSPACE_COPY.switcherStatusDraft}
+                    </Badge>
+                    <Badge variant={branch.accepting_orders ? 'success' : 'neutral'} size="sm">
+                      {branch.accepting_orders ? BRANCH_WORKSPACE_COPY.switcherAcceptingOrders : BRANCH_WORKSPACE_COPY.switcherPausedOrders}
+                    </Badge>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                      {branch.pending_order_count} pending
+                    </span>
+                    <Button
+                      type="button"
+                      variant={isCurrent ? 'secondary' : 'outline'}
+                      size="sm"
+                      disabled={isCurrent}
+                      onClick={() => access.selectRestaurant(String(branch.restaurant_id))}
+                    >
+                      {isCurrent ? BRANCH_WORKSPACE_COPY.switcherCurrentBadge : BRANCH_WORKSPACE_COPY.allBranchesManageAction}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* ── 4 Stat Cards ─────────────────────────────── */}
       <div className="owner-dashboard-stats-grid">

@@ -221,7 +221,10 @@ export default function OwnerOrdersPage() {
 
   return (
     <OwnerLayout>
-      <header style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
+        <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          {access.selectedRestaurant?.displayName || access.selectedRestaurant?.name || 'Orders'}
+        </div>
         <div role="status" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning-text)', padding: '8px 12px', borderRadius: 'var(--radius-full)', fontWeight: 700, fontSize: 'var(--font-size-xs)' }}>
           {actionRequiredCount} order{actionRequiredCount === 1 ? '' : 's'} need action
         </div>

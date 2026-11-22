@@ -82,6 +82,13 @@ export const BUSINESS_ONBOARDING_CONTENT = {
           href: '/owner/profile#operating-hours-heading',
           ctaLabel: 'Review Toggles',
         },
+        deliveryCoverage: {
+          id: 'delivery_coverage',
+          label: 'Set delivery coverage',
+          description: 'Configure at least one delivery service area before publishing while delivery is enabled.',
+          href: '/owner/profile',
+          ctaLabel: 'Set Coverage',
+        },
         publish: {
           id: 'publish',
           label: 'Publish Your Restaurant',

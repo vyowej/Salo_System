@@ -145,6 +145,7 @@ class User extends Authenticatable
                     'is_main_branch' => $parentId === null,
                     'short_address' => $shortAddress !== '' ? $shortAddress : null,
                     'restaurant_status' => $row->restaurant_status,
+                    'permissions' => self::allRestaurantPermissions(),
                     'joined_at' => $row->joined_at,
                 ];
             })
@@ -198,7 +199,7 @@ class User extends Authenticatable
                     'staff_status' => $row->staff_status,
                     'can_handle_orders' => self::isOrderHandlerPosition($row->staff_position),
                     'can_publish_menu' => self::isMenuPublisherPosition($row->staff_position),
-                    'permissions' => null,
+                    'permissions' => self::permissionsForPosition($row->staff_position),
                     'joined_at' => $row->joined_at,
                 ];
             })
@@ -270,6 +271,45 @@ class User extends Authenticatable
         return $context;
     }
 
+    /**
+     * @return array<int, string>
+     */
+    public static function allRestaurantPermissions(): array
+    {
+        return array_values(array_map(
+            static fn (mixed $item): string => (string) $item,
+            (array) config('salo.staff.all_permissions', []),
+        ));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function permissionsForPosition(?string $position): array
+    {
+        $normalized = strtolower(trim((string) $position));
+        if ($normalized === '') {
+            return [];
+        }
+
+        $map = (array) config('salo.staff.position_permissions', []);
+        foreach ($map as $configuredPosition => $permissions) {
+            if (strtolower(trim((string) $configuredPosition)) === $normalized) {
+                return array_values(array_map(
+                    static fn (mixed $item): string => (string) $item,
+                    (array) $permissions,
+                ));
+            }
+        }
+
+        return [];
+    }
+
+    public static function positionHasPermission(?string $position, string $permission): bool
+    {
+        return in_array($permission, self::permissionsForPosition($position), true);
+    }
+
     public static function isOrderHandlerPosition(?string $position): bool
     {
         return self::matchesConfiguredPosition($position, 'salo.orders.handler_positions');
@@ -283,6 +323,16 @@ class User extends Authenticatable
     public static function isMenuPublisherPosition(?string $position): bool
     {
         return self::matchesConfiguredPosition($position, 'salo.menu.publisher_positions');
+    }
+
+    public static function isMenuManagerPosition(?string $position): bool
+    {
+        return self::positionHasPermission($position, 'menu.categories.manage');
+    }
+
+    public static function canViewMenuPosition(?string $position): bool
+    {
+        return self::positionHasPermission($position, 'menu.view');
     }
 
     private static function matchesConfiguredPosition(?string $position, string $configKey): bool

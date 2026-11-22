@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import './MenuPublishBar.css';
@@ -113,6 +114,19 @@ export default function MenuPublishBar({
                 ? 'Your live customer menu is up to date. Availability toggles (Available / Sold out / Hidden) apply immediately.'
                 : 'Build your categories and dishes as drafts, preview how customers will see them, then click Publish to go live.'}
           </p>
+          {blockers.length > 0 && !publishStatus.is_published && (
+            <div className="salo-publish-alert salo-publish-alert--error" role="status" style={{ marginTop: 8 }}>
+              <strong>Before publishing:</strong> {blockers.join(' ')}
+              {blockers.some((b) => /delivery service area/i.test(String(b))) && (
+                <>
+                  {' '}
+                  <Link to="/owner/profile" style={{ fontWeight: 700, textDecoration: 'underline' }}>
+                    Set delivery coverage
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="salo-menu-publish-bar__actions">

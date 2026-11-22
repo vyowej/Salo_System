@@ -12,6 +12,8 @@ import { LocationPicker } from '../../../components/location';
 import locationApiService from '../../../services/locationApiService';
 import RestaurantCoverageSection from '../components/RestaurantCoverageSection';
 import RestaurantImage from '../../customer/components/RestaurantImage';
+import AddBranchModal from '../components/AddBranchModal';
+import { BRANCH_WORKSPACE_COPY } from '../content/branchContent';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import OperatingHoursEditor from './OperatingHoursEditor';
 import {
@@ -155,6 +157,8 @@ export default function OwnerProfilePage() {
   const [stagedLogoPreview, setStagedLogoPreview] = useState(null);
   const [stagedCoverPreview, setStagedCoverPreview] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [addBranchOpen, setAddBranchOpen] = useState(false);
+  const [branchCreatedMsg, setBranchCreatedMsg] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
@@ -176,7 +180,7 @@ export default function OwnerProfilePage() {
     try {
       const [profile, loc] = await Promise.all([
         ownerService.getProfile(selectedRestaurantId),
-        locationApiService.getRestaurantLocation().catch(() => null),
+        locationApiService.getRestaurantLocationAndCoverage(selectedRestaurantId).catch(() => null),
       ]);
       if (!profile) throw new Error('Restaurant profile is unavailable.');
 
@@ -369,18 +373,24 @@ export default function OwnerProfilePage() {
         <header className="owner-profile-header">
           <div className="owner-profile-header-intro">
             <p className="owner-profile-eyebrow">Storefront Identity & Brand Settings</p>
-            <h1>{formData.name || 'Business Profile'}</h1>
+            <h1>{access.selectedRestaurant?.displayName || formData.name || 'Business Profile'}</h1>
             <p className="owner-profile-header-subtitle">
               Customize your public storefront details, upload your restaurant logo and cover photo, and configure delivery coverage.
             </p>
           </div>
           <div className="owner-profile-header-actions">
+            {access.isOwner && (
+              <Button type="button" variant="outline" onClick={() => setAddBranchOpen(true)}>
+                {BRANCH_WORKSPACE_COPY.switcherAddBranchButton}
+              </Button>
+            )}
             <Link to={`/customer/restaurants/${selectedRestaurantId}`} target="_blank" rel="noreferrer">
               <Button type="button" variant="outline">Open customer page</Button>
             </Link>
           </div>
         </header>
 
+        {branchCreatedMsg && <p className="owner-profile-success" role="status">✓ {branchCreatedMsg}</p>}
         {saved && <p className="owner-profile-success" role="status">✓ Profile changes saved and published to your storefront.</p>}
         {error && <p className="owner-profile-error" role="alert">{error}</p>}
 
@@ -704,6 +714,13 @@ export default function OwnerProfilePage() {
           </div>
         </div>
       </div>
+      {access.isOwner && (
+        <AddBranchModal
+          open={addBranchOpen}
+          onClose={() => setAddBranchOpen(false)}
+          onCreated={() => setBranchCreatedMsg(BRANCH_WORKSPACE_COPY.addBranchSuccessNote)}
+        />
+      )}
     </OwnerLayout>
   );
 }

@@ -2,15 +2,17 @@
 
 ## 1. Access & Authorization Rules
 
-- All Step 7 owner workspace endpoints live under `/api/restaurant/*` and require `auth` + `role:owner` middleware.
-- **Active-Restaurant Guard (`OwnerProfileService::requireActiveOwnedRestaurant`):**
-  - Verifies the authenticated user is listed in `restaurant_owners` for the target `restaurant_id`.
-  - Requires `restaurants.restaurant_status === 'active'`. Owners of `pending`, `approved`, `rejected`, `inactive`, or `suspended` restaurants receive **`403 Forbidden`**.
-  - `OwnerLayout.jsx` renders an application-status gate instead of the workspace pages whenever `selectedRestaurant.status !== 'active'`.
-- **Unchanged Existing Owner Endpoints:**
-  - `GET /api/restaurant/setup-status`: already restricts to `approved` / `active` restaurants (`403` when `pending`).
-  - `GET/PATCH /api/restaurant/location` and `PUT /api/restaurant/coverage`: check `restaurant_owners`/`restaurant_staff` membership without a `restaurant_status = 'active'` check; left untouched per Step 7 scope.
-  - `User::resolveRoleContext()` was left unchanged so onboarding/setup-status flows continue working; workspace isolation is enforced by the endpoint guard and `OwnerLayout`.
+- Restaurant workspace endpoints live under `/api/restaurant/*`:
+  - **Owner-only (`role:owner` + `WorkspaceAccessResolver::requireActiveOwnedRestaurant`):** `/setup-status`, `/profile*`, `/accepting-status`, `/settings`, `/change-requests*`, `/operating-hours`, `/staff*`, `POST /branches`, and `/location` + `/coverage` (`RestaurantLocationService` enforces owner-only).
+  - **Owner & authorized staff (`role:owner,staff` + position-scoped `WorkspaceAccessResolver` guards):**
+    - `GET /branches` (owner + all active staff, scoped to assigned branches).
+    - `GET /menu/categories`, `GET /menu/items`: `requireActiveAuthorizedRestaurantForMenuView` (owner, `Manager`, `Menu Manager`, `Inventory Manager`).
+    - Mutating `/menu/categories*` and `/menu/items*`: `requireActiveAuthorizedRestaurantForMenuManage` (owner, `Manager`, `Menu Manager`).
+    - `/menu/publish-status`, `/menu/preview`, `/menu/publish`, `/menu/unpublish`, `/menu/discard-changes`: `requireActiveAuthorizedRestaurantForMenuPublish` (owner, `Manager`).
+    - `/orders*` & `/reviews*`: `requireActiveAuthorizedRestaurantForOrders` (owner, `Manager`, `Order Handler`, `Order Staff`).
+    - `/inventory/config`: `requireActiveAuthorizedRestaurantForInventory` (owner, `Manager`, `Inventory Manager`).
+- **Single Source of Truth (`CLEAN-1(d)`):** `backend/config/salo.php` (`salo.staff.position_permissions`) defines the canonical position-to-permission map, from which `orders.handler_positions`, `inventory.manager_positions`, and `menu.publisher_positions` are derived. `User::resolveRoleContext()` returns `permissions` on `/api/auth/me`, and `RestaurantAccessContext.jsx` consumes them directly.
+- **Active-Restaurant Guard:** Requires `restaurants.restaurant_status === 'active'` and active `restaurant_staff.staff_status === 'active'` on the requested branch (`403 Forbidden` otherwise). `OwnerLayout.jsx` renders an application-status gate whenever `selectedRestaurant.status !== 'active'`.
 
 ---
 

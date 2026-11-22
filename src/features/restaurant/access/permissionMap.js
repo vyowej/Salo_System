@@ -120,12 +120,17 @@ export function buildRestaurantAccess(user, memberships, restaurants, selectedRe
   ]);
   const accessibleRestaurants = restaurants.filter((restaurant) => accessibleIds.has(restaurant.id));
   const selected = accessibleRestaurants.find((restaurant) => restaurant.id === selectedRestaurantId)
+    || accessibleRestaurants.find((restaurant) => restaurant.isMainBranch)
     || accessibleRestaurants[0]
     || null;
   const ownershipMembership = ownershipMemberships.find((membership) => membership.restaurantId === selected?.id);
   const staffMembership = staffMemberships.find((membership) => membership.restaurantId === selected?.id);
   const isOwner = Boolean(ownershipMembership);
-  const permissions = isOwner ? Object.keys(RESTAURANT_PERMISSIONS) : staffMembership?.permissions || [];
+  const permissions = isOwner
+    ? (Array.isArray(ownershipMembership?.permissions) && ownershipMembership.permissions.length > 0
+        ? ownershipMembership.permissions
+        : Object.keys(RESTAURANT_PERMISSIONS))
+    : staffMembership?.permissions || [];
   const permissionSet = new Set(permissions);
 
   return {

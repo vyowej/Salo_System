@@ -390,6 +390,18 @@ export function deriveBusinessSetupChecklist({
       });
     }
 
+    const publishBlockers = Array.isArray(backendStatus.publish?.blockers) ? backendStatus.publish.blockers : [];
+    const hasCoverageBlocker = publishBlockers.some((msg) => /delivery service area/i.test(String(msg)));
+    if (
+      itemsConfig.deliveryCoverage &&
+      (hasCoverageBlocker || (backendStatus.delivery_coverage && typeof backendStatus.delivery_coverage.complete === 'boolean'))
+    ) {
+      derived.push({
+        ...itemsConfig.deliveryCoverage,
+        done: !hasCoverageBlocker && Boolean(backendStatus.delivery_coverage?.complete),
+      });
+    }
+
     if (backendStatus.publish && typeof backendStatus.publish.complete === 'boolean' && itemsConfig.publish) {
       derived.push({
         ...itemsConfig.publish,

@@ -141,6 +141,10 @@ export const locationApiService = {
     return res?.data;
   },
 
+  async getRestaurantLocation(restaurantId = null) {
+    return this.getRestaurantLocationAndCoverage(restaurantId);
+  },
+
   async updateRestaurantLocation(payload) {
     const res = await apiClient.patch('/restaurant/location', payload);
     return res?.data;
