@@ -59,7 +59,10 @@ All notification endpoints require cookie-session authentication (`auth` middlew
 | Reservation completed | `customer` | `reservation_completed` | Reservation customer | `reservation` |
 | Reservation marked no-show | `customer` | `reservation_no_show` | Reservation customer | `reservation` |
 | Reservation cancelled by customer | `restaurant` | `reservation_cancelled_by_customer` | Restaurant owner(s) + active reservation-handler staff | `reservation` |
-| Reservation cancelled by restaurant | `customer` | `reservation_cancelled_by_restaurant` | Reservation customer (includes cancellation reason) | `reservation` |
+| Reservation cancelled by restaurant | `customer` | `reservation_cancelled_by_restaurant` | Reservation customer (includes cancellation reason and refund note if refunded) | `reservation` |
+| Reservation deposit received | `customer` | `reservation_deposit_received` | Reservation customer (when marked paid without status transition) | `reservation` |
+| Reservation deposit waived | `customer` | `reservation_deposit_waived` | Reservation customer | `reservation` |
+| Reservation deposit refunded | `customer` | `reservation_deposit_refunded` | Reservation customer (includes refunded amount) | `reservation` |
 | Reservation dining area changed | `customer` | `reservation_table_changed` | Reservation customer (emitted when dining area changes) | `reservation` |
 
 ---

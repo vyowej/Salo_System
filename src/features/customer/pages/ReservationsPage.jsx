@@ -935,6 +935,12 @@ export default function ReservationsPage() {
               </div>
             )}
 
+            {selectedRes?.depositStatus === 'paid' && (
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', padding: '8px 10px', borderRadius: 6, background: 'var(--bg-secondary, #f8fafc)' }}>
+                Refunds are decided by the restaurant.
+              </p>
+            )}
+
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
                 Reason for cancellation (optional):

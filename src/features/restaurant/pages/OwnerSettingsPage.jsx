@@ -4,6 +4,10 @@ import OwnerLayout from '../../../layouts/OwnerLayout';
 import { useAuth } from '../../../hooks/useAuth';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import ownerService from '../../../services/ownerService';
+import {
+  mapBackendSettingsErrors,
+  validateReservationSettings,
+} from '../utils/reservationSettingsHelpers';
 import accountService from '../../../services/accountService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
@@ -87,6 +91,7 @@ export default function OwnerSettingsPage() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const [changeRequests, setChangeRequests] = useState([]);
   const [changeModalOpen, setChangeModalOpen] = useState(false);
@@ -135,6 +140,14 @@ export default function OwnerSettingsPage() {
           accepting_reservations: Boolean(profile.accepting_reservations),
           reservation_min_notice_hours: Number(profile.reservation_min_notice_hours ?? 2),
           reservation_max_party_size: Number(profile.reservation_max_party_size ?? 8),
+          reservation_duration_minutes: Number(profile.reservation_duration_minutes ?? 90),
+          reservation_max_advance_days: Number(profile.reservation_max_advance_days ?? 30),
+          reservation_cancellation_cutoff_minutes: Number(profile.reservation_cancellation_cutoff_minutes ?? 120),
+          reservation_auto_confirm: Boolean(profile.reservation_auto_confirm ?? false),
+          reservation_pending_expiry_minutes: Number(profile.reservation_pending_expiry_minutes ?? 120),
+          reservation_deposit_required: Boolean(profile.reservation_deposit_required ?? false),
+          reservation_deposit_amount: Number(profile.reservation_deposit_amount ?? 0),
+          reservation_service_fee: Number(profile.reservation_service_fee ?? 0),
           reservation_notes: profile.reservation_notes || '',
         };
         setSavedForm(initialRestForm);
@@ -170,7 +183,23 @@ export default function OwnerSettingsPage() {
   }, [loadSettings]);
 
   const updateField = (key, value) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === 'reservation_deposit_required' && value === true) {
+        next.reservation_auto_confirm = false;
+      }
+      return next;
+    });
+    setFieldErrors((prev) => {
+      if (!prev || Object.keys(prev).length === 0) return prev;
+      const next = { ...prev };
+      delete next[key];
+      if (key === 'reservation_deposit_required') {
+        delete next.reservation_auto_confirm;
+        delete next.reservation_deposit_amount;
+      }
+      return next;
+    });
     setDirty(true);
     setNotice('');
   };
@@ -182,8 +211,19 @@ export default function OwnerSettingsPage() {
       return;
     }
 
+    if (canEditBusiness) {
+      const validationErrors = validateReservationSettings(form);
+      if (Object.keys(validationErrors).length > 0) {
+        setFieldErrors(validationErrors);
+        setNotice(Object.values(validationErrors)[0]);
+        setActiveSection('reservations');
+        return;
+      }
+    }
+
     setSaving(true);
     setNotice('');
+    setFieldErrors({});
     try {
       const [restRes, acctRes] = await Promise.all([
         canEditBusiness
@@ -192,6 +232,14 @@ export default function OwnerSettingsPage() {
               delivery_radius: form.delivery_radius === '' ? null : Number(form.delivery_radius),
               reservation_min_notice_hours: Number(form.reservation_min_notice_hours),
               reservation_max_party_size: Number(form.reservation_max_party_size),
+              reservation_duration_minutes: Number(form.reservation_duration_minutes),
+              reservation_max_advance_days: Number(form.reservation_max_advance_days),
+              reservation_cancellation_cutoff_minutes: Number(form.reservation_cancellation_cutoff_minutes),
+              reservation_pending_expiry_minutes: Number(form.reservation_pending_expiry_minutes),
+              reservation_auto_confirm: Boolean(form.reservation_auto_confirm),
+              reservation_deposit_required: Boolean(form.reservation_deposit_required),
+              reservation_deposit_amount: Number(form.reservation_deposit_amount || 0),
+              reservation_service_fee: Number(form.reservation_service_fee || 0),
             })
           : Promise.resolve(null),
         accountService.updateSettings(accountSettings),
@@ -212,6 +260,10 @@ export default function OwnerSettingsPage() {
       setDirty(false);
       setNotice('Restaurant settings saved.');
     } catch (err) {
+      const mapped = mapBackendSettingsErrors(err);
+      if (Object.keys(mapped).length > 0) {
+        setFieldErrors(mapped);
+      }
       setNotice(err?.message || 'Unable to save restaurant settings.');
     } finally {
       setSaving(false);
@@ -486,8 +538,8 @@ export default function OwnerSettingsPage() {
       case 'reservations':
         return (
           <SettingsCard
-            title="Table Reservation Settings"
-            description="Configure whether your restaurant accepts table bookings and guest limits."
+            title="Reservation settings"
+            description="Configure table booking rules, deposits, and fees. Deposits are collected directly by your restaurant (no online payment gateway)."
           >
             <div className="salo-settings-toggle-list">
               <SettingsToggleRow
@@ -506,10 +558,73 @@ export default function OwnerSettingsPage() {
                 disabled={!canEditBusiness || !form?.accepts_reservations}
                 onChange={(checked) => updateField('accepting_reservations', checked)}
               />
+              <SettingsToggleRow
+                id="owner-res-auto-confirm"
+                label="Auto-confirm bookings"
+                description={
+                  form?.reservation_deposit_required
+                    ? 'Disabled while a deposit is required — deposits must be received before confirming.'
+                    : 'Automatically confirm new bookings when a matching table is available.'
+                }
+                checked={Boolean(form?.reservation_auto_confirm)}
+                disabled={!canEditBusiness || Boolean(form?.reservation_deposit_required)}
+                onChange={(checked) => updateField('reservation_auto_confirm', checked)}
+              />
+              {fieldErrors.reservation_auto_confirm && (
+                <p className="salo-field-error" role="alert">{fieldErrors.reservation_auto_confirm}</p>
+              )}
+              <SettingsToggleRow
+                id="owner-res-deposit-required"
+                label="Require deposit"
+                description="Require a deposit for new bookings. Collected directly by the restaurant (no online payment)."
+                checked={Boolean(form?.reservation_deposit_required)}
+                disabled={!canEditBusiness}
+                onChange={(checked) => updateField('reservation_deposit_required', checked)}
+              />
             </div>
 
             <div className="salo-settings-form-grid" style={{ marginTop: '12px' }}>
-              <SettingsField id="owner-res-notice" label="Minimum notice (hours)">
+              <SettingsField
+                id="owner-res-duration"
+                label="Reservation length (minutes)"
+                hint="30–240 minutes in 15-minute steps."
+                error={fieldErrors.reservation_duration_minutes}
+              >
+                <input
+                  id="owner-res-duration"
+                  type="number"
+                  min="30"
+                  max="240"
+                  step="15"
+                  disabled={!canEditBusiness}
+                  value={form?.reservation_duration_minutes ?? 90}
+                  onChange={(e) => updateField('reservation_duration_minutes', e.target.value)}
+                />
+              </SettingsField>
+
+              <SettingsField
+                id="owner-res-advance"
+                label="Booking window (max days ahead)"
+                hint="How far in advance guests can book (1–365 days)."
+                error={fieldErrors.reservation_max_advance_days}
+              >
+                <input
+                  id="owner-res-advance"
+                  type="number"
+                  min="1"
+                  max="365"
+                  disabled={!canEditBusiness}
+                  value={form?.reservation_max_advance_days ?? 30}
+                  onChange={(e) => updateField('reservation_max_advance_days', e.target.value)}
+                />
+              </SettingsField>
+
+              <SettingsField
+                id="owner-res-notice"
+                label="Minimum notice (hours)"
+                hint="Hours before arrival required to book (0–168h; must fit within booking window)."
+                error={fieldErrors.reservation_min_notice_hours}
+              >
                 <input
                   id="owner-res-notice"
                   type="number"
@@ -520,7 +635,13 @@ export default function OwnerSettingsPage() {
                   onChange={(e) => updateField('reservation_min_notice_hours', e.target.value)}
                 />
               </SettingsField>
-              <SettingsField id="owner-res-party" label="Max party size">
+
+              <SettingsField
+                id="owner-res-party"
+                label="Max party size"
+                hint="Maximum guests per reservation (1–100)."
+                error={fieldErrors.reservation_max_party_size}
+              >
                 <input
                   id="owner-res-party"
                   type="number"
@@ -531,10 +652,85 @@ export default function OwnerSettingsPage() {
                   onChange={(e) => updateField('reservation_max_party_size', e.target.value)}
                 />
               </SettingsField>
+
+              <SettingsField
+                id="owner-res-cutoff"
+                label="Cancellation cutoff (minutes)"
+                hint="Minutes before booking when guest self-cancellation closes (0–1440)."
+                error={fieldErrors.reservation_cancellation_cutoff_minutes}
+              >
+                <input
+                  id="owner-res-cutoff"
+                  type="number"
+                  min="0"
+                  max="1440"
+                  disabled={!canEditBusiness}
+                  value={form?.reservation_cancellation_cutoff_minutes ?? 120}
+                  onChange={(e) => updateField('reservation_cancellation_cutoff_minutes', e.target.value)}
+                />
+              </SettingsField>
+
+              <SettingsField
+                id="owner-res-expiry"
+                label="Pending request expiry (minutes)"
+                hint="Minutes before unreviewed pending requests expire (15–1440)."
+                error={fieldErrors.reservation_pending_expiry_minutes}
+              >
+                <input
+                  id="owner-res-expiry"
+                  type="number"
+                  min="15"
+                  max="1440"
+                  disabled={!canEditBusiness}
+                  value={form?.reservation_pending_expiry_minutes ?? 120}
+                  onChange={(e) => updateField('reservation_pending_expiry_minutes', e.target.value)}
+                />
+              </SettingsField>
+
+              <SettingsField
+                id="owner-res-deposit-amount"
+                label="Deposit amount (₱)"
+                hint="Collected directly by the restaurant (required > ₱0 when deposits are enabled)."
+                error={fieldErrors.reservation_deposit_amount}
+              >
+                <input
+                  id="owner-res-deposit-amount"
+                  type="number"
+                  min="0"
+                  max="100000"
+                  step="0.01"
+                  disabled={!canEditBusiness}
+                  value={form?.reservation_deposit_amount ?? 0}
+                  onChange={(e) => updateField('reservation_deposit_amount', e.target.value)}
+                />
+              </SettingsField>
+
+              <SettingsField
+                id="owner-res-service-fee"
+                label="Service fee (₱)"
+                hint="Optional reservation service fee settled directly with the restaurant."
+                error={fieldErrors.reservation_service_fee}
+              >
+                <input
+                  id="owner-res-service-fee"
+                  type="number"
+                  min="0"
+                  max="100000"
+                  step="0.01"
+                  disabled={!canEditBusiness}
+                  value={form?.reservation_service_fee ?? 0}
+                  onChange={(e) => updateField('reservation_service_fee', e.target.value)}
+                />
+              </SettingsField>
             </div>
 
             <div style={{ marginTop: '12px' }}>
-              <SettingsField id="owner-res-notes" label="Guest reservation instructions">
+              <SettingsField
+                id="owner-res-notes"
+                label="Guest reservation instructions"
+                hint="Shown to guests when booking a table (max 1000 characters)."
+                error={fieldErrors.reservation_notes}
+              >
                 <textarea
                   id="owner-res-notes"
                   rows={3}

@@ -34,10 +34,11 @@ const RESERVATION_STATUS_LABELS = {
 
 const DEPOSIT_STATUS_LABELS = {
   none: 'No Deposit Required',
-  pending: 'Deposit Pending',
-  paid: 'Deposit Paid',
-  waived: 'Deposit Waived',
-  refunded: 'Deposit Refunded',
+  pending: 'Deposit pending — pay the restaurant directly',
+  paid: 'Deposit received',
+  waived: 'Deposit waived',
+  refunded: 'Deposit refunded',
+  not_collected: 'Deposit not collected',
 };
 
 export function normalizeReservation(raw) {
@@ -57,6 +58,9 @@ export function normalizeReservation(raw) {
   const depositAmount = Number(raw.deposit_amount ?? raw.depositAmount ?? 0);
   const serviceFee = Number(raw.service_fee ?? raw.serviceFee ?? 0);
   const depositStatus = String(raw.deposit_status ?? raw.depositStatus ?? 'none').toLowerCase();
+  const depositDisplayStatus = String(
+    raw.deposit_display_status ?? raw.depositDisplayStatus ?? depositStatus,
+  ).toLowerCase();
 
   const history = Array.isArray(raw.status_history ?? raw.statusHistory ?? raw.history)
     ? (raw.status_history ?? raw.statusHistory ?? raw.history).map((entry) => ({
@@ -132,7 +136,8 @@ export function normalizeReservation(raw) {
     specialRequests: raw.special_requests ?? raw.specialRequests ?? null,
     depositAmount,
     depositStatus,
-    paymentStatus: DEPOSIT_STATUS_LABELS[depositStatus] || 'No Deposit Required',
+    depositDisplayStatus,
+    paymentStatus: DEPOSIT_STATUS_LABELS[depositDisplayStatus] || DEPOSIT_STATUS_LABELS[depositStatus] || 'No Deposit Required',
     serviceFee,
     fee: depositAmount > 0 ? depositAmount : serviceFee,
     isFeeRefundable: Boolean(raw.is_fee_refundable ?? raw.isFeeRefundable ?? true),

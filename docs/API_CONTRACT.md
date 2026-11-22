@@ -239,12 +239,14 @@ Calendar-first restaurant reservation management (`reservations.view`, `reservat
 - `POST /api/restaurant/reservations/{id}/approve` — `pending` → `confirmed` or `awaiting_payment` (when deposit required).
 - `POST /api/restaurant/reservations/{id}/reject` — `pending` → `rejected` (`reason` required).
 - `POST /api/restaurant/reservations/{id}/confirm-deposit` — `awaiting_payment` → `confirmed` (`deposit_status = 'paid'`).
+- `POST /api/restaurant/reservations/{id}/deposit` — `{ deposit_status: 'paid'|'waived'|'refunded', note? }`; transitions `pending` → `paid|waived` (also confirms `awaiting_payment`), `paid` → `refunded`; errors: `NO_DEPOSIT`, `INVALID_DEPOSIT_TRANSITION` (409).
 - `POST /api/restaurant/reservations/{id}/arrived` — `confirmed` → `arrived`.
 - `POST /api/restaurant/reservations/{id}/seat` — `confirmed|arrived` → `seated` (optional `table_id`).
 - `POST /api/restaurant/reservations/{id}/complete` — `seated` → `completed`.
 - `POST /api/restaurant/reservations/{id}/no-show` — `confirmed|arrived` → `no_show` (after grace period).
-- `POST /api/restaurant/reservations/{id}/cancel` — `pending..arrived` → `cancelled` (`reason` required).
+- `POST /api/restaurant/reservations/{id}/cancel` — `pending..arrived` → `cancelled` (`reason` required, optional `refund_deposit` boolean; returns `deposit_action_needed`).
 - `PATCH /api/restaurant/reservations/{id}/table` — reassign table while `pending..arrived`.
+- **Deposit policy:** Deposits are collected and refunded manually between guest and restaurant (no online payment gateway). Guest cancellations and no-shows leave paid deposits as `paid` unless the restaurant marks them `refunded`. `deposit_display_status` exposes `not_collected` for `pending` deposits on `rejected`/`expired`/`cancelled`/`no_show` bookings, and `allowed_deposit_actions` lists valid actions (`mark_paid`, `waive`, `refund`).
 
 ### `GET /api/restaurant/tables` & `POST /api/restaurant/tables` & `PATCH /api/restaurant/tables/{id}`
 Restaurant table floor plan management (`tables.view`, `tables.add`, `tables.edit`, `tables.manageAvailability`):

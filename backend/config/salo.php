@@ -186,6 +186,13 @@ return [
             'no_show' => [],
             'expired' => [],
         ],
+        'deposit_transitions' => [
+            'none' => [],
+            'pending' => ['paid', 'waived'],
+            'paid' => ['refunded'],
+            'waived' => [],
+            'refunded' => [],
+        ],
     ],
 
     'tables' => [

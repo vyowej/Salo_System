@@ -309,7 +309,7 @@ export default function AdminReservationsPage() {
         <div>
           <span>{row.deposit_amount > 0 ? formatPeso(row.deposit_amount) : 'No deposit'}</span>
           <div className="admin-muted">
-            {row.deposit_amount > 0 ? row.deposit_status : `Fee: ${formatPeso(row.service_fee)}`}
+            {row.deposit_amount > 0 ? String(row.deposit_display_status || row.deposit_status).replace('_', ' ') : `Fee: ${formatPeso(row.service_fee)}`}
           </div>
         </div>
       ),
@@ -794,7 +794,7 @@ export default function AdminReservationsPage() {
                 <li>
                   <strong>Deposit</strong>
                   {selectedDetail.deposit_amount > 0
-                    ? `${formatPeso(selectedDetail.deposit_amount)} (${selectedDetail.deposit_status})`
+                    ? `${formatPeso(selectedDetail.deposit_amount)} (${String(selectedDetail.deposit_display_status || selectedDetail.deposit_status).replace('_', ' ')})`
                     : 'None'}
                 </li>
                 <li>

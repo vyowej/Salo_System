@@ -270,6 +270,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::post('/reservations/{id}/approve', [OwnerReservationController::class, 'approve'])->whereNumber('id');
         Route::post('/reservations/{id}/reject', [OwnerReservationController::class, 'reject'])->whereNumber('id');
         Route::post('/reservations/{id}/confirm-deposit', [OwnerReservationController::class, 'confirmDeposit'])->whereNumber('id');
+        Route::post('/reservations/{id}/deposit', [OwnerReservationController::class, 'deposit'])->whereNumber('id');
         Route::post('/reservations/{id}/arrived', [OwnerReservationController::class, 'arrived'])->whereNumber('id');
         Route::post('/reservations/{id}/seat', [OwnerReservationController::class, 'seat'])->whereNumber('id');
         Route::post('/reservations/{id}/complete', [OwnerReservationController::class, 'complete'])->whereNumber('id');

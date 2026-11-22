@@ -117,6 +117,71 @@ const OWNER_RESERVATION_STATUS_LABELS = {
   expired: 'Expired',
 };
 
+export const DEPOSIT_ACTION_TO_STATUS = {
+  mark_paid: 'paid',
+  waive: 'waived',
+  refund: 'refunded',
+  paid: 'paid',
+  waived: 'waived',
+  refunded: 'refunded',
+};
+
+export function mapDepositActionToStatus(actionOrStatus) {
+  const key = String(actionOrStatus || '').trim().toLowerCase();
+  return DEPOSIT_ACTION_TO_STATUS[key] || key;
+}
+
+export function normalizeOwnerSettingsProfile(profile) {
+  if (!profile || typeof profile !== 'object') return null;
+
+  return {
+    ...profile,
+    reservationMinNoticeHours: Number(profile.reservation_min_notice_hours ?? profile.reservationMinNoticeHours ?? 2),
+    reservationMaxPartySize: Number(profile.reservation_max_party_size ?? profile.reservationMaxPartySize ?? 8),
+    reservationDurationMinutes: Number(profile.reservation_duration_minutes ?? profile.reservationDurationMinutes ?? 90),
+    reservationMaxAdvanceDays: Number(profile.reservation_max_advance_days ?? profile.reservationMaxAdvanceDays ?? 30),
+    reservationCancellationCutoffMinutes: Number(
+      profile.reservation_cancellation_cutoff_minutes ?? profile.reservationCancellationCutoffMinutes ?? 120,
+    ),
+    reservationAutoConfirm: Boolean(profile.reservation_auto_confirm ?? profile.reservationAutoConfirm ?? false),
+    reservationPendingExpiryMinutes: Number(
+      profile.reservation_pending_expiry_minutes ?? profile.reservationPendingExpiryMinutes ?? 120,
+    ),
+    reservationDepositRequired: Boolean(
+      profile.reservation_deposit_required ?? profile.reservationDepositRequired ?? false,
+    ),
+    reservationDepositAmount: Number(profile.reservation_deposit_amount ?? profile.reservationDepositAmount ?? 0),
+    reservationServiceFee: Number(profile.reservation_service_fee ?? profile.reservationServiceFee ?? 0),
+    reservationNotes: profile.reservation_notes ?? profile.reservationNotes ?? '',
+  };
+}
+
+export function mapOwnerSettingsPayload(payload = {}) {
+  const mapped = { ...payload };
+  const camelToSnake = {
+    reservationMinNoticeHours: 'reservation_min_notice_hours',
+    reservationMaxPartySize: 'reservation_max_party_size',
+    reservationDurationMinutes: 'reservation_duration_minutes',
+    reservationMaxAdvanceDays: 'reservation_max_advance_days',
+    reservationCancellationCutoffMinutes: 'reservation_cancellation_cutoff_minutes',
+    reservationAutoConfirm: 'reservation_auto_confirm',
+    reservationPendingExpiryMinutes: 'reservation_pending_expiry_minutes',
+    reservationDepositRequired: 'reservation_deposit_required',
+    reservationDepositAmount: 'reservation_deposit_amount',
+    reservationServiceFee: 'reservation_service_fee',
+    reservationNotes: 'reservation_notes',
+  };
+
+  Object.entries(camelToSnake).forEach(([camel, snake]) => {
+    if (mapped[camel] !== undefined && mapped[snake] === undefined) {
+      mapped[snake] = mapped[camel];
+    }
+    delete mapped[camel];
+  });
+
+  return mapped;
+}
+
 export function normalizeOwnerReservation(raw) {
   if (!raw || typeof raw !== 'object') return null;
 
@@ -178,6 +243,13 @@ export function normalizeOwnerReservation(raw) {
     specialRequests: raw.special_requests ?? raw.specialRequests ?? null,
     depositAmount: Number(raw.deposit_amount ?? raw.depositAmount ?? 0),
     depositStatus: String(raw.deposit_status ?? raw.depositStatus ?? 'none').toLowerCase(),
+    depositDisplayStatus: String(
+      raw.deposit_display_status ?? raw.depositDisplayStatus ?? raw.deposit_status ?? raw.depositStatus ?? 'none',
+    ).toLowerCase(),
+    depositActionNeeded: Boolean(raw.deposit_action_needed ?? raw.depositActionNeeded ?? false),
+    allowedDepositActions: Array.isArray(raw.allowed_deposit_actions ?? raw.allowedDepositActions)
+      ? (raw.allowed_deposit_actions ?? raw.allowedDepositActions)
+      : [],
     serviceFee: Number(raw.service_fee ?? raw.serviceFee ?? 0),
     isFeeRefundable: Boolean(raw.is_fee_refundable ?? raw.isFeeRefundable ?? true),
     cancellationFee: Number(raw.cancellation_fee ?? raw.cancellationFee ?? 0),
@@ -839,10 +911,11 @@ export const ownerService = {
     return normalizeOwnerReservation(res?.data?.reservation ?? null);
   },
 
-  async cancelReservation(restaurantId, id, reason) {
+  async cancelReservation(restaurantId, id, reason, options = {}) {
     const body = {
       ...(restaurantId ? { restaurant_id: restaurantId } : {}),
       reason,
+      ...(options?.refundDeposit !== undefined ? { refund_deposit: Boolean(options.refundDeposit) } : {}),
     };
     const res = await apiClient.post(`/restaurant/reservations/${encodeURIComponent(id)}/cancel`, body);
     return normalizeOwnerReservation(res?.data?.reservation ?? null);
@@ -889,12 +962,20 @@ export const ownerService = {
     }
   },
 
-  recordReservationPayment() {
-    notAvailable('Recording reservation payment');
-  },
+  async recordReservationPayment(restaurantId, id, payload = {}) {
+    const rawTarget = payload.depositStatus ?? payload.deposit_status ?? payload.action ?? '';
+    const depositStatus = mapDepositActionToStatus(rawTarget);
+    const note = payload.note !== undefined && payload.note !== null && String(payload.note).trim() !== ''
+      ? String(payload.note).trim()
+      : null;
 
-  resolveReservationCancellation() {
-    notAvailable('Resolving reservation cancellation');
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      deposit_status: depositStatus,
+      ...(note ? { note } : {}),
+    };
+    const res = await apiClient.post(`/restaurant/reservations/${encodeURIComponent(id)}/deposit`, body);
+    return normalizeOwnerReservation(res?.data?.reservation ?? null);
   },
 
   getInventoryItems() {
@@ -978,15 +1059,25 @@ export const ownerService = {
   async getSettings(restaurantId) {
     const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
     const res = await apiClient.get(`/restaurant/settings${query}`);
-    return res?.data ?? null;
+    const data = res?.data ?? null;
+    if (!data) return null;
+    return {
+      ...data,
+      profile: normalizeOwnerSettingsProfile(data.profile),
+    };
   },
 
   async updateSettings(restaurantId, payload) {
     const res = await apiClient.patch('/restaurant/settings', {
       ...(restaurantId ? { restaurant_id: restaurantId } : {}),
-      ...payload,
+      ...mapOwnerSettingsPayload(payload),
     });
-    return res?.data ?? null;
+    const data = res?.data ?? null;
+    if (!data) return null;
+    return {
+      ...data,
+      profile: normalizeOwnerSettingsProfile(data.profile),
+    };
   },
 
   async getChangeRequests(restaurantId) {

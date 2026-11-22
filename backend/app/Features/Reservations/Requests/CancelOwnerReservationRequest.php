@@ -25,6 +25,7 @@ class CancelOwnerReservationRequest extends FormRequest
     {
         return [
             'reason' => ['required', 'string', 'min:3', 'max:255'],
+            'refund_deposit' => ['sometimes', 'boolean'],
         ];
     }
 }

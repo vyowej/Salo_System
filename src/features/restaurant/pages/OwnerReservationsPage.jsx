@@ -23,10 +23,11 @@ const STATUS_BADGE_MAP = {
 };
 
 const DEPOSIT_BADGE_MAP = {
-  pending: { variant: 'warning', label: 'Deposit Pending' },
-  paid: { variant: 'success', label: 'Deposit Paid' },
-  waived: { variant: 'default', label: 'Deposit Waived' },
-  refunded: { variant: 'info', label: 'Deposit Refunded' },
+  pending: { variant: 'warning', label: 'Deposit: Pending' },
+  paid: { variant: 'success', label: 'Deposit: Received' },
+  waived: { variant: 'default', label: 'Deposit: Waived' },
+  refunded: { variant: 'info', label: 'Deposit: Refunded' },
+  not_collected: { variant: 'default', label: 'Deposit: Not collected' },
 };
 
 const ATTENTION_META = {
@@ -157,7 +158,12 @@ export default function OwnerReservationsPage() {
 
   const [reasonModal, setReasonModal] = useState(null); // { mode: 'reject' | 'cancel', res }
   const [reasonInput, setReasonInput] = useState('');
+  const [refundDepositOnCancel, setRefundDepositOnCancel] = useState(true);
   const [reasonError, setReasonError] = useState('');
+
+  const [depositModal, setDepositModal] = useState(null); // { action: 'mark_paid' | 'waive' | 'refund', res }
+  const [depositNote, setDepositNote] = useState('');
+  const [depositError, setDepositError] = useState('');
 
   const [seatModal, setSeatModal] = useState(null); // { res }
   const [seatTableId, setSeatTableId] = useState('');
@@ -462,6 +468,7 @@ export default function OwnerReservationsPage() {
     if (actionKey === 'reject' || actionKey === 'cancel') {
       setReasonModal({ mode: actionKey, res });
       setReasonInput('');
+      setRefundDepositOnCancel(true);
       setReasonError('');
       return;
     }
@@ -500,8 +507,18 @@ export default function OwnerReservationsPage() {
         updated = await ownerService.rejectReservation(selectedRestaurantId, reasonModal.res.id, trimmed);
         showToastMessage('success', `Reservation ${reasonModal.res.reference} declined.`);
       } else {
-        updated = await ownerService.cancelReservation(selectedRestaurantId, reasonModal.res.id, trimmed);
-        showToastMessage('success', `Reservation ${reasonModal.res.reference} cancelled.`);
+        const isPaid = reasonModal.res.depositStatus === 'paid';
+        updated = await ownerService.cancelReservation(
+          selectedRestaurantId,
+          reasonModal.res.id,
+          trimmed,
+          isPaid ? { refundDeposit: refundDepositOnCancel } : {},
+        );
+        if (updated?.depositActionNeeded) {
+          showToastMessage('warning', `Reservation ${reasonModal.res.reference} cancelled. Remember to mark the ₱${Number(reasonModal.res.depositAmount || 0).toFixed(2)} deposit as refunded once returned.`);
+        } else {
+          showToastMessage('success', `Reservation ${reasonModal.res.reference} cancelled.`);
+        }
       }
 
       if (detailRes && detailRes.id === reasonModal.res.id && updated) {
@@ -570,6 +587,72 @@ export default function OwnerReservationsPage() {
     } finally {
       setBusyActionId(null);
     }
+  }
+
+  async function handleSubmitDepositModal(e) {
+    e.preventDefault();
+    if (!depositModal) return;
+
+    setBusyActionId(depositModal.res.id);
+    setDepositError('');
+    try {
+      const updated = await ownerService.recordReservationPayment(selectedRestaurantId, depositModal.res.id, {
+        action: depositModal.action,
+        note: depositNote.trim() || null,
+      });
+      if (detailRes && detailRes.id === depositModal.res.id && updated) {
+        setDetailRes(updated);
+      }
+      const actionLabels = {
+        mark_paid: 'Deposit marked as received.',
+        waive: 'Deposit waived.',
+        refund: 'Deposit marked as refunded.',
+      };
+      showToastMessage('success', `${actionLabels[depositModal.action] || 'Deposit updated.'} (${depositModal.res.reference})`);
+      setDepositModal(null);
+      await loadReservations(true);
+    } catch (err) {
+      setDepositError(err?.message || 'Unable to update deposit status.');
+    } finally {
+      setBusyActionId(null);
+    }
+  }
+
+  function renderDepositButtons(res) {
+    const depActions = Array.isArray(res?.allowedDepositActions) ? res.allowedDepositActions : [];
+    if (depActions.length === 0) return null;
+    const isBusy = busyActionId === res.id;
+    const hasConfirmDeposit = (res?.allowedActions || []).includes('confirm_deposit');
+
+    const depositBtnMeta = {
+      mark_paid: { label: 'Mark deposit received', variant: 'secondary' },
+      waive: { label: 'Waive deposit', variant: 'outline' },
+      refund: { label: 'Mark as refunded', variant: 'outline' },
+    };
+
+    return depActions
+      .filter((act) => !(act === 'mark_paid' && hasConfirmDeposit))
+      .map((act) => {
+        const meta = depositBtnMeta[act];
+        if (!meta) return null;
+        return (
+          <Button
+            key={`dep-${act}`}
+            type="button"
+            size="sm"
+            variant={meta.variant}
+            disabled={isBusy}
+            onClick={(e) => {
+              e.stopPropagation();
+              setDepositModal({ action: act, res });
+              setDepositNote('');
+              setDepositError('');
+            }}
+          >
+            {meta.label}
+          </Button>
+        );
+      });
   }
 
   function renderActionButtons(res, compact = false) {
@@ -1115,7 +1198,8 @@ export default function OwnerReservationsPage() {
                       <div className="owner-slot-card__body">
                         {slot.items.map((res) => {
                           const statusMeta = STATUS_BADGE_MAP[res.statusCode] || STATUS_BADGE_MAP.pending;
-                          const depositMeta = DEPOSIT_BADGE_MAP[res.depositStatus] || null;
+                          const hasDeposit = Number(res.depositAmount || 0) > 0 && res.depositStatus !== 'none';
+                          const depositMeta = hasDeposit ? (DEPOSIT_BADGE_MAP[res.depositDisplayStatus || res.depositStatus] || null) : null;
                           const attentionMeta = res.attention ? ATTENTION_META[res.attention] : null;
                           const guestInitial = (res.guestName || 'G').charAt(0).toUpperCase();
 
@@ -1269,7 +1353,8 @@ export default function OwnerReservationsPage() {
                     <tbody>
                       {reservations.map((res) => {
                         const statusMeta = STATUS_BADGE_MAP[res.statusCode] || STATUS_BADGE_MAP.pending;
-                        const depositMeta = DEPOSIT_BADGE_MAP[res.depositStatus] || null;
+                        const hasDeposit = Number(res.depositAmount || 0) > 0 && res.depositStatus !== 'none';
+                        const depositMeta = hasDeposit ? (DEPOSIT_BADGE_MAP[res.depositDisplayStatus || res.depositStatus] || null) : null;
 
                         return (
                           <tr
@@ -1397,7 +1482,7 @@ export default function OwnerReservationsPage() {
                 <div>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block' }}>Deposit &amp; Fee</span>
                   <strong>
-                    Deposit: ₱{detailRes.depositAmount.toFixed(2)} ({detailRes.depositStatus})
+                    Deposit: ₱{detailRes.depositAmount.toFixed(2)} ({DEPOSIT_BADGE_MAP[detailRes.depositDisplayStatus || detailRes.depositStatus]?.label || detailRes.depositDisplayStatus || detailRes.depositStatus})
                   </strong>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                     Service Fee: ₱{detailRes.serviceFee.toFixed(2)}
@@ -1460,9 +1545,59 @@ export default function OwnerReservationsPage() {
               )}
 
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', paddingTop: 10, borderTop: '1px solid var(--border-primary)' }}>
+                {renderDepositButtons(detailRes)}
                 {renderActionButtons(detailRes)}
               </div>
             </div>
+          )}
+        </Modal>
+
+        {/* Deposit Action Modal */}
+        <Modal
+          open={Boolean(depositModal)}
+          onClose={() => !busyActionId && setDepositModal(null)}
+          title={
+            depositModal?.action === 'mark_paid'
+              ? `Mark Deposit Received · ${depositModal.res.reference}`
+              : depositModal?.action === 'waive'
+                ? `Waive Deposit · ${depositModal?.res?.reference || ''}`
+                : `Mark Deposit Refunded · ${depositModal?.res?.reference || ''}`
+          }
+          size="sm"
+        >
+          {depositModal && (
+            <form onSubmit={handleSubmitDepositModal} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
+                {depositModal.action === 'mark_paid' && `Record receipt of ₱${Number(depositModal.res.depositAmount || 0).toFixed(2)} deposit from ${depositModal.res.guestName}.`}
+                {depositModal.action === 'waive' && `Confirm waiving the ₱${Number(depositModal.res.depositAmount || 0).toFixed(2)} deposit for ${depositModal.res.guestName}.`}
+                {depositModal.action === 'refund' && `Confirm marking the ₱${Number(depositModal.res.depositAmount || 0).toFixed(2)} deposit as refunded to ${depositModal.res.guestName}.`}
+              </p>
+              {depositError && (
+                <div role="alert" style={{ padding: 10, borderRadius: 8, background: '#fef2f2', color: '#b91c1c', fontSize: 12, fontWeight: 600 }}>
+                  {depositError}
+                </div>
+              )}
+              {depositModal.action === 'mark_paid' && (
+                <textarea
+                  rows={2}
+                  maxLength={255}
+                  className="textarea"
+                  placeholder="Optional note (e.g. GCash ref or cash at counter)..."
+                  value={depositNote}
+                  onChange={(e) => setDepositNote(e.target.value)}
+                  disabled={Boolean(busyActionId)}
+                  style={{ width: '100%' }}
+                />
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setDepositModal(null)} disabled={Boolean(busyActionId)}>
+                  Close
+                </Button>
+                <Button type="submit" variant="primary" size="sm" disabled={Boolean(busyActionId)}>
+                  {busyActionId ? 'Saving...' : 'Confirm'}
+                </Button>
+              </div>
+            </form>
           )}
         </Modal>
 
@@ -1497,6 +1632,19 @@ export default function OwnerReservationsPage() {
                 disabled={Boolean(busyActionId)}
                 style={{ width: '100%' }}
               />
+              {reasonModal.mode === 'cancel' && reasonModal.res.depositStatus === 'paid' && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={refundDepositOnCancel}
+                    onChange={(e) => setRefundDepositOnCancel(e.target.checked)}
+                    disabled={Boolean(busyActionId)}
+                  />
+                  <span>
+                    Mark the deposit as refunded (₱{Number(reasonModal.res.depositAmount || 0).toFixed(2)})
+                  </span>
+                </label>
+              )}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                 <Button type="button" variant="ghost" size="sm" onClick={() => setReasonModal(null)} disabled={Boolean(busyActionId)}>
                   Close

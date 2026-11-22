@@ -552,6 +552,14 @@ class OwnerProfileService
             'reservation_min_notice_hours' => (int) ($row->reservation_min_notice_hours ?? 2),
             'reservation_max_party_size' => (int) ($row->reservation_max_party_size ?? 8),
             'reservation_notes' => $row->reservation_notes,
+            'reservation_duration_minutes' => (int) ($row->reservation_duration_minutes ?? 90),
+            'reservation_max_advance_days' => (int) ($row->reservation_max_advance_days ?? 30),
+            'reservation_cancellation_cutoff_minutes' => (int) ($row->reservation_cancellation_cutoff_minutes ?? 120),
+            'reservation_auto_confirm' => (bool) ($row->reservation_auto_confirm ?? false),
+            'reservation_pending_expiry_minutes' => (int) ($row->reservation_pending_expiry_minutes ?? 120),
+            'reservation_deposit_required' => (bool) ($row->reservation_deposit_required ?? false),
+            'reservation_deposit_amount' => round((float) ($row->reservation_deposit_amount ?? 0), 2),
+            'reservation_service_fee' => round((float) ($row->reservation_service_fee ?? 0), 2),
             'address' => $addr ? [
                 'street' => $addr->street,
                 'barangay' => $addr->barangay_name,
@@ -613,6 +621,39 @@ class OwnerProfileService
             ]);
         }
 
+        $minNoticeHours = array_key_exists('reservation_min_notice_hours', $validated)
+            ? (int) $validated['reservation_min_notice_hours']
+            : (int) ($restaurant->reservation_min_notice_hours ?? 2);
+        $maxAdvanceDays = array_key_exists('reservation_max_advance_days', $validated)
+            ? (int) $validated['reservation_max_advance_days']
+            : (int) ($restaurant->reservation_max_advance_days ?? 30);
+        $autoConfirm = array_key_exists('reservation_auto_confirm', $validated)
+            ? (bool) $validated['reservation_auto_confirm']
+            : (bool) ($restaurant->reservation_auto_confirm ?? false);
+        $depositRequired = array_key_exists('reservation_deposit_required', $validated)
+            ? (bool) $validated['reservation_deposit_required']
+            : (bool) ($restaurant->reservation_deposit_required ?? false);
+        $depositAmount = array_key_exists('reservation_deposit_amount', $validated)
+            ? round((float) $validated['reservation_deposit_amount'], 2)
+            : round((float) ($restaurant->reservation_deposit_amount ?? 0), 2);
+        $serviceFee = array_key_exists('reservation_service_fee', $validated)
+            ? round((float) $validated['reservation_service_fee'], 2)
+            : round((float) ($restaurant->reservation_service_fee ?? 0), 2);
+
+        $crossErrors = [];
+        if ($depositRequired && $depositAmount <= 0) {
+            $crossErrors['reservation_deposit_amount'] = ['A deposit amount greater than 0 is required when deposits are enabled.'];
+        }
+        if ($depositRequired && $autoConfirm) {
+            $crossErrors['reservation_auto_confirm'] = ['Auto-confirm cannot be enabled when a deposit is required because a deposit must be received before confirming.'];
+        }
+        if ($minNoticeHours > ($maxAdvanceDays * 24)) {
+            $crossErrors['reservation_min_notice_hours'] = ['Minimum notice hours cannot exceed the maximum booking window (max advance days × 24).'];
+        }
+        if ($crossErrors !== []) {
+            throw ValidationException::withMessages($crossErrors);
+        }
+
         $updates = [
             'offers_delivery' => $offersDelivery ? 1 : 0,
             'offers_pickup' => $offersPickup ? 1 : 0,
@@ -632,19 +673,53 @@ class OwnerProfileService
             'delivery_radius' => array_key_exists('delivery_radius', $validated)
                 ? ($validated['delivery_radius'] !== null ? (float) $validated['delivery_radius'] : null)
                 : $restaurant->delivery_radius,
-            'reservation_min_notice_hours' => array_key_exists('reservation_min_notice_hours', $validated)
-                ? (int) $validated['reservation_min_notice_hours']
-                : (int) $restaurant->reservation_min_notice_hours,
+            'reservation_min_notice_hours' => $minNoticeHours,
             'reservation_max_party_size' => array_key_exists('reservation_max_party_size', $validated)
                 ? (int) $validated['reservation_max_party_size']
                 : (int) $restaurant->reservation_max_party_size,
             'reservation_notes' => array_key_exists('reservation_notes', $validated)
                 ? ($validated['reservation_notes'] !== null ? trim((string) $validated['reservation_notes']) : null)
                 : $restaurant->reservation_notes,
+            'reservation_duration_minutes' => array_key_exists('reservation_duration_minutes', $validated)
+                ? (int) $validated['reservation_duration_minutes']
+                : (int) ($restaurant->reservation_duration_minutes ?? 90),
+            'reservation_max_advance_days' => $maxAdvanceDays,
+            'reservation_cancellation_cutoff_minutes' => array_key_exists('reservation_cancellation_cutoff_minutes', $validated)
+                ? (int) $validated['reservation_cancellation_cutoff_minutes']
+                : (int) ($restaurant->reservation_cancellation_cutoff_minutes ?? 120),
+            'reservation_auto_confirm' => $autoConfirm ? 1 : 0,
+            'reservation_pending_expiry_minutes' => array_key_exists('reservation_pending_expiry_minutes', $validated)
+                ? (int) $validated['reservation_pending_expiry_minutes']
+                : (int) ($restaurant->reservation_pending_expiry_minutes ?? 120),
+            'reservation_deposit_required' => $depositRequired ? 1 : 0,
+            'reservation_deposit_amount' => number_format($depositAmount, 2, '.', ''),
+            'reservation_service_fee' => number_format($serviceFee, 2, '.', ''),
             'updated_at' => now(),
         ];
 
-        DB::transaction(function () use ($targetId, $restaurant, $updates, $user, $request): void {
+        $oldValues = [
+            'offers_delivery' => (bool) $restaurant->offers_delivery,
+            'offers_pickup' => (bool) $restaurant->offers_pickup,
+            'offers_dine_in' => (bool) $restaurant->offers_dine_in,
+            'accepts_reservations' => (bool) $restaurant->accepts_reservations,
+            'accepting_orders' => (bool) $restaurant->accepting_orders,
+            'accepting_reservations' => (bool) $restaurant->accepting_reservations,
+            'inventory_deduction_mode' => $restaurant->inventory_deduction_mode,
+            'delivery_radius' => $restaurant->delivery_radius !== null ? (float) $restaurant->delivery_radius : null,
+            'reservation_min_notice_hours' => (int) ($restaurant->reservation_min_notice_hours ?? 2),
+            'reservation_max_party_size' => (int) ($restaurant->reservation_max_party_size ?? 8),
+            'reservation_notes' => $restaurant->reservation_notes,
+            'reservation_duration_minutes' => (int) ($restaurant->reservation_duration_minutes ?? 90),
+            'reservation_max_advance_days' => (int) ($restaurant->reservation_max_advance_days ?? 30),
+            'reservation_cancellation_cutoff_minutes' => (int) ($restaurant->reservation_cancellation_cutoff_minutes ?? 120),
+            'reservation_auto_confirm' => (bool) ($restaurant->reservation_auto_confirm ?? false),
+            'reservation_pending_expiry_minutes' => (int) ($restaurant->reservation_pending_expiry_minutes ?? 120),
+            'reservation_deposit_required' => (bool) ($restaurant->reservation_deposit_required ?? false),
+            'reservation_deposit_amount' => round((float) ($restaurant->reservation_deposit_amount ?? 0), 2),
+            'reservation_service_fee' => round((float) ($restaurant->reservation_service_fee ?? 0), 2),
+        ];
+
+        DB::transaction(function () use ($targetId, $oldValues, $updates, $user, $request): void {
             DB::table('restaurants')->where('restaurant_id', $targetId)->update($updates);
 
             $this->auditLogService->record(
@@ -652,13 +727,7 @@ class OwnerProfileService
                 action: 'owner_settings_updated',
                 entityType: 'restaurants',
                 entityId: $targetId,
-                oldValues: [
-                    'offers_delivery' => (bool) $restaurant->offers_delivery,
-                    'offers_pickup' => (bool) $restaurant->offers_pickup,
-                    'offers_dine_in' => (bool) $restaurant->offers_dine_in,
-                    'accepts_reservations' => (bool) $restaurant->accepts_reservations,
-                    'inventory_deduction_mode' => $restaurant->inventory_deduction_mode,
-                ],
+                oldValues: $oldValues,
                 newValues: $updates,
                 request: $request,
             );

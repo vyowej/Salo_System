@@ -468,36 +468,185 @@ class OwnerReservationService
         Request $request,
         ?CarbonInterface $now = null,
     ): array {
+        return $this->updateDeposit(
+            user: $user,
+            reservationId: $reservationId,
+            targetDepositStatus: 'paid',
+            note: $note ?? 'Deposit settled and reservation confirmed.',
+            restaurantId: $restaurantId,
+            request: $request,
+            now: $now,
+            requireAwaitingPayment: true,
+        );
+    }
+
+    public function updateDeposit(
+        User $user,
+        int $reservationId,
+        string $targetDepositStatus,
+        ?string $note,
+        ?int $restaurantId,
+        Request $request,
+        ?CarbonInterface $now = null,
+        bool $requireAwaitingPayment = false,
+    ): array {
         $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForReservations(
             $user,
             $restaurantId,
             'reservations.updateStatus',
         );
+        $targetRestaurantId = (int) $restaurant->restaurant_id;
+        $manilaNow = $this->toManilaImmutable($now);
 
-        return $this->transition(
-            restaurant: $restaurant,
-            reservationId: $reservationId,
-            action: 'confirm_deposit',
-            toStatus: ReservationStatus::CONFIRMED,
-            extraFields: static fn (object $row, CarbonImmutable $manilaNow): array => [
-                'confirmed_at' => $manilaNow->format('Y-m-d H:i:s'),
-                'deposit_status' => 'paid',
-            ],
-            note: $note ?? 'Deposit settled and reservation confirmed.',
-            actor: $user,
-            request: $request,
-            checks: static function (): void {},
-            notificationFactory: static function (object $row, object $rest, CarbonImmutable $start): array {
-                $ref = $row->reservation_reference ?: ('#' . $row->reservation_id);
+        DB::transaction(function () use (
+            $restaurant,
+            $targetRestaurantId,
+            $reservationId,
+            $targetDepositStatus,
+            $note,
+            $user,
+            $request,
+            $manilaNow,
+            $requireAwaitingPayment,
+        ): void {
+            $row = DB::table('reservations')
+                ->where('reservation_id', $reservationId)
+                ->where('restaurant_id', $targetRestaurantId)
+                ->lockForUpdate()
+                ->first();
 
-                return [
-                    'type' => 'reservation_confirmed',
-                    'title' => "Deposit Confirmed — Table Secured ({$ref})",
-                    'body' => "Your deposit has been recorded and your table at {$rest->restaurant_name} for {$start->format('M j, Y \a\t g:i A')} is confirmed!",
-                ];
-            },
-            now: $now,
-        );
+            if (! $row) {
+                throw new NotFoundHttpException('Reservation not found.');
+            }
+
+            $depositAmount = (float) ($row->deposit_amount ?? 0);
+            $currentDepositStatus = (string) ($row->deposit_status ?? 'none');
+            $currentStatus = (string) $row->reservation_status;
+
+            if ($depositAmount <= 0 || $currentDepositStatus === 'none') {
+                throw new ReservationBookingException(
+                    errorCode: 'NO_DEPOSIT',
+                    message: 'This reservation does not have a deposit.',
+                    statusCode: 409,
+                );
+            }
+
+            if ($requireAwaitingPayment && $currentStatus !== ReservationStatus::AWAITING_PAYMENT) {
+                if ($currentStatus === ReservationStatus::CONFIRMED && $currentDepositStatus === 'paid') {
+                    return;
+                }
+                throw new ReservationBookingException(
+                    errorCode: 'INVALID_TRANSITION',
+                    message: "Cannot confirm deposit while reservation is {$currentStatus}.",
+                    statusCode: 409,
+                );
+            }
+
+            // Idempotent when target deposit_status matches current
+            if ($targetDepositStatus === $currentDepositStatus) {
+                return;
+            }
+
+            $allowedTargets = config("salo.reservations.deposit_transitions.{$currentDepositStatus}", []);
+            if (! is_array($allowedTargets) || ! in_array($targetDepositStatus, $allowedTargets, true)) {
+                throw new ReservationBookingException(
+                    errorCode: 'INVALID_DEPOSIT_TRANSITION',
+                    message: "Cannot change deposit status from {$currentDepositStatus} to {$targetDepositStatus}.",
+                    statusCode: 409,
+                );
+            }
+
+            $nowStr = $manilaNow->format('Y-m-d H:i:s');
+            $movesToConfirmed = $currentStatus === ReservationStatus::AWAITING_PAYMENT
+                && in_array($targetDepositStatus, ['paid', 'waived'], true);
+            $newStatus = $movesToConfirmed ? ReservationStatus::CONFIRMED : $currentStatus;
+
+            $updates = [
+                'deposit_status' => $targetDepositStatus,
+                'updated_at' => $nowStr,
+            ];
+
+            if ($movesToConfirmed) {
+                $updates['reservation_status'] = ReservationStatus::CONFIRMED;
+                $updates['confirmed_at'] = $nowStr;
+            }
+
+            DB::table('reservations')
+                ->where('reservation_id', $reservationId)
+                ->where('restaurant_id', $targetRestaurantId)
+                ->update($updates);
+
+            $cleanNote = $note !== null && trim($note) !== '' ? mb_substr(trim($note), 0, 255) : null;
+            $historyNote = $cleanNote ?? match ($targetDepositStatus) {
+                'paid' => $movesToConfirmed ? 'Deposit settled and reservation confirmed.' : 'Deposit marked as received.',
+                'waived' => $movesToConfirmed ? 'Deposit waived and reservation confirmed.' : 'Deposit waived by restaurant.',
+                'refunded' => 'Deposit marked as refunded by restaurant.',
+                default => "Deposit status updated to {$targetDepositStatus}.",
+            };
+
+            $this->historyRecorder->record(
+                reservationId: $reservationId,
+                fromStatus: $currentStatus,
+                toStatus: $newStatus,
+                changedByUserId: (int) $user->user_id,
+                changedByRole: 'restaurant',
+                note: $historyNote,
+                createdAt: $manilaNow,
+            );
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: "restaurant_reservation_deposit_{$targetDepositStatus}",
+                entityType: 'reservations',
+                entityId: $reservationId,
+                oldValues: [
+                    'deposit_status' => $currentDepositStatus,
+                    'reservation_status' => $currentStatus,
+                ],
+                newValues: [
+                    'deposit_status' => $targetDepositStatus,
+                    'reservation_status' => $newStatus,
+                    'note' => $cleanNote,
+                ],
+                request: $request,
+            );
+
+            $ref = $row->reservation_reference ?: ('#' . $reservationId);
+            $startCarbon = CarbonImmutable::parse((string) $row->reservation_start, self::TIMEZONE);
+            $formattedAmount = number_format($depositAmount, 2);
+
+            if ($movesToConfirmed) {
+                $notifType = 'reservation_confirmed';
+                $notifTitle = "Deposit Confirmed — Table Secured ({$ref})";
+                $notifBody = $targetDepositStatus === 'waived'
+                    ? "Your deposit was waived and your table at {$restaurant->restaurant_name} for {$startCarbon->format('M j, Y \a\t g:i A')} is confirmed!"
+                    : "Your deposit has been recorded and your table at {$restaurant->restaurant_name} for {$startCarbon->format('M j, Y \a\t g:i A')} is confirmed!";
+            } elseif ($targetDepositStatus === 'paid') {
+                $notifType = 'reservation_deposit_received';
+                $notifTitle = "Deposit Received ({$ref})";
+                $notifBody = "Your deposit of ₱{$formattedAmount} for {$restaurant->restaurant_name} ({$ref}) was marked as received.";
+            } elseif ($targetDepositStatus === 'waived') {
+                $notifType = 'reservation_deposit_waived';
+                $notifTitle = "Deposit Waived ({$ref})";
+                $notifBody = "Your deposit was waived by {$restaurant->restaurant_name} for reservation {$ref}.";
+            } else {
+                $notifType = 'reservation_deposit_refunded';
+                $notifTitle = "Deposit Refunded ({$ref})";
+                $notifBody = "Your deposit of ₱{$formattedAmount} was marked as refunded by the restaurant ({$restaurant->restaurant_name}, {$ref}).";
+            }
+
+            $this->notificationService->notifyUser(
+                userId: (int) $row->customer_id,
+                workspace: 'customer',
+                type: $notifType,
+                title: $notifTitle,
+                body: $notifBody,
+                relatedEntityType: 'reservation',
+                relatedEntityId: $reservationId,
+            );
+        });
+
+        return $this->getDetail($user, $reservationId, $restaurantId, $manilaNow);
     }
 
     public function markArrived(
@@ -750,6 +899,7 @@ class OwnerReservationService
         ?int $restaurantId,
         Request $request,
         ?CarbonInterface $now = null,
+        bool $refundDeposit = false,
     ): array {
         $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForReservations(
             $user,
@@ -763,23 +913,34 @@ class OwnerReservationService
             reservationId: $reservationId,
             action: 'cancel',
             toStatus: ReservationStatus::CANCELLED,
-            extraFields: static fn (object $row, CarbonImmutable $manilaNow): array => [
-                'cancelled_by' => 'restaurant',
-                'cancelled_at' => $manilaNow->format('Y-m-d H:i:s'),
-                'cancellation_reason' => $cleanReason,
-                'cancellation_fee' => '0.00',
-            ],
+            extraFields: static function (object $row, CarbonImmutable $manilaNow) use ($cleanReason, $refundDeposit): array {
+                $fields = [
+                    'cancelled_by' => 'restaurant',
+                    'cancelled_at' => $manilaNow->format('Y-m-d H:i:s'),
+                    'cancellation_reason' => $cleanReason,
+                    'cancellation_fee' => '0.00',
+                ];
+
+                if ($refundDeposit && ((string) ($row->deposit_status ?? 'none')) === 'paid') {
+                    $fields['deposit_status'] = 'refunded';
+                }
+
+                return $fields;
+            },
             note: $cleanReason,
             actor: $user,
             request: $request,
             checks: static function (): void {},
-            notificationFactory: static function (object $row, object $rest, CarbonImmutable $start) use ($cleanReason): array {
+            notificationFactory: static function (object $row, object $rest, CarbonImmutable $start) use ($cleanReason, $refundDeposit): array {
                 $ref = $row->reservation_reference ?: ('#' . $row->reservation_id);
+                $refundNote = ($refundDeposit && ((string) ($row->deposit_status ?? 'none')) === 'paid')
+                    ? ' Your deposit of ₱'.number_format((float) ($row->deposit_amount ?? 0), 2).' was marked as refunded.'
+                    : '';
 
                 return [
                     'type' => 'reservation_cancelled_by_restaurant',
                     'title' => "Reservation Cancelled by Restaurant ({$ref})",
-                    'body' => "Your reservation at {$rest->restaurant_name} for {$start->format('M j, Y \a\t g:i A')} was cancelled by the restaurant. Reason: {$cleanReason}",
+                    'body' => "Your reservation at {$rest->restaurant_name} for {$start->format('M j, Y \a\t g:i A')} was cancelled by the restaurant. Reason: {$cleanReason}{$refundNote}",
                 ];
             },
             now: $now,
@@ -1293,6 +1454,7 @@ class OwnerReservationService
         ?array $statusHistory = null,
     ): array {
         $allowedActions = $this->computeAllowedActions($row, $permissions, $manilaNow);
+        $allowedDepositActions = $this->computeAllowedDepositActions($row, $permissions);
         $attention = $this->computeAttentionFlag($row, $restaurant, $manilaNow);
 
         return ReservationFormatter::formatOwner(
@@ -1305,7 +1467,47 @@ class OwnerReservationService
             guestHistory: $guestHistory,
             allowedActions: $allowedActions,
             attention: $attention,
+            allowedDepositActions: $allowedDepositActions,
         );
+    }
+
+    /**
+     * Compute valid manual deposit actions RIGHT NOW given deposit_status and user permissions.
+     *
+     * @param  array<string, bool>  $permissions
+     * @return array<int, string>
+     */
+    private function computeAllowedDepositActions(object $row, array $permissions): array
+    {
+        if (! ($permissions['reservations.updateStatus'] ?? false)) {
+            return [];
+        }
+
+        $depositAmount = (float) ($row->deposit_amount ?? 0);
+        $depositStatus = (string) ($row->deposit_status ?? 'none');
+        if ($depositAmount <= 0 || $depositStatus === 'none') {
+            return [];
+        }
+
+        $allowedTargets = config("salo.reservations.deposit_transitions.{$depositStatus}", []);
+        if (! is_array($allowedTargets)) {
+            return [];
+        }
+
+        $actionMap = [
+            'paid' => 'mark_paid',
+            'waived' => 'waive',
+            'refunded' => 'refund',
+        ];
+
+        $actions = [];
+        foreach ($allowedTargets as $target) {
+            if (isset($actionMap[$target])) {
+                $actions[] = $actionMap[$target];
+            }
+        }
+
+        return $actions;
     }
 
     /**

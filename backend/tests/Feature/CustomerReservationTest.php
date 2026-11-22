@@ -121,8 +121,8 @@ class CustomerReservationTest extends TestCase
 
         $restaurantId = $this->createRestaurant([
             'reservation_auto_confirm' => 1,
-            'reservation_deposit_required' => 1,
-            'reservation_deposit_amount' => '500.00',
+            'reservation_deposit_required' => 0,
+            'reservation_deposit_amount' => '0.00',
             'reservation_service_fee' => '40.00',
         ]);
         $this->insertDailyOperatingHours($restaurantId, '10:00:00', '22:00:00');
@@ -142,8 +142,8 @@ class CustomerReservationTest extends TestCase
         $first = $this->actingAs($customerA)->postJson('/api/customer/reservations', $payload);
         $first->assertStatus(201)
             ->assertJsonPath('data.reservation.reservation_status', 'confirmed')
-            ->assertJsonPath('data.reservation.deposit_amount', '500.00')
-            ->assertJsonPath('data.reservation.deposit_status', 'pending')
+            ->assertJsonPath('data.reservation.deposit_amount', '0.00')
+            ->assertJsonPath('data.reservation.deposit_status', 'none')
             ->assertJsonPath('data.reservation.service_fee', '40.00');
 
         $firstId = (int) $first->json('data.reservation.reservation_id');

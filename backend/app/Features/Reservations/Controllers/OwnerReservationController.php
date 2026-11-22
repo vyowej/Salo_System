@@ -9,6 +9,7 @@ use App\Features\Reservations\Requests\OptionalOwnerReservationNoteRequest;
 use App\Features\Reservations\Requests\OwnerReservationCalendarRequest;
 use App\Features\Reservations\Requests\RejectOwnerReservationRequest;
 use App\Features\Reservations\Requests\SeatOwnerReservationRequest;
+use App\Features\Reservations\Requests\UpdateOwnerReservationDepositRequest;
 use App\Features\Reservations\Services\OwnerReservationService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
@@ -88,6 +89,26 @@ class OwnerReservationController extends Controller
                 ),
             ],
             message: 'Reservation rejected.',
+        );
+    }
+
+    public function deposit(UpdateOwnerReservationDepositRequest $request, int $id): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+        $validated = $request->validated();
+
+        return ApiResponse::success(
+            data: [
+                'reservation' => $this->ownerReservationService->updateDeposit(
+                    user: $request->user(),
+                    reservationId: $id,
+                    targetDepositStatus: (string) $validated['deposit_status'],
+                    note: $validated['note'] ?? null,
+                    restaurantId: $restaurantId,
+                    request: $request,
+                ),
+            ],
+            message: 'Reservation deposit updated.',
         );
     }
 
@@ -200,6 +221,7 @@ class OwnerReservationController extends Controller
                     reason: (string) $validated['reason'],
                     restaurantId: $restaurantId,
                     request: $request,
+                    refundDeposit: (bool) ($validated['refund_deposit'] ?? false),
                 ),
             ],
             message: 'Reservation cancelled.',

@@ -292,7 +292,7 @@ class CustomerReservationService
                 $depositStatus = ($depositRequired && (float) $depositAmount > 0) ? 'pending' : 'none';
                 $serviceFee = number_format((float) $freshSettings['reservation_service_fee'], 2, '.', '');
 
-                $autoConfirm = (bool) $freshSettings['reservation_auto_confirm'];
+                $autoConfirm = (bool) $freshSettings['reservation_auto_confirm'] && ! $depositRequired;
                 $initialStatus = $autoConfirm ? ReservationStatus::CONFIRMED : ReservationStatus::PENDING;
                 $nowStr = $manilaNow->format('Y-m-d H:i:s');
                 $confirmedAt = $autoConfirm ? $nowStr : null;
@@ -716,13 +716,16 @@ class CustomerReservationService
                 $formattedWhen = $startCarbon->format('M j, Y \a\t g:i A');
                 $guestName = $row->contact_name ?: 'Customer';
                 $reasonSuffix = $cleanReason !== null ? " Reason: {$cleanReason}" : '';
+                $depositSuffix = ((string) ($row->deposit_status ?? 'none')) === 'paid'
+                    ? ' Deposit already received — decide whether to refund.'
+                    : '';
 
                 $this->notificationService->notifyUsers(
                     userIds: $handlerUserIds,
                     workspace: 'restaurant',
                     type: 'reservation_cancelled_by_customer',
                     title: "Reservation Cancelled ({$reference})",
-                    body: "{$guestName} cancelled their reservation for {$row->number_of_guests} guest(s) on {$formattedWhen}.{$reasonSuffix}",
+                    body: "{$guestName} cancelled their reservation for {$row->number_of_guests} guest(s) on {$formattedWhen}.{$reasonSuffix}{$depositSuffix}",
                     relatedEntityType: 'reservation',
                     relatedEntityId: $reservationId,
                 );

@@ -122,6 +122,24 @@ class OwnerProfileController extends Controller
             'reservation_min_notice_hours' => ['sometimes', 'integer', 'min:0', 'max:168'],
             'reservation_max_party_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'reservation_notes' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'reservation_duration_minutes' => [
+                'sometimes',
+                'integer',
+                'min:30',
+                'max:240',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (((int) $value) % 15 !== 0) {
+                        $fail('Reservation duration must be a multiple of 15 minutes.');
+                    }
+                },
+            ],
+            'reservation_max_advance_days' => ['sometimes', 'integer', 'min:1', 'max:365'],
+            'reservation_cancellation_cutoff_minutes' => ['sometimes', 'integer', 'min:0', 'max:1440'],
+            'reservation_pending_expiry_minutes' => ['sometimes', 'integer', 'min:15', 'max:1440'],
+            'reservation_auto_confirm' => ['sometimes', 'boolean'],
+            'reservation_deposit_required' => ['sometimes', 'boolean'],
+            'reservation_deposit_amount' => ['sometimes', 'numeric', 'min:0', 'max:100000', 'regex:/^\d+(\.\d{1,2})?$/'],
+            'reservation_service_fee' => ['sometimes', 'numeric', 'min:0', 'max:100000', 'regex:/^\d+(\.\d{1,2})?$/'],
         ]);
 
         return ApiResponse::success(

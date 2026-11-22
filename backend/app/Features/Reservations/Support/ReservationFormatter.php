@@ -136,6 +136,7 @@ class ReservationFormatter
                 : null,
             'deposit_amount' => number_format((float) ($data->deposit_amount ?? 0), 2, '.', ''),
             'deposit_status' => (string) ($data->deposit_status ?? 'none'),
+            'deposit_display_status' => self::depositDisplayStatus((string) ($data->deposit_status ?? 'none'), $status),
             'service_fee' => number_format((float) ($data->service_fee ?? 0), 2, '.', ''),
             'is_fee_refundable' => (bool) ($data->is_fee_refundable ?? true),
             'cancellation_fee' => number_format((float) ($data->cancellation_fee ?? 0), 2, '.', ''),
@@ -212,6 +213,7 @@ class ReservationFormatter
         array $guestHistory = ['visits' => 0, 'no_shows' => 0, 'cancellations' => 0],
         array $allowedActions = [],
         ?string $attention = null,
+        array $allowedDepositActions = [],
     ): array {
         $base = self::format($row, $now, $cancellationCutoffMinutes, $statusHistory);
         $status = (string) ($base['reservation_status'] ?? ReservationStatus::PENDING);
@@ -240,9 +242,29 @@ class ReservationFormatter
             'cancellations' => (int) ($guestHistory['cancellations'] ?? 0),
         ];
         $base['allowed_actions'] = array_values($allowedActions);
+        $base['allowed_deposit_actions'] = array_values($allowedDepositActions);
+        $base['deposit_action_needed'] = $status === ReservationStatus::CANCELLED
+            && ($base['deposit_status'] ?? 'none') === 'paid';
         $base['attention'] = $attention;
 
         return $base;
+    }
+
+    public static function depositDisplayStatus(string $depositStatus, string $reservationStatus): string
+    {
+        if (
+            $depositStatus === 'pending'
+            && in_array($reservationStatus, [
+                ReservationStatus::REJECTED,
+                ReservationStatus::EXPIRED,
+                ReservationStatus::CANCELLED,
+                ReservationStatus::NO_SHOW,
+            ], true)
+        ) {
+            return 'not_collected';
+        }
+
+        return $depositStatus;
     }
 
     /**

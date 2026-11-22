@@ -30,6 +30,9 @@ const NOTIFICATION_TYPE_TITLES = {
   branch_permit_info_requested: 'Branch permit needs more information',
   branch_permit_waived: 'Branch permit requirement waived',
   branch_permit_reopened: 'Branch permit reopened for review',
+  reservation_deposit_received: 'Reservation deposit received',
+  reservation_deposit_waived: 'Reservation deposit waived',
+  reservation_deposit_refunded: 'Reservation deposit refunded',
 };
 
 export function isValidWorkspace(workspace) {

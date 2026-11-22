@@ -565,4 +565,19 @@ All owner reservation endpoints require session authentication (`auth`), `role:o
 - `no-show` → `reservation_no_show`
 - `cancel` → `reservation_cancelled_by_restaurant` (includes reason)
 - `assignTable` → `reservation_table_changed` (only when `dining_area` changes)
+- `deposit` → `reservation_confirmed` (when `awaiting_payment` → `confirmed`), `reservation_deposit_received`, `reservation_deposit_waived`, or `reservation_deposit_refunded`
 - `arrived` / `seat` → none
+
+### Reservation Settings (`GET` / `PATCH /api/restaurant/settings`, owner-only)
+- **Fields:** `reservation_duration_minutes` (`30..240`, multiple of `15`), `reservation_max_advance_days` (`1..365`), `reservation_cancellation_cutoff_minutes` (`0..1440`), `reservation_pending_expiry_minutes` (`15..1440`), `reservation_auto_confirm` (`bool`), `reservation_deposit_required` (`bool`), `reservation_deposit_amount` (`0..100000`, 2 dp), `reservation_service_fee` (`0..100000`, 2 dp).
+- **Cross-field rules (`422`, evaluated on merged values):** `reservation_deposit_required = true` requires `reservation_deposit_amount > 0` and is incompatible with `reservation_auto_confirm = true`; `reservation_min_notice_hours <= reservation_max_advance_days * 24`.
+
+### Manual Deposit Handling (`POST /api/restaurant/reservations/{id}/deposit`, permission `reservations.updateStatus`)
+- **Body:** `{ deposit_status: 'paid' | 'waived' | 'refunded', note?: string (<=255) }`
+- **Deposit transition table (`config('salo.reservations.deposit_transitions')`):**
+  - `none` → `[]` (`409 NO_DEPOSIT`)
+  - `pending` → `paid`, `waived` (if `reservation_status === 'awaiting_payment'`, also transitions to `confirmed` and sets `confirmed_at`)
+  - `paid` → `refunded` (allowed on any reservation status)
+  - `waived` / `refunded` → `[]` (`409 INVALID_DEPOSIT_TRANSITION`; repeating the same target is idempotent `200`)
+- **Cancel (`POST /api/restaurant/reservations/{id}/cancel`):** accepts optional `refund_deposit` (`bool`); when `true` and `deposit_status === 'paid'`, marks `deposit_status = 'refunded'` in the same transaction. Response includes `deposit_action_needed` (`true` when `cancelled` and `deposit_status === 'paid'`).
+- **Deposit policy:** Deposits and fees are settled directly between guest and restaurant (no payment gateway). Guest cancellations and no-shows leave `deposit_status = 'paid'` untouched unless the restaurant explicitly marks it `refunded`. `deposit_display_status` returns `not_collected` when `deposit_status === 'pending'` on `rejected`/`expired`/`cancelled`/`no_show` reservations; `allowed_deposit_actions` lists `mark_paid`, `waive`, or `refund` based on current deposit state and `reservations.updateStatus` permission.

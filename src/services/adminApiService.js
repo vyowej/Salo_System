@@ -47,6 +47,7 @@ export function normalizeAdminReservation(row = {}) {
     can_admin_cancel: Boolean(row.can_admin_cancel),
     deposit_amount: Number(row.deposit_amount ?? 0),
     deposit_status: row.deposit_status || 'none',
+    deposit_display_status: row.deposit_display_status || row.deposit_status || 'none',
     service_fee: Number(row.service_fee ?? 0),
     cancellation_fee: Number(row.cancellation_fee ?? 0),
     special_requests: row.special_requests || null,
