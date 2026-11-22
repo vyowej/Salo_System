@@ -12,6 +12,9 @@ import {
   formatBranchAddressSummary,
   hasEnteredBranchData,
 } from '../utils/branchHelpers';
+import BranchPermitFields from '../../../features/restaurant/components/BranchPermitFields';
+import { BRANCH_PERMIT_COPY } from '../../../features/restaurant/content/branchContent';
+import '../../../features/restaurant/components/BranchPermitPanel.css';
 
 export default function BusinessAddressStep({
   data,
@@ -306,6 +309,39 @@ export default function BusinessAddressStep({
                               placeholder="Defaults to main business phone"
                             />
                           </FormGroup>
+                        </div>
+
+                        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-secondary, #e5e7eb)' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                            {BRANCH_PERMIT_COPY.sectionTitle}
+                          </div>
+                          {branch.hadPendingPermitFile && !branch.permitFile && branch.permitRequiredLocally !== false && (
+                            <p style={{ fontSize: '12px', color: 'var(--salo-warning-text, #b45309)', margin: '0 0 8px' }} role="status">
+                              Draft restored — please re-attach your Mayor&apos;s / Business Permit file for this branch.
+                            </p>
+                          )}
+                          <BranchPermitFields
+                            idPrefix={`wizard-branch-permit-${idx}`}
+                            file={branch.permitFile || null}
+                            isRequiredLocally={branch.permitRequiredLocally !== false}
+                            exemptionReason={branch.permitExemptionReason || ''}
+                            errors={{
+                              mayors_permit: errors[`branches.${idx}.permitFile`],
+                              exemption_reason: errors[`branches.${idx}.permitExemptionReason`],
+                            }}
+                            onFileChange={(nextFile) => handleUpdateBranch(idx, {
+                              permitFile: nextFile,
+                              hadPendingPermitFile: false,
+                            })}
+                            onToggleNotRequired={(nextRequired) => handleUpdateBranch(idx, {
+                              permitRequiredLocally: nextRequired,
+                              permitFile: nextRequired ? branch.permitFile : null,
+                              hadPendingPermitFile: false,
+                            })}
+                            onExemptionChange={(nextText) => handleUpdateBranch(idx, {
+                              permitExemptionReason: nextText,
+                            })}
+                          />
                         </div>
 
                         <PhilippineAddressFields

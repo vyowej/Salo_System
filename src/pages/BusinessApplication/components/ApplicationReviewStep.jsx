@@ -388,6 +388,13 @@ export default function ApplicationReviewStep({
                           <div className="review-branch-meta">
                             <span>{formatBranchAddressSummary(branch)}</span>
                             {branch.contactPhone && <span>Phone: {branch.contactPhone}</span>}
+                            <span>
+                              {branch.permitRequiredLocally === false
+                                ? `Permit: Not required locally — ${branch.permitExemptionReason || 'No reason provided'}`
+                                : branch.permitFile?.name
+                                  ? `Permit file: ${branch.permitFile.name}`
+                                  : 'Permit file: Missing'}
+                            </span>
                           </div>
                         </div>
                       ))}

@@ -1,4 +1,9 @@
 import { MAX_APPLICATION_BRANCHES } from '../constants/applicationDefaults.js';
+import {
+  getBranchPermitMeta,
+  isBranchPermitEditable,
+  validateBranchPermitInput,
+} from '../../../features/restaurant/utils/branchWorkspaceUtils.js';
 
 export function hasEnteredBranchData(addressData = {}) {
   if (String(addressData?.mainBranchName || '').trim() !== '') {
@@ -70,6 +75,19 @@ export function validateAddressStep(addressData = {}, maxTotalBranches = MAX_APP
     } else if (!/^[0-9]{4}$/.test(postal)) {
       errors[`branches.${idx}.postalCode`] = 'Postal code must be 4 digits.';
     }
+
+    const permitRequired = branch?.permitRequiredLocally !== false;
+    const permitErrors = validateBranchPermitInput({
+      mayors_permit: branch?.permitFile || null,
+      is_required_locally: permitRequired,
+      exemption_reason: branch?.permitExemptionReason || '',
+    });
+    if (permitErrors.mayors_permit) {
+      errors[`branches.${idx}.permitFile`] = permitErrors.mayors_permit;
+    }
+    if (permitErrors.exemption_reason) {
+      errors[`branches.${idx}.permitExemptionReason`] = permitErrors.exemption_reason;
+    }
   });
 
   return errors;
@@ -98,9 +116,137 @@ export function appendBranchPayloadToFormData(fd, addressData = {}) {
     if (branch?.additionalDetails) fd.append(`branches[${idx}][landmark]`, branch.additionalDetails);
     if (branch?.coordinates?.lat != null) fd.append(`branches[${idx}][latitude]`, String(branch.coordinates.lat));
     if (branch?.coordinates?.lng != null) fd.append(`branches[${idx}][longitude]`, String(branch.coordinates.lng));
+
+    const permitRequired = branch?.permitRequiredLocally !== false;
+    fd.append(`branches[${idx}][permit_required_locally]`, permitRequired ? '1' : '0');
+    if (!permitRequired && String(branch?.permitExemptionReason || '').trim()) {
+      fd.append(`branches[${idx}][permit_exemption_reason]`, String(branch.permitExemptionReason).trim());
+    }
   });
 
   return fd;
+}
+
+export function buildApplicationBranchPermitPayload(branch = {}) {
+  const permitRequired = branch?.permitRequiredLocally !== false;
+  if (!permitRequired) {
+    return {
+      is_required_locally: false,
+      exemption_reason: String(branch?.permitExemptionReason || '').trim(),
+    };
+  }
+  const fd = new FormData();
+  fd.append('is_required_locally', '1');
+  if (branch?.permitFile) {
+    fd.append('mayors_permit', branch.permitFile);
+  }
+  return fd;
+}
+
+export function stripFilesFromAddressDraft(address = {}) {
+  const branches = Array.isArray(address?.branches) ? address.branches : [];
+  return {
+    ...address,
+    branches: branches.map((branch) => {
+      const hadFile = Boolean(branch?.permitFile || branch?.hadPendingPermitFile);
+      const rest = { ...branch };
+      delete rest.permitFile;
+      return {
+        ...rest,
+        hadPendingPermitFile: hadFile && branch?.permitRequiredLocally !== false,
+      };
+    }),
+  };
+}
+
+/**
+ * Execute the two-step multi-branch application submission:
+ * 1) Submit application + branch metadata (unless already saved from an earlier attempt).
+ * 2) Sequentially upload each required branch's permit file using returned application_branch_id.
+ */
+export async function executeTwoStepApplicationSubmit({
+  applicationFormData,
+  branches = [],
+  existingApplication = null,
+  previousProgress = {},
+  submitApplication,
+  submitBranchPermit,
+  onProgress,
+}) {
+  const created = existingApplication || (await submitApplication(applicationFormData));
+  const appId = created?.restaurant_application_id;
+  const createdBranches = Array.isArray(created?.branches) ? created.branches : [];
+  const progress = { ...previousProgress };
+
+  let hasFailure = false;
+
+  for (let idx = 0; idx < branches.length; idx += 1) {
+    const localBranch = branches[idx];
+    const remoteBranch = createdBranches[idx];
+    const appBranchId = remoteBranch?.application_branch_id;
+
+    if (!appBranchId || localBranch?.permitRequiredLocally === false || !localBranch?.permitFile) {
+      continue;
+    }
+
+    if (progress[appBranchId]?.status === 'uploaded') {
+      continue;
+    }
+
+    progress[appBranchId] = {
+      applicationBranchId: appBranchId,
+      branchName: localBranch.branchName || remoteBranch?.branch_name || `Branch #${idx + 1}`,
+      status: 'uploading',
+      error: null,
+    };
+    onProgress?.({ ...progress });
+
+    try {
+      await submitBranchPermit(appId, appBranchId, buildApplicationBranchPermitPayload(localBranch));
+      progress[appBranchId] = {
+        ...progress[appBranchId],
+        status: 'uploaded',
+        error: null,
+      };
+    } catch (err) {
+      hasFailure = true;
+      progress[appBranchId] = {
+        ...progress[appBranchId],
+        status: 'failed',
+        error: err?.message || 'Upload failed. Please retry.',
+      };
+    }
+    onProgress?.({ ...progress });
+  }
+
+  return {
+    application: created,
+    progress,
+    hasFailure,
+  };
+}
+
+export function getApplicationBranchPermitViewModel(branch = {}, applicationStatus = '', conflict409 = false) {
+  const permitStatus = branch?.permit_status || 'pending_submission';
+  const meta = getBranchPermitMeta(permitStatus);
+  const isMaterialized = Boolean(branch?.created_branch_restaurant_id)
+    || String(applicationStatus || '').toLowerCase() === 'approved';
+  const editable = !isMaterialized && !conflict409 && isBranchPermitEditable(permitStatus);
+
+  return {
+    permitStatus,
+    badgeLabel: meta?.label || permitStatus,
+    badgeVariant: meta?.variant || 'neutral',
+    isMaterialized,
+    movedToOwnerWorkspace: isMaterialized || Boolean(conflict409),
+    editable,
+    hasFile: Boolean(branch?.has_file),
+    reviewNote: branch?.review_note || branch?.permit_review_note || null,
+    exemptionReason: branch?.exemption_reason || branch?.permit_exemption_reason || null,
+    isRequiredLocally: branch?.is_required_locally !== undefined
+      ? Boolean(branch.is_required_locally)
+      : (branch?.permit_is_required_locally !== undefined ? Boolean(branch.permit_is_required_locally) : true),
+  };
 }
 
 export function formatBranchAddressSummary(address = {}) {

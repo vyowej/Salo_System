@@ -8,6 +8,10 @@ import {
   showAdminToast,
 } from './index';
 import adminApiService from '../../../services/adminApiService';
+import Badge from '../../../components/common/Badge';
+import Button from '../../../components/common/Button';
+import AdminBranchPermitDrawer from './AdminBranchPermitDrawer';
+import { getAdminBranchPermitBadge } from '../utils/branchPermitAdminUtils';
 import { mapBackendApplicationStatus, resolveBackendUrl } from '../../../services/applicationService';
 import { extractApplicationLocations, formatBranchAddressSummary } from '../../../pages/BusinessApplication/utils/branchHelpers';
 import { formatDate, formatDateTime } from '../utils/format';
@@ -27,6 +31,7 @@ export default function ApplicationReviewModal({
   const [pendingFlagDoc, setPendingFlagDoc] = useState(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [selectedPermitId, setSelectedPermitId] = useState(null);
 
   useEffect(() => {
     setDetail(application);
@@ -274,21 +279,41 @@ export default function ApplicationReviewModal({
                               <div style={{ fontWeight: 600, fontSize: 13 }}>{locSummary.mainBranchName} (Main)</div>
                               <div style={{ fontSize: 12, opacity: 0.85 }}>{formatBranchAddressSummary(detail.address)}</div>
                             </div>
-                            {locSummary.branches.map((branch, idx) => (
-                              <div
-                                key={branch.application_branch_id || `${branch.branch_name}-${idx}`}
-                                style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-secondary, #f8fafc)' }}
-                              >
-                                <div style={{ fontWeight: 600, fontSize: 13 }}>{branch.branch_name}</div>
-                                <div style={{ fontSize: 12, opacity: 0.85 }}>
-                                  {formatBranchAddressSummary(branch.address)}
-                                  {branch.address?.latitude != null && branch.address?.longitude != null && (
-                                    <> · Pin: {Number(branch.address.latitude).toFixed(4)}, {Number(branch.address.longitude).toFixed(4)}</>
-                                  )}
-                                  {branch.contact_phone && <> · {branch.contact_phone}</>}
+                            {locSummary.branches.map((branch, idx) => {
+                              const permitBadge = branch.permit_status
+                                ? getAdminBranchPermitBadge(branch.permit_status)
+                                : null;
+                              return (
+                                <div
+                                  key={branch.application_branch_id || `${branch.branch_name}-${idx}`}
+                                  style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-secondary, #f8fafc)' }}
+                                >
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <div style={{ fontWeight: 600, fontSize: 13 }}>{branch.branch_name}</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      {permitBadge && <Badge variant={permitBadge.variant} size="sm">{permitBadge.label}</Badge>}
+                                      {branch.permit_id && (
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => setSelectedPermitId(branch.permit_id)}
+                                        >
+                                          Open permit review
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div style={{ fontSize: 12, opacity: 0.85 }}>
+                                    {formatBranchAddressSummary(branch.address)}
+                                    {branch.address?.latitude != null && branch.address?.longitude != null && (
+                                      <> · Pin: {Number(branch.address.latitude).toFixed(4)}, {Number(branch.address.longitude).toFixed(4)}</>
+                                    )}
+                                    {branch.contact_phone && <> · {branch.contact_phone}</>}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </li>
                       );
@@ -343,21 +368,41 @@ export default function ApplicationReviewModal({
                               <div style={{ fontWeight: 600, fontSize: 13 }}>{locSummary.mainBranchName} (Main)</div>
                               <div style={{ fontSize: 12, opacity: 0.85 }}>{formatBranchAddressSummary(detail.address)}</div>
                             </div>
-                            {locSummary.branches.map((branch, idx) => (
-                              <div
-                                key={branch.application_branch_id || `${branch.branch_name}-${idx}`}
-                                style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-secondary, #f8fafc)' }}
-                              >
-                                <div style={{ fontWeight: 600, fontSize: 13 }}>{branch.branch_name}</div>
-                                <div style={{ fontSize: 12, opacity: 0.85 }}>
-                                  {formatBranchAddressSummary(branch.address)}
-                                  {branch.address?.latitude != null && branch.address?.longitude != null && (
-                                    <> · Pin: {Number(branch.address.latitude).toFixed(4)}, {Number(branch.address.longitude).toFixed(4)}</>
-                                  )}
-                                  {branch.contact_phone && <> · {branch.contact_phone}</>}
+                            {locSummary.branches.map((branch, idx) => {
+                              const permitBadge = branch.permit_status
+                                ? getAdminBranchPermitBadge(branch.permit_status)
+                                : null;
+                              return (
+                                <div
+                                  key={branch.application_branch_id || `${branch.branch_name}-${idx}`}
+                                  style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-secondary, #f8fafc)' }}
+                                >
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <div style={{ fontWeight: 600, fontSize: 13 }}>{branch.branch_name}</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      {permitBadge && <Badge variant={permitBadge.variant} size="sm">{permitBadge.label}</Badge>}
+                                      {branch.permit_id && (
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => setSelectedPermitId(branch.permit_id)}
+                                        >
+                                          Open permit review
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div style={{ fontSize: 12, opacity: 0.85 }}>
+                                    {formatBranchAddressSummary(branch.address)}
+                                    {branch.address?.latitude != null && branch.address?.longitude != null && (
+                                      <> · Pin: {Number(branch.address.latitude).toFixed(4)}, {Number(branch.address.longitude).toFixed(4)}</>
+                                    )}
+                                    {branch.contact_phone && <> · {branch.contact_phone}</>}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </li>
                       );
@@ -485,6 +530,26 @@ export default function ApplicationReviewModal({
           const target = pendingFlagDoc;
           setPendingFlagDoc(null);
           if (target) handleDocumentReview(target, 'rejected', reason);
+        }}
+      />
+
+      <AdminBranchPermitDrawer
+        open={Boolean(selectedPermitId)}
+        permitId={selectedPermitId}
+        onClose={() => setSelectedPermitId(null)}
+        onUpdated={(updatedPermit) => {
+          setDetail((prev) => {
+            if (!prev || !Array.isArray(prev.branches)) return prev;
+            return {
+              ...prev,
+              branches: prev.branches.map((b) => (
+                b.permit_id === updatedPermit.permit_id
+                  ? { ...b, permit_status: updatedPermit.permit_status, review_note: updatedPermit.review_note }
+                  : b
+              )),
+            };
+          });
+          onUpdated?.();
         }}
       />
     </>

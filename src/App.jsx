@@ -71,6 +71,7 @@ const RiderSafetyPage = lazy(() => import('./features/rider/pages/RiderSafetyPag
 
 // Admin Module (Phase 6)
 const AdminDashboard = lazy(() => import('./features/admin/pages/AdminDashboard'));
+const AdminBranchPermitsPage = lazy(() => import('./features/admin/pages/AdminBranchPermitsPage'));
 const AdminRestaurantsPage = lazy(() => import('./features/admin/pages/AdminRestaurantsPage'));
 const AdminRidersPage = lazy(() => import('./features/admin/pages/AdminRidersPage'));
 const AdminOrdersPage = lazy(() => import('./features/admin/pages/AdminOrdersPage'));
@@ -265,6 +266,10 @@ function AppShell() {
         title: 'Applications | SALO Admin',
         description: 'Review pending restaurant and rider applications.',
       },
+      '/admin/branch-permits': {
+        title: 'Branch Permits | SALO Admin',
+        description: 'Review Mayor\'s / Business Permits and local exemptions for additional branches.',
+      },
       '/admin/accounts': {
         title: 'Accounts | SALO Admin',
         description: 'Review account capabilities, statuses, and platform activity.',
@@ -450,6 +455,7 @@ function AppShell() {
             <Route path="users" element={<AdminPermissionRoute module="accounts" topic="accounts"><AdminUsersPage /></AdminPermissionRoute>} />
             <Route path="administrators" element={<AdminPermissionRoute module="administrators" topic="administrators"><AdminAdministratorsPage /></AdminPermissionRoute>} />
             <Route path="restaurants" element={<AdminPermissionRoute module="restaurants" topic="restaurants"><AdminRestaurantsPage /></AdminPermissionRoute>} />
+            <Route path="branch-permits" element={<AdminPermissionRoute module="applications" topic="applications"><AdminBranchPermitsPage /></AdminPermissionRoute>} />
             <Route path="riders" element={<AdminPermissionRoute module="riders" topic="riders"><AdminRidersPage /></AdminPermissionRoute>} />
             <Route path="orders" element={<AdminPermissionRoute module="orders" topic="orders"><AdminOrdersPage /></AdminPermissionRoute>} />
             <Route path="orders/disputes" element={<AdminPermissionRoute module="orders" topic="disputes"><AdminDisputesPage /></AdminPermissionRoute>} />

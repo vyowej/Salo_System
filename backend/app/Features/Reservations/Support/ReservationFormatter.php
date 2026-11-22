@@ -246,6 +246,53 @@ class ReservationFormatter
     }
 
     /**
+     * Format a reservation row for the admin monitoring workspace.
+     *
+     * @param  object|array<string, mixed>  $row
+     * @param  array<int, object|array<string, mixed>>|null  $statusHistory
+     * @return array<string, mixed>
+     */
+    public static function formatAdmin(
+        object|array $row,
+        ?CarbonInterface $now = null,
+        ?int $cancellationCutoffMinutes = null,
+        ?array $statusHistory = null,
+        ?string $attention = null,
+    ): array {
+        $data = is_array($row) ? (object) $row : $row;
+        $base = self::format($data, $now, $cancellationCutoffMinutes, $statusHistory);
+        $status = (string) ($base['reservation_status'] ?? ReservationStatus::PENDING);
+
+        $statusLabels = [
+            ReservationStatus::PENDING => 'Pending',
+            ReservationStatus::APPROVED => 'Approved',
+            ReservationStatus::AWAITING_PAYMENT => 'Awaiting Deposit',
+            ReservationStatus::CONFIRMED => 'Confirmed',
+            ReservationStatus::ARRIVED => 'Arrived',
+            ReservationStatus::SEATED => 'Seated',
+            ReservationStatus::COMPLETED => 'Completed',
+            ReservationStatus::CANCELLED => 'Cancelled',
+            ReservationStatus::NO_SHOW => 'No-Show',
+            ReservationStatus::REJECTED => 'Rejected',
+            ReservationStatus::EXPIRED => 'Expired',
+        ];
+
+        $base['reference'] = $base['reservation_reference'];
+        $base['status'] = $status;
+        $base['status_label'] = $statusLabels[$status] ?? ucfirst($status);
+        $base['party_size'] = $base['number_of_guests'];
+        $base['attention'] = $attention;
+        $base['can_admin_cancel'] = false;
+
+        $base['restaurant'] = [
+            'restaurant_id' => isset($data->restaurant_id) ? (int) $data->restaurant_id : null,
+            'name' => isset($data->restaurant_name) ? (string) $data->restaurant_name : null,
+        ];
+
+        return $base;
+    }
+
+    /**
      * @param  object|array<string, mixed>  $entry
      * @return array<string, mixed>
      */

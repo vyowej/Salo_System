@@ -138,11 +138,15 @@ export function getNotificationRoute(notification) {
 
   if (workspace === 'admin') {
     if (
+      entityType === 'branch_permits'
+      || type.startsWith('branch_permit_')
+    ) {
+      return '/admin/branch-permits';
+    }
+    if (
       entityType === 'restaurant_applications'
       || entityType === 'rider_applications'
-      || entityType === 'branch_permits'
       || type.includes('_application_')
-      || type.startsWith('branch_permit_')
     ) {
       return '/admin/applications';
     }
@@ -159,6 +163,16 @@ export function getNotificationRoute(notification) {
   }
 
   return '/customer';
+}
+
+export function resolveNotificationRestaurantId(notification, accessibleRestaurants = []) {
+  const candidate = notification?.restaurant_id ?? notification?.meta?.restaurant_id ?? null;
+  if (candidate == null) return null;
+  const targetId = String(candidate);
+  if (accessibleRestaurants.length > 0 && !accessibleRestaurants.some((r) => String(r.id) === targetId)) {
+    return null;
+  }
+  return targetId;
 }
 
 /**

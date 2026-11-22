@@ -274,12 +274,15 @@ test('multi-branch validation enforces main branch name, case-insensitive unique
         branchName: 'SM North EDSA',
         street: 'North Ave',
         postalCode: '1100',
+        permitFile: new File(['%PDF-1.4'], 'sm-north-permit.pdf', { type: 'application/pdf' }),
       },
       {
         ...createEmptyApplicationBranch(),
         branchName: 'BGC High Street',
         street: '9th Ave',
         postalCode: '1634',
+        permitRequiredLocally: false,
+        permitExemptionReason: 'Temporary kiosk exempt under barangay ordinance.',
       },
     ],
   });

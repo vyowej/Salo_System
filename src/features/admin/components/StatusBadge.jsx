@@ -29,6 +29,13 @@ const TONES = {
   'in transit': 'info',
   preparing: 'info',
   'on delivery': 'info',
+  confirmed: 'success',
+  arrived: 'info',
+  seated: 'info',
+  awaiting_payment: 'action',
+  'awaiting deposit': 'action',
+  no_show: 'error',
+  'no-show': 'error',
 };
 
 export default function StatusBadge({ status, className = '' }) {

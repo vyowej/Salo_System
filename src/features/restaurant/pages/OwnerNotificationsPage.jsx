@@ -6,13 +6,16 @@ import { StateView } from '../../../components/feedback';
 import { useWorkspaceNotifications } from '../../../hooks/useWorkspaceNotifications';
 import OwnerLayout from '../../../layouts/OwnerLayout';
 import { formatDateTimeManila } from '../../../utils/format';
+import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import {
   getNotificationRoute,
   groupNotificationsByDateManila,
+  resolveNotificationRestaurantId,
 } from '../../../utils/notificationUtils';
 
 export default function OwnerNotificationsPage() {
   const navigate = useNavigate();
+  const access = useRestaurantAccess();
   const [filter, setFilter] = useState('all');
   const [page, setPage] = useState(1);
 
@@ -50,6 +53,14 @@ export default function OwnerNotificationsPage() {
         await markAsRead(notification.id);
       } catch {
         // Proceed with navigation even if mark-read fails transiently.
+      }
+    }
+    const targetRestaurantId = resolveNotificationRestaurantId(notification, access.restaurants);
+    if (targetRestaurantId && targetRestaurantId !== access.selectedRestaurantId) {
+      try {
+        access.selectRestaurant(targetRestaurantId);
+      } catch {
+        // Ignore if branch is not accessible
       }
     }
     navigate(getNotificationRoute(notification));

@@ -16,6 +16,8 @@ import useAdminSession from '../contexts/useAdminSession';
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { formatDate } from '../utils/format';
 import { BRANCH_BROWSE_COPY } from '../../customer/content/branchBrowseContent';
+import Badge from '../../../components/common/Badge';
+import { getAdminBranchPermitBadge } from '../utils/branchPermitAdminUtils';
 import './AdminPages.css';
 
 const STATUS_LABELS = {
@@ -63,6 +65,8 @@ function mapRestaurant(row) {
     serviceCoverage: row.zone ? [row.zone] : [],
     status: statusLabel,
     rawStatus,
+    permitStatus: row.permit_status ?? null,
+    isRequiredLocally: row.is_required_locally !== undefined ? Boolean(row.is_required_locally) : true,
     isPublished: Boolean(row.is_published),
     lastPublishedAt: row.last_published_at || null,
     applicationStatus: appStatusLabel,
@@ -219,7 +223,25 @@ export default function AdminRestaurantsPage() {
       },
     },
     { key: 'address', label: 'Physical address / coverage', render: (restaurant) => <>{restaurant.address}<br /><span className="admin-muted">City: {restaurant.zone}</span></> },
-    { key: 'status', label: 'Account / operating', render: (restaurant) => <><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><StatusBadge status={restaurant.status} /><StatusBadge status={restaurant.isPublished ? 'Published' : 'Not published'} /></div><span className="admin-muted">{restaurant.operatingStatus || '—'} · {restaurant.applicationStatus || '—'} · {restaurant.verificationStatus || '—'}</span></> },
+    { key: 'status', label: 'Account / operating', render: (restaurant) => {
+      const permitMeta = getAdminBranchPermitBadge(restaurant.permitStatus, restaurant.isMainBranch);
+      return (
+        <>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <StatusBadge status={restaurant.status} />
+            <StatusBadge status={restaurant.isPublished ? 'Published' : 'Not published'} />
+            <Badge
+              variant={permitMeta.variant}
+              size="sm"
+              title={restaurant.isMainBranch ? 'Derived read-only from main application' : 'Branch permit status'}
+            >
+              Permit: {permitMeta.label}
+            </Badge>
+          </div>
+          <span className="admin-muted">{restaurant.operatingStatus || '—'} · {restaurant.applicationStatus || '—'} · {restaurant.verificationStatus || '—'}</span>
+        </>
+      );
+    } },
     { key: 'businessType', label: 'Business type', render: (restaurant) => restaurant.businessType || '—' },
     { key: 'services', label: 'Services', render: (restaurant) => [restaurant.offersDelivery && 'Delivery', restaurant.offersPickup && 'Pickup', restaurant.offersDineIn && 'Dine-in'].filter(Boolean).join(', ') || '—' },
     { key: 'joinedDate', label: 'Registered', render: (restaurant) => formatDate(restaurant.joinedDate) },

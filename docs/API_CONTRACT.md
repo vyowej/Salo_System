@@ -298,6 +298,9 @@ Reviews LTO driver licenses, vehicle plate registrations, and monitors high COD 
 ### `GET /api/admin/orders` & `POST /api/admin/orders/{id}/resolve-dispute`
 Supervises multi-kitchen orders and processes customer refund approvals or claim dismissals.
 
+### `GET /api/admin/reservations`, `GET /api/admin/reservations/stats` & `GET /api/admin/reservations/{id}`
+Platform-wide table reservation monitoring: paginated search/filter (`status`, `attention`, `restaurant_id`, `date_from`, `date_to`, `direction`), operational KPIs/trends/top restaurants, and read-only reservation detail with status history timeline (`can_admin_cancel` is `false`).
+
 ### `GET /api/admin/users` & `PATCH /api/admin/users/{id}/status`
 User directory search across all 4 roles with account moderation controls.
 

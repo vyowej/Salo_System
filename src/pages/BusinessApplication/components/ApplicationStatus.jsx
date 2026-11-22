@@ -7,6 +7,7 @@ import {
   APPLICATION_STATUS_CONFIG,
 } from '../constants/applicationDefaults';
 import { extractApplicationLocations, formatBranchAddressSummary } from '../utils/branchHelpers';
+import ApplicationBranchPermitCard from './ApplicationBranchPermitCard';
 import applicationService, { resolveBackendUrl } from '../../../services/applicationService';
 import './ApplicationStatus.css';
 
@@ -444,19 +445,13 @@ export default function ApplicationStatus({
                       </div>
                     </div>
                     {locSummary.branches.map((branch, idx) => (
-                      <div
+                      <ApplicationBranchPermitCard
                         key={branch.application_branch_id || `${branch.branch_name}-${idx}`}
-                        style={{ padding: '10px 12px', border: '1px solid var(--border-secondary, #e5e7eb)', borderRadius: '8px' }}
-                      >
-                        <div style={{ fontSize: '13px', fontWeight: 600 }}>{branch.branch_name}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                          {formatBranchAddressSummary(branch.address)}
-                          {branch.address?.latitude != null && branch.address?.longitude != null && (
-                            <> • Pin: {Number(branch.address.latitude).toFixed(4)}, {Number(branch.address.longitude).toFixed(4)}</>
-                          )}
-                          {branch.contact_phone && <> • Phone: {branch.contact_phone}</>}
-                        </div>
-                      </div>
+                        applicationId={applicationData?.id}
+                        applicationStatus={currentStatus}
+                        branch={branch}
+                        onPermitUpdated={onApplicationUpdated}
+                      />
                     ))}
                   </div>
                 </div>

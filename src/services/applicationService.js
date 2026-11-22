@@ -73,6 +73,29 @@ export const applicationService = {
     const response = await apiClient.post(`/restaurant/applications/${applicationId}/documents`, fd);
     return response?.data?.application ?? null;
   },
+
+  async submitApplicationBranchPermit(applicationId, applicationBranchId, payload) {
+    const response = await apiClient.post(
+      `/restaurant/applications/${applicationId}/branches/${applicationBranchId}/permit`,
+      payload,
+    );
+    return response?.data?.permit ?? null;
+  },
+
+  async fetchApplicationBranchPermitFileBlob(applicationId, applicationBranchId) {
+    const url = `${apiClient.getBaseUrl()}/restaurant/applications/${applicationId}/branches/${applicationBranchId}/permit/file`;
+    const res = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`Unable to load branch permit file (${res.status}).`);
+    }
+    return res.blob();
+  },
 };
 
 export default applicationService;

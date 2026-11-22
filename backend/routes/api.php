@@ -9,6 +9,7 @@ use App\Features\Admin\Controllers\AdminApplicationController;
 use App\Features\Admin\Controllers\AdminBranchPermitController;
 use App\Features\Admin\Controllers\AdminManagementController;
 use App\Features\Admin\Controllers\AdminOrderController;
+use App\Features\Admin\Controllers\AdminReservationController;
 use App\Features\Admin\Controllers\AdminSettingsRequestController;
 use App\Features\Applications\Controllers\ApplicationDocumentController;
 use App\Features\Auth\Controllers\AuthController;
@@ -314,6 +315,10 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::get('/locations/overview', [AdminServiceAreaController::class, 'locationsOverview']);
     Route::get('/orders', [AdminOrderController::class, 'index']);
     Route::get('/orders/{id}/tracking', [TrackingController::class, 'adminOrderTracking'])->whereNumber('id');
+
+    Route::get('/reservations', [AdminReservationController::class, 'index']);
+    Route::get('/reservations/stats', [AdminReservationController::class, 'stats']);
+    Route::get('/reservations/{id}', [AdminReservationController::class, 'show'])->whereNumber('id');
 
     Route::get('/change-requests', [AdminSettingsRequestController::class, 'changeRequests']);
     Route::post('/change-requests/{id}/decision', [AdminSettingsRequestController::class, 'decideChangeRequest'])->whereNumber('id');

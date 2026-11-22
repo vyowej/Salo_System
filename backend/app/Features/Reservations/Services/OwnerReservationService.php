@@ -3,6 +3,7 @@
 namespace App\Features\Reservations\Services;
 
 use App\Features\Notifications\Services\NotificationService;
+use App\Features\Reservations\Support\ReservationAttention;
 use App\Features\Reservations\Support\ReservationBookingException;
 use App\Features\Reservations\Support\ReservationFormatter;
 use App\Features\Reservations\Support\ReservationStatus;
@@ -1407,37 +1408,7 @@ class OwnerReservationService
         object $restaurant,
         CarbonImmutable $manilaNow,
     ): ?string {
-        $status = (string) $row->reservation_status;
-        $startCarbon = CarbonImmutable::parse((string) $row->reservation_start, self::TIMEZONE);
-        $endCarbon = CarbonImmutable::parse((string) $row->reservation_end, self::TIMEZONE);
-
-        if ($status === ReservationStatus::PENDING && ! empty($row->created_at)) {
-            $expiryMinutes = max(5, (int) ($restaurant->reservation_pending_expiry_minutes ?? 120));
-            $warningMinutes = max(5, (int) config('salo.reservations.pending_expiring_warning_minutes', 30));
-            $createdCarbon = CarbonImmutable::parse((string) $row->created_at, self::TIMEZONE);
-            $expiresAt = $createdCarbon->addMinutes($expiryMinutes);
-            $warningAt = $expiresAt->subMinutes($warningMinutes);
-
-            if ($manilaNow->greaterThanOrEqualTo($warningAt)) {
-                return 'pending_expiring';
-            }
-        }
-
-        if (in_array($status, [ReservationStatus::CONFIRMED, ReservationStatus::ARRIVED], true)) {
-            $graceMinutes = max(0, (int) config('salo.reservations.no_show_grace_minutes', 15));
-            if ($manilaNow->greaterThanOrEqualTo($startCarbon->addMinutes($graceMinutes))) {
-                return 'no_show_candidate';
-            }
-        }
-
-        if ($status === ReservationStatus::SEATED) {
-            $overdueMinutes = max(0, (int) config('salo.reservations.overdue_seated_minutes', 60));
-            if ($manilaNow->greaterThan($endCarbon->addMinutes($overdueMinutes))) {
-                return 'overdue_seated';
-            }
-        }
-
-        return null;
+        return ReservationAttention::compute($row, $restaurant, $manilaNow);
     }
 
     /**

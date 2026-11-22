@@ -22,7 +22,12 @@ import {
 import { getRequiredDocuments } from './constants/documentRequirements';
 import applicationService from '../../services/applicationService';
 import { resolveUploadableFile, mapAccountTypeToEnum } from '../../services/formDataHelper';
-import { appendBranchPayloadToFormData, validateAddressStep } from './utils/branchHelpers';
+import {
+  appendBranchPayloadToFormData,
+  executeTwoStepApplicationSubmit,
+  stripFilesFromAddressDraft,
+  validateAddressStep,
+} from './utils/branchHelpers';
 import './BusinessApplicationPage.css';
 
 const SESSION_DRAFT_KEY = 'salo_partner_app_draft';
@@ -68,6 +73,8 @@ export default function BusinessApplicationPage() {
   const [exitModalOpen, setExitModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submittedData, setSubmittedData] = useState(null);
+  const [savedApplication, setSavedApplication] = useState(null);
+  const [branchUploadProgress, setBranchUploadProgress] = useState({});
 
   // Sync email & company name to businessInfo if verified
   useEffect(() => {
@@ -100,6 +107,7 @@ export default function BusinessApplicationPage() {
     try {
       const serializableData = {
         ...formData,
+        address: stripFilesFromAddressDraft(formData.address),
         documents: {},
         payout: {
           ...formData.payout,
@@ -266,8 +274,10 @@ export default function BusinessApplicationPage() {
     });
   };
 
-  // Final Application Submission
+  // Final Application Submission (Two-step: metadata first, then per-branch permit files)
   const handleSubmitApplication = async () => {
+    if (submitting) return;
+
     const verifiedEmail = (
       formData.emailVerification?.isVerified ? formData.emailVerification?.verifiedEmail : ''
     )?.trim();
@@ -288,152 +298,173 @@ export default function BusinessApplicationPage() {
 
     try {
       const fd = new FormData();
-      const mapBusinessType = (val) => {
-        const map = {
-          Restaurant: 'restaurant',
-          'Café': 'cafe',
-          Cafe: 'cafe',
-          Bakery: 'bakery',
-          'Fast Food': 'fast_food',
-          'Food Stall': 'food_stall',
-          'Food Kiosk': 'food_kiosk',
-          'Cloud Kitchen': 'cloud_kitchen',
+      if (!savedApplication) {
+        const mapBusinessType = (val) => {
+          const map = {
+            Restaurant: 'restaurant',
+            'Café': 'cafe',
+            Cafe: 'cafe',
+            Bakery: 'bakery',
+            'Fast Food': 'fast_food',
+            'Food Stall': 'food_stall',
+            'Food Kiosk': 'food_kiosk',
+            'Cloud Kitchen': 'cloud_kitchen',
+          };
+          return map[val] || 'other';
         };
-        return map[val] || 'other';
-      };
 
-      const mapOwnership = (val) => {
-        const map = {
-          'Sole Proprietorship': 'sole_proprietorship',
-          Partnership: 'partnership',
-          Corporation: 'corporation',
-          Cooperative: 'cooperative',
+        const mapOwnership = (val) => {
+          const map = {
+            'Sole Proprietorship': 'sole_proprietorship',
+            Partnership: 'partnership',
+            Corporation: 'corporation',
+            Cooperative: 'cooperative',
+          };
+          return map[val] || 'other';
         };
-        return map[val] || 'other';
-      };
 
-      const mapPosition = (val) => {
-        const map = {
-          'Business Owner': 'business_owner',
-          'Co-owner': 'co_owner',
-          'Authorized Representative': 'authorized_representative',
-          Manager: 'manager',
+        const mapPosition = (val) => {
+          const map = {
+            'Business Owner': 'business_owner',
+            'Co-owner': 'co_owner',
+            'Authorized Representative': 'authorized_representative',
+            Manager: 'manager',
+          };
+          return map[val] || 'business_owner';
         };
-        return map[val] || 'business_owner';
-      };
 
-      fd.append('restaurant_name', formData.businessInfo.restaurantName || '');
-      if (formData.businessInfo.registeredName) {
-        fd.append('registered_name', formData.businessInfo.registeredName);
+        fd.append('restaurant_name', formData.businessInfo.restaurantName || '');
+        if (formData.businessInfo.registeredName) {
+          fd.append('registered_name', formData.businessInfo.registeredName);
+        }
+        fd.append('business_type', mapBusinessType(formData.businessInfo.businessType));
+        fd.append('ownership_structure', mapOwnership(formData.businessInfo.ownershipStructure));
+        if (formData.businessInfo.description) {
+          fd.append('description', formData.businessInfo.description);
+        }
+        fd.append('business_phone', formData.businessInfo.businessPhone || formData.representative.phone || '');
+        fd.append('business_email', verifiedEmail);
+
+        if (formData.businessInfo.cuisineType) {
+          fd.append('categories[]', formData.businessInfo.cuisineType);
+        }
+
+        fd.append('applicant_position', mapPosition(formData.representative.position));
+        fd.append('legal_first_name', formData.representative.firstName || user?.first_name || '');
+        if (formData.representative.middleName) {
+          fd.append('legal_middle_name', formData.representative.middleName);
+        }
+        fd.append('legal_last_name', formData.representative.lastName || user?.last_name || '');
+        if (formData.representative.suffix) {
+          fd.append('legal_suffix', formData.representative.suffix);
+        }
+        fd.append('date_of_birth', formData.representative.dateOfBirth || '');
+        fd.append('contact_phone', formData.representative.phone || '');
+        fd.append('contact_email', verifiedEmail);
+
+        fd.append('province', formData.address.province || 'Metro Manila');
+        fd.append('city', formData.address.city || 'Quezon City');
+        fd.append('barangay', formData.address.barangay || 'South Triangle');
+        if (formData.address.street) fd.append('street', formData.address.street);
+        if (formData.address.postalCode) fd.append('postal_code', formData.address.postalCode);
+        if (formData.address.additionalDetails) fd.append('landmark', formData.address.additionalDetails);
+        if (formData.address.coordinates?.lat != null) fd.append('latitude', String(formData.address.coordinates.lat));
+        if (formData.address.coordinates?.lng != null) fd.append('longitude', String(formData.address.coordinates.lng));
+        appendBranchPayloadToFormData(fd, formData.address);
+
+        const services = formData.configuration?.services || {};
+        fd.append('offers_delivery', services.delivery ? '1' : '0');
+        fd.append('offers_pickup', services.pickup ? '1' : '0');
+        fd.append('offers_dine_in', services.dineIn ? '1' : '0');
+        fd.append('accepts_reservations', services.tableReservations ? '1' : '0');
+
+        const dayIndexMap = {
+          sunday: 0,
+          monday: 1,
+          tuesday: 2,
+          wednesday: 3,
+          thursday: 4,
+          friday: 5,
+          saturday: 6,
+        };
+        const opHours = formData.configuration?.operatingHours || {};
+        Object.entries(opHours).forEach(([dayKey, cfg], idx) => {
+          if (dayIndexMap[dayKey] === undefined) return;
+          fd.append(`operating_hours[${idx}][day_of_week]`, String(dayIndexMap[dayKey]));
+          fd.append(`operating_hours[${idx}][opening_time]`, `${cfg.openTime || '09:00'}:00`);
+          fd.append(`operating_hours[${idx}][closing_time]`, `${cfg.closeTime || '21:00'}:00`);
+          fd.append(`operating_hours[${idx}][is_closed]`, cfg.isOpen === false ? '1' : '0');
+        });
+
+        fd.append('payout_provider', formData.payout.bankName || 'BPI');
+        fd.append('payout_account_type', mapAccountTypeToEnum(formData.payout.accountType));
+        fd.append('payout_account_holder_name', formData.payout.accountHolder || '');
+        fd.append('payout_account_number', formData.payout.accountNumber || '');
+        fd.append('terms_accepted', '1');
+        fd.append('terms_version', 'v1.0');
+
+        const logoFile = resolveUploadableFile(formData.configuration?.logo, 'logo.png');
+        if (logoFile) fd.append('logo_image', logoFile);
+
+        const coverFile = resolveUploadableFile(formData.configuration?.coverPhoto, 'cover.jpg');
+        if (coverFile) fd.append('cover_image', coverFile);
+
+        const menuItems = formData.configuration?.menuItems || [];
+        menuItems.forEach((item, idx) => {
+          fd.append(`menu_items[${idx}][name]`, item.name || '');
+          if (item.description) fd.append(`menu_items[${idx}][description]`, item.description);
+          if (item.category) fd.append(`menu_items[${idx}][category]`, item.category);
+          fd.append(`menu_items[${idx}][price]`, String(item.price ?? 0));
+          fd.append(`menu_items[${idx}][available]`, item.available !== false ? '1' : '0');
+          const photoFile = resolveUploadableFile(item.photoFile || item.photoUrl, `menu_item_${idx}.jpg`);
+          if (photoFile) {
+            fd.append(`menu_item_photos[${idx}]`, photoFile);
+          }
+        });
+
+        Object.entries(formData.documents || {}).forEach(([docId, entry]) => {
+          const file = resolveUploadableFile(entry, `${docId}.pdf`);
+          if (file) {
+            fd.append(`documents[${docId}]`, file);
+          }
+        });
+
+        if (formData.payout?.proofDocument) {
+          const proofFile = resolveUploadableFile(formData.payout.proofDocument, 'bank_proof.pdf');
+          if (proofFile) {
+            fd.append('documents[bank_proof]', proofFile);
+          }
+        }
       }
-      fd.append('business_type', mapBusinessType(formData.businessInfo.businessType));
-      fd.append('ownership_structure', mapOwnership(formData.businessInfo.ownershipStructure));
-      if (formData.businessInfo.description) {
-        fd.append('description', formData.businessInfo.description);
-      }
-      fd.append('business_phone', formData.businessInfo.businessPhone || formData.representative.phone || '');
-      fd.append('business_email', verifiedEmail);
 
-      if (formData.businessInfo.cuisineType) {
-        fd.append('categories[]', formData.businessInfo.cuisineType);
-      }
-
-      fd.append('applicant_position', mapPosition(formData.representative.position));
-      fd.append('legal_first_name', formData.representative.firstName || user?.first_name || '');
-      if (formData.representative.middleName) {
-        fd.append('legal_middle_name', formData.representative.middleName);
-      }
-      fd.append('legal_last_name', formData.representative.lastName || user?.last_name || '');
-      if (formData.representative.suffix) {
-        fd.append('legal_suffix', formData.representative.suffix);
-      }
-      fd.append('date_of_birth', formData.representative.dateOfBirth || '');
-      fd.append('contact_phone', formData.representative.phone || '');
-      fd.append('contact_email', verifiedEmail);
-
-      fd.append('province', formData.address.province || 'Metro Manila');
-      fd.append('city', formData.address.city || 'Quezon City');
-      fd.append('barangay', formData.address.barangay || 'South Triangle');
-      if (formData.address.street) fd.append('street', formData.address.street);
-      if (formData.address.postalCode) fd.append('postal_code', formData.address.postalCode);
-      if (formData.address.additionalDetails) fd.append('landmark', formData.address.additionalDetails);
-      if (formData.address.coordinates?.lat != null) fd.append('latitude', String(formData.address.coordinates.lat));
-      if (formData.address.coordinates?.lng != null) fd.append('longitude', String(formData.address.coordinates.lng));
-      appendBranchPayloadToFormData(fd, formData.address);
-
-      const services = formData.configuration?.services || {};
-      fd.append('offers_delivery', services.delivery ? '1' : '0');
-      fd.append('offers_pickup', services.pickup ? '1' : '0');
-      fd.append('offers_dine_in', services.dineIn ? '1' : '0');
-      fd.append('accepts_reservations', services.tableReservations ? '1' : '0');
-
-      const dayIndexMap = {
-        sunday: 0,
-        monday: 1,
-        tuesday: 2,
-        wednesday: 3,
-        thursday: 4,
-        friday: 5,
-        saturday: 6,
-      };
-      const opHours = formData.configuration?.operatingHours || {};
-      Object.entries(opHours).forEach(([dayKey, cfg], idx) => {
-        if (dayIndexMap[dayKey] === undefined) return;
-        fd.append(`operating_hours[${idx}][day_of_week]`, String(dayIndexMap[dayKey]));
-        fd.append(`operating_hours[${idx}][opening_time]`, `${cfg.openTime || '09:00'}:00`);
-        fd.append(`operating_hours[${idx}][closing_time]`, `${cfg.closeTime || '21:00'}:00`);
-        fd.append(`operating_hours[${idx}][is_closed]`, cfg.isOpen === false ? '1' : '0');
+      const result = await executeTwoStepApplicationSubmit({
+        applicationFormData: fd,
+        branches: formData.address?.hasBranches ? (formData.address?.branches || []) : [],
+        existingApplication: savedApplication,
+        previousProgress: branchUploadProgress,
+        submitApplication: (payload) => applicationService.submitRestaurantApplication(payload),
+        submitBranchPermit: (appId, branchId, payload) => (
+          applicationService.submitApplicationBranchPermit(appId, branchId, payload)
+        ),
+        onProgress: (nextProgress) => setBranchUploadProgress(nextProgress),
       });
 
-      fd.append('payout_provider', formData.payout.bankName || 'BPI');
-      fd.append('payout_account_type', mapAccountTypeToEnum(formData.payout.accountType));
-      fd.append('payout_account_holder_name', formData.payout.accountHolder || '');
-      fd.append('payout_account_number', formData.payout.accountNumber || '');
-      fd.append('terms_accepted', '1');
-      fd.append('terms_version', 'v1.0');
-
-      const logoFile = resolveUploadableFile(formData.configuration?.logo, 'logo.png');
-      if (logoFile) fd.append('logo_image', logoFile);
-
-      const coverFile = resolveUploadableFile(formData.configuration?.coverPhoto, 'cover.jpg');
-      if (coverFile) fd.append('cover_image', coverFile);
-
-      const menuItems = formData.configuration?.menuItems || [];
-      menuItems.forEach((item, idx) => {
-        fd.append(`menu_items[${idx}][name]`, item.name || '');
-        if (item.description) fd.append(`menu_items[${idx}][description]`, item.description);
-        if (item.category) fd.append(`menu_items[${idx}][category]`, item.category);
-        fd.append(`menu_items[${idx}][price]`, String(item.price ?? 0));
-        fd.append(`menu_items[${idx}][available]`, item.available !== false ? '1' : '0');
-        const photoFile = resolveUploadableFile(item.photoFile || item.photoUrl, `menu_item_${idx}.jpg`);
-        if (photoFile) {
-          fd.append(`menu_item_photos[${idx}]`, photoFile);
-        }
-      });
-
-      Object.entries(formData.documents || {}).forEach(([docId, entry]) => {
-        const file = resolveUploadableFile(entry, `${docId}.pdf`);
-        if (file) {
-          fd.append(`documents[${docId}]`, file);
-        }
-      });
-
-      if (formData.payout?.proofDocument) {
-        const proofFile = resolveUploadableFile(formData.payout.proofDocument, 'bank_proof.pdf');
-        if (proofFile) {
-          fd.append('documents[bank_proof]', proofFile);
-        }
-      }
-
-      const created = await applicationService.submitRestaurantApplication(fd);
-
+      setSavedApplication(result.application);
       sessionStorage.removeItem(SESSION_DRAFT_KEY);
 
+      if (result.hasFailure) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          submit: 'Your application was saved, but one or more branch permit uploads failed. Retry the failed branch below or continue to your application status page.',
+        }));
+        return;
+      }
+
       setSubmittedData({
-        referenceNumber: created?.reference_number,
-        submissionDate: created?.submitted_at || new Date().toISOString(),
-        restaurantName: created?.restaurant_name || formData.businessInfo.restaurantName,
-        applicantEmail: created?.contact_email || verifiedEmail,
+        referenceNumber: result.application?.reference_number,
+        submissionDate: result.application?.submitted_at || new Date().toISOString(),
+        restaurantName: result.application?.restaurant_name || formData.businessInfo.restaurantName,
+        applicantEmail: result.application?.contact_email || verifiedEmail,
       });
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -612,6 +643,34 @@ export default function BusinessApplicationPage() {
                   submitting={submitting}
                   allRequiredValid={areAllRequiredStepsValid()}
                 />
+              )}
+
+              {Object.keys(branchUploadProgress).length > 0 && (
+                <div className="wizard-branch-upload-progress" role="status" style={{ marginTop: 16, padding: '12px 16px', borderRadius: 10, border: '1px solid var(--border-primary, #e5e7eb)', background: 'var(--surface-primary, #ffffff)' }}>
+                  <strong style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>Branch Permit Uploads</strong>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {Object.values(branchUploadProgress).map((item) => (
+                      <div key={item.applicationBranchId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, gap: 8 }}>
+                        <span>{item.branchName}</span>
+                        <span>
+                          {item.status === 'uploading' && 'Uploading...'}
+                          {item.status === 'uploaded' && 'Uploaded'}
+                          {item.status === 'failed' && `Failed: ${item.error || 'Upload error'}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {savedApplication && Object.values(branchUploadProgress).some((item) => item.status === 'failed') && (
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                      <Button type="button" variant="primary" size="sm" onClick={handleSubmitApplication} disabled={submitting}>
+                        Retry Failed Uploads
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => navigate('/business-application/status')}>
+                        Continue to Application Status
+                      </Button>
+                    </div>
+                  )}
+                </div>
               )}
 
               {validationErrors.submit && (

@@ -19,6 +19,7 @@ export const ADMIN_NAV_ITEMS = [
   { id: 'restaurants', section: 'PEOPLE', label: 'Restaurants', href: '/admin/restaurants', module: 'restaurants', requiredPermission: { module: 'restaurants', action: 'view' } },
   { id: 'riders', section: 'PEOPLE', label: 'Riders', href: '/admin/riders', module: 'riders', requiredPermission: { module: 'riders', action: 'view' } },
   { id: 'applications', section: 'PEOPLE', label: 'Applications', href: '/admin/applications', module: 'applications', requiredPermission: { module: 'applications', action: 'view' } },
+  { id: 'branchPermits', section: 'PEOPLE', label: 'Branch Permits', href: '/admin/branch-permits', module: 'applications', requiredPermission: { module: 'applications', action: 'view' } },
   { id: 'orders', section: 'OPERATIONS', label: 'Orders', href: '/admin/orders', module: 'orders', requiredPermission: { module: 'orders', action: 'view' } },
   { id: 'reservations', section: 'OPERATIONS', label: 'Reservations', href: '/admin/reservations', module: 'reservations', requiredPermission: { module: 'reservations', action: 'view' } },
   { id: 'serviceAreas', section: 'OPERATIONS', label: 'Service Areas', href: '/admin/service-areas', module: 'serviceAreas', requiredPermission: { module: 'serviceAreas', action: 'view' } },
