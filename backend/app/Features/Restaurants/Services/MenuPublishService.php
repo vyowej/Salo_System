@@ -55,6 +55,7 @@ class MenuPublishService
             'SELECT
                 (SELECT COUNT(*) FROM operating_hours WHERE restaurant_id = ? AND is_closed = 0) AS open_periods_count,
                 (SELECT COUNT(*) FROM restaurant_tables WHERE restaurant_id = ? AND is_active = 1) AS tables_count,
+                (SELECT COUNT(*) FROM service_areas WHERE restaurant_id = ?) AS service_areas_count,
                 (SELECT COUNT(*) FROM menu_categories WHERE restaurant_id = ? AND draft_state = ?) AS cats_new,
                 (SELECT COUNT(*) FROM menu_categories WHERE restaurant_id = ? AND draft_state = ?) AS cats_modified,
                 (SELECT COUNT(*) FROM menu_categories WHERE restaurant_id = ? AND draft_state = ?) AS cats_pending_delete,
@@ -71,6 +72,7 @@ class MenuPublishService
                       AND mi.availability_status != ?
                       AND mi.draft_state != ?) AS visible_draft_items_count',
             [
+                $targetId,
                 $targetId,
                 $targetId,
                 $targetId, 'new',
@@ -120,6 +122,12 @@ class MenuPublishService
 
         if ((int) ($counts->visible_draft_items_count ?? 0) < 1) {
             $blockers[] = 'Add at least one active menu category with at least one non-hidden menu item before publishing.';
+        }
+
+        if (! (bool) $restaurant->is_published && (bool) $restaurant->offers_delivery) {
+            if ((int) ($counts->service_areas_count ?? 0) < 1) {
+                $blockers[] = 'Configure at least one delivery service area before publishing while delivery is enabled.';
+            }
         }
 
         $warnings = [];

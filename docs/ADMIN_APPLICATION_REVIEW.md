@@ -35,11 +35,17 @@ Every action records an `audit_logs` entry inside the same database transaction 
 ## 3. Approval & Rejection Side Effects
 
 - **Restaurant Approval (`approved`):**
-  - Sets `restaurants.restaurant_status = 'active'` (making it visible on public `/api/restaurants` and `/api/restaurants/{id}`).
-  - Sets `menu_items.approval_status = 'approved'` for that restaurant's `pending` items in the same transaction (making initial menu items visible on `/api/restaurants/{id}/menu`).
+  - Sets `restaurants.restaurant_status = 'active'` on the root restaurant (`is_published` remains `0` until the owner/manager publishes the menu).
+  - Sets `menu_items.approval_status = 'approved'` for the root restaurant's `pending` items in the same transaction.
+  - **Multi-Branch Materialization (Phase 3a):** If the application includes rows in `restaurant_application_branches`, approval materializes each additional branch inside the same database transaction via `RestaurantBranchService::createChildBranch()`:
+    - Creates a child `restaurants` row (`parent_restaurant_id = root.restaurant_id`, `brand_restaurant_id = root.brand_restaurant_id`, `restaurant_status = 'active'`, `is_published = 0`, `contact_phone` falling back to root if omitted).
+    - Copies `restaurant_owners` (Strategy B), `restaurant_category_map`, and `operating_hours` from the root restaurant.
+    - Clones the initial menu (`menu_categories`, `menu_items`, `add_on_groups`, `add_on_options`) as `approval_status = 'approved'` and unpublished (`is_published = 0`, `draft_state = 'new'`).
+    - Sets `restaurant_application_branches.created_branch_restaurant_id` to the new child `restaurant_id` and records one `audit_logs` entry (`action = 'restaurant_branch_created'`) per created branch with `brand_restaurant_id` and `branch_name` in `new_values`.
+    - Does **not** copy `service_areas` (configured per branch) and does **not** create child `payout_accounts` (shared with root). Any error while creating a branch rolls back the entire approval.
   - Does **not** alter `accepting_orders` or `accepting_reservations`.
 - **Restaurant Rejection (`rejected`):**
-  - Sets `restaurants.restaurant_status = 'rejected'`.
+  - Sets `restaurants.restaurant_status = 'rejected'` on the root restaurant. Pending `restaurant_application_branches` rows remain attached to the application record with `created_branch_restaurant_id = NULL` (no child `restaurants` rows are created).
 - **Rider Approval (`approved`):**
   - Sets `riders.rider_status = 'approved'` and `riders.approved_at = now()`.
   - Approval grants rider portal/dashboard access (`User::hasDerivedRole('rider')`) **without** making the rider eligible to go online (`RiderService::updateAvailability()` requires `rider_status === 'active'`).

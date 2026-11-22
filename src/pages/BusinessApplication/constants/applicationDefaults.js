@@ -117,6 +117,38 @@ export const DAYS_OF_WEEK = [
   { key: 'sunday', label: 'Sunday' },
 ];
 
+export const MAX_APPLICATION_BRANCHES = 5;
+
+export const APPLICATION_BRANCH_COPY = {
+  questionTitle: 'Does your restaurant have other branches?',
+  questionHint: 'Select Yes if you are applying for a main outlet plus additional branches under the same brand.',
+  singleOptionLabel: 'No — single location only',
+  multiOptionLabel: 'Yes — we have multiple branches',
+  mainBranchLabel: 'Main Branch Name',
+  mainBranchPlaceholder: 'e.g. Katipunan Main Branch',
+  additionalHeading: 'Additional Branches',
+  addBranchLabel: '+ Add Branch',
+  removeBranchLabel: 'Remove',
+  limitReachedHint: `Maximum of ${MAX_APPLICATION_BRANCHES} total locations (main + ${MAX_APPLICATION_BRANCHES - 1} additional branches) per application.`,
+  confirmClearMessage: 'Switching back to a single location will clear your entered branch names and additional branch addresses. Continue?',
+};
+
+export function createEmptyApplicationBranch() {
+  return {
+    branchName: '',
+    contactPhone: '',
+    province: 'Metro Manila',
+    city: 'Quezon City',
+    barangay: 'South Triangle',
+    street: '',
+    houseNumber: '',
+    postalCode: '',
+    additionalDetails: '',
+    coordinates: { lat: 14.6369, lng: 121.0362 },
+    mapPinned: false,
+  };
+}
+
 export const WIZARD_STEPS = [
   { step: 1, id: 'verification', label: 'Email Verification', shortLabel: 'Email OTP' },
   { step: 2, id: 'business', label: 'Business Information', shortLabel: 'Business' },
@@ -177,6 +209,9 @@ export const INITIAL_APPLICATION_STATE = {
     additionalDetails: '',
     coordinates: { lat: 14.6369, lng: 121.0362 },
     mapPinned: true,
+    hasBranches: false,
+    mainBranchName: '',
+    branches: [],
   },
 
   // Step 6: Payout

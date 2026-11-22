@@ -11,9 +11,18 @@ import {
   OWNERSHIP_STRUCTURES,
   APPLICATION_STATUS_CONFIG,
   INITIAL_APPLICATION_STATE,
+  MAX_APPLICATION_BRANCHES,
   WIZARD_STEPS,
+  createEmptyApplicationBranch,
   validateRestaurantServices,
 } from './constants/applicationDefaults.js';
+import {
+  appendBranchPayloadToFormData,
+  extractApplicationLocations,
+  formatBranchAddressSummary,
+  hasEnteredBranchData,
+  validateAddressStep,
+} from './utils/branchHelpers.js';
 
 test('document matrix requires DTI for Sole Proprietorship', () => {
   const docs = getRequiredDocuments('Sole Proprietorship', 'Business Owner');
@@ -194,4 +203,136 @@ test('validateRestaurantServices requires Delivery or Pickup / Takeout and treat
   });
   assert.ok(noneSelectedErr, 'No services selected must fail validation');
   assert.match(noneSelectedErr, /Delivery or Pickup/i);
+});
+
+test('multi-branch defaults, toggle confirmation guard, and add/remove branch helpers', () => {
+  assert.equal(INITIAL_APPLICATION_STATE.address.hasBranches, false);
+  assert.equal(INITIAL_APPLICATION_STATE.address.mainBranchName, '');
+  assert.deepEqual(INITIAL_APPLICATION_STATE.address.branches, []);
+  assert.equal(MAX_APPLICATION_BRANCHES, 5);
+
+  assert.equal(hasEnteredBranchData(INITIAL_APPLICATION_STATE.address), false);
+  assert.equal(hasEnteredBranchData({ mainBranchName: 'Main Outlet', branches: [] }), true);
+
+  const branch = createEmptyApplicationBranch();
+  assert.equal(branch.branchName, '');
+  assert.equal(hasEnteredBranchData({ mainBranchName: '', branches: [branch] }), true);
+});
+
+test('multi-branch validation enforces main branch name, case-insensitive uniqueness, address fields, and 5-location limit', () => {
+  const baseAddress = {
+    province: 'Metro Manila',
+    city: 'Quezon City',
+    barangay: 'Diliman',
+    street: '10 Katipunan Ave',
+    postalCode: '1101',
+    hasBranches: true,
+    mainBranchName: '',
+    branches: [],
+  };
+
+  // Missing mainBranchName
+  const missingMain = validateAddressStep(baseAddress);
+  assert.ok(missingMain.mainBranchName);
+
+  // Duplicate name (case-insensitive vs mainBranchName)
+  const dupMain = validateAddressStep({
+    ...baseAddress,
+    mainBranchName: 'Katipunan Main',
+    branches: [
+      {
+        ...createEmptyApplicationBranch(),
+        branchName: '  katipunan main ',
+        street: '20 North Ave',
+        postalCode: '1100',
+      },
+    ],
+  });
+  assert.ok(dupMain['branches.0.branchName']);
+
+  // Over limit (1 main + 5 additional = 6 > 5)
+  const fiveExtra = Array.from({ length: 5 }, (_, idx) => ({
+    ...createEmptyApplicationBranch(),
+    branchName: `Branch ${idx + 1}`,
+    street: `${idx + 1} Test St`,
+    postalCode: '1100',
+  }));
+  const overLimit = validateAddressStep({
+    ...baseAddress,
+    mainBranchName: 'Katipunan Main',
+    branches: fiveExtra,
+  });
+  assert.ok(overLimit.branches);
+
+  // Valid 1 main + 2 additional branches -> zero errors
+  const valid = validateAddressStep({
+    ...baseAddress,
+    mainBranchName: 'Katipunan Main',
+    branches: [
+      {
+        ...createEmptyApplicationBranch(),
+        branchName: 'SM North EDSA',
+        street: 'North Ave',
+        postalCode: '1100',
+      },
+      {
+        ...createEmptyApplicationBranch(),
+        branchName: 'BGC High Street',
+        street: '9th Ave',
+        postalCode: '1634',
+      },
+    ],
+  });
+  assert.deepEqual(valid, {});
+});
+
+test('appendBranchPayloadToFormData omits branch fields for single-location and serializes branches when enabled', () => {
+  const singleFd = new FormData();
+  appendBranchPayloadToFormData(singleFd, { hasBranches: false, mainBranchName: 'Ignored', branches: [] });
+  assert.equal(singleFd.has('has_branches'), false);
+  assert.equal(singleFd.has('main_branch_name'), false);
+
+  const multiFd = new FormData();
+  appendBranchPayloadToFormData(multiFd, {
+    hasBranches: true,
+    mainBranchName: 'Katipunan Main',
+    branches: [
+      {
+        branchName: 'BGC Branch',
+        contactPhone: '09171234567',
+        province: 'Metro Manila',
+        city: 'Taguig City',
+        barangay: 'Fort Bonifacio / BGC',
+        street: '9th Ave',
+        postalCode: '1634',
+        coordinates: { lat: 14.5501, lng: 121.0512 },
+      },
+    ],
+  });
+
+  assert.equal(multiFd.get('has_branches'), '1');
+  assert.equal(multiFd.get('main_branch_name'), 'Katipunan Main');
+  assert.equal(multiFd.get('branches[0][branch_name]'), 'BGC Branch');
+  assert.equal(multiFd.get('branches[0][contact_phone]'), '09171234567');
+  assert.equal(multiFd.get('branches[0][city]'), 'Taguig City');
+  assert.equal(multiFd.get('branches[0][latitude]'), '14.5501');
+});
+
+test('extractApplicationLocations and formatBranchAddressSummary handle single-location and multi-branch payloads', () => {
+  const single = extractApplicationLocations({ has_branches: false, branches: [] });
+  assert.equal(single.hasBranches, false);
+  assert.equal(single.totalLocations, 1);
+
+  const multi = extractApplicationLocations({
+    has_branches: true,
+    main_branch_name: 'Diliman Flagship',
+    branches: [
+      { branch_name: 'SM North EDSA', address: { street: 'EDSA', barangay: 'Diliman', city: 'Quezon City', province: 'Metro Manila' } },
+      { branch_name: 'Loyola Heights', address: { street: 'Katipunan Ave', barangay: 'Loyola Heights', city: 'Quezon City', province: 'Metro Manila' } },
+    ],
+  });
+  assert.equal(multi.hasBranches, true);
+  assert.equal(multi.mainBranchName, 'Diliman Flagship');
+  assert.equal(multi.totalLocations, 3);
+  assert.match(formatBranchAddressSummary(multi.branches[0].address), /EDSA, Brgy\. Diliman, Quezon City/);
 });

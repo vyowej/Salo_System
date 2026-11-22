@@ -70,17 +70,33 @@ class CheckBranchIntegrityCommand extends Command
                )'
         )->cnt ?? 0);
 
+        $totalAnomalies = $nullBrandCount + $mismatchedRootCount + $grandchildCount + $childBrandMismatchCount + $ownerMismatchCount;
+
+        $appBranchLinkMismatchCount = (int) (DB::selectOne(
+            'SELECT COUNT(*) AS cnt
+             FROM restaurant_application_branches rab
+             INNER JOIN restaurant_applications ra ON ra.restaurant_application_id = rab.restaurant_application_id
+             LEFT JOIN restaurants r ON r.restaurant_id = rab.created_branch_restaurant_id
+             WHERE rab.created_branch_restaurant_id IS NOT NULL
+               AND (
+                   r.restaurant_id IS NULL
+                   OR r.parent_restaurant_id <> ra.restaurant_id
+                   OR r.brand_restaurant_id <> ra.restaurant_id
+               )'
+        )->cnt ?? 0);
+
         $this->line(sprintf(
-            '[%s] brand_restaurant_id IS NULL: %d | root brand mismatch: %d | non-root parent: %d | child brand mismatch: %d | owner mismatch: %d',
+            '[%s] brand_restaurant_id IS NULL: %d | root brand mismatch: %d | non-root parent: %d | child brand mismatch: %d | owner mismatch: %d | app branch link mismatch: %d',
             $dbName,
             $nullBrandCount,
             $mismatchedRootCount,
             $grandchildCount,
             $childBrandMismatchCount,
             $ownerMismatchCount,
+            $appBranchLinkMismatchCount,
         ));
 
-        $totalAnomalies = $nullBrandCount + $mismatchedRootCount + $grandchildCount + $childBrandMismatchCount + $ownerMismatchCount;
+        $totalAnomalies += $appBranchLinkMismatchCount;
 
         if ($totalAnomalies > 0) {
             $this->error('Branch integrity check failed.');

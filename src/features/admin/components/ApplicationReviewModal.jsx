@@ -9,6 +9,7 @@ import {
 } from './index';
 import adminApiService from '../../../services/adminApiService';
 import { mapBackendApplicationStatus, resolveBackendUrl } from '../../../services/applicationService';
+import { extractApplicationLocations, formatBranchAddressSummary } from '../../../pages/BusinessApplication/utils/branchHelpers';
 import { formatDate, formatDateTime } from '../utils/format';
 
 export default function ApplicationReviewModal({
@@ -262,6 +263,36 @@ export default function ApplicationReviewModal({
                     <li><strong>Email</strong><span>{detail.contact_email}</span></li>
                     <li><strong>Phone</strong><span>{detail.contact_phone}</span></li>
                     <li><strong>Address</strong><span>{[detail.address?.street, detail.address?.barangay, detail.address?.city, detail.address?.province].filter(Boolean).join(', ')}</span></li>
+                    {(() => {
+                      const locSummary = extractApplicationLocations(detail);
+                      if (!locSummary.hasBranches) return null;
+                      return (
+                        <li>
+                          <strong>Locations ({locSummary.totalLocations})</strong>
+                          <div style={{ display: 'grid', gap: 6, marginTop: 4 }}>
+                            <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-secondary, #f8fafc)' }}>
+                              <div style={{ fontWeight: 600, fontSize: 13 }}>{locSummary.mainBranchName} (Main)</div>
+                              <div style={{ fontSize: 12, opacity: 0.85 }}>{formatBranchAddressSummary(detail.address)}</div>
+                            </div>
+                            {locSummary.branches.map((branch, idx) => (
+                              <div
+                                key={branch.application_branch_id || `${branch.branch_name}-${idx}`}
+                                style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-secondary, #f8fafc)' }}
+                              >
+                                <div style={{ fontWeight: 600, fontSize: 13 }}>{branch.branch_name}</div>
+                                <div style={{ fontSize: 12, opacity: 0.85 }}>
+                                  {formatBranchAddressSummary(branch.address)}
+                                  {branch.address?.latitude != null && branch.address?.longitude != null && (
+                                    <> · Pin: {Number(branch.address.latitude).toFixed(4)}, {Number(branch.address.longitude).toFixed(4)}</>
+                                  )}
+                                  {branch.contact_phone && <> · {branch.contact_phone}</>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </li>
+                      );
+                    })()}
                     {detail.logo_image && (
                       <li>
                         <strong>Logo</strong>
@@ -301,6 +332,36 @@ export default function ApplicationReviewModal({
                     <li><strong>Phone</strong><span>{detail.contact_phone}</span></li>
                     <li><strong>Base city</strong><span>{detail.base_city}</span></li>
                     <li><strong>Address</strong><span>{[detail.address?.street, detail.address?.barangay, detail.address?.city, detail.address?.province].filter(Boolean).join(', ')}</span></li>
+                    {(() => {
+                      const locSummary = extractApplicationLocations(detail);
+                      if (!locSummary.hasBranches) return null;
+                      return (
+                        <li>
+                          <strong>Locations ({locSummary.totalLocations})</strong>
+                          <div style={{ display: 'grid', gap: 6, marginTop: 4 }}>
+                            <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-secondary, #f8fafc)' }}>
+                              <div style={{ fontWeight: 600, fontSize: 13 }}>{locSummary.mainBranchName} (Main)</div>
+                              <div style={{ fontSize: 12, opacity: 0.85 }}>{formatBranchAddressSummary(detail.address)}</div>
+                            </div>
+                            {locSummary.branches.map((branch, idx) => (
+                              <div
+                                key={branch.application_branch_id || `${branch.branch_name}-${idx}`}
+                                style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-secondary, #f8fafc)' }}
+                              >
+                                <div style={{ fontWeight: 600, fontSize: 13 }}>{branch.branch_name}</div>
+                                <div style={{ fontSize: 12, opacity: 0.85 }}>
+                                  {formatBranchAddressSummary(branch.address)}
+                                  {branch.address?.latitude != null && branch.address?.longitude != null && (
+                                    <> · Pin: {Number(branch.address.latitude).toFixed(4)}, {Number(branch.address.longitude).toFixed(4)}</>
+                                  )}
+                                  {branch.contact_phone && <> · {branch.contact_phone}</>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </li>
+                      );
+                    })()}
                     <li><strong>Vehicle</strong><span>{[detail.vehicle_type, detail.vehicle_brand, detail.vehicle_model, detail.plate_number].filter(Boolean).join(' · ')}</span></li>
                     <li><strong>Gov ID type</strong><span>{detail.gov_id_type}</span></li>
                     <li><strong>Emergency contact</strong><span>{`${detail.emergency_contact_name} (${detail.emergency_contact_phone})`}</span></li>

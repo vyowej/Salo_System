@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -506,5 +507,266 @@ class AdminApplicationReviewTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.items.0.id', $app1Id);
+    }
+
+    public function test_multi_branch_application_admin_detail_approval_materialization_rejection_and_rollback(): void
+    {
+        $admin = $this->createUser('admin', 'mbadmin');
+        $applicant = $this->createUser('customer', 'mbapp');
+        $rejectedApplicant = $this->createUser('customer', 'mbrej');
+
+        // 1. Rejection of a multi-branch application creates zero child restaurants rows.
+        $this->verifyOtp($rejectedApplicant, 'restaurant_application');
+        $rejSubmit = $this->actingAs($rejectedApplicant)->post('/api/restaurant/applications', [
+            'restaurant_name' => 'Rejected Multi Kitchen',
+            'has_branches' => true,
+            'main_branch_name' => 'Main Outlet',
+            'branches' => [[
+                'branch_name' => 'Second Outlet',
+                'province' => 'Metro Manila',
+                'city' => 'Quezon City',
+                'barangay' => 'Diliman',
+                'street' => '22 Second St',
+            ]],
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'sole_proprietorship',
+            'business_phone' => '09171110000',
+            'business_email' => $rejectedApplicant->email,
+            'applicant_position' => 'business_owner',
+            'legal_first_name' => 'Rej',
+            'legal_last_name' => 'Owner',
+            'date_of_birth' => '1990-01-10',
+            'contact_phone' => '09171110000',
+            'contact_email' => $rejectedApplicant->email,
+            'province' => 'Metro Manila',
+            'city' => 'Quezon City',
+            'barangay' => 'Diliman',
+            'street' => '11 Main St',
+            'offers_delivery' => true,
+            'offers_pickup' => true,
+            'offers_dine_in' => true,
+            'payout_provider' => 'BPI',
+            'payout_account_type' => 'savings',
+            'payout_account_holder_name' => 'Rej Owner',
+            'payout_account_number' => '1111222233',
+            'terms_accepted' => true,
+            'documents' => [
+                'dti_certificate' => UploadedFile::fake()->createWithContent('dti.pdf', "%PDF-1.4\n%dti\n"),
+            ],
+        ], ['Accept' => 'application/json'])->assertStatus(201);
+
+        $rejAppId = (int) $rejSubmit->json('data.application.restaurant_application_id');
+        $rejRootId = (int) $rejSubmit->json('data.application.restaurant_id');
+
+        $this->actingAs($admin)->postJson("/api/admin/applications/restaurant/{$rejAppId}/decision", [
+            'decision' => 'under_review',
+        ])->assertOk();
+
+        $this->actingAs($admin)->postJson("/api/admin/applications/restaurant/{$rejAppId}/decision", [
+            'decision' => 'reject',
+            'note' => 'Incomplete permits',
+        ])->assertOk();
+
+        $this->assertSame(0, DB::table('restaurants')->where('parent_restaurant_id', $rejRootId)->count());
+        $this->assertNull(
+            DB::table('restaurant_application_branches')
+                ->where('restaurant_application_id', $rejAppId)
+                ->value('created_branch_restaurant_id')
+        );
+
+        // 2. Submit multi-branch application with categories, operating hours, and initial menu item (+ add-ons).
+        $this->verifyOtp($applicant, 'restaurant_application');
+        $submitRes = $this->actingAs($applicant)->post('/api/restaurant/applications', [
+            'restaurant_name' => 'Kanto Branches Grill',
+            'registered_name' => 'Kanto Branches Inc',
+            'has_branches' => true,
+            'main_branch_name' => 'Diliman Flagship',
+            'branches' => [
+                [
+                    'branch_name' => 'SM North EDSA',
+                    'contact_phone' => '09173330001',
+                    'province' => 'Metro Manila',
+                    'city' => 'Quezon City',
+                    'barangay' => 'Diliman',
+                    'street' => 'EDSA North',
+                    'latitude' => 14.6560,
+                    'longitude' => 121.0300,
+                ],
+                [
+                    'branch_name' => 'Loyola Heights',
+                    'province' => 'Metro Manila',
+                    'city' => 'Quezon City',
+                    'barangay' => 'Loyola Heights',
+                    'street' => 'Katipunan Ave',
+                ],
+            ],
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'corporation',
+            'description' => 'Multi-branch grill house',
+            'business_phone' => '09173330000',
+            'business_email' => $applicant->email,
+            'categories' => ['Filipino · Grill & BBQ'],
+            'applicant_position' => 'business_owner',
+            'legal_first_name' => $applicant->first_name,
+            'legal_last_name' => $applicant->last_name,
+            'date_of_birth' => '1989-05-12',
+            'contact_phone' => '09173330000',
+            'contact_email' => $applicant->email,
+            'province' => 'Metro Manila',
+            'city' => 'Quezon City',
+            'barangay' => 'Diliman',
+            'street' => '1 Flagship Rd',
+            'offers_delivery' => true,
+            'offers_pickup' => true,
+            'offers_dine_in' => true,
+            'operating_hours' => [
+                ['day_of_week' => 1, 'opening_time' => '08:00:00', 'closing_time' => '22:00:00', 'is_closed' => false],
+                ['day_of_week' => 2, 'opening_time' => '08:00:00', 'closing_time' => '22:00:00', 'is_closed' => false],
+            ],
+            'payout_provider' => 'BPI',
+            'payout_account_type' => 'savings',
+            'payout_account_holder_name' => 'Kanto Branches Inc',
+            'payout_account_number' => '5555666677',
+            'terms_accepted' => true,
+            'menu_items' => [
+                [
+                    'name' => 'Inasal Quarter',
+                    'description' => 'Chargrilled chicken',
+                    'category' => 'Grill Specials',
+                    'price' => '195.00',
+                    'available' => true,
+                ],
+            ],
+            'documents' => [
+                'sec_certificate' => UploadedFile::fake()->createWithContent('sec.pdf', "%PDF-1.4\n%sec\n"),
+            ],
+        ], ['Accept' => 'application/json'])->assertStatus(201);
+
+        $appId = (int) $submitRes->json('data.application.restaurant_application_id');
+        $rootId = (int) $submitRes->json('data.application.restaurant_id');
+
+        // Seed an add-on group & option on the root menu item to verify add-on cloning on approval.
+        $rootMenuItemId = (int) DB::table('menu_items')->where('restaurant_id', $rootId)->value('menu_item_id');
+        $rootAddOnGroupId = (int) DB::table('add_on_groups')->insertGetId([
+            'menu_item_id' => $rootMenuItemId,
+            'group_name' => 'Extra Rice',
+            'is_required' => 0,
+            'minimum_selections' => 0,
+            'maximum_selections' => 2,
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('add_on_options')->insert([
+            'add_on_group_id' => $rootAddOnGroupId,
+            'option_name' => 'Garlic Rice',
+            'additional_price' => '35.00',
+            'is_available' => 1,
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Admin detail shows main_branch_name and branches[]
+        $this->actingAs($admin)->getJson("/api/admin/applications/restaurant/{$appId}")
+            ->assertOk()
+            ->assertJsonPath('data.application.has_branches', true)
+            ->assertJsonPath('data.application.main_branch_name', 'Diliman Flagship')
+            ->assertJsonCount(2, 'data.application.branches')
+            ->assertJsonPath('data.application.branches.0.branch_name', 'SM North EDSA');
+
+        $this->actingAs($admin)->postJson("/api/admin/applications/restaurant/{$appId}/decision", [
+            'decision' => 'under_review',
+        ])->assertOk();
+
+        // 3. Forced failure mid-approval (after 1st child branch is created, 2nd child branch hits max_branches_per_business=2)
+        // must roll back the ENTIRE approval transaction!
+        Config::set('salo.restaurants.max_branches_per_business', 2);
+        $this->actingAs($admin)->postJson("/api/admin/applications/restaurant/{$appId}/decision", [
+            'decision' => 'approve',
+            'note' => 'Should roll back on 2nd branch',
+        ])->assertStatus(422);
+
+        $this->assertSame('under_review', DB::table('restaurant_applications')->where('restaurant_application_id', $appId)->value('application_status'));
+        $this->assertSame('pending', DB::table('restaurants')->where('restaurant_id', $rootId)->value('restaurant_status'));
+        $this->assertSame(0, DB::table('restaurants')->where('parent_restaurant_id', $rootId)->count());
+        $this->assertSame(
+            0,
+            DB::table('restaurant_application_branches')
+                ->where('restaurant_application_id', $appId)
+                ->whereNotNull('created_branch_restaurant_id')
+                ->count()
+        );
+
+        // 4. Restore limit and approve -> materializes 2 active unpublished child branches.
+        Config::set('salo.restaurants.max_branches_per_business', 10);
+        $approveRes = $this->actingAs($admin)->postJson("/api/admin/applications/restaurant/{$appId}/decision", [
+            'decision' => 'approve',
+            'note' => 'Approved all branches',
+        ])->assertOk()
+            ->assertJsonPath('data.application.application_status', 'approved');
+
+        $children = DB::table('restaurants')
+            ->where('parent_restaurant_id', $rootId)
+            ->orderBy('restaurant_id')
+            ->get();
+        $this->assertCount(2, $children);
+
+        $child1 = $children[0];
+        $child2 = $children[1];
+
+        $this->assertSame('SM North EDSA', $child1->branch_name);
+        $this->assertSame($rootId, (int) $child1->brand_restaurant_id);
+        $this->assertSame('active', $child1->restaurant_status);
+        $this->assertSame(0, (int) $child1->is_published);
+        $this->assertSame('09173330001', $child1->contact_phone);
+
+        // Child 2 had no branch phone -> falls back to root contact_phone
+        $this->assertSame('Loyola Heights', $child2->branch_name);
+        $this->assertSame('09173330000', $child2->contact_phone);
+        $this->assertSame('active', $child2->restaurant_status);
+        $this->assertSame(0, (int) $child2->is_published);
+
+        foreach ([$child1->restaurant_id, $child2->restaurant_id] as $cId) {
+            $cId = (int) $cId;
+            // Strategy B owners copied
+            $this->assertTrue(DB::table('restaurant_owners')->where('restaurant_id', $cId)->where('user_id', $applicant->user_id)->exists());
+            // Categories & operating hours copied
+            $this->assertSame(1, DB::table('restaurant_category_map')->where('restaurant_id', $cId)->count());
+            $this->assertSame(2, DB::table('operating_hours')->where('restaurant_id', $cId)->count());
+            // Menu category, item, and add-ons cloned as approved + unpublished
+            $clonedItem = DB::table('menu_items')->where('restaurant_id', $cId)->first();
+            $this->assertNotNull($clonedItem);
+            $this->assertSame('Inasal Quarter', $clonedItem->item_name);
+            $this->assertSame('approved', $clonedItem->approval_status);
+            $this->assertSame(0, (int) $clonedItem->is_published);
+            $this->assertSame('new', $clonedItem->draft_state);
+
+            $clonedGroup = DB::table('add_on_groups')->where('menu_item_id', $clonedItem->menu_item_id)->first();
+            $this->assertNotNull($clonedGroup);
+            $this->assertSame('Extra Rice', $clonedGroup->group_name);
+            $this->assertSame(1, DB::table('add_on_options')->where('add_on_group_id', $clonedGroup->add_on_group_id)->count());
+
+            // No service_areas and no payout_accounts created for child branches
+            $this->assertSame(0, DB::table('service_areas')->where('restaurant_id', $cId)->count());
+            $this->assertSame(0, DB::table('payout_accounts')->where('restaurant_id', $cId)->count());
+
+            // Audit log recorded per created branch with brand_restaurant_id and branch_name
+            $audit = DB::table('audit_logs')
+                ->where('action', 'restaurant_branch_created')
+                ->where('entity_type', 'restaurants')
+                ->where('entity_id', (string) $cId)
+                ->first();
+            $this->assertNotNull($audit);
+            $auditNew = json_decode((string) $audit->new_values, true);
+            $this->assertSame($rootId, $auditNew['brand_restaurant_id']);
+            $this->assertNotEmpty($auditNew['branch_name']);
+        }
+
+        // created_branch_restaurant_id populated on restaurant_application_branches
+        $this->assertSame((int) $child1->restaurant_id, (int) $approveRes->json('data.application.branches.0.created_branch_restaurant_id'));
+        $this->assertSame((int) $child2->restaurant_id, (int) $approveRes->json('data.application.branches.1.created_branch_restaurant_id'));
+
+        $this->artisan('salo:check-branch-integrity')->assertSuccessful();
     }
 }

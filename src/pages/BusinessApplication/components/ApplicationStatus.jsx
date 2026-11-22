@@ -6,6 +6,7 @@ import { Card, CardBody } from '../../../components/common/Card';
 import {
   APPLICATION_STATUS_CONFIG,
 } from '../constants/applicationDefaults';
+import { extractApplicationLocations, formatBranchAddressSummary } from '../utils/branchHelpers';
 import applicationService, { resolveBackendUrl } from '../../../services/applicationService';
 import './ApplicationStatus.css';
 
@@ -419,11 +420,48 @@ export default function ApplicationStatus({
         </CardBody>
       </Card>
 
-      {/* Uploaded Assets & Documents */}
-      {(applicationData?.logoImage || applicationData?.coverImage || (applicationData?.menuItems?.length > 0) || (applicationData?.documents?.length > 0)) && (
+      {/* Uploaded Assets, Locations & Documents */}
+      {(applicationData?.logoImage || applicationData?.coverImage || applicationData?.hasBranches || (applicationData?.branches?.length > 0) || (applicationData?.menuItems?.length > 0) || (applicationData?.documents?.length > 0)) && (
         <Card className="status-timeline-card">
           <CardBody>
             <h3 className="timeline-title">Submitted Branding, Menu &amp; Documents</h3>
+
+            {(() => {
+              const locSummary = extractApplicationLocations(applicationData);
+              if (!locSummary.hasBranches) return null;
+              return (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
+                    Locations ({locSummary.totalLocations})
+                  </div>
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    <div style={{ padding: '10px 12px', border: '1px solid var(--border-secondary, #e5e7eb)', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 600 }}>
+                        {locSummary.mainBranchName} <Badge variant="info" size="sm">Main</Badge>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        {formatBranchAddressSummary(applicationData?.address)}
+                      </div>
+                    </div>
+                    {locSummary.branches.map((branch, idx) => (
+                      <div
+                        key={branch.application_branch_id || `${branch.branch_name}-${idx}`}
+                        style={{ padding: '10px 12px', border: '1px solid var(--border-secondary, #e5e7eb)', borderRadius: '8px' }}
+                      >
+                        <div style={{ fontSize: '13px', fontWeight: 600 }}>{branch.branch_name}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                          {formatBranchAddressSummary(branch.address)}
+                          {branch.address?.latitude != null && branch.address?.longitude != null && (
+                            <> • Pin: {Number(branch.address.latitude).toFixed(4)}, {Number(branch.address.longitude).toFixed(4)}</>
+                          )}
+                          {branch.contact_phone && <> • Phone: {branch.contact_phone}</>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {(applicationData?.logoImage || applicationData?.coverImage) && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '16px' }}>

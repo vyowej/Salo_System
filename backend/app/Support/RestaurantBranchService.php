@@ -234,4 +234,171 @@ class RestaurantBranchService
             }
         });
     }
+
+    /**
+     * Copy restaurant_category_map and operating_hours from root to a child branch.
+     */
+    public function copyCategoriesAndHoursFromRoot(int $rootRestaurantId, int $branchRestaurantId, mixed $now = null): void
+    {
+        $timestamp = $now ?? now();
+
+        $categoryIds = DB::table('restaurant_category_map')
+            ->where('restaurant_id', $rootRestaurantId)
+            ->pluck('category_id');
+
+        foreach ($categoryIds as $categoryId) {
+            DB::table('restaurant_category_map')->insertOrIgnore([
+                'restaurant_id' => $branchRestaurantId,
+                'category_id' => (int) $categoryId,
+            ]);
+        }
+
+        $hours = DB::table('operating_hours')
+            ->where('restaurant_id', $rootRestaurantId)
+            ->orderBy('day_of_week')
+            ->get();
+
+        foreach ($hours as $hour) {
+            DB::table('operating_hours')->insert([
+                'restaurant_id' => $branchRestaurantId,
+                'day_of_week' => (int) $hour->day_of_week,
+                'opening_time' => $hour->opening_time,
+                'closing_time' => $hour->closing_time,
+                'closes_next_day' => (int) ($hour->closes_next_day ?? 0),
+                'is_closed' => (int) $hour->is_closed,
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ]);
+        }
+    }
+
+    /**
+     * Clone menu categories, items, and add-ons from a source restaurant to a target branch
+     * as approved but unpublished (is_published = 0, draft_state = 'new').
+     */
+    public function cloneMenuAsUnpublishedApproved(int $sourceRestaurantId, int $targetRestaurantId, mixed $now = null): void
+    {
+        $timestamp = $now ?? now();
+
+        $categories = DB::table('menu_categories')
+            ->where('restaurant_id', $sourceRestaurantId)
+            ->orderBy('sort_order')
+            ->orderBy('menu_category_id')
+            ->get();
+
+        $categoryMap = [];
+        foreach ($categories as $cat) {
+            $newCatId = (int) DB::table('menu_categories')->insertGetId([
+                'restaurant_id' => $targetRestaurantId,
+                'category_name' => $cat->category_name,
+                'description' => $cat->description,
+                'sort_order' => (int) $cat->sort_order,
+                'is_active' => (int) $cat->is_active,
+                'draft_state' => 'new',
+                'is_published' => 0,
+                'published_category_name' => null,
+                'published_description' => null,
+                'published_sort_order' => null,
+                'published_is_active' => null,
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ]);
+            $categoryMap[(int) $cat->menu_category_id] = $newCatId;
+        }
+
+        $items = DB::table('menu_items')
+            ->where('restaurant_id', $sourceRestaurantId)
+            ->orderBy('sort_order')
+            ->orderBy('menu_item_id')
+            ->get();
+
+        $itemMap = [];
+        foreach ($items as $item) {
+            $newCatId = $categoryMap[(int) $item->menu_category_id] ?? null;
+            if ($newCatId === null) {
+                continue;
+            }
+
+            $newItemId = (int) DB::table('menu_items')->insertGetId([
+                'restaurant_id' => $targetRestaurantId,
+                'menu_category_id' => $newCatId,
+                'item_name' => $item->item_name,
+                'description' => $item->description,
+                'photo_image' => $item->photo_image,
+                'base_price' => $item->base_price,
+                'availability_status' => $item->availability_status,
+                'approval_status' => 'approved',
+                'sort_order' => (int) $item->sort_order,
+                'draft_state' => 'new',
+                'is_published' => 0,
+                'published_menu_category_id' => null,
+                'published_item_name' => null,
+                'published_description' => null,
+                'published_photo_image' => null,
+                'published_base_price' => null,
+                'published_sort_order' => null,
+                'published_at' => null,
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ]);
+            $itemMap[(int) $item->menu_item_id] = $newItemId;
+        }
+
+        if ($itemMap === []) {
+            return;
+        }
+
+        $groups = DB::table('add_on_groups')
+            ->whereIn('menu_item_id', array_keys($itemMap))
+            ->orderBy('sort_order')
+            ->orderBy('add_on_group_id')
+            ->get();
+
+        $groupMap = [];
+        foreach ($groups as $group) {
+            $targetItemId = $itemMap[(int) $group->menu_item_id] ?? null;
+            if ($targetItemId === null) {
+                continue;
+            }
+
+            $newGroupId = (int) DB::table('add_on_groups')->insertGetId([
+                'menu_item_id' => $targetItemId,
+                'group_name' => $group->group_name,
+                'is_required' => (int) $group->is_required,
+                'minimum_selections' => (int) $group->minimum_selections,
+                'maximum_selections' => (int) $group->maximum_selections,
+                'sort_order' => (int) $group->sort_order,
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ]);
+            $groupMap[(int) $group->add_on_group_id] = $newGroupId;
+        }
+
+        if ($groupMap === []) {
+            return;
+        }
+
+        $options = DB::table('add_on_options')
+            ->whereIn('add_on_group_id', array_keys($groupMap))
+            ->orderBy('sort_order')
+            ->orderBy('add_on_option_id')
+            ->get();
+
+        foreach ($options as $opt) {
+            $targetGroupId = $groupMap[(int) $opt->add_on_group_id] ?? null;
+            if ($targetGroupId === null) {
+                continue;
+            }
+
+            DB::table('add_on_options')->insert([
+                'add_on_group_id' => $targetGroupId,
+                'option_name' => $opt->option_name,
+                'additional_price' => $opt->additional_price,
+                'is_available' => (int) $opt->is_available,
+                'sort_order' => (int) $opt->sort_order,
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ]);
+        }
+    }
 }

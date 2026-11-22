@@ -2,6 +2,7 @@ import { useMemo, useEffect, useRef } from 'react';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { getDocumentClassification } from '../constants/documentRequirements';
+import { formatBranchAddressSummary } from '../utils/branchHelpers';
 
 const REVIEW_DECLARATION_FIELDS = [
   'infoConfirmed',
@@ -360,6 +361,41 @@ export default function ApplicationReviewStep({
                   : 'Not pinned'}
               </span>
             </div>
+            {address.hasBranches && (
+              <>
+                <div className="review-item">
+                  <span className="review-label">Main Branch Name</span>
+                  <span className="review-value font-strong">{address.mainBranchName || '—'}</span>
+                </div>
+                <div className="review-item full-width">
+                  <span className="review-label">
+                    Additional Branches ({(address.branches || []).length})
+                  </span>
+                  {(address.branches || []).length === 0 ? (
+                    <span className="review-value">No additional branches added</span>
+                  ) : (
+                    <div className="review-branches-list">
+                      {(address.branches || []).map((branch, idx) => (
+                        <div key={idx} className="review-branch-row">
+                          <div className="review-branch-head">
+                            <strong>{branch.branchName || `Branch #${idx + 1}`}</strong>
+                            <Badge variant={branch.mapPinned ? 'success' : 'neutral'} size="sm">
+                              {branch.mapPinned && branch.coordinates
+                                ? `Pinned (${Number(branch.coordinates.lat).toFixed(4)}, ${Number(branch.coordinates.lng).toFixed(4)})`
+                                : 'Not pinned'}
+                            </Badge>
+                          </div>
+                          <div className="review-branch-meta">
+                            <span>{formatBranchAddressSummary(branch)}</span>
+                            {branch.contactPhone && <span>Phone: {branch.contactPhone}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 

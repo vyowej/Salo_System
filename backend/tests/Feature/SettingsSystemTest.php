@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Support\RestaurantBranchService;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -11,6 +13,7 @@ use Tests\TestCase;
 
 class SettingsSystemTest extends TestCase
 {
+    use DatabaseTransactions;
     private function seedLocation(): array
     {
         $suffix = (string) mt_rand(100000, 999999);
@@ -105,7 +108,7 @@ class SettingsSystemTest extends TestCase
         $admin = $this->createUser('admin');
         $otherUser = $this->createUser('customer');
 
-        $restaurantId = (int) DB::table('restaurants')->insertGetId([
+        $restaurantId = app(RestaurantBranchService::class)->createRootRestaurant([
             'restaurant_name' => 'Original Bistro',
             'registered_name' => 'Original Bistro Corp',
             'business_type' => 'restaurant',
@@ -222,7 +225,7 @@ class SettingsSystemTest extends TestCase
         ]);
 
         // Create active delivery to verify deactivation safeguard
-        $restaurantId = (int) DB::table('restaurants')->insertGetId([
+        $restaurantId = app(RestaurantBranchService::class)->createRootRestaurant([
             'restaurant_name' => 'Safe Eats',
             'business_type' => 'restaurant',
             'ownership_structure' => 'sole_proprietorship',

@@ -105,6 +105,7 @@ class RestaurantApplicationService
                     $now,
                 );
 
+                $this->insertApplicationBranches($applicationId, $validated, $now);
                 $this->storeApplicationDocuments($user, $applicationId, $documentFiles, $now, $storedPrivatePaths);
                 $this->insertPayoutAccount($restaurantId, $validated, $now);
                 $this->recordSubmissionAuditAndNotify($user, $applicationId, $referenceNumber, $restaurantId, $validated, $request);
@@ -149,7 +150,70 @@ class RestaurantApplicationService
             }
         }
 
+        $this->validateBranchPreconditions($validated);
+
         return [$offersDelivery, $offersPickup, $offersDineIn, $contactEmail, $verifiedAt];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function validateBranchPreconditions(array $validated): void
+    {
+        $hasBranches = filter_var($validated['has_branches'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $branches = isset($validated['branches']) && is_array($validated['branches']) ? $validated['branches'] : [];
+
+        if (! $hasBranches && $branches === []) {
+            return;
+        }
+
+        $mainBranchName = trim((string) ($validated['main_branch_name'] ?? ''));
+        if ($mainBranchName === '') {
+            throw ValidationException::withMessages([
+                'main_branch_name' => ['The main branch name field is required when the business has branches.'],
+            ]);
+        }
+
+        $maxTotal = max(1, (int) config('salo.restaurants.max_application_branches', 5));
+        if (1 + count($branches) > $maxTotal) {
+            throw ValidationException::withMessages([
+                'branches' => ["A maximum of {$maxTotal} total branch locations (including the main branch) is allowed per application."],
+            ]);
+        }
+
+        $seen = [mb_strtolower($mainBranchName) => true];
+        foreach ($branches as $idx => $branch) {
+            $bName = trim((string) ($branch['branch_name'] ?? ''));
+            if ($bName === '') {
+                throw ValidationException::withMessages([
+                    "branches.{$idx}.branch_name" => ['Branch name is required.'],
+                ]);
+            }
+            $key = mb_strtolower($bName);
+            if (isset($seen[$key])) {
+                throw ValidationException::withMessages([
+                    "branches.{$idx}.branch_name" => ["Duplicate branch name \"{$bName}\". Branch names must be unique within the application."],
+                ]);
+            }
+            $seen[$key] = true;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function resolveSubmittedMainBranchName(array $validated): ?string
+    {
+        $hasBranches = filter_var($validated['has_branches'] ?? false, FILTER_VALIDATE_BOOLEAN)
+            || (! empty($validated['branches']) && is_array($validated['branches']));
+
+        if (! $hasBranches) {
+            return null;
+        }
+
+        $trimmed = trim((string) ($validated['main_branch_name'] ?? ''));
+
+        return $trimmed !== '' ? $trimmed : null;
     }
 
     /**
@@ -186,6 +250,7 @@ class RestaurantApplicationService
             'parent_restaurant_id' => null,
             'brand_restaurant_id' => null,
             'restaurant_name' => trim((string) $validated['restaurant_name']),
+            'branch_name' => $this->resolveSubmittedMainBranchName($validated),
             'registered_name' => ! empty($validated['registered_name']) ? trim((string) $validated['registered_name']) : null,
             'business_type' => $validated['business_type'],
             'ownership_structure' => $validated['ownership_structure'],
@@ -421,6 +486,42 @@ class RestaurantApplicationService
     }
 
     /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function insertApplicationBranches(int $applicationId, array $validated, mixed $now): void
+    {
+        $branches = isset($validated['branches']) && is_array($validated['branches'])
+            ? array_values($validated['branches'])
+            : [];
+
+        if ($branches === []) {
+            return;
+        }
+
+        foreach ($branches as $index => $branchData) {
+            if (! is_array($branchData)) {
+                continue;
+            }
+
+            $branchAddressId = $this->createRestaurantAddress($branchData);
+            $phone = isset($branchData['contact_phone']) && trim((string) $branchData['contact_phone']) !== ''
+                ? trim((string) $branchData['contact_phone'])
+                : null;
+
+            DB::table('restaurant_application_branches')->insert([
+                'restaurant_application_id' => $applicationId,
+                'branch_name' => trim((string) $branchData['branch_name']),
+                'address_id' => $branchAddressId,
+                'contact_phone' => $phone,
+                'sort_order' => $index + 1,
+                'created_branch_restaurant_id' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
+    }
+
+    /**
      * @param  array<string, UploadedFile>  $documentFiles
      * @param  list<string>  $storedPrivatePaths
      */
@@ -650,8 +751,9 @@ class RestaurantApplicationService
         $documents = $this->loadApplicationDocuments($applicationId);
         $requests = $this->loadApplicationDocumentRequests($applicationId);
         $menuItems = $this->loadApplicationMenuItems((int) $row->restaurant_id);
+        $branches = $this->loadApplicationBranches($applicationId);
 
-        return $this->formatApplicationPayload($row, $categories, $documents, $requests, $menuItems);
+        return $this->formatApplicationPayload($row, $categories, $documents, $requests, $menuItems, $branches);
     }
 
     private function loadApplicationRow(int $applicationId): object
@@ -666,6 +768,7 @@ class RestaurantApplicationService
             ->select([
                 'ra.*',
                 'rest.restaurant_name',
+                'rest.branch_name as main_branch_name',
                 'rest.registered_name',
                 'rest.business_type',
                 'rest.ownership_structure',
@@ -794,10 +897,65 @@ class RestaurantApplicationService
     }
 
     /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadApplicationBranches(int $applicationId): array
+    {
+        return DB::table('restaurant_application_branches as rab')
+            ->join('addresses as addr', 'addr.address_id', '=', 'rab.address_id')
+            ->join('barangays as brgy', 'brgy.barangay_id', '=', 'addr.barangay_id')
+            ->join('cities as c', 'c.city_id', '=', 'brgy.city_id')
+            ->join('provinces as p', 'p.province_id', '=', 'c.province_id')
+            ->where('rab.restaurant_application_id', $applicationId)
+            ->orderBy('rab.sort_order')
+            ->orderBy('rab.application_branch_id')
+            ->select([
+                'rab.application_branch_id',
+                'rab.branch_name',
+                'rab.contact_phone',
+                'rab.sort_order',
+                'rab.created_branch_restaurant_id',
+                'addr.street',
+                'addr.house_number',
+                'addr.building_name',
+                'addr.landmark',
+                'addr.postal_code',
+                'addr.latitude',
+                'addr.longitude',
+                'brgy.barangay_name',
+                'c.city_name',
+                'p.province_name',
+            ])
+            ->get()
+            ->map(fn ($b): array => [
+                'application_branch_id' => (int) $b->application_branch_id,
+                'branch_name' => $b->branch_name,
+                'contact_phone' => $b->contact_phone,
+                'sort_order' => (int) $b->sort_order,
+                'created_branch_restaurant_id' => $b->created_branch_restaurant_id !== null ? (int) $b->created_branch_restaurant_id : null,
+                'address' => [
+                    'province' => $b->province_name,
+                    'city' => $b->city_name,
+                    'barangay' => $b->barangay_name,
+                    'street' => $b->street,
+                    'house_number' => $b->house_number,
+                    'building_name' => $b->building_name,
+                    'landmark' => $b->landmark,
+                    'postal_code' => $b->postal_code,
+                    'latitude' => $b->latitude !== null ? (float) $b->latitude : null,
+                    'longitude' => $b->longitude !== null ? (float) $b->longitude : null,
+                ],
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
      * @param  list<mixed>  $categories
      * @param  list<array<string, mixed>>  $documents
      * @param  list<array<string, mixed>>  $requests
      * @param  list<array<string, mixed>>  $menuItems
+     * @param  list<array<string, mixed>>  $branches
      * @return array<string, mixed>
      */
     private function formatApplicationPayload(
@@ -806,6 +964,7 @@ class RestaurantApplicationService
         array $documents,
         array $requests,
         array $menuItems,
+        array $branches = [],
     ): array {
         return [
             'restaurant_application_id' => (int) $row->restaurant_application_id,
@@ -814,6 +973,9 @@ class RestaurantApplicationService
             'application_status' => $row->application_status,
             'restaurant_status' => $row->restaurant_status,
             'restaurant_name' => $row->restaurant_name,
+            'has_branches' => $row->main_branch_name !== null || count($branches) > 0,
+            'main_branch_name' => $row->main_branch_name,
+            'branches' => $branches,
             'registered_name' => $row->registered_name,
             'business_type' => $row->business_type,
             'ownership_structure' => $row->ownership_structure,

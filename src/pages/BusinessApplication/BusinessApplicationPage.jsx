@@ -22,6 +22,7 @@ import {
 import { getRequiredDocuments } from './constants/documentRequirements';
 import applicationService from '../../services/applicationService';
 import { resolveUploadableFile, mapAccountTypeToEnum } from '../../services/formDataHelper';
+import { appendBranchPayloadToFormData, validateAddressStep } from './utils/branchHelpers';
 import './BusinessApplicationPage.css';
 
 const SESSION_DRAFT_KEY = 'salo_partner_app_draft';
@@ -47,6 +48,10 @@ export default function BusinessApplicationPage() {
         return {
           ...INITIAL_APPLICATION_STATE,
           ...parsed,
+          address: {
+            ...INITIAL_APPLICATION_STATE.address,
+            ...(parsed.address || {}),
+          },
           documents: {}, // Browser File objects cannot be persisted in JSON; keep clean
         };
       }
@@ -179,15 +184,7 @@ export default function BusinessApplicationPage() {
     }
 
     if (stepNumber === 5) {
-      if (!formData.address.street?.trim()) {
-        errors.street = 'Street or building address is required.';
-      }
-      if (!formData.address.postalCode?.trim()) {
-        errors.postalCode = 'Postal code is required.';
-      }
-      if (!formData.address.barangay?.trim()) {
-        errors.barangay = 'Barangay is required.';
-      }
+      Object.assign(errors, validateAddressStep(formData.address));
     }
 
     if (stepNumber === 6) {
@@ -362,6 +359,7 @@ export default function BusinessApplicationPage() {
       if (formData.address.additionalDetails) fd.append('landmark', formData.address.additionalDetails);
       if (formData.address.coordinates?.lat != null) fd.append('latitude', String(formData.address.coordinates.lat));
       if (formData.address.coordinates?.lng != null) fd.append('longitude', String(formData.address.coordinates.lng));
+      appendBranchPayloadToFormData(fd, formData.address);
 
       const services = formData.configuration?.services || {};
       fd.append('offers_delivery', services.delivery ? '1' : '0');
@@ -446,6 +444,17 @@ export default function BusinessApplicationPage() {
           const firstMsg = Array.isArray(msgs) ? msgs[0] : String(msgs);
           if (firstMsg) {
             fieldErrors[key] = firstMsg;
+            if (key === 'main_branch_name') {
+              fieldErrors.mainBranchName = firstMsg;
+            }
+            const branchNameMatch = key.match(/^branches\.(\d+)\.branch_name$/);
+            if (branchNameMatch) {
+              fieldErrors[`branches.${branchNameMatch[1]}.branchName`] = firstMsg;
+            }
+            const branchPostalMatch = key.match(/^branches\.(\d+)\.postal_code$/);
+            if (branchPostalMatch) {
+              fieldErrors[`branches.${branchPostalMatch[1]}.postalCode`] = firstMsg;
+            }
             if (key.startsWith('documents.')) {
               fieldErrors[key.replace('documents.', '')] = firstMsg;
             }
@@ -470,11 +479,12 @@ export default function BusinessApplicationPage() {
 
   // Check if all prior steps are valid for review submit
   const areAllRequiredStepsValid = () => {
+    const addressErrors = validateAddressStep(formData.address);
     return (
       Boolean(formData.emailVerification?.isVerified) &&
       Boolean(formData.businessInfo.restaurantName) &&
       Boolean(formData.representative.firstName) &&
-      Boolean(formData.address.street) &&
+      Object.keys(addressErrors).length === 0 &&
       Boolean(formData.payout.accountHolder) &&
       !validateRestaurantServices(formData.configuration?.services)
     );

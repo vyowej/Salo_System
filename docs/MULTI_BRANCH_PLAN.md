@@ -411,6 +411,62 @@ Phase 2a backend branch context, hierarchy/owner-sync helpers, authorization enf
 
 ---
 
+## Phase 3a implemented (salo_test only)
+
+Phase 3a backend multi-branch application submission, read payloads, and atomic admin approval materialization have been implemented and verified on `salo_test` only (`salo_db` and `database/salo_db.sql` remain untouched; frontend wizard/modal updates are deferred to Phase 3b).
+
+### Implemented Components
+
+1. **Application Submission (`POST /api/restaurant/applications`):**
+   - `SubmitRestaurantApplicationRequest.php` & `RestaurantApplicationService.php`: Added optional `has_branches` (`boolean`), `main_branch_name` (required when `has_branches` is true or `branches` is non-empty, max `150`), and `branches[]` (`branch_name`, optional `contact_phone`, and full address/coordinates in the same validation shape as the main address).
+   - Enforces total locations (`1 + count(branches)`) `<= config('salo.restaurants.max_application_branches', 5)` (`4` additional branches max) and case-insensitive uniqueness of branch names across `main_branch_name` and `branches[*].branch_name`.
+   - Stores `restaurants.branch_name = main_branch_name` on the root row and creates a normalized `addresses` row + `restaurant_application_branches` row (`sort_order = 1..N`) for each additional branch inside the submission transaction. Single-location submissions (`has_branches` omitted/false) behave identically to before.
+2. **Application Read Payloads (`GET /api/restaurant/applications/current` & `GET /api/admin/applications/restaurant/{id}`):**
+   - `RestaurantApplicationService::getApplicationById()` now returns additive fields `has_branches`, `main_branch_name`, and `branches[]` (`application_branch_id`, `branch_name`, `contact_phone`, `sort_order`, `created_branch_restaurant_id`, and `address` including `latitude`/`longitude`).
+3. **Admin Approval Materialization (`POST /api/admin/applications/restaurant/{id}/decision`):**
+   - `AdminApplicationService::materializeApprovedApplicationBranches()` + `RestaurantBranchService::copyCategoriesAndHoursFromRoot()` + `RestaurantBranchService::cloneMenuAsUnpublishedApproved()`:
+     - For each `restaurant_application_branches` row, creates an active unpublished (`restaurant_status = 'active'`, `is_published = 0`) child `restaurants` row via `RestaurantBranchService::createChildBranch()`, copies `restaurant_owners` (Strategy B), `restaurant_category_map`, and `operating_hours`, and clones initial `menu_categories`, `menu_items`, `add_on_groups`, and `add_on_options` (`approval_status = 'approved'`, `is_published = 0`, `draft_state = 'new'`).
+     - Populates `restaurant_application_branches.created_branch_restaurant_id` and writes one `audit_logs` row (`action = 'restaurant_branch_created'`) per created branch containing `brand_restaurant_id` and `branch_name`.
+     - Does not copy `service_areas` or create `payout_accounts` for child branches. Any failure mid-loop rolls back the entire approval transaction.
+4. **Extended Integrity Command (`salo:check-branch-integrity`):**
+   - Added `app branch link mismatch` check verifying every non-null `restaurant_application_branches.created_branch_restaurant_id` references an existing child `restaurants` row whose `parent_restaurant_id` and `brand_restaurant_id` match the application's root `restaurant_id`.
+
+---
+
+## Phase 3b implemented
+
+Phase 3b frontend partner application wizard, applicant status view, and admin review modal updates have been implemented:
+
+1. **Constants & Helpers (`applicationDefaults.js`, `branchHelpers.js`):**
+   - Added `MAX_APPLICATION_BRANCHES = 5`, `APPLICATION_BRANCH_COPY`, `createEmptyApplicationBranch()`, and `INITIAL_APPLICATION_STATE.address.{hasBranches, mainBranchName, branches}`.
+   - Added `validateAddressStep()`, `appendBranchPayloadToFormData()`, `hasEnteredBranchData()`, `formatBranchAddressSummary()`, and `extractApplicationLocations()`.
+2. **Partner Application Wizard (`BusinessAddressStep.jsx`, `BusinessApplicationPage.jsx`, `ApplicationReviewStep.jsx`):**
+   - Step 5 renders the **"Does your restaurant have other branches?"** toggle (`No — single location only` default; `Yes — we have multiple branches`), confirmation banner when switching back to `No` with entered data, required `Main Branch Name`, and repeatable `Additional Branches` cards reusing `PhilippineAddressFields` + `LocationPickerModal`.
+   - Single-location submissions omit `has_branches` and `branches` so existing single-location payloads stay identical. Backend 422 errors (`main_branch_name`, `branches`, `branches.*.branch_name`, `branches.*.postal_code`) map to per-field errors.
+   - Review Step (Section 5) displays Main Branch Name and each additional branch (name, full address, pin status, optional phone) with an Edit link back to Step 5.
+3. **Applicant Status & Admin Review Modal (`BusinessApplicationStatusPage.jsx`, `ApplicationStatus.jsx`, `ApplicationReviewModal.jsx`):**
+   - When `has_branches` or `branches.length > 0`, displays `Locations (N)` showing the main branch and each additional branch (name, address, coordinates, phone). Single-location applications render identically to before.
+
+---
+
+## Phase 4a implemented (salo_test only)
+
+Phase 4a backend branch listing, owner Add Branch creation, delivery-coverage publish readiness guard, menu photo cross-branch protection verification, and CORS preflight verification have been implemented on `salo_test` only (`salo_db` and `database/salo_db.sql` remain untouched).
+
+### Implemented Components
+
+1. **Branch Endpoints (`OwnerBranchController`, `OwnerBranchService`, `StoreBranchRequest`):**
+   - `GET /api/restaurant/branches` (`role:owner,staff`): Returns accessible branches (`restaurant_id`, `brand_restaurant_id`, `branch_name`, `display_name`, `is_main_branch`, `restaurant_status`, `is_published`, `short_address`, `accepting_orders`, `pending_order_count`) ordered root-first. Staff see only their active assigned branches.
+   - `POST /api/restaurant/branches` (`role:owner`): Validates `branch_name`, address fields, optional `contact_phone`, service toggles, `copy_operating_hours` (default `true`), `copy_menu` (default `true`), `copy_from_restaurant_id` (default root), and `main_branch_name` (required when root `branch_name` is `NULL`). Enforces active root, `assertValidNewBranch()` (limit `10`, unique case-insensitive name), creates active unpublished child via `createChildBranch()`, copies owners (Strategy B), categories, hours, and menu (unpublished + approved), skips `service_areas` and `payout_accounts`, writes `restaurant_branch_created` audit log, and notifies active admins.
+2. **Delivery Coverage Publish Readiness (`MenuPublishService`):**
+   - Unpublished restaurants (`is_published = 0`) with `offers_delivery = 1` and zero `service_areas` rows are blocked (`422`) from publishing until coverage is configured. Already-published restaurants (`35` in `salo_test`) are unaffected.
+3. **Menu Photo Reference Protection & CORS:**
+   - Verified `OwnerMenuService::isMenuPhotoReferenced()` and `MenuPublishService::cleanupCandidatePhotos()` protect shared menu item photos (local and `gdrive:...`) across branches.
+   - Verified `backend/config/cors.php` (`allowed_headers => ['*']`) allows `X-Restaurant-Id` on CORS preflight requests.
+4. **Documentation:** Added [docs/BRANCHES.md](file:///c:/xampp/htdocs/Salo_Final/docs/BRANCHES.md).
+
+---
+
 ## Approved Decisions Baseline (Decisions 1–7)
 
 1. **Decision 1 — Core Data Model:** **Option B** — Each branch is a `restaurants` row linked to the root row via `parent_restaurant_id` + plain `brand_restaurant_id` + `branch_name` (accepting duplicated business-level columns on child rows as a tradeoff), plus `restaurant_application_branches` for pending application branches, and copying `restaurant_owners` rows to each branch on creation/approval.

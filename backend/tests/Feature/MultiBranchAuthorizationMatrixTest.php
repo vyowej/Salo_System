@@ -9,9 +9,11 @@ use App\Support\AddressService;
 use App\Support\RestaurantBranchService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -517,5 +519,197 @@ class MultiBranchAuthorizationMatrixTest extends TestCase
         $this->assertSame('Notify Cafe Rebranded', $rootAfter->restaurant_name);
         $this->assertSame('Notify Cafe Rebranded', $branchBAfter->restaurant_name);
         $this->assertSame('corporation', $branchBAfter->ownership_structure);
+    }
+
+    public function test_staff_on_sibling_branch_without_explicit_restaurant_id_defaults_to_assigned_branch(): void
+    {
+        $owner = $this->createUser('defown');
+        $staff = $this->createUser('defstf');
+        $customer = $this->createUser('defcust');
+        $brand = $this->createBrandWithTwoActiveBranches($owner, 'Default Branch Cafe');
+
+        DB::table('restaurant_staff')->insert([
+            'restaurant_id' => $brand['branch_b_id'],
+            'user_id' => $staff->user_id,
+            'invited_by' => $owner->user_id,
+            'staff_position' => 'Manager',
+            'staff_status' => 'active',
+            'invited_at' => now(),
+            'responded_at' => now(),
+        ]);
+
+        $orderRootId = $this->seedOrderForRestaurant($brand['root_id'], $customer->user_id);
+        $orderBId = $this->seedOrderForRestaurant($brand['branch_b_id'], $customer->user_id);
+        $this->seedPublishedMenuItem($brand['branch_b_id'], 'BGC Default Dish');
+
+        // Staff assigned ONLY to Branch B, sending neither restaurant_id nor X-Restaurant-Id,
+        // defaults to Branch B (not root, not 403).
+        $ordersRes = $this->actingAs($staff)
+            ->getJson('/api/restaurant/orders')
+            ->assertOk();
+
+        $returnedOrderIds = array_map(
+            static fn (array $o): int => (int) $o['order_id'],
+            (array) $ordersRes->json('data.orders', []),
+        );
+        $this->assertContains($orderBId, $returnedOrderIds);
+        $this->assertNotContains($orderRootId, $returnedOrderIds);
+
+        $this->actingAs($staff)
+            ->getJson('/api/restaurant/inventory/config')
+            ->assertOk();
+
+        $this->actingAs($staff)
+            ->postJson('/api/restaurant/menu/publish')
+            ->assertOk();
+
+        $branchBAfterPublish = DB::table('restaurants')->where('restaurant_id', $brand['branch_b_id'])->first();
+        $this->assertSame(1, (int) $branchBAfterPublish->is_published);
+    }
+
+    public function test_owner_profile_propagation_is_limited_to_brand_assets_and_leaves_branch_ops_isolated(): void
+    {
+        $owner = $this->createUser('propown');
+        $admin = $this->createUser('propadmin', 'admin');
+        $brand = $this->createBrandWithTwoActiveBranches($owner, 'Prop Kitchen');
+
+        // Ensure Metro Manila / Quezon City platform service area exists (ignore 422 if already seeded in salo_test).
+        $areaRes = $this->actingAs($admin)->postJson('/api/admin/service-areas', [
+            'province' => 'Metro Manila',
+            'city' => 'Quezon City',
+            'barangay' => null,
+            'is_active' => true,
+        ]);
+        $this->assertTrue(in_array($areaRes->status(), [201, 422], true));
+
+        // Update Main Branch profile (description + contact_phone + offers_delivery).
+        $this->actingAs($owner)
+            ->patchJson('/api/restaurant/profile', [
+                'restaurant_id' => $brand['root_id'],
+                'description' => 'Updated Shared Brand Description',
+                'contact_phone' => '09179990001',
+                'business_email' => 'main_updated@example.com',
+                'offers_delivery' => false,
+                'offers_pickup' => true,
+            ])
+            ->assertOk();
+
+        // Update Main Branch accepting_orders toggle.
+        $this->actingAs($owner)
+            ->patchJson('/api/restaurant/accepting-status', [
+                'restaurant_id' => $brand['root_id'],
+                'accepting_orders' => false,
+            ])
+            ->assertOk();
+
+        // Update Main Branch operating hours (close Monday = day 1).
+        $hoursPayload = [];
+        for ($d = 0; $d <= 6; $d++) {
+            $hoursPayload[] = [
+                'day_of_week' => $d,
+                'opening_time' => $d === 1 ? null : '09:00',
+                'closing_time' => $d === 1 ? null : '21:00',
+                'is_closed' => $d === 1,
+            ];
+        }
+        $this->actingAs($owner)
+            ->putJson('/api/restaurant/operating-hours', [
+                'restaurant_id' => $brand['root_id'],
+                'operating_hours' => $hoursPayload,
+            ])
+            ->assertOk();
+
+        // Update Main Branch delivery coverage.
+        $this->actingAs($owner)
+            ->putJson('/api/restaurant/coverage', [
+                'restaurant_id' => $brand['root_id'],
+                'areas' => [['province' => 'Metro Manila', 'city' => 'Quezon City']],
+            ])
+            ->assertOk();
+
+        $rootAfter = DB::table('restaurants')->where('restaurant_id', $brand['root_id'])->first();
+        $branchBAfter = DB::table('restaurants')->where('restaurant_id', $brand['branch_b_id'])->first();
+
+        // Shared brand description propagated:
+        $this->assertSame('Updated Shared Brand Description', $rootAfter->description);
+        $this->assertSame('Updated Shared Brand Description', $branchBAfter->description);
+
+        // Branch-level operational fields did NOT change on Branch B:
+        $this->assertSame('09171110002', $branchBAfter->contact_phone);
+        $this->assertSame(1, (int) $branchBAfter->offers_delivery);
+        $this->assertSame(1, (int) $branchBAfter->accepting_orders);
+
+        $branchBMonday = DB::table('operating_hours')
+            ->where('restaurant_id', $brand['branch_b_id'])
+            ->where('day_of_week', 1)
+            ->first();
+        $this->assertSame(0, (int) $branchBMonday->is_closed);
+
+        $branchBCoverageCount = DB::table('service_areas')
+            ->where('restaurant_id', $brand['branch_b_id'])
+            ->count();
+        $this->assertSame(0, $branchBCoverageCount);
+    }
+
+    public function test_shared_logo_and_cover_replacement_preserves_file_when_another_branch_still_references_it(): void
+    {
+        Storage::fake('public');
+        Config::set('salo.uploads.public_image_driver', 'local');
+
+        $owner = $this->createUser('mediaown');
+        $brand = $this->createBrandWithTwoActiveBranches($owner, 'Media Brand');
+
+        $logo1 = UploadedFile::fake()->image('logo1.png', 200, 200);
+        $cover1 = UploadedFile::fake()->image('cover1.jpg', 800, 400);
+
+        $this->actingAs($owner)
+            ->post('/api/restaurant/profile/media', [
+                'restaurant_id' => $brand['root_id'],
+                'logo_image' => $logo1,
+                'cover_image' => $cover1,
+            ], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $rootMedia = DB::table('restaurants')->where('restaurant_id', $brand['root_id'])->first();
+        $logo1Path = (string) $rootMedia->logo_image;
+        $cover1Path = (string) $rootMedia->cover_image;
+        $this->assertNotEmpty($logo1Path);
+        $this->assertNotEmpty($cover1Path);
+        Storage::disk('public')->assertExists(ltrim(str_replace('/storage/', '', $logo1Path), '/'));
+        Storage::disk('public')->assertExists(ltrim(str_replace('/storage/', '', $cover1Path), '/'));
+
+        // Both branches now share logo1 & cover1.
+        $branchB = DB::table('restaurants')->where('restaurant_id', $brand['branch_b_id'])->first();
+        $this->assertSame($logo1Path, $branchB->logo_image);
+        $this->assertSame($cover1Path, $branchB->cover_image);
+
+        // Simulate a sibling/other branch still referencing logo1Path & cover1Path
+        // (e.g. if a branch had a separate path or snapshot) while Main Branch removes its media:
+        $otherRootId = app(RestaurantBranchService::class)->createRootRestaurant([
+            'restaurant_name' => 'Other Ref Brand',
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'sole_proprietorship',
+            'contact_phone' => '09171119999',
+            'business_email' => 'otherref_'.random_int(100, 999).'@example.com',
+            'address_id' => $this->createAddress('Diliman', '99 Ref St'),
+            'logo_image' => $logo1Path,
+            'cover_image' => $cover1Path,
+            'restaurant_status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->assertGreaterThan(0, $otherRootId);
+
+        $this->actingAs($owner)
+            ->post('/api/restaurant/profile/media', [
+                'restaurant_id' => $brand['root_id'],
+                'remove_logo' => true,
+                'remove_cover' => true,
+            ], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        // Because another row still references logo1Path / cover1Path, files must NOT be deleted!
+        Storage::disk('public')->assertExists(ltrim(str_replace('/storage/', '', $logo1Path), '/'));
+        Storage::disk('public')->assertExists(ltrim(str_replace('/storage/', '', $cover1Path), '/'));
     }
 }

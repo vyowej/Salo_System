@@ -1629,4 +1629,181 @@
     height: 48px;
     font-size: 20px;
   }
+  .wizard-branches-toggle-group,
+  .wizard-branch-card-meta-grid {
+    grid-template-columns: 1fr;
+  }
+  .wizard-branches-list-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* ============================================================
+   STEP 5: Multi-Branch Locations
+   ============================================================ */
+
+.wizard-branches-section {
+  display: grid;
+  gap: var(--space-4, 16px);
+  margin-top: var(--space-2, 8px);
+}
+
+.wizard-branches-question-card {
+  display: grid;
+  gap: var(--space-3, 12px);
+  padding: var(--space-4, 16px);
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--border-secondary, #e5e7eb);
+  background: var(--surface-secondary, #f8f9fa);
+}
+
+.wizard-branches-title {
+  margin: 0;
+  font-size: var(--font-size-base, 15px);
+  font-weight: 700;
+  color: var(--text-primary, #171717);
+}
+
+.wizard-branches-subtitle {
+  margin: 0;
+  font-size: var(--text-sm, 14px);
+  font-weight: 700;
+  color: var(--text-primary, #171717);
+}
+
+.wizard-branches-hint {
+  margin: 4px 0 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary, #525252);
+}
+
+.wizard-branches-toggle-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3, 12px);
+}
+
+.wizard-branch-choice {
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-primary, #d4d4d4);
+  background: var(--surface-primary, #ffffff);
+  color: var(--text-primary, #171717);
+  font-size: var(--text-sm, 14px);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.wizard-branch-choice.is-active {
+  border-color: var(--salo-orange, #f36b2b);
+  background: var(--salo-orange-light, #fff5f0);
+  color: var(--salo-orange-dark, #c2410c);
+}
+
+.wizard-branch-confirm-banner {
+  display: grid;
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 12px);
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid rgba(217, 119, 6, 0.35);
+  background: var(--status-warning-bg, #fffbeb);
+  color: var(--status-warning-text, #92400e);
+  font-size: var(--text-xs, 12px);
+}
+
+.wizard-branch-confirm-banner p {
+  margin: 0;
+}
+
+.wizard-branch-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+}
+
+.wizard-branches-body {
+  display: grid;
+  gap: var(--space-4, 16px);
+}
+
+.wizard-branches-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+}
+
+.wizard-branches-empty {
+  padding: var(--space-4, 16px);
+  border-radius: var(--radius-md, 10px);
+  border: 1px dashed var(--border-primary, #d4d4d4);
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary, #525252);
+  text-align: center;
+}
+
+.wizard-branches-cards {
+  display: grid;
+  gap: var(--space-4, 16px);
+}
+
+.wizard-branch-card {
+  display: grid;
+  gap: var(--space-3, 12px);
+  padding: var(--space-4, 16px);
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--border-secondary, #e5e7eb);
+  background: var(--surface-primary, #ffffff);
+}
+
+.wizard-branch-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wizard-branch-card-badge {
+  font-size: var(--text-xs, 12px);
+  font-weight: 700;
+  color: var(--salo-orange, #f36b2b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.wizard-branch-card-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3, 12px);
+}
+
+.review-branches-list {
+  display: grid;
+  gap: var(--space-2, 8px);
+  margin-top: 4px;
+}
+
+.review-branch-row {
+  padding: var(--space-3, 12px);
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-secondary, #e5e7eb);
+  background: var(--surface-secondary, #f8f9fa);
+}
+
+.review-branch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+  font-size: var(--text-sm, 14px);
+}
+
+.review-branch-meta {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary, #525252);
 }

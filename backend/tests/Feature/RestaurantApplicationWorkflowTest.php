@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -111,7 +112,10 @@ class RestaurantApplicationWorkflowTest extends TestCase
 
         $submitResponse->assertStatus(201)
             ->assertJsonPath('data.application.application_status', 'submitted')
-            ->assertJsonPath('data.application.restaurant_name', 'Kusina ni Elena');
+            ->assertJsonPath('data.application.restaurant_name', 'Kusina ni Elena')
+            ->assertJsonPath('data.application.has_branches', false)
+            ->assertJsonPath('data.application.main_branch_name', null)
+            ->assertJsonPath('data.application.branches', []);
 
         $appId = $submitResponse->json('data.application.restaurant_application_id');
         $docId = $submitResponse->json('data.application.documents.0.document_id');
@@ -162,5 +166,196 @@ class RestaurantApplicationWorkflowTest extends TestCase
         $this->actingAs($owner)->getJson('/api/auth/me')
             ->assertOk()
             ->assertJsonFragment(['owner']);
+    }
+
+    public function test_multi_branch_submission_validation_persistence_and_applicant_read_isolation(): void
+    {
+        Mail::fake();
+
+        $owner = User::create([
+            'username' => 'mb_app_owner_'.random_int(1000, 9999),
+            'first_name' => 'Marco',
+            'last_name' => 'Reyes',
+            'email' => 'marco.mb@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'active',
+        ]);
+
+        $otherUser = User::create([
+            'username' => 'mb_other_'.random_int(1000, 9999),
+            'first_name' => 'Other',
+            'last_name' => 'User',
+            'email' => 'other.mb@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'active',
+        ]);
+
+        // Verify OTP
+        $this->actingAs($owner)->postJson('/api/otp/send', [
+            'email' => 'marco.mb@example.com',
+            'purpose' => 'restaurant_application',
+        ])->assertOk();
+
+        $otp = null;
+        Mail::assertSent(EmailOtpMail::class, function (EmailOtpMail $mail) use (&$otp) {
+            $otp = $mail->otpCode;
+
+            return true;
+        });
+
+        $this->actingAs($owner)->postJson('/api/otp/verify', [
+            'email' => 'marco.mb@example.com',
+            'purpose' => 'restaurant_application',
+            'code' => $otp,
+        ])->assertOk();
+
+        $basePayload = [
+            'restaurant_name' => 'Marco Multi-Branch Grill',
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'sole_proprietorship',
+            'business_phone' => '09171001000',
+            'business_email' => 'marco.mb@example.com',
+            'applicant_position' => 'business_owner',
+            'legal_first_name' => 'Marco',
+            'legal_last_name' => 'Reyes',
+            'date_of_birth' => '1988-06-10',
+            'contact_phone' => '09171001000',
+            'contact_email' => 'marco.mb@example.com',
+            'province' => 'Metro Manila',
+            'city' => 'Quezon City',
+            'barangay' => 'Diliman',
+            'street' => '10 Katipunan Ave',
+            'offers_delivery' => true,
+            'offers_pickup' => true,
+            'offers_dine_in' => true,
+            'payout_provider' => 'BDO',
+            'payout_account_type' => 'savings',
+            'payout_account_holder_name' => 'Marco Reyes',
+            'payout_account_number' => '9876543210',
+            'terms_accepted' => true,
+        ];
+
+        $docs = fn (): array => [
+            'dti_certificate' => UploadedFile::fake()->createWithContent('dti.pdf', "%PDF-1.4\n%SALO-TEST-PDF\n"),
+        ];
+
+        // 1. has_branches=true without main_branch_name -> 422
+        $this->actingAs($owner)->post('/api/restaurant/applications', array_merge($basePayload, [
+            'has_branches' => true,
+            'main_branch_name' => '',
+            'documents' => $docs(),
+        ]), ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['main_branch_name']);
+
+        // 2. Duplicate branch names (case-insensitive vs main_branch_name) -> 422
+        $this->actingAs($owner)->post('/api/restaurant/applications', array_merge($basePayload, [
+            'has_branches' => true,
+            'main_branch_name' => 'Katipunan Main',
+            'branches' => [[
+                'branch_name' => '  katipunan main  ',
+                'province' => 'Metro Manila',
+                'city' => 'Quezon City',
+                'barangay' => 'Loyola Heights',
+            ]],
+            'documents' => $docs(),
+        ]), ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['branches.0.branch_name']);
+
+        // 3. Over limit (> 4 additional branches when max_application_branches = 5) -> 422
+        $fiveExtra = [];
+        for ($i = 1; $i <= 5; $i++) {
+            $fiveExtra[] = [
+                'branch_name' => "Branch #{$i}",
+                'province' => 'Metro Manila',
+                'city' => 'Quezon City',
+                'barangay' => 'Diliman',
+            ];
+        }
+        $this->actingAs($owner)->post('/api/restaurant/applications', array_merge($basePayload, [
+            'has_branches' => true,
+            'main_branch_name' => 'Katipunan Main',
+            'branches' => $fiveExtra,
+            'documents' => $docs(),
+        ]), ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['branches']);
+
+        // 4. Invalid branch address (invalid postal_code and missing city) -> 422
+        $this->actingAs($owner)->post('/api/restaurant/applications', array_merge($basePayload, [
+            'has_branches' => true,
+            'main_branch_name' => 'Katipunan Main',
+            'branches' => [[
+                'branch_name' => 'BGC Branch',
+                'province' => 'Metro Manila',
+                'city' => '',
+                'barangay' => 'Diliman',
+                'postal_code' => '12A',
+            ]],
+            'documents' => $docs(),
+        ]), ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['branches.0.city', 'branches.0.postal_code']);
+
+        // 5. Valid submission with has_branches and 2 additional branches
+        $validRes = $this->actingAs($owner)->post('/api/restaurant/applications', array_merge($basePayload, [
+            'has_branches' => true,
+            'main_branch_name' => 'Katipunan Main',
+            'branches' => [
+                [
+                    'branch_name' => 'SM North EDSA',
+                    'contact_phone' => '09172002001',
+                    'province' => 'Metro Manila',
+                    'city' => 'Quezon City',
+                    'barangay' => 'Diliman',
+                    'street' => 'North Ave',
+                    'postal_code' => '1100',
+                    'latitude' => 14.6565,
+                    'longitude' => 121.0305,
+                ],
+                [
+                    'branch_name' => 'Loyola Heights Branch',
+                    'province' => 'Metro Manila',
+                    'city' => 'Quezon City',
+                    'barangay' => 'Loyola Heights',
+                    'street' => 'Esteban Abada St',
+                ],
+            ],
+            'documents' => $docs(),
+        ]), ['Accept' => 'application/json']);
+
+        $validRes->assertStatus(201)
+            ->assertJsonPath('data.application.has_branches', true)
+            ->assertJsonPath('data.application.main_branch_name', 'Katipunan Main')
+            ->assertJsonCount(2, 'data.application.branches')
+            ->assertJsonPath('data.application.branches.0.branch_name', 'SM North EDSA')
+            ->assertJsonPath('data.application.branches.0.contact_phone', '09172002001')
+            ->assertJsonPath('data.application.branches.0.address.street', 'North Ave')
+            ->assertJsonPath('data.application.branches.1.branch_name', 'Loyola Heights Branch')
+            ->assertJsonPath('data.application.branches.1.contact_phone', null);
+
+        $appId = (int) $validRes->json('data.application.restaurant_application_id');
+        $rootRestId = (int) $validRes->json('data.application.restaurant_id');
+
+        $rootRow = DB::table('restaurants')->where('restaurant_id', $rootRestId)->first();
+        $this->assertSame('Katipunan Main', $rootRow->branch_name);
+        $this->assertSame($rootRestId, (int) $rootRow->brand_restaurant_id);
+        $this->assertSame(2, DB::table('restaurant_application_branches')->where('restaurant_application_id', $appId)->count());
+
+        // Applicant read path returns branches; another user cannot view applicant's branches
+        $this->actingAs($owner)->getJson('/api/restaurant/applications/current')
+            ->assertOk()
+            ->assertJsonPath('data.application.main_branch_name', 'Katipunan Main')
+            ->assertJsonCount(2, 'data.application.branches');
+
+        $this->actingAs($otherUser)->getJson('/api/restaurant/applications/current')
+            ->assertOk()
+            ->assertJsonPath('data.application', null);
+
+        $this->actingAs($otherUser)->getJson("/api/admin/applications/restaurant/{$appId}")
+            ->assertStatus(403);
     }
 }

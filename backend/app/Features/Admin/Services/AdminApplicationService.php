@@ -8,6 +8,7 @@ use App\Features\Riders\Services\RiderApplicationService;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use App\Support\RestaurantBranchService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -456,6 +457,16 @@ class AdminApplicationService
                             'approval_status' => 'approved',
                             'updated_at' => $now,
                         ]);
+
+                    $this->materializeApprovedApplicationBranches(
+                        applicationId: $applicationId,
+                        rootRestaurantId: (int) $app->restaurant_id,
+                        referenceNumber: (string) $app->reference_number,
+                        cleanNote: $cleanNote,
+                        admin: $admin,
+                        request: $request,
+                        now: $now,
+                    );
                 } elseif ($nextStatus === 'rejected') {
                     DB::table('restaurants')->where('restaurant_id', $app->restaurant_id)->update([
                         'restaurant_status' => 'rejected',
@@ -492,6 +503,95 @@ class AdminApplicationService
         });
 
         return $this->getApplicationDetail($type, $applicationId);
+    }
+
+    private function materializeApprovedApplicationBranches(
+        int $applicationId,
+        int $rootRestaurantId,
+        string $referenceNumber,
+        ?string $cleanNote,
+        User $admin,
+        Request $request,
+        mixed $now,
+    ): void {
+        $appBranches = DB::table('restaurant_application_branches')
+            ->where('restaurant_application_id', $applicationId)
+            ->orderBy('sort_order')
+            ->orderBy('application_branch_id')
+            ->get();
+
+        if ($appBranches->isEmpty()) {
+            return;
+        }
+
+        $root = DB::table('restaurants')->where('restaurant_id', $rootRestaurantId)->first();
+        abort_unless($root !== null, 404, 'Root restaurant not found for branch materialization.');
+
+        $branchService = app(RestaurantBranchService::class);
+        $brandId = (int) ($root->brand_restaurant_id ?: $root->restaurant_id);
+
+        foreach ($appBranches as $appBranch) {
+            $contactPhone = $appBranch->contact_phone !== null && trim((string) $appBranch->contact_phone) !== ''
+                ? trim((string) $appBranch->contact_phone)
+                : $root->contact_phone;
+
+            $childRestaurantId = $branchService->createChildBranch($rootRestaurantId, [
+                'restaurant_name' => $root->restaurant_name,
+                'registered_name' => $root->registered_name,
+                'branch_name' => $appBranch->branch_name,
+                'business_type' => $root->business_type,
+                'ownership_structure' => $root->ownership_structure,
+                'description' => $root->description,
+                'contact_phone' => $contactPhone,
+                'business_email' => $root->business_email,
+                'address_id' => (int) $appBranch->address_id,
+                'logo_image' => $root->logo_image,
+                'cover_image' => $root->cover_image,
+                'delivery_radius' => $root->delivery_radius,
+                'offers_delivery' => (int) $root->offers_delivery,
+                'offers_pickup' => (int) $root->offers_pickup,
+                'offers_dine_in' => (int) $root->offers_dine_in,
+                'accepts_reservations' => (int) $root->accepts_reservations,
+                'accepting_orders' => (int) $root->accepting_orders,
+                'accepting_reservations' => (int) $root->accepting_reservations,
+                'inventory_deduction_mode' => $root->inventory_deduction_mode,
+                'reservation_min_notice_hours' => $root->reservation_min_notice_hours,
+                'reservation_max_party_size' => $root->reservation_max_party_size,
+                'reservation_notes' => $root->reservation_notes,
+                'restaurant_status' => 'active',
+                'is_published' => 0,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            $branchService->copyCategoriesAndHoursFromRoot($rootRestaurantId, $childRestaurantId, $now);
+            $branchService->cloneMenuAsUnpublishedApproved($rootRestaurantId, $childRestaurantId, $now);
+
+            DB::table('restaurant_application_branches')
+                ->where('application_branch_id', $appBranch->application_branch_id)
+                ->update([
+                    'created_branch_restaurant_id' => $childRestaurantId,
+                    'updated_at' => $now,
+                ]);
+
+            $this->auditLogService->record(
+                actorUserId: (int) $admin->user_id,
+                action: 'restaurant_branch_created',
+                entityType: 'restaurants',
+                entityId: $childRestaurantId,
+                newValues: [
+                    'restaurant_id' => $childRestaurantId,
+                    'parent_restaurant_id' => $rootRestaurantId,
+                    'brand_restaurant_id' => $brandId,
+                    'branch_name' => $appBranch->branch_name,
+                    'restaurant_application_id' => $applicationId,
+                    'restaurant_status' => 'active',
+                    'is_published' => false,
+                ],
+                reason: $cleanNote ?? "Branch created on approval of application {$referenceNumber}",
+                request: $request,
+            );
+        }
     }
 
     private function notifyApplicantForDecision(

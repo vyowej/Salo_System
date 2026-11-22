@@ -21,6 +21,7 @@ use App\Features\Media\Controllers\PublicImageProxyController;
 use App\Features\Notifications\Controllers\NotificationController;
 use App\Features\Orders\Controllers\CustomerOrderController;
 use App\Features\Orders\Controllers\RestaurantOrderController;
+use App\Features\Restaurants\Controllers\OwnerBranchController;
 use App\Features\Restaurants\Controllers\OwnerInventoryController;
 use App\Features\Restaurants\Controllers\OwnerMenuController;
 use App\Features\Restaurants\Controllers\OwnerMenuPublishController;
@@ -208,9 +209,13 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::get('/staff', [StaffInvitationController::class, 'index']);
         Route::post('/staff/invitations', [StaffInvitationController::class, 'storeInvitation'])->middleware('throttle:20,1');
         Route::post('/staff/invitations/{id}/cancel', [StaffInvitationController::class, 'cancelInvitation'])->whereNumber('id');
+
+        Route::post('/branches', [OwnerBranchController::class, 'store']);
     });
 
     Route::middleware('role:owner,staff')->group(function (): void {
+        Route::get('/branches', [OwnerBranchController::class, 'index']);
+
         Route::get('/menu/publish-status', [OwnerMenuPublishController::class, 'status']);
         Route::get('/menu/preview', [OwnerMenuPublishController::class, 'preview']);
         Route::post('/menu/publish', [OwnerMenuPublishController::class, 'publish'])->middleware('throttle:20,1');

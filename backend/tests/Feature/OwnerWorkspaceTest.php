@@ -66,6 +66,19 @@ class OwnerWorkspaceTest extends TestCase
             'joined_at' => now(),
         ]);
 
+        $cityId = DB::table('addresses as a')
+            ->join('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
+            ->where('a.address_id', $addressId)
+            ->value('b.city_id');
+        if ($cityId !== null) {
+            DB::table('service_areas')->insert([
+                'restaurant_id' => $restaurantId,
+                'city_id' => (int) $cityId,
+                'barangay_id' => null,
+                'created_at' => now(),
+            ]);
+        }
+
         return $restaurantId;
     }
 

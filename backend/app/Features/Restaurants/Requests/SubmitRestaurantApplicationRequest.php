@@ -5,6 +5,7 @@ namespace App\Features\Restaurants\Requests;
 use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class SubmitRestaurantApplicationRequest extends FormRequest
 {
@@ -38,6 +39,8 @@ class SubmitRestaurantApplicationRequest extends FormRequest
         $docMimes = implode(',', (array) config('salo.uploads.allowed_document_types', ['pdf', 'jpg', 'jpeg', 'png']));
         $imgMimes = implode(',', (array) config('salo.uploads.allowed_image_types', ['jpg', 'jpeg', 'png', 'webp']));
         $minAdultDob = Carbon::now('Asia/Manila')->subYears(18)->format('Y-m-d');
+        $maxTotalBranches = max(1, (int) config('salo.restaurants.max_application_branches', 5));
+        $maxAdditionalBranches = max(0, $maxTotalBranches - 1);
 
         return [
             'restaurant_name' => ['required', 'string', 'max:200'],
@@ -103,7 +106,64 @@ class SubmitRestaurantApplicationRequest extends FormRequest
 
             'documents' => ['required', 'array', 'min:1'],
             'documents.*' => ['file', "mimes:{$docMimes}", "max:{$maxKb}"],
+
+            'has_branches' => ['nullable', 'boolean'],
+            'main_branch_name' => ['nullable', 'string', 'max:150'],
+            'branches' => ['nullable', 'array', "max:{$maxAdditionalBranches}"],
+            'branches.*.branch_name' => ['required', 'string', 'max:150'],
+            'branches.*.contact_phone' => ['nullable', 'string', 'max:30'],
+            'branches.*.province' => ['required', 'string', 'max:100'],
+            'branches.*.city' => ['required', 'string', 'max:100'],
+            'branches.*.barangay' => ['required', 'string', 'max:100'],
+            'branches.*.street' => ['nullable', 'string', 'max:255'],
+            'branches.*.house_number' => ['nullable', 'string', 'max:50'],
+            'branches.*.building_name' => ['nullable', 'string', 'max:150'],
+            'branches.*.landmark' => ['nullable', 'string', 'max:500'],
+            'branches.*.postal_code' => ['nullable', 'string', 'regex:/^[0-9]{4}$/'],
+            'branches.*.latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'branches.*.longitude' => ['nullable', 'numeric', 'between:-180,180'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $hasBranches = filter_var($this->input('has_branches', false), FILTER_VALIDATE_BOOLEAN);
+            $branches = $this->input('branches');
+            $hasBranchRows = is_array($branches) && count($branches) > 0;
+
+            if (! $hasBranches && ! $hasBranchRows) {
+                return;
+            }
+
+            $mainName = trim((string) $this->input('main_branch_name', ''));
+            if ($mainName === '') {
+                $validator->errors()->add('main_branch_name', 'The main branch name field is required when the business has branches.');
+            }
+
+            $seen = [];
+            if ($mainName !== '') {
+                $seen[mb_strtolower($mainName)] = true;
+            }
+
+            if (is_array($branches)) {
+                foreach ($branches as $idx => $branch) {
+                    if (! is_array($branch)) {
+                        continue;
+                    }
+                    $bName = trim((string) ($branch['branch_name'] ?? ''));
+                    if ($bName === '') {
+                        continue;
+                    }
+                    $key = mb_strtolower($bName);
+                    if (isset($seen[$key])) {
+                        $validator->errors()->add("branches.{$idx}.branch_name", "Duplicate branch name \"{$bName}\". Branch names must be unique within the application.");
+                    } else {
+                        $seen[$key] = true;
+                    }
+                }
+            }
+        });
     }
 
     /**

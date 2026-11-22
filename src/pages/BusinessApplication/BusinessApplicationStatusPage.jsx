@@ -27,6 +27,10 @@ export default function BusinessApplicationStatusPage() {
             reviewerNote: app.reviewer_note,
             logoImage: app.logo_image || null,
             coverImage: app.cover_image || null,
+            hasBranches: Boolean(app.has_branches),
+            mainBranchName: app.main_branch_name || null,
+            address: app.address || null,
+            branches: app.branches || [],
             menuItems: app.menu_items || [],
             requestedDocuments: (app.document_requests || []).map((req) => ({
               id: req.request_id,
@@ -99,6 +103,10 @@ export default function BusinessApplicationStatusPage() {
                   reviewerNote: updatedApp.reviewer_note,
                   logoImage: updatedApp.logo_image || null,
                   coverImage: updatedApp.cover_image || null,
+                  hasBranches: Boolean(updatedApp.has_branches),
+                  mainBranchName: updatedApp.main_branch_name || null,
+                  address: updatedApp.address || null,
+                  branches: updatedApp.branches || [],
                   menuItems: updatedApp.menu_items || [],
                   requestedDocuments: (updatedApp.document_requests || []).map((req) => ({
                     id: req.request_id,
