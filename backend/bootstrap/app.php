@@ -51,6 +51,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
+            if ($e instanceof \App\Features\Reservations\Support\ReservationBookingException) {
+                return $e->toResponse();
+            }
+
             if ($e instanceof ValidationException) {
                 return ApiResponse::error(
                     message: 'The given data was invalid.',

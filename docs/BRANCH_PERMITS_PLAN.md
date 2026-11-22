@@ -236,3 +236,11 @@ Permit-1 schema and integrity checks are implemented on `salo_test` only (`salo_
 | `rejected` | `200` | `200` | `409` | `409` | `200` (or `422`) | `409` |
 | `approved` | `409` | `409` | `200` (unpublishes) | `200` (unpublishes) | `409` | `200` (unpublishes) |
 | `waived` | `409` | `409` | `200` (unpublishes) | `200` (unpublishes) | `409` | `200` (unpublishes) |
+
+## Permit-3 implemented (salo_test only)
+- Updated `BranchPermitService` with SHA-256 content-hash identical-retry comparison (`isIdenticalPermitSubmission`), `submitOrUpdateForApplicationBranch()`, and `streamApplicationBranchPermitFile()` sharing `persistPermitSubmission()`.
+- Updated `SubmitRestaurantApplicationRequest` and `RestaurantApplicationService` so `POST /api/restaurant/applications` accepts `branches.*.permit_required_locally` / `branches.*.permit_exemption_reason` and inserts `branch_permits` rows (`restaurant_id = NULL`) in the same transaction; `GET /api/restaurant/applications/current` and detail expose `permit_id`, `permit_status`, `is_required_locally`, `exemption_reason`, `review_note`, and `has_file` (never `file_path`).
+- Added `POST /api/restaurant/applications/{id}/branches/{branchId}/permit` and `GET /api/restaurant/applications/{id}/branches/{branchId}/permit/file` in `RestaurantApplicationController` and `routes/api.php`.
+- Updated `RestaurantBranchService::createChildBranch()` and `AdminApplicationService` Phase 3a materialization to reuse the existing `branch_permits` row by setting `restaurant_id` without creating duplicate rows.
+- Extended `salo:check-branch-integrity` with `app_branch_duplicate_permit`, `approved_app_branch_missing_restaurant_id`, and strict `permit_app_branch_mismatch` checks.
+- Added `BranchPermitsApplicationFlowTest.php` covering two-step application submission, per-branch upload/retry/content-hash/rollback isolation, applicant read/file endpoints, pre-materialization admin review, materialization reuse, and post-approval endpoint handoff.

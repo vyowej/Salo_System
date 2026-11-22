@@ -288,25 +288,200 @@ class BranchPermitService
         }
 
         $brandId = (int) ($restaurant->brand_restaurant_id ?: $restaurant->parent_restaurant_id);
+        $branchLabel = $restaurant->branch_name
+            ? "{$restaurant->restaurant_name} — {$restaurant->branch_name}"
+            : (string) $restaurant->restaurant_name;
+
+        return $this->persistPermitSubmission(
+            actor: $owner,
+            storageDirectory: "branch-permits/{$brandId}",
+            branchLabel: $branchLabel,
+            file: $file,
+            isRequiredLocally: $isRequiredLocally,
+            exemptionReason: $exemptionReason,
+            lockPermitQuery: fn (): ?object => DB::table('branch_permits')
+                ->where('restaurant_id', $restaurantId)
+                ->lockForUpdate()
+                ->first(),
+            auditContext: ['restaurant_id' => $restaurantId],
+            request: $request,
+        );
+    }
+
+    /**
+     * Applicant uploads or updates permit/exemption for an unmaterialized application branch.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    public function submitOrUpdateForApplicationBranch(
+        User $applicant,
+        int $applicationId,
+        int $applicationBranchId,
+        ?UploadedFile $file,
+        array $validated,
+        Request $request,
+    ): array {
+        $app = DB::table('restaurant_applications as ra')
+            ->join('restaurants as r', 'r.restaurant_id', '=', 'ra.restaurant_id')
+            ->where('ra.restaurant_application_id', $applicationId)
+            ->first([
+                'ra.restaurant_application_id',
+                'ra.applicant_user_id',
+                'ra.application_status',
+                'r.restaurant_name',
+            ]);
+
+        abort_unless($app !== null, 404, 'Restaurant application not found.');
+        if ((int) $app->applicant_user_id !== (int) $applicant->user_id) {
+            abort(403, 'Forbidden: only the application owner may manage branch permits for this application.');
+        }
+
+        $appBranch = DB::table('restaurant_application_branches')
+            ->where('application_branch_id', $applicationBranchId)
+            ->where('restaurant_application_id', $applicationId)
+            ->first(['application_branch_id', 'branch_name', 'created_branch_restaurant_id']);
+
+        abort_unless($appBranch !== null, 404, 'Application branch not found.');
+
+        if ((string) $app->application_status === 'approved' || $appBranch->created_branch_restaurant_id !== null) {
+            $branchId = (int) $appBranch->created_branch_restaurant_id;
+            throw new ConflictHttpException(
+                "Application is already approved; manage this branch permit via POST /api/restaurant/branches/{$branchId}/permit."
+            );
+        }
+
+        if (in_array((string) $app->application_status, ['rejected', 'withdrawn'], true)) {
+            throw new ConflictHttpException(
+                "Cannot update branch permit for a {$app->application_status} application."
+            );
+        }
+
+        $hasIsRequired = array_key_exists('is_required_locally', $validated) && $validated['is_required_locally'] !== null;
+        $isRequiredLocally = $hasIsRequired
+            ? filter_var($validated['is_required_locally'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true
+            : true;
+        $exemptionReason = isset($validated['exemption_reason']) ? trim((string) $validated['exemption_reason']) : '';
+
+        if ($file === null && $isRequiredLocally) {
+            throw ValidationException::withMessages([
+                'mayors_permit' => ['Upload a Mayor\'s / Business Permit file or declare that a permit is not required locally.'],
+            ]);
+        }
+        if ($file !== null && ! $isRequiredLocally) {
+            throw ValidationException::withMessages([
+                'mayors_permit' => ['Do not upload a permit file when declaring that a permit is not required locally.'],
+            ]);
+        }
+        if (! $isRequiredLocally) {
+            $len = mb_strlen($exemptionReason);
+            if ($len < 10 || $len > 500) {
+                throw ValidationException::withMessages([
+                    'exemption_reason' => ['Please provide an explanation between 10 and 500 characters for why a local permit is not required.'],
+                ]);
+            }
+        }
+
+        $branchLabel = "{$app->restaurant_name} — {$appBranch->branch_name}";
+
+        return $this->persistPermitSubmission(
+            actor: $applicant,
+            storageDirectory: "branch-permits/app-{$applicationId}",
+            branchLabel: $branchLabel,
+            file: $file,
+            isRequiredLocally: $isRequiredLocally,
+            exemptionReason: $exemptionReason,
+            lockPermitQuery: fn (): ?object => DB::table('branch_permits')
+                ->where('application_branch_id', $applicationBranchId)
+                ->lockForUpdate()
+                ->first(),
+            auditContext: [
+                'restaurant_application_id' => $applicationId,
+                'application_branch_id' => $applicationBranchId,
+            ],
+            request: $request,
+        );
+    }
+
+    /**
+     * Stream an application branch's private permit file for the applicant only (404 when no file; 403 otherwise).
+     */
+    public function streamApplicationBranchPermitFile(User $user, int $applicationId, int $applicationBranchId): StreamedResponse
+    {
+        $app = DB::table('restaurant_applications')
+            ->where('restaurant_application_id', $applicationId)
+            ->first(['restaurant_application_id', 'applicant_user_id']);
+
+        abort_unless($app !== null, 404, 'Restaurant application not found.');
+
+        if ((int) $app->applicant_user_id !== (int) $user->user_id) {
+            abort(403, 'Forbidden: only the applicant may access this branch permit file.');
+        }
+
+        $appBranch = DB::table('restaurant_application_branches')
+            ->where('application_branch_id', $applicationBranchId)
+            ->where('restaurant_application_id', $applicationId)
+            ->first(['application_branch_id']);
+
+        abort_unless($appBranch !== null, 404, 'Application branch not found.');
+
+        $permit = DB::table('branch_permits')
+            ->where('application_branch_id', $applicationBranchId)
+            ->first(['file_path', 'original_filename', 'mime_type']);
+
+        if (! $permit || ! $permit->file_path) {
+            abort(404, 'Branch permit file not found.');
+        }
+
+        return $this->fileStorageService->streamPrivateFile(
+            path: (string) $permit->file_path,
+            downloadName: (string) ($permit->original_filename ?: 'branch-permit.pdf'),
+            mimeType: (string) ($permit->mime_type ?: 'application/pdf'),
+        );
+    }
+
+    /**
+     * Shared submission/re-upload/idempotency/audit/admin-notification routine for both
+     * owner branch permits and pre-approval application branch permits.
+     *
+     * @param  callable(): ?object  $lockPermitQuery
+     * @param  array<string, mixed>  $auditContext
+     * @return array<string, mixed>
+     */
+    private function persistPermitSubmission(
+        User $actor,
+        string $storageDirectory,
+        string $branchLabel,
+        ?UploadedFile $file,
+        bool $isRequiredLocally,
+        string $exemptionReason,
+        callable $lockPermitQuery,
+        array $auditContext,
+        Request $request,
+    ): array {
         $newlyStoredPath = null;
 
         try {
-            $stored = $file !== null ? $this->storePermitFile($file, $brandId, 'mayors_permit') : null;
+            $stored = $file !== null
+                ? $this->fileStorageService->storePrivateDocument(
+                    file: $file,
+                    directory: $storageDirectory,
+                    fieldName: 'mayors_permit',
+                )
+                : null;
             $newlyStoredPath = $stored['path'] ?? null;
 
             return DB::transaction(function () use (
-                $owner,
-                $restaurant,
-                $restaurantId,
+                $actor,
+                $branchLabel,
                 $isRequiredLocally,
                 $exemptionReason,
                 $stored,
+                $lockPermitQuery,
+                $auditContext,
                 $request,
             ): array {
-                $permit = DB::table('branch_permits')
-                    ->where('restaurant_id', $restaurantId)
-                    ->lockForUpdate()
-                    ->first();
+                $permit = $lockPermitQuery();
 
                 if (! $permit) {
                     throw new NotFoundHttpException('Branch permit record not found.');
@@ -314,24 +489,14 @@ class BranchPermitService
 
                 $currentStatus = (string) $permit->permit_status;
 
-                // Idempotent retry check when already pending_review with identical payload
-                if ($currentStatus === self::STATUS_PENDING_REVIEW) {
-                    $sameExemption = ! $isRequiredLocally
-                        && ! (bool) $permit->is_required_locally
-                        && (string) $permit->exemption_reason === $exemptionReason
-                        && $stored === null;
-                    $sameFile = $stored !== null
-                        && (bool) $permit->is_required_locally
-                        && (string) $permit->original_filename === (string) $stored['original_filename']
-                        && (int) $permit->file_size_bytes === (int) $stored['size_bytes'];
-
-                    if ($sameExemption || $sameFile) {
-                        if ($stored !== null && isset($stored['path'])) {
-                            Storage::disk('local')->delete((string) $stored['path']);
-                        }
-
-                        return $this->formatOwnerPermitSummary($permit);
+                if ($currentStatus === self::STATUS_PENDING_REVIEW
+                    && $this->isIdenticalPermitSubmission($permit, $isRequiredLocally, $exemptionReason, $stored)
+                ) {
+                    if ($stored !== null && isset($stored['path'])) {
+                        Storage::disk('local')->delete((string) $stored['path']);
                     }
+
+                    return $this->formatOwnerPermitSummary($permit);
                 }
 
                 if (! in_array($currentStatus, self::OWNER_REUPLOAD_ALLOWED_STATUSES, true)) {
@@ -355,7 +520,7 @@ class BranchPermitService
                     'exemption_reason' => $isRequiredLocally ? null : $exemptionReason,
                     'permit_status' => self::STATUS_PENDING_REVIEW,
                     'review_note' => null,
-                    'uploaded_by' => $owner->user_id,
+                    'uploaded_by' => $actor->user_id,
                     'uploaded_at' => $now,
                     'updated_at' => $now,
                 ];
@@ -377,27 +542,23 @@ class BranchPermitService
                     ->update($updatePayload);
 
                 $this->auditLogService->record(
-                    actorUserId: (int) $owner->user_id,
+                    actorUserId: (int) $actor->user_id,
                     action: 'branch_permit_submitted',
                     entityType: 'branch_permits',
                     entityId: (int) $permit->permit_id,
                     oldValues: $oldValues,
-                    newValues: [
-                        'restaurant_id' => $restaurantId,
+                    newValues: array_merge($auditContext, [
                         'permit_status' => self::STATUS_PENDING_REVIEW,
                         'is_required_locally' => $isRequiredLocally,
                         'exemption_reason' => $isRequiredLocally ? null : $exemptionReason,
                         'file_path' => $updatePayload['file_path'],
                         'original_filename' => $updatePayload['original_filename'],
-                    ],
+                    ]),
                     request: $request,
                 );
 
-                $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $owner->user_id);
+                $adminIds = $this->notificationService->resolveActiveAdminUserIds((int) $actor->user_id);
                 if ($adminIds !== []) {
-                    $branchLabel = $restaurant->branch_name
-                        ? "{$restaurant->restaurant_name} — {$restaurant->branch_name}"
-                        : $restaurant->restaurant_name;
                     $this->notificationService->notifyUsers(
                         userIds: $adminIds,
                         workspace: 'admin',
@@ -419,6 +580,37 @@ class BranchPermitService
             }
             throw $e;
         }
+    }
+
+    /**
+     * Identical-retry identity compares exemption text or SHA-256 content of stored vs uploaded bytes.
+     *
+     * @param  array<string, mixed>|null  $stored
+     */
+    private function isIdenticalPermitSubmission(
+        object $permit,
+        bool $isRequiredLocally,
+        string $exemptionReason,
+        ?array $stored,
+    ): bool {
+        if (! $isRequiredLocally) {
+            return ! (bool) $permit->is_required_locally
+                && (string) $permit->exemption_reason === $exemptionReason
+                && $stored === null;
+        }
+
+        if ($stored === null || ! (bool) $permit->is_required_locally || ! $permit->file_path) {
+            return false;
+        }
+
+        $existingPath = (string) $permit->file_path;
+        $newPath = (string) ($stored['path'] ?? '');
+        if ($newPath === '' || ! Storage::disk('local')->exists($existingPath) || ! Storage::disk('local')->exists($newPath)) {
+            return false;
+        }
+
+        return hash('sha256', (string) Storage::disk('local')->get($existingPath))
+            === hash('sha256', (string) Storage::disk('local')->get($newPath));
     }
 
     /**

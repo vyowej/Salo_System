@@ -57,7 +57,7 @@ test('addressService: toBackendAddressPayload normalizes frontend fields for /ap
 
 test('customerService: unbacked Category B collections return honest empty arrays', () => {
   assert.deepEqual(customerService.getOrders(), []);
-  assert.deepEqual(customerService.getReservations(), []);
+  assert.equal(typeof customerService.getReservations, 'function');
   assert.deepEqual(customerService.getFavoriteRestaurants(), []);
   assert.deepEqual(customerService.getNotifications(), []);
 });

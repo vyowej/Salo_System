@@ -562,7 +562,7 @@ class AdminApplicationService
                 'is_published' => 0,
                 'created_at' => $now,
                 'updated_at' => $now,
-            ]);
+            ], (int) $appBranch->application_branch_id);
 
             $branchService->copyCategoriesAndHoursFromRoot($rootRestaurantId, $childRestaurantId, $now);
             $branchService->cloneMenuAsUnpublishedApproved($rootRestaurantId, $childRestaurantId, $now);
@@ -571,13 +571,6 @@ class AdminApplicationService
                 ->where('application_branch_id', $appBranch->application_branch_id)
                 ->update([
                     'created_branch_restaurant_id' => $childRestaurantId,
-                    'updated_at' => $now,
-                ]);
-
-            DB::table('branch_permits')
-                ->where('restaurant_id', $childRestaurantId)
-                ->update([
-                    'application_branch_id' => $appBranch->application_branch_id,
                     'updated_at' => $now,
                 ]);
 

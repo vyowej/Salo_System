@@ -193,19 +193,26 @@ Public reservation availability engine (`Asia/Manila`):
 - `GET /api/restaurants/{id}/reservation-availability/tables?start=YYYY-MM-DDTHH:MM&party_size=N[&dining_area=...]` — returns best-fit `available_tables` for a specific slot, or `suggested_alternatives` when the slot is full.
 - Reason codes: `RESTAURANT_UNAVAILABLE`, `RESERVATIONS_NOT_OFFERED`, `NOT_ACCEPTING`, `NO_TABLES`, `PARTY_TOO_LARGE`, `PAST_TIME`, `TOO_SOON`, `TOO_FAR_AHEAD`, `CLOSED`, `FULLY_BOOKED`, `NO_FIT`.
 
-### `POST /api/customer/reservations` (Protected)
-Submits a table reservation request with refundable dining deposit.
-- **Request Body:**
-  ```json
-  {
-    "restaurant_id": "dalisay-heritage",
-    "party_size": 4,
-    "date": "2026-11-08",
-    "time": "19:30",
-    "special_requests": "Window seat preferred",
-    "deposit_payment_method": "GCash"
-  }
-  ```
+### `POST /api/customer/reservations` & `GET /api/customer/reservations*` (Protected: Customer)
+Customer table reservation booking and lifecycle management:
+- `POST /api/customer/reservations` (`throttle:20,1`) — books a table with `(customer_id, idempotency_key)` idempotency, `SELECT ... FOR UPDATE` row locking on candidate tables, server-derived duration and deposit/fee snapshot, `reservation_status_history`, `customer_reservation_created` audit log, and synchronous notifications (`reservation_requested` or `reservation_confirmed`).
+  - **Request Body:**
+    ```json
+    {
+      "restaurant_id": 1,
+      "start": "2026-11-24T19:30",
+      "party_size": 4,
+      "table_id": null,
+      "dining_area": "Indoor",
+      "contact_name": "Maria Santos",
+      "contact_phone": "09171234567",
+      "special_requests": "Window seat preferred",
+      "idempotency_key": "res-20261123-0001"
+    }
+    ```
+- `GET /api/customer/reservations` — paginated customer reservations (`tab=upcoming|past|cancelled|all`, `status`, `restaurant_id`, `search`, `date_from`, `date_to`, `sort=soonest|latest`, `page`, `per_page`) with `{ items, pagination, summary }`.
+- `GET /api/customer/reservations/{id}` — single reservation detail with `status_history`, restaurant contact/address/notes, and cancellation cutoff metadata (`404` for cross-customer IDs).
+- `POST /api/customer/reservations/{id}/cancel` — customer cancellation enforcing state transitions and cutoff rules (`pending` until start; `approved`/`awaiting_payment`/`confirmed` until `start - reservation_cancellation_cutoff_minutes`).
 
 ---
 

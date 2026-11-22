@@ -121,7 +121,27 @@ class CheckBranchIntegrityCommand extends Command
                  FROM branch_permits bp
                  INNER JOIN restaurant_application_branches rab ON rab.application_branch_id = bp.application_branch_id
                  WHERE (rab.created_branch_restaurant_id IS NOT NULL AND (bp.restaurant_id IS NULL OR bp.restaurant_id <> rab.created_branch_restaurant_id))
-                    OR (bp.restaurant_id IS NOT NULL AND rab.created_branch_restaurant_id IS NOT NULL AND bp.restaurant_id <> rab.created_branch_restaurant_id)'
+                    OR (bp.restaurant_id IS NOT NULL AND (rab.created_branch_restaurant_id IS NULL OR bp.restaurant_id <> rab.created_branch_restaurant_id))'
+            )->cnt ?? 0);
+
+            $appBranchDuplicatePermitCount = (int) (DB::selectOne(
+                'SELECT COUNT(*) AS cnt
+                 FROM (
+                     SELECT application_branch_id
+                     FROM branch_permits
+                     WHERE application_branch_id IS NOT NULL
+                     GROUP BY application_branch_id
+                     HAVING COUNT(*) > 1
+                 ) dup'
+            )->cnt ?? 0);
+
+            $approvedAppBranchMissingRestIdCount = (int) (DB::selectOne(
+                "SELECT COUNT(*) AS cnt
+                 FROM branch_permits bp
+                 INNER JOIN restaurant_application_branches rab ON rab.application_branch_id = bp.application_branch_id
+                 INNER JOIN restaurant_applications ra ON ra.restaurant_application_id = rab.restaurant_application_id
+                 WHERE ra.application_status = 'approved'
+                   AND bp.restaurant_id IS NULL"
             )->cnt ?? 0);
 
             $rootWithPermitCount = (int) (DB::selectOne(
@@ -144,11 +164,13 @@ class CheckBranchIntegrityCommand extends Command
             )->cnt ?? 0);
 
             $this->line(sprintf(
-                '[%s] non_root_missing_permit: %d | orphan_branch_permit: %d | permit_app_branch_mismatch: %d | root_with_branch_permit: %d | published_unverified_branch: %d',
+                '[%s] non_root_missing_permit: %d | orphan_branch_permit: %d | permit_app_branch_mismatch: %d | app_branch_duplicate_permit: %d | approved_app_branch_missing_restaurant_id: %d | root_with_branch_permit: %d | published_unverified_branch: %d',
                 $dbName,
                 $nonRootMissingPermitCount,
                 $orphanPermitCount,
                 $permitAppBranchMismatchCount,
+                $appBranchDuplicatePermitCount,
+                $approvedAppBranchMissingRestIdCount,
                 $rootWithPermitCount,
                 $publishedUnverifiedBranchCount,
             ));
@@ -156,6 +178,8 @@ class CheckBranchIntegrityCommand extends Command
             $totalAnomalies += $nonRootMissingPermitCount
                 + $orphanPermitCount
                 + $permitAppBranchMismatchCount
+                + $appBranchDuplicatePermitCount
+                + $approvedAppBranchMissingRestIdCount
                 + $rootWithPermitCount
                 + $publishedUnverifiedBranchCount;
         }

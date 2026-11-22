@@ -69,9 +69,9 @@ class RestaurantBranchService
      *
      * @param  array<string, mixed>  $attributes
      */
-    public function createChildBranch(int $parentRestaurantId, array $attributes): int
+    public function createChildBranch(int $parentRestaurantId, array $attributes, ?int $applicationBranchId = null): int
     {
-        return (int) DB::transaction(function () use ($parentRestaurantId, $attributes): int {
+        return (int) DB::transaction(function () use ($parentRestaurantId, $attributes, $applicationBranchId): int {
             $branchName = isset($attributes['branch_name']) ? trim((string) $attributes['branch_name']) : null;
             $parent = $this->assertValidNewBranch($parentRestaurantId, $branchName);
             $brandId = (int) ($parent->brand_restaurant_id ?: $parent->restaurant_id);
@@ -88,13 +88,27 @@ class RestaurantBranchService
 
             if (\Illuminate\Support\Facades\Schema::hasTable('branch_permits')) {
                 $now = $attributes['created_at'] ?? now();
-                DB::table('branch_permits')->insert([
-                    'restaurant_id' => $branchId,
-                    'is_required_locally' => 1,
-                    'permit_status' => 'pending_submission',
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]);
+                $existing = $applicationBranchId !== null
+                    ? DB::table('branch_permits')->where('application_branch_id', $applicationBranchId)->lockForUpdate()->first()
+                    : null;
+
+                if ($existing !== null) {
+                    DB::table('branch_permits')
+                        ->where('permit_id', $existing->permit_id)
+                        ->update([
+                            'restaurant_id' => $branchId,
+                            'updated_at' => $now,
+                        ]);
+                } else {
+                    DB::table('branch_permits')->insert([
+                        'restaurant_id' => $branchId,
+                        'application_branch_id' => $applicationBranchId,
+                        'is_required_locally' => 1,
+                        'permit_status' => 'pending_submission',
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                }
             }
 
             return $branchId;

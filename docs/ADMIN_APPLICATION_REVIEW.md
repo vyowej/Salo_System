@@ -76,8 +76,19 @@ Verify the target database (`DB_DATABASE` in `backend/.env` or `--env=testing` f
 - **Applicant & Admin notifications:** In-app notifications are recorded inside the review transaction (see [NOTIFICATIONS.md](./NOTIFICATIONS.md)). Email/SMS/push providers remain future work.
 
 ## Branch Permits Admin Review (Permit-2b)
-- `GET /api/admin/applications/restaurant/{id}` includes additive `branches[].permit_id`, `branches[].permit_status`, `branches[].permit_is_required_locally`, `branches[].permit_exemption_reason`, and `branches[].permit_review_note` for materialized (and linked) branches.
-- `GET /api/admin/restaurants` includes `permit_status` and `is_required_locally` on every row: non-root branches read directly from `branch_permits`, while root restaurants derive a read-only `permit_status` from the latest `mayors_permit` row in `application_documents` (`verified` → `approved`, `rejected` → `rejected`, `pending` → `pending_review`, `under_review` → `under_review`, none → `not_submitted`; `is_required_locally = true`).
+- `GET /api/admin/applications/restaurant/{id}` includes additive `branches[].permit_id`, `branches[].permit_status`, `branches[].is_required_locally`, `branches[].exemption_reason`, `branches[].review_note`, and `branches[].has_file` (plus `permit_is_required_locally`, `permit_exemption_reason`, `permit_review_note`) for both pre-materialization and materialized branches.
+- `GET /api/admin/restaurants` includes `permit_status` and `is_required_locally` on every row: non-root branches read directly from `branch_permits`, while root restaurants derive a read-only `permit_status` from the latest `mayors_permit` row in `application_documents`:
+  - `verified` → `approved`
+  - `rejected` → `rejected`
+  - `pending` → `pending_review`
+  - `under_review` → `under_review`
+  - no `mayors_permit` row → `not_submitted`
+  - `is_required_locally` is always `true` for root restaurants.
+- **Permit-3 Two-Step Application Flow & Materialization:**
+  - `POST /api/restaurant/applications` creates `restaurant_application_branches` and `branch_permits` (`restaurant_id = NULL`) in the same transaction (`pending_submission` when `permit_required_locally` is true/omitted; `pending_review` when false with `permit_exemption_reason`).
+  - `POST /api/restaurant/applications/{applicationId}/branches/{applicationBranchId}/permit` uploads a single permit file (`<= 10 MB`) or updates the exemption declaration while the application is non-terminal; once approved/materialized, it returns `409` pointing to `POST /api/restaurant/branches/{id}/permit`.
+  - Pre-materialization admin permit reviews (`GET /api/admin/branch-permits*`, `start-review`, `approve`, `reject`, `request-info`, `waive`, `reopen`) notify the applicant (`customer` workspace) and block self-review against `applicant_user_id`.
+  - On application approval (Phase 3a), `RestaurantBranchService::createChildBranch()` reuses each branch's existing `branch_permits` row by setting `restaurant_id` (no duplicate row). Business approval never depends on branch permit statuses; unverified branches are still created as `active`, `is_published = 0`, hidden and unpublishable until `approved` or `waived`.
 - Dedicated admin branch permit endpoints (`role:admin`, self-review blocked with `403`):
   - `GET /api/admin/branch-permits` (`status`, `search`, `submitted_date`, `per_page`)
   - `GET /api/admin/branch-permits/{permitId}` (detail + `review_note` + `file_url` only if a file exists)

@@ -22,6 +22,7 @@ use App\Features\Media\Controllers\PublicImageProxyController;
 use App\Features\Notifications\Controllers\NotificationController;
 use App\Features\Orders\Controllers\CustomerOrderController;
 use App\Features\Orders\Controllers\RestaurantOrderController;
+use App\Features\Reservations\Controllers\CustomerReservationController;
 use App\Features\Reservations\Controllers\OwnerTableController;
 use App\Features\Reservations\Controllers\ReservationAvailabilityController;
 use App\Features\Restaurants\Controllers\OwnerBranchController;
@@ -169,12 +170,19 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
     Route::get('/orders/{id}/reviews', [CustomerReviewController::class, 'showOrderReviews'])->whereNumber('id');
     Route::post('/orders/{id}/reviews/restaurant', [CustomerReviewController::class, 'storeRestaurantReview'])->whereNumber('id');
     Route::post('/orders/{id}/reviews/rider', [CustomerReviewController::class, 'storeRiderReview'])->whereNumber('id');
+
+    Route::post('/reservations', [CustomerReservationController::class, 'store'])->middleware('throttle:20,1');
+    Route::get('/reservations', [CustomerReservationController::class, 'index']);
+    Route::get('/reservations/{id}', [CustomerReservationController::class, 'show'])->whereNumber('id');
+    Route::post('/reservations/{id}/cancel', [CustomerReservationController::class, 'cancel'])->whereNumber('id');
 });
 
 Route::prefix('restaurant')->middleware('auth')->group(function (): void {
     Route::post('/applications', [RestaurantApplicationController::class, 'store']);
     Route::get('/applications/current', [RestaurantApplicationController::class, 'current']);
     Route::post('/applications/{id}/documents', [RestaurantApplicationController::class, 'uploadDocument'])->whereNumber('id');
+    Route::post('/applications/{id}/branches/{branchId}/permit', [RestaurantApplicationController::class, 'submitBranchPermit'])->whereNumber(['id', 'branchId']);
+    Route::get('/applications/{id}/branches/{branchId}/permit/file', [RestaurantApplicationController::class, 'branchPermitFile'])->whereNumber(['id', 'branchId']);
     Route::get('/branches/{id}/permit/file', [OwnerBranchController::class, 'permitFile'])->whereNumber('id');
 
     Route::middleware('role:owner')->group(function (): void {

@@ -14,6 +14,7 @@ const WORKSPACE_FALLBACK_ROUTES = {
 
 const CATEGORY_LABELS = {
   order: 'Order update',
+  reservation: 'Reservation update',
   delivery: 'Delivery',
   invitation: 'Team invitation',
   application: 'Application',
@@ -35,6 +36,7 @@ export function assertValidWorkspace(workspace) {
 export function getNotificationCategory(type) {
   const code = String(type || '').toLowerCase();
   if (code.startsWith('order_')) return 'order';
+  if (code.startsWith('reservation_')) return 'reservation';
   if (code.startsWith('delivery_')) return 'delivery';
   if (code.startsWith('staff_invitation_')) return 'invitation';
   if (code.includes('_application_')) return 'application';
@@ -62,6 +64,9 @@ export function getNotificationRoute(notification) {
     if (entityType === 'order' || type.startsWith('order_')) {
       return hasValidEntityId ? `/customer/orders/${entityId}` : '/customer/orders';
     }
+    if (entityType === 'reservation' || entityType === 'reservations' || type.startsWith('reservation_')) {
+      return '/customer/reservations';
+    }
     if (entityType === 'staff_invitation' || type.startsWith('staff_invitation_')) {
       return '/customer/invitations';
     }
@@ -77,6 +82,9 @@ export function getNotificationRoute(notification) {
   if (workspace === 'restaurant') {
     if (entityType === 'order' || type.startsWith('order_')) {
       return '/owner/orders';
+    }
+    if (entityType === 'reservation' || entityType === 'reservations' || type.startsWith('reservation_')) {
+      return '/owner/reservations';
     }
     if (entityType === 'staff_invitation' || type.startsWith('staff_invitation_')) {
       return '/owner/team';
@@ -110,6 +118,9 @@ export function getNotificationRoute(notification) {
     }
     if (entityType === 'order') {
       return hasValidEntityId ? `/admin/orders/${entityId}` : '/admin/orders';
+    }
+    if (entityType === 'reservation' || entityType === 'reservations' || type.startsWith('reservation_')) {
+      return hasValidEntityId ? `/admin/reservations/${entityId}` : '/admin/reservations';
     }
     if (entityType === 'rider') {
       return hasValidEntityId ? `/admin/riders/${entityId}` : '/admin/riders';

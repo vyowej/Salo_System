@@ -44,17 +44,22 @@ class ReservationFormatter
             && $endCarbon->greaterThanOrEqualTo($referenceNow);
 
         $canCancel = false;
-        if (
-            in_array($status, [
-                ReservationStatus::PENDING,
-                ReservationStatus::APPROVED,
-                ReservationStatus::AWAITING_PAYMENT,
-                ReservationStatus::CONFIRMED,
-            ], true)
-            && $startCarbon !== null
-        ) {
-            $cutoffThreshold = $startCarbon->subMinutes($cutoff);
-            $canCancel = $referenceNow->lessThanOrEqualTo($cutoffThreshold);
+        $cancellationDeadline = null;
+        if ($startCarbon !== null) {
+            if ($status === ReservationStatus::PENDING) {
+                $cancellationDeadline = $startCarbon;
+                $canCancel = $referenceNow->lessThanOrEqualTo($startCarbon);
+            } elseif (
+                in_array($status, [
+                    ReservationStatus::APPROVED,
+                    ReservationStatus::AWAITING_PAYMENT,
+                    ReservationStatus::CONFIRMED,
+                ], true)
+            ) {
+                $cutoffThreshold = $startCarbon->subMinutes($cutoff);
+                $cancellationDeadline = $cutoffThreshold;
+                $canCancel = $referenceNow->lessThanOrEqualTo($cutoffThreshold);
+            }
         }
 
         $tableId = isset($data->table_id) && $data->table_id !== null ? (int) $data->table_id : null;
@@ -159,7 +164,25 @@ class ReservationFormatter
             'updated_at' => OrderTimestampFormatter::toManilaIso($data->updated_at ?? null),
             'can_cancel' => $canCancel,
             'is_upcoming' => $isUpcoming,
+            'cancellation_cutoff_minutes' => $cutoff,
+            'cancellation_deadline' => OrderTimestampFormatter::toManilaIso($cancellationDeadline),
         ];
+
+        if (isset($data->restaurant_phone)) {
+            $formatted['restaurant_phone'] = $data->restaurant_phone !== null ? (string) $data->restaurant_phone : null;
+        }
+        if (isset($data->restaurant_address)) {
+            $formatted['restaurant_address'] = $data->restaurant_address !== null ? (string) $data->restaurant_address : null;
+        }
+        if (isset($data->restaurant_logo_path)) {
+            $formatted['restaurant_logo_path'] = $data->restaurant_logo_path !== null ? (string) $data->restaurant_logo_path : null;
+        }
+        if (isset($data->reservation_notes)) {
+            $formatted['reservation_notes'] = $data->reservation_notes !== null ? (string) $data->reservation_notes : null;
+        }
+        if (isset($data->assigned_dining_area_differs)) {
+            $formatted['assigned_dining_area_differs'] = (bool) $data->assigned_dining_area_differs;
+        }
 
         if ($statusHistory !== null) {
             $formatted['status_history'] = array_values(array_map(

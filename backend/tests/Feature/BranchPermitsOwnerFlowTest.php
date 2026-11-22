@@ -290,10 +290,16 @@ class BranchPermitsOwnerFlowTest extends TestCase
             ->assertStatus(200)
             ->assertJsonPath('data.permit.permit_status', 'pending_review');
 
-        // 3. Different payload while pending_review (different file OR exemption) -> 409
+        // 3. Different payload while pending_review (different file, same name/size with different bytes, OR exemption) -> 409
         $this->actingAs($owner)
             ->postJson("/api/restaurant/branches/{$branchId}/permit", [
                 'mayors_permit' => $this->fakePdf('different.pdf', 'v2-different'),
+            ])
+            ->assertStatus(409);
+
+        $this->actingAs($owner)
+            ->postJson("/api/restaurant/branches/{$branchId}/permit", [
+                'mayors_permit' => $this->fakePdf('first.pdf', 'v2'),
             ])
             ->assertStatus(409);
 
@@ -618,19 +624,19 @@ class BranchPermitsOwnerFlowTest extends TestCase
         $this->assertArrayNotHasKey('permit_status', $meRoot);
         $this->assertSame('rejected', $meChild['permit_status'] ?? null);
 
-        // Staff/Manager and non-manager Staff do NOT see permit fields on any branch
-        $cashier = $this->createUser('customer', 'cashier');
+        // Staff/Manager and non-manager Staff (canonical position) do NOT see permit fields on any branch
+        $orderStaff = $this->createUser('customer', 'ostaff');
         DB::table('restaurant_staff')->insert([
             'restaurant_id' => $childId,
-            'user_id' => $cashier->user_id,
+            'user_id' => $orderStaff->user_id,
             'invited_by' => $owner->user_id,
-            'staff_position' => 'Cashier',
+            'staff_position' => 'Order Staff',
             'staff_status' => 'active',
             'invited_at' => now(),
             'responded_at' => now(),
         ]);
 
-        foreach ([$manager, $cashier] as $staffUser) {
+        foreach ([$manager, $orderStaff] as $staffUser) {
             $staffBranches = $this->actingAs($staffUser)->getJson('/api/restaurant/branches')->json('data.branches');
             $staffChild = collect($staffBranches)->firstWhere('restaurant_id', $childId);
             $this->assertArrayNotHasKey('permit_status', $staffChild);

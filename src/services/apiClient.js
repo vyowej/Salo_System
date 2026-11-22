@@ -24,6 +24,10 @@ export class ApiError extends Error {
     this.status = status;
     this.data = data;
     this.errors = data?.errors || null;
+    this.code = data?.code || data?.reason_code || null;
+    this.reasonCode = data?.reason_code || data?.code || null;
+    this.suggestedAlternatives =
+      data?.suggested_alternatives || data?.data?.suggested_alternatives || null;
   }
 }
 

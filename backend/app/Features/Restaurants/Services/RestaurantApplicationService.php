@@ -105,7 +105,7 @@ class RestaurantApplicationService
                     $now,
                 );
 
-                $this->insertApplicationBranches($applicationId, $validated, $now);
+                $this->insertApplicationBranches($applicationId, $validated, (int) $user->user_id, $now);
                 $this->storeApplicationDocuments($user, $applicationId, $documentFiles, $now, $storedPrivatePaths);
                 $this->insertPayoutAccount($restaurantId, $validated, $now);
                 $this->recordSubmissionAuditAndNotify($user, $applicationId, $referenceNumber, $restaurantId, $validated, $request);
@@ -488,7 +488,7 @@ class RestaurantApplicationService
     /**
      * @param  array<string, mixed>  $validated
      */
-    private function insertApplicationBranches(int $applicationId, array $validated, mixed $now): void
+    private function insertApplicationBranches(int $applicationId, array $validated, int $applicantUserId, mixed $now): void
     {
         $branches = isset($validated['branches']) && is_array($validated['branches'])
             ? array_values($validated['branches'])
@@ -497,6 +497,8 @@ class RestaurantApplicationService
         if ($branches === []) {
             return;
         }
+
+        $hasBranchPermitsTable = \Illuminate\Support\Facades\Schema::hasTable('branch_permits');
 
         foreach ($branches as $index => $branchData) {
             if (! is_array($branchData)) {
@@ -508,7 +510,7 @@ class RestaurantApplicationService
                 ? trim((string) $branchData['contact_phone'])
                 : null;
 
-            DB::table('restaurant_application_branches')->insert([
+            $applicationBranchId = (int) DB::table('restaurant_application_branches')->insertGetId([
                 'restaurant_application_id' => $applicationId,
                 'branch_name' => trim((string) $branchData['branch_name']),
                 'address_id' => $branchAddressId,
@@ -518,6 +520,27 @@ class RestaurantApplicationService
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+
+            if ($hasBranchPermitsTable) {
+                $isRequired = array_key_exists('permit_required_locally', $branchData) && $branchData['permit_required_locally'] !== null
+                    ? (filter_var($branchData['permit_required_locally'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true)
+                    : true;
+                $exemptionReason = ! $isRequired && isset($branchData['permit_exemption_reason'])
+                    ? trim((string) $branchData['permit_exemption_reason'])
+                    : null;
+
+                DB::table('branch_permits')->insert([
+                    'restaurant_id' => null,
+                    'application_branch_id' => $applicationBranchId,
+                    'is_required_locally' => $isRequired ? 1 : 0,
+                    'exemption_reason' => $isRequired ? null : $exemptionReason,
+                    'permit_status' => $isRequired ? 'pending_submission' : 'pending_review',
+                    'uploaded_by' => $isRequired ? null : $applicantUserId,
+                    'uploaded_at' => $isRequired ? null : $now,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
         }
     }
 
@@ -932,6 +955,7 @@ class RestaurantApplicationService
                 DB::raw('COALESCE(bp_rest.is_required_locally, bp_app.is_required_locally) as permit_is_required_locally'),
                 DB::raw('COALESCE(bp_rest.exemption_reason, bp_app.exemption_reason) as permit_exemption_reason'),
                 DB::raw('COALESCE(bp_rest.review_note, bp_app.review_note) as permit_review_note'),
+                DB::raw('COALESCE(bp_rest.file_path, bp_app.file_path) as permit_file_path'),
             ])
             ->get()
             ->map(fn ($b): array => [
@@ -942,6 +966,10 @@ class RestaurantApplicationService
                 'created_branch_restaurant_id' => $b->created_branch_restaurant_id !== null ? (int) $b->created_branch_restaurant_id : null,
                 'permit_id' => $b->permit_id !== null ? (int) $b->permit_id : null,
                 'permit_status' => $b->permit_status,
+                'is_required_locally' => $b->permit_is_required_locally !== null ? (bool) $b->permit_is_required_locally : null,
+                'exemption_reason' => $b->permit_exemption_reason,
+                'review_note' => $b->permit_review_note,
+                'has_file' => $b->permit_file_path !== null && trim((string) $b->permit_file_path) !== '',
                 'permit_is_required_locally' => $b->permit_is_required_locally !== null ? (bool) $b->permit_is_required_locally : null,
                 'permit_exemption_reason' => $b->permit_exemption_reason,
                 'permit_review_note' => $b->permit_review_note,

@@ -471,3 +471,48 @@ Validates a specific start time slot and returns `available_tables` ordered best
   }
 }
 ```
+
+---
+
+## Customer Reservation Booking & Management (`/api/customer/reservations*`)
+
+All customer reservation endpoints require session authentication (`auth` middleware) and operate in `Asia/Manila`.
+
+### `POST /api/customer/reservations` (`auth`, `throttle:20,1`)
+
+Creates a table reservation with idempotency (`(customer_id, idempotency_key)`), row locking (`SELECT ... FOR UPDATE`) on candidate tables, server-derived end time and fees, status history, audit log (`customer_reservation_created`), and synchronous notifications.
+
+- **Request Body:**
+  ```json
+  {
+    "restaurant_id": 1,
+    "start": "2026-11-24T18:30",
+    "party_size": 4,
+    "table_id": null,
+    "dining_area": "Terrace",
+    "contact_name": "Maria Santos",
+    "contact_phone": "09171234567",
+    "special_requests": "Birthday dinner",
+    "idempotency_key": "res-20261123-0001"
+  }
+  ```
+- **Response (`201`):** Returns `{ "success": true, "message": "Reservation request submitted.", "data": { "reservation": { ... } } }`.
+- **Error Responses:**
+  - `422`: Validation failure, `SELF_BOOKING` (owner or active staff of the target restaurant), or booking window policy failure (`RESTAURANT_UNAVAILABLE`, `RESERVATIONS_NOT_OFFERED`, `NOT_ACCEPTING`, `NO_TABLES`, `PARTY_TOO_LARGE`, `PAST_TIME`, `TOO_SOON`, `TOO_FAR_AHEAD`, `CLOSED`).
+  - `409`: `SLOT_TAKEN`, `FULLY_BOOKED` (includes `suggested_alternatives`), `NO_FIT`, `OVERLAPPING_BOOKING` (customer already holds an overlapping active reservation at any restaurant), or `TOO_MANY_PENDING` (customer has reached `config('salo.reservations.max_active_pending_per_customer')`).
+  - `404`: Restaurant does not exist or is not active/published.
+
+### `GET /api/customer/reservations` (`auth`)
+
+Lists the authenticated customer's reservations with eager-joined restaurant and table info in a single query.
+- **Query parameters:** `tab` (`upcoming|past|cancelled|all`), `status`, `restaurant_id`, `search`, `date_from`, `date_to`, `sort` (`soonest|latest`), `page`, `per_page` (default `15`, max `100`).
+- **Response (`200`):** `{ "success": true, "data": { "items": [...], "pagination": { ... }, "summary": { "total", "upcoming", "pending", "completed", "cancelled_or_declined" } } }`.
+
+### `GET /api/customer/reservations/{id}` (`auth`)
+
+Returns a single reservation owned by the authenticated customer (`404` if not found or owned by another customer), including `status_history`, `restaurant_address`, `restaurant_phone`, `reservation_notes`, `cancellation_cutoff_minutes`, and `cancellation_deadline`.
+
+### `POST /api/customer/reservations/{id}/cancel` (`auth`)
+
+Cancels a customer's reservation (`pending` cancellable until `reservation_start`; `approved`, `awaiting_payment`, and `confirmed` cancellable until `reservation_start - reservation_cancellation_cutoff_minutes`). Records status history, `customer_reservation_cancelled` audit log, and notifies restaurant reservation handlers (`reservation_cancelled_by_customer`).
+- **Error Responses:** `404` if not owned by the customer; `409` (`CANCELLATION_CUTOFF_PASSED` or `INVALID_STATUS_TRANSITION`).

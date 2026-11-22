@@ -207,7 +207,12 @@ export default function CustomerDashboard() {
   useEffect(() => {
     setFavoriteIds(customerService.getFavoriteRestaurants());
     setActiveOrders(customerService.getOrders());
-    setUpcomingReservations(customerService.getReservations());
+    Promise.resolve(customerService.getReservations({ tab: 'upcoming', perPage: 5 }))
+      .then((res) => {
+        const list = Array.isArray(res) ? res : (res?.items || []);
+        setUpcomingReservations(list);
+      })
+      .catch(() => setUpcomingReservations([]));
     reviewService.getFeaturedRestaurant()
       .then((featured) => setFeaturedRestaurant(featured))
       .catch(() => setFeaturedRestaurant(null));

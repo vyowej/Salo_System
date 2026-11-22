@@ -4,16 +4,19 @@ namespace App\Features\Restaurants\Controllers;
 
 use App\Features\Restaurants\Requests\SubmitRestaurantApplicationRequest;
 use App\Features\Restaurants\Requests\UploadRestaurantApplicationDocumentRequest;
+use App\Features\Restaurants\Services\BranchPermitService;
 use App\Features\Restaurants\Services\RestaurantApplicationService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class RestaurantApplicationController extends Controller
 {
     public function __construct(
         private readonly RestaurantApplicationService $restaurantApplicationService,
+        private readonly BranchPermitService $branchPermitService,
     ) {}
 
     public function store(SubmitRestaurantApplicationRequest $request): JsonResponse
@@ -71,6 +74,38 @@ class RestaurantApplicationController extends Controller
         return ApiResponse::success(
             data: ['application' => $application],
             message: 'Document uploaded successfully.',
+        );
+    }
+
+    public function submitBranchPermit(Request $request, int $id, int $branchId): JsonResponse
+    {
+        $validated = $request->validate([
+            'mayors_permit' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'is_required_locally' => ['nullable', 'boolean'],
+            'exemption_reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $permit = $this->branchPermitService->submitOrUpdateForApplicationBranch(
+            applicant: $request->user(),
+            applicationId: $id,
+            applicationBranchId: $branchId,
+            file: $request->file('mayors_permit'),
+            validated: $validated,
+            request: $request,
+        );
+
+        return ApiResponse::success(
+            data: ['permit' => $permit],
+            message: 'Application branch permit submitted for review.',
+        );
+    }
+
+    public function branchPermitFile(Request $request, int $id, int $branchId): StreamedResponse
+    {
+        return $this->branchPermitService->streamApplicationBranchPermitFile(
+            user: $request->user(),
+            applicationId: $id,
+            applicationBranchId: $branchId,
         );
     }
 }

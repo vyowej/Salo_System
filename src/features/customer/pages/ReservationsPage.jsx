@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import customerService from '../../../services/customerService';
@@ -15,10 +15,27 @@ function localDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
+function formatManilaDateTime(isoString) {
+  if (!isoString) return '';
+  try {
+    const dt = new Date(isoString);
+    if (Number.isNaN(dt.getTime())) return isoString;
+    return dt.toLocaleString('en-PH', {
+      timeZone: 'Asia/Manila',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+  } catch {
+    return isoString;
+  }
+}
+
 export default function ReservationsPage() {
   const [reservations, setReservations] = useState([]);
+  const [serverSummary, setServerSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [successBanner, setSuccessBanner] = useState('');
 
   // Primary View Mode: 'calendar' (Default) | 'list'
   const [viewMode, setViewMode] = useState('calendar');
@@ -34,23 +51,37 @@ export default function ReservationsPage() {
 
   // Modals state
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
-  const [selectedResId, setSelectedResId] = useState(null);
+  const [selectedRes, setSelectedRes] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+
   const [detailsRes, setDetailsRes] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
 
   const todayKey = localDateKey(new Date());
 
-  useEffect(() => {
+  const loadReservations = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      setError('');
-      setReservations(customerService.getReservations());
+      const result = await customerService.getReservations({ perPage: 100 });
+      const items = Array.isArray(result) ? result : (result?.items || []);
+      setReservations(items);
+      if (result?.summary) {
+        setServerSummary(result.summary);
+      }
     } catch (loadError) {
-      setError(loadError.message || 'Unable to load your reservations.');
+      setError(loadError?.message || 'Unable to load your reservations.');
     } finally {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    loadReservations();
+  }, [loadReservations]);
 
   // Summary counts
   const counts = useMemo(() => {
@@ -61,7 +92,7 @@ export default function ReservationsPage() {
 
     reservations.forEach((r) => {
       const s = r.status;
-      if (['Approved', 'Confirmed', 'Arrived', 'Seated'].includes(s)) {
+      if (['Approved', 'Awaiting Payment', 'Confirmed', 'Arrived', 'Seated'].includes(s)) {
         upcoming += 1;
       } else if (s === 'Pending') {
         pending += 1;
@@ -72,6 +103,16 @@ export default function ReservationsPage() {
       }
     });
 
+    if (serverSummary) {
+      return {
+        all: Number(serverSummary.total ?? reservations.length),
+        upcoming: Number(serverSummary.upcoming ?? upcoming),
+        pending: Number(serverSummary.pending ?? pending),
+        completed: Number(serverSummary.completed ?? completed),
+        cancelled: Number(serverSummary.cancelledOrDeclined ?? serverSummary.cancelled_or_declined ?? cancelled),
+      };
+    }
+
     return {
       all: reservations.length,
       upcoming,
@@ -79,7 +120,7 @@ export default function ReservationsPage() {
       completed,
       cancelled,
     };
-  }, [reservations]);
+  }, [reservations, serverSummary]);
 
   // Calendar matrix days
   const calendarDays = useMemo(() => {
@@ -140,7 +181,9 @@ export default function ReservationsPage() {
     return reservations
       .filter((res) => {
         if (statusFilter === 'upcoming') {
-          if (!['Approved', 'Confirmed', 'Arrived', 'Seated'].includes(res.status)) return false;
+          if (!res.isUpcoming && !['Pending', 'Approved', 'Awaiting Payment', 'Confirmed', 'Arrived', 'Seated'].includes(res.status)) {
+            return false;
+          }
         } else if (statusFilter === 'pending') {
           if (res.status !== 'Pending') return false;
         } else if (statusFilter === 'confirmed') {
@@ -154,7 +197,7 @@ export default function ReservationsPage() {
         if (search.trim()) {
           const q = search.trim().toLowerCase();
           const matchRestaurant = res.restaurantName?.toLowerCase().includes(q);
-          const matchRef = res.id?.toLowerCase().includes(q);
+          const matchRef = (res.reference || res.id || '')?.toLowerCase().includes(q);
           const matchArea = res.seatingArea?.toLowerCase().includes(q);
           const matchNote = res.specialRequests?.toLowerCase().includes(q);
           if (!matchRestaurant && !matchRef && !matchArea && !matchNote) return false;
@@ -164,12 +207,12 @@ export default function ReservationsPage() {
       })
       .sort((a, b) => {
         if (sortBy === 'date-desc') {
-          return new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`);
+          return new Date(`${b.date}T${b.time || '00:00'}`) - new Date(`${a.date}T${a.time || '00:00'}`);
         }
         if (sortBy === 'guests-desc') {
           return (Number(b.guests) || 0) - (Number(a.guests) || 0);
         }
-        return new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`);
+        return new Date(`${a.date}T${a.time || '00:00'}`) - new Date(`${b.date}T${b.time || '00:00'}`);
       });
   }, [reservations, statusFilter, search, sortBy]);
 
@@ -186,25 +229,60 @@ export default function ReservationsPage() {
     setSelectedCalendarDate(localDateKey(now));
   };
 
-  // Handlers
-  const handleCancelClick = (id) => {
-    setSelectedResId(id);
-    setCancelReason('');
-    setCancelModalOpen(true);
-  };
+  const handleOpenDetails = async (res) => {
+    setDetailsRes(res);
+    const numericId = res.reservationId || res.id;
+    if (!numericId) return;
 
-  const handleConfirmCancel = () => {
-    if (selectedResId) {
-      setError('Reservation cancellation is not available yet. The reservation API is pending backend implementation.');
-      setCancelModalOpen(false);
+    setDetailsLoading(true);
+    try {
+      const full = await customerService.getReservation(numericId);
+      if (full) {
+        setDetailsRes(full);
+      }
+    } catch {
+      // Keep list item details if detail fetch fails
+    } finally {
+      setDetailsLoading(false);
     }
   };
 
-  const copyRefToClipboard = (id) => {
-    if (!id) return;
+  const handleCancelClick = (res) => {
+    setSelectedRes(res);
+    setCancelReason('');
+    setCancelError('');
+    setCancelModalOpen(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!selectedRes || cancelling) return;
+    const targetId = selectedRes.reservationId || selectedRes.id;
+    setCancelling(true);
+    setCancelError('');
+
     try {
-      navigator.clipboard.writeText(id);
-      setCopiedId(id);
+      const updated = await customerService.cancelReservation(targetId, cancelReason.trim());
+      setCancelModalOpen(false);
+      setSelectedRes(null);
+      setSuccessBanner(
+        `Reservation ${updated?.reference || selectedRes.reference || selectedRes.id} has been cancelled.`,
+      );
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('salo:notificationsUpdated'));
+      }
+      await loadReservations();
+    } catch (err) {
+      setCancelError(err?.message || 'Unable to cancel this reservation.');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const copyRefToClipboard = (ref) => {
+    if (!ref) return;
+    try {
+      navigator.clipboard.writeText(ref);
+      setCopiedId(ref);
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
       // Fallback
@@ -247,8 +325,39 @@ export default function ReservationsPage() {
         </header>
 
         {error && (
-          <div role="alert" className="form-error" style={{ marginBottom: 'var(--space-2)' }}>
-            {error}
+          <div role="alert" className="form-error" style={{ marginBottom: 'var(--space-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>{error}</span>
+            <Button variant="outline" size="sm" onClick={loadReservations}>
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {successBanner && (
+          <div
+            role="status"
+            style={{
+              marginBottom: 'var(--space-2)',
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-md)',
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: '#065f46',
+              fontSize: 13,
+              fontWeight: 600,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <span>{successBanner}</span>
+            <button
+              type="button"
+              onClick={() => setSuccessBanner('')}
+              style={{ background: 'none', border: 'none', color: 'inherit', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
@@ -437,13 +546,13 @@ export default function ReservationsPage() {
                         <div className="customer-month-cell__chips">
                           {dayBookings.map((b) => {
                             const isConf = ['Approved', 'Confirmed', 'Arrived', 'Seated'].includes(b.status);
-                            const isPend = b.status === 'Pending';
+                            const isPend = b.status === 'Pending' || b.status === 'Awaiting Payment';
                             const isComp = b.status === 'Completed';
                             const chipType = isConf ? 'confirmed' : isPend ? 'pending' : isComp ? 'completed' : 'cancelled';
 
                             return (
                               <span
-                                key={b.id}
+                                key={b.reservationId || b.id}
                                 className={`customer-month-chip customer-month-chip--${chipType}`}
                                 title={`${b.restaurantName} at ${b.time} (${b.status})`}
                               >
@@ -495,19 +604,17 @@ export default function ReservationsPage() {
                 <div className="customer-res-list">
                   {selectedDateBookings.map((res) => {
                     const isConfirmed = ['Approved', 'Confirmed', 'Arrived', 'Seated', 'Completed'].includes(res.status);
-                    const isPending = res.status === 'Pending';
+                    const isPending = res.status === 'Pending' || res.status === 'Awaiting Payment';
                     const isCancelledOrRejected = ['Cancelled', 'Rejected', 'No-Show', 'Expired'].includes(res.status);
                     const badgeVariant = isConfirmed ? 'success' : isPending ? 'warning' : isCancelledOrRejected ? 'error' : 'default';
 
-                    const canRequestCancel =
-                      !['Cancelled', 'Rejected', 'Completed', 'No-Show', 'Expired'].includes(res.status) &&
-                      !['requested', 'approved'].includes(res.cancellationRequest?.status);
-
+                    const canRequestCancel = Boolean(res.canCancel);
+                    const refLabel = res.reference || res.id;
                     const restaurantInitial = (res.restaurantName || 'R').charAt(0).toUpperCase();
 
                     return (
                       <article
-                        key={res.id}
+                        key={res.reservationId || res.id}
                         className="customer-res-card customer-reservation-card brand-card brand-card--green"
                       >
                         <div className="customer-res-card__header customer-reservation-card__heading">
@@ -518,7 +625,7 @@ export default function ReservationsPage() {
                             <div className="customer-res-card__titles">
                               <div className="customer-reservation-card__title-row">
                                 <h2 className="customer-res-card__restaurant-name">
-                                  <Link to={`/customer/restaurant/${res.restaurantId || ''}`}>
+                                  <Link to={`/customer/restaurants/${res.restaurantId || ''}`}>
                                     {res.restaurantName}
                                   </Link>
                                 </h2>
@@ -529,14 +636,14 @@ export default function ReservationsPage() {
                               <div className="customer-res-card__meta-bar customer-reservation-card__meta">
                                 <span>Booking Ref:</span>
                                 <span className="customer-res-card__ref-pill">
-                                  #{res.id}
+                                  {refLabel}
                                   <button
                                     type="button"
                                     className="customer-res-card__copy-btn"
                                     title="Copy booking reference"
-                                    onClick={() => copyRefToClipboard(res.id)}
+                                    onClick={() => copyRefToClipboard(refLabel)}
                                   >
-                                    {copiedId === res.id ? '✓' : '⧉'}
+                                    {copiedId === refLabel ? '✓' : '⧉'}
                                   </button>
                                 </span>
                                 <span>·</span>
@@ -547,14 +654,9 @@ export default function ReservationsPage() {
 
                           <div className="customer-res-card__header-right customer-reservation-card__actions">
                             {canRequestCancel && (
-                              <Button variant="danger-outline" size="sm" onClick={() => handleCancelClick(res.id)}>
-                                Request cancellation
+                              <Button variant="danger-outline" size="sm" onClick={() => handleCancelClick(res)}>
+                                Cancel reservation
                               </Button>
-                            )}
-                            {res.cancellationRequest?.status === 'requested' && (
-                              <Badge variant="warning" size="sm">
-                                Cancellation under review
-                              </Badge>
                             )}
                           </div>
                         </div>
@@ -565,7 +667,7 @@ export default function ReservationsPage() {
                             <div>
                               <strong>Reservation Declined by Restaurant</strong>
                               <span style={{ display: 'block', marginTop: 2 }}>
-                                {res.rejectionReason || 'The restaurant was unable to accommodate this reservation request. Any held deposit has been released.'}
+                                {res.rejectionReason || 'The restaurant was unable to accommodate this reservation request.'}
                               </span>
                             </div>
                           </div>
@@ -578,7 +680,7 @@ export default function ReservationsPage() {
                           </div>
                           <div className="customer-res-detail-item">
                             <span className="customer-res-detail-item__label">👥 Party Size</span>
-                            <p className="customer-res-detail-item__value">{res.guests} Guests</p>
+                            <p className="customer-res-detail-item__value">{res.guests} {res.guests === 1 ? 'Guest' : 'Guests'}</p>
                           </div>
                           <div className="customer-res-detail-item">
                             <span className="customer-res-detail-item__label">🪑 Seating &amp; Table</span>
@@ -590,7 +692,7 @@ export default function ReservationsPage() {
                           <div className="customer-res-detail-item">
                             <span className="customer-res-detail-item__label">💳 Reservation fee / payment</span>
                             <p className="customer-res-detail-item__value">
-                              ₱{res.fee ?? res.depositAmount ?? 0} · {res.paymentStatus || 'Pending'}
+                              ₱{Number(res.depositAmount > 0 ? res.depositAmount : res.serviceFee).toLocaleString('en-PH')} · {res.paymentStatus}
                             </p>
                           </div>
                         </div>
@@ -602,10 +704,10 @@ export default function ReservationsPage() {
                         )}
 
                         <div className="customer-res-card__footer">
-                          <Button variant="secondary" size="sm" onClick={() => setDetailsRes(res)}>
+                          <Button variant="secondary" size="sm" onClick={() => handleOpenDetails(res)}>
                             View Full Details
                           </Button>
-                          <Link to={`/customer/restaurant/${res.restaurantId || ''}`} style={{ textDecoration: 'none', fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
+                          <Link to={`/customer/restaurants/${res.restaurantId || ''}`} style={{ textDecoration: 'none', fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
                             Explore Restaurant Menu →
                           </Link>
                         </div>
@@ -708,17 +810,16 @@ export default function ReservationsPage() {
               <div className="customer-res-list">
                 {filteredReservations.map((res) => {
                   const isConfirmed = ['Approved', 'Confirmed', 'Arrived', 'Seated', 'Completed'].includes(res.status);
-                  const isPending = res.status === 'Pending';
+                  const isPending = res.status === 'Pending' || res.status === 'Awaiting Payment';
                   const isCancelledOrRejected = ['Cancelled', 'Rejected', 'No-Show', 'Expired'].includes(res.status);
                   const badgeVariant = isConfirmed ? 'success' : isPending ? 'warning' : isCancelledOrRejected ? 'error' : 'default';
 
-                  const canRequestCancel =
-                    !['Cancelled', 'Rejected', 'Completed', 'No-Show', 'Expired'].includes(res.status) &&
-                    !['requested', 'approved'].includes(res.cancellationRequest?.status);
+                  const canRequestCancel = Boolean(res.canCancel);
+                  const refLabel = res.reference || res.id;
 
                   return (
                     <article
-                      key={res.id}
+                      key={res.reservationId || res.id}
                       className="customer-res-card customer-reservation-card brand-card brand-card--green"
                     >
                       <div className="customer-res-card__header customer-reservation-card__heading">
@@ -729,7 +830,7 @@ export default function ReservationsPage() {
                           <div className="customer-res-card__titles">
                             <div className="customer-reservation-card__title-row">
                               <h2 className="customer-res-card__restaurant-name">
-                                <Link to={`/customer/restaurant/${res.restaurantId || ''}`}>
+                                <Link to={`/customer/restaurants/${res.restaurantId || ''}`}>
                                   {res.restaurantName}
                                 </Link>
                               </h2>
@@ -739,7 +840,7 @@ export default function ReservationsPage() {
                             </div>
                             <div className="customer-res-card__meta-bar customer-reservation-card__meta">
                               <span>Booking Ref:</span>
-                              <span className="customer-res-card__ref-pill">#{res.id}</span>
+                              <span className="customer-res-card__ref-pill">{refLabel}</span>
                               <span>·</span>
                               <span>Area: <strong>{res.seatingArea}</strong></span>
                             </div>
@@ -748,12 +849,9 @@ export default function ReservationsPage() {
 
                         <div className="customer-res-card__header-right customer-reservation-card__actions">
                           {canRequestCancel && (
-                            <Button variant="danger-outline" size="sm" onClick={() => handleCancelClick(res.id)}>
-                              Request cancellation
+                            <Button variant="danger-outline" size="sm" onClick={() => handleCancelClick(res)}>
+                              Cancel reservation
                             </Button>
-                          )}
-                          {res.cancellationRequest?.status === 'requested' && (
-                            <Badge variant="warning" size="sm">Cancellation under review</Badge>
                           )}
                         </div>
                       </div>
@@ -765,7 +863,7 @@ export default function ReservationsPage() {
                         </div>
                         <div className="customer-res-detail-item">
                           <span className="customer-res-detail-item__label">👥 Party Size</span>
-                          <p className="customer-res-detail-item__value">{res.guests} Guests</p>
+                          <p className="customer-res-detail-item__value">{res.guests} {res.guests === 1 ? 'Guest' : 'Guests'}</p>
                         </div>
                         <div className="customer-res-detail-item">
                           <span className="customer-res-detail-item__label">🪑 Seating &amp; Table</span>
@@ -777,16 +875,16 @@ export default function ReservationsPage() {
                         <div className="customer-res-detail-item">
                           <span className="customer-res-detail-item__label">💳 Reservation fee / payment</span>
                           <p className="customer-res-detail-item__value">
-                            ₱{res.fee ?? res.depositAmount ?? 0} · {res.paymentStatus || 'Pending'}
+                            ₱{Number(res.depositAmount > 0 ? res.depositAmount : res.serviceFee).toLocaleString('en-PH')} · {res.paymentStatus}
                           </p>
                         </div>
                       </div>
 
                       <div className="customer-res-card__footer">
-                        <Button variant="secondary" size="sm" onClick={() => setDetailsRes(res)}>
+                        <Button variant="secondary" size="sm" onClick={() => handleOpenDetails(res)}>
                           View Full Details
                         </Button>
-                        <Link to={`/customer/restaurant/${res.restaurantId || ''}`} style={{ textDecoration: 'none', fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
+                        <Link to={`/customer/restaurants/${res.restaurantId || ''}`} style={{ textDecoration: 'none', fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
                           Explore Menu →
                         </Link>
                       </div>
@@ -801,24 +899,42 @@ export default function ReservationsPage() {
         {/* ── Cancellation Request Modal ───────────────────────────────── */}
         <Modal
           open={cancelModalOpen}
-          onClose={() => setCancelModalOpen(false)}
-          title="Request Reservation Cancellation"
+          onClose={() => !cancelling && setCancelModalOpen(false)}
+          title="Cancel Table Reservation"
           size="sm"
           footer={
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              <Button variant="ghost" size="sm" onClick={() => setCancelModalOpen(false)}>
+              <Button variant="ghost" size="sm" onClick={() => setCancelModalOpen(false)} disabled={cancelling}>
                 Keep Reservation
               </Button>
-              <Button variant="danger" size="sm" onClick={handleConfirmCancel}>
-                Confirm Cancellation
+              <Button variant="danger" size="sm" onClick={handleConfirmCancel} disabled={cancelling}>
+                {cancelling ? 'Cancelling...' : 'Confirm Cancellation'}
               </Button>
             </div>
           }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
-              This sends a cancellation request to the restaurant. Your reservation remains active until the restaurant reviews and processes it. Any fee or refund will be confirmed after review.
+              Cancel your reservation{selectedRes ? ` at ${selectedRes.restaurantName} (${selectedRes.reference || selectedRes.id})` : ''}?
+              Your assigned table will be released immediately.
             </p>
+
+            {cancelError && (
+              <div
+                role="alert"
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  background: '#fef2f2',
+                  color: '#b91c1c',
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                {cancelError}
+              </div>
+            )}
+
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
                 Reason for cancellation (optional):
@@ -826,9 +942,11 @@ export default function ReservationsPage() {
               <textarea
                 className="textarea"
                 rows={2}
+                maxLength={255}
                 placeholder="Change of schedule, guest illness, etc..."
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
+                disabled={cancelling}
                 style={{ width: '100%' }}
               />
             </div>
@@ -840,22 +958,21 @@ export default function ReservationsPage() {
           <Modal
             open={Boolean(detailsRes)}
             onClose={() => setDetailsRes(null)}
-            title={`Reservation Particulars · #${detailsRes.id}`}
+            title={`Reservation Particulars · ${detailsRes.reference || detailsRes.id}`}
             size="md"
             footer={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                {!['Cancelled', 'Rejected', 'Completed', 'No-Show', 'Expired'].includes(detailsRes.status) &&
-                !['requested', 'approved'].includes(detailsRes.cancellationRequest?.status) ? (
+                {detailsRes.canCancel ? (
                   <Button
                     variant="danger-outline"
                     size="sm"
                     onClick={() => {
-                      const id = detailsRes.id;
+                      const target = detailsRes;
                       setDetailsRes(null);
-                      handleCancelClick(id);
+                      handleCancelClick(target);
                     }}
                   >
-                    Request Cancellation
+                    Cancel Reservation
                   </Button>
                 ) : <span />}
 
@@ -870,10 +987,20 @@ export default function ReservationsPage() {
                 <div>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block' }}>Restaurant</span>
                   <strong>{detailsRes.restaurantName}</strong>
+                  {detailsRes.restaurantAddress && (
+                    <span style={{ display: 'block', fontSize: 11, color: 'var(--text-secondary)' }}>
+                      {detailsRes.restaurantAddress}
+                    </span>
+                  )}
+                  {detailsRes.restaurantPhone && (
+                    <span style={{ display: 'block', fontSize: 11, color: 'var(--text-secondary)' }}>
+                      📞 {detailsRes.restaurantPhone}
+                    </span>
+                  )}
                 </div>
                 <div>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block' }}>Booking Reference</span>
-                  <strong style={{ fontFamily: 'monospace' }}>#{detailsRes.id}</strong>
+                  <strong style={{ fontFamily: 'monospace' }}>{detailsRes.reference || detailsRes.id}</strong>
                 </div>
                 <div>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block' }}>Date &amp; Arrival Time</span>
@@ -881,7 +1008,7 @@ export default function ReservationsPage() {
                 </div>
                 <div>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block' }}>Party Size</span>
-                  <strong>{detailsRes.guests} Guests</strong>
+                  <strong>{detailsRes.guests} {detailsRes.guests === 1 ? 'Guest' : 'Guests'}</strong>
                 </div>
                 <div>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block' }}>Seating Area</span>
@@ -898,10 +1025,16 @@ export default function ReservationsPage() {
                 <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Status Update</span>
                 <p style={{ margin: '4px 0 0', color: 'var(--text-primary)' }}>
                   Current Status: <strong>{detailsRes.status}</strong>
-                  {detailsRes.status === 'Pending' && ' — Awaiting restaurant review.'}
-                  {['Approved', 'Confirmed'].includes(detailsRes.status) && ' — Your table is confirmed! Please arrive 5-10 minutes prior.'}
-                  {detailsRes.rejectionReason && ` — Reason: "${detailsRes.rejectionReason}"`}
+                  {detailsRes.status === 'Pending' && ' — Awaiting restaurant host review.'}
+                  {['Approved', 'Confirmed'].includes(detailsRes.status) && ' — Your table is confirmed! Please arrive 5–10 minutes prior.'}
+                  {detailsRes.rejectionReason && ` — Declined: "${detailsRes.rejectionReason}"`}
+                  {detailsRes.cancellationReason && ` — Cancelled: "${detailsRes.cancellationReason}"`}
                 </p>
+                {detailsRes.cancellationDeadline && (
+                  <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
+                    Online cancellation cutoff: {formatManilaDateTime(detailsRes.cancellationDeadline)}
+                  </p>
+                )}
               </div>
 
               {/* Special Requests */}
@@ -909,6 +1042,50 @@ export default function ReservationsPage() {
                 <div style={{ fontSize: 13 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block' }}>Special Requests</span>
                   <p style={{ margin: '2px 0 0', fontStyle: 'italic' }}>"{detailsRes.specialRequests}"</p>
+                </div>
+              )}
+
+              {/* Restaurant Reservation Policy Notes */}
+              {detailsRes.reservationNotes && (
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block' }}>Restaurant Policy Notes</span>
+                  <p style={{ margin: '2px 0 0' }}>{detailsRes.reservationNotes}</p>
+                </div>
+              )}
+
+              {/* Status History Timeline */}
+              {detailsLoading ? (
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading activity history…</span>
+              ) : Array.isArray(detailsRes.history) && detailsRes.history.length > 0 && (
+                <div>
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
+                    Status Timeline
+                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {detailsRes.history.map((item) => (
+                      <div
+                        key={item.historyId || `${item.toStatus}-${item.createdAt}`}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'baseline',
+                          gap: 8,
+                          fontSize: 12,
+                          padding: '6px 10px',
+                          background: 'var(--bg-secondary, #f8fafc)',
+                          borderRadius: 6,
+                        }}
+                      >
+                        <div>
+                          <strong>{item.toStatusLabel || item.toStatus}</strong>
+                          {item.note && <span style={{ color: 'var(--text-secondary)' }}> — {item.note}</span>}
+                        </div>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                          {formatManilaDateTime(item.createdAt)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

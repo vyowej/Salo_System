@@ -91,12 +91,18 @@ export default function CustomerLayout({ children }) {
         )
       );
 
-      const reservations = customerService.getReservations();
-      const unreadReservationNote = unread.some((n) => n.type === 'reservation');
-      const activeReservation = reservations.some((r) =>
-        ['Pending', 'Approved', 'Confirmed', 'Arrived', 'Seated'].includes(r.status)
-      );
-      setHasReservationUpdate(unreadReservationNote || activeReservation);
+      const unreadReservationNote = unread.some((n) => n.type === 'reservation' || String(n.type || '').startsWith('reservation_'));
+      Promise.resolve(customerService.getReservations({ tab: 'upcoming', perPage: 10 }))
+        .then((res) => {
+          const list = Array.isArray(res) ? res : (res?.items || []);
+          const activeReservation = list.some((r) =>
+            ['Pending', 'Approved', 'Confirmed', 'Arrived', 'Seated'].includes(r.status)
+          );
+          setHasReservationUpdate(unreadReservationNote || activeReservation);
+        })
+        .catch(() => {
+          setHasReservationUpdate(unreadReservationNote);
+        });
     };
 
     syncAttentionState();

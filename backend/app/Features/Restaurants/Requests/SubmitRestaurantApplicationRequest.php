@@ -122,6 +122,8 @@ class SubmitRestaurantApplicationRequest extends FormRequest
             'branches.*.postal_code' => ['nullable', 'string', 'regex:/^[0-9]{4}$/'],
             'branches.*.latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'branches.*.longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'branches.*.permit_required_locally' => ['nullable', 'boolean'],
+            'branches.*.permit_exemption_reason' => ['nullable', 'string', 'max:500'],
         ];
     }
 
@@ -151,6 +153,20 @@ class SubmitRestaurantApplicationRequest extends FormRequest
                     if (! is_array($branch)) {
                         continue;
                     }
+                    $permitRequired = array_key_exists('permit_required_locally', $branch) && $branch['permit_required_locally'] !== null
+                        ? (filter_var($branch['permit_required_locally'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true)
+                        : true;
+                    if (! $permitRequired) {
+                        $reason = trim((string) ($branch['permit_exemption_reason'] ?? ''));
+                        $len = mb_strlen($reason);
+                        if ($len < 10 || $len > 500) {
+                            $validator->errors()->add(
+                                "branches.{$idx}.permit_exemption_reason",
+                                'Please provide an explanation between 10 and 500 characters when a local permit is not required.'
+                            );
+                        }
+                    }
+
                     $bName = trim((string) ($branch['branch_name'] ?? ''));
                     if ($bName === '') {
                         continue;
