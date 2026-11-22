@@ -303,8 +303,8 @@ export default function CustomerDashboard() {
                 <div className="customer-spotlight-card__media">
                   <RestaurantImage
                     image={spotlightRestaurant.coverPhoto}
-                    alt={`${spotlightRestaurant.name} featured cover`}
-                    fallback={spotlightRestaurant.coverImage || getInitials(spotlightRestaurant.name)}
+                    alt={`${spotlightRestaurant.displayName || spotlightRestaurant.name} featured cover`}
+                    fallback={spotlightRestaurant.coverImage || getInitials(spotlightRestaurant.displayName || spotlightRestaurant.name)}
                     fallbackSrc={getRestaurantFallbackCover(spotlightRestaurant, 0)}
                     className="customer-spotlight-card__image"
                   />
@@ -321,7 +321,7 @@ export default function CustomerDashboard() {
                     <KitchenOpenBadge restaurant={spotlightRestaurant} detailedClosedText />
                   </div>
                   <div className="customer-spotlight-card__header-row">
-                    <h2 className="customer-spotlight-card__title">{spotlightRestaurant.name}</h2>
+                    <h2 className="customer-spotlight-card__title">{spotlightRestaurant.displayName || spotlightRestaurant.name}</h2>
                     <span className="customer-spotlight-card__cuisine">{spotlightRestaurant.cuisine}</span>
                   </div>
                   <p className="customer-spotlight-card__bio">
@@ -500,7 +500,7 @@ export default function CustomerDashboard() {
                       {/* Details */}
                       <div className="customer-restaurant-card__details">
                         <div className="customer-restaurant-card__title-row">
-                          <h3>{rest.name}</h3>
+                          <h3>{rest.displayName || rest.name}</h3>
                           <KitchenOpenBadge restaurant={rest} />
                         </div>
 

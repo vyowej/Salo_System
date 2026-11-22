@@ -58,6 +58,7 @@ class FeaturedRestaurantService
             ->select([
                 'fw.*',
                 'r.restaurant_name',
+                'r.branch_name',
                 'r.business_type',
                 'r.cover_image',
                 'r.logo_image',
@@ -475,6 +476,7 @@ class FeaturedRestaurantService
             ->select([
                 'fw.*',
                 'r.restaurant_name',
+                'r.branch_name',
                 'r.business_type',
                 'r.cover_image',
                 'r.logo_image',
@@ -529,6 +531,7 @@ class FeaturedRestaurantService
             ->select([
                 'fw.*',
                 'r.restaurant_name',
+                'r.branch_name',
                 'r.business_type',
                 'r.cover_image',
                 'r.logo_image',
@@ -550,10 +553,14 @@ class FeaturedRestaurantService
             $row->city_name ?? null,
         ]);
 
+        $branchName = property_exists($row, 'branch_name') ? $row->branch_name : null;
+
         return [
             'featured_week_id' => (int) $row->featured_week_id,
             'restaurant_id' => (int) $row->restaurant_id,
             'restaurant_name' => $row->restaurant_name,
+            'branch_name' => $branchName,
+            'display_name' => \App\Support\RestaurantBranchService::formatDisplayName((string) $row->restaurant_name, $branchName),
             'cuisine' => $row->business_type ?? 'Restaurant',
             'address' => implode(', ', $addressParts),
             'cover_photo' => $row->cover_image ? $this->fileStorageService->publicImageUrl($row->cover_image) : null,

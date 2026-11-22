@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\Money;
 use App\Support\PublicRestaurantVisibility;
+use App\Support\RestaurantBranchService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -105,12 +106,14 @@ class CheckoutService
                     ->where('staff_status', 'active')
                     ->exists();
 
+            $displayName = RestaurantBranchService::formatDisplayName((string) $restaurant->restaurant_name, $restaurant->branch_name ?? null);
+
             if ($isOwnerOrStaff) {
-                $groupErrors["groups.{$gIdx}.restaurant_id"][] = "You cannot place an order from {$restaurant->restaurant_name} because you own or work at it.";
+                $groupErrors["groups.{$gIdx}.restaurant_id"][] = "You cannot place an order from {$displayName} because you own or work at it.";
             }
 
             if ((int) $restaurant->accepting_orders !== 1) {
-                $groupErrors["groups.{$gIdx}.restaurant_id"][] = "{$restaurant->restaurant_name} is not accepting orders right now.";
+                $groupErrors["groups.{$gIdx}.restaurant_id"][] = "{$displayName} is not accepting orders right now.";
             }
 
             $operatingHours = DB::table('operating_hours')
@@ -125,13 +128,13 @@ class CheckoutService
 
             $availability = $this->availabilityService->compute($restaurant, $operatingHours, $closures);
             if (! $availability['is_open']) {
-                $groupErrors["groups.{$gIdx}.restaurant_id"][] = "{$restaurant->restaurant_name} is currently closed.";
+                $groupErrors["groups.{$gIdx}.restaurant_id"][] = "{$displayName} is currently closed.";
             }
 
             if ($fulfillment === 'delivery' && (int) $restaurant->offers_delivery !== 1) {
-                $groupErrors["groups.{$gIdx}.fulfillment"][] = "{$restaurant->restaurant_name} does not offer delivery.";
+                $groupErrors["groups.{$gIdx}.fulfillment"][] = "{$displayName} does not offer delivery.";
             } elseif ($fulfillment === 'pickup' && (int) $restaurant->offers_pickup !== 1) {
-                $groupErrors["groups.{$gIdx}.fulfillment"][] = "{$restaurant->restaurant_name} does not offer pickup.";
+                $groupErrors["groups.{$gIdx}.fulfillment"][] = "{$displayName} does not offer pickup.";
             }
 
             $addressSnapshot = null;
@@ -424,9 +427,10 @@ class CheckoutService
         $totalMismatch = false;
         $computedGroupsSummary = [];
         foreach ($preparedGroups as $group) {
+            $groupRest = $group['restaurant'];
             $computedGroupsSummary[] = [
-                'restaurant_id' => (int) $group['restaurant']->restaurant_id,
-                'restaurant_name' => $group['restaurant']->restaurant_name,
+                'restaurant_id' => (int) $groupRest->restaurant_id,
+                'restaurant_name' => RestaurantBranchService::formatDisplayName((string) $groupRest->restaurant_name, $groupRest->branch_name ?? null),
                 'subtotal_amount' => (float) Money::fromCents($group['subtotal_cents']),
                 'delivery_fee' => (float) Money::fromCents($group['delivery_fee_cents']),
                 'total_amount' => (float) Money::fromCents($group['total_cents']),
@@ -466,6 +470,7 @@ class CheckoutService
 
             foreach ($preparedGroups as $group) {
                 $rest = $group['restaurant'];
+                $restDisplayName = RestaurantBranchService::formatDisplayName((string) $rest->restaurant_name, $rest->branch_name ?? null);
                 $addr = $group['address_snapshot'];
                 $orderRef = $this->generateUniqueReference('orders', 'order_reference', 'SALO-ORD');
                 $orderTotalDecimal = Money::fromCents($group['total_cents']);
@@ -474,7 +479,7 @@ class CheckoutService
                     'checkout_id' => $checkoutId,
                     'restaurant_id' => $rest->restaurant_id,
                     'customer_id' => $user->user_id,
-                    'restaurant_name' => $rest->restaurant_name,
+                    'restaurant_name' => mb_substr($restDisplayName, 0, 200),
                     'customer_name' => mb_substr($customerName, 0, 200),
                     'order_reference' => $orderRef,
                     'order_type' => $group['fulfillment'],
@@ -563,7 +568,7 @@ class CheckoutService
                     workspace: 'restaurant',
                     type: 'order_received',
                     title: "New order {$orderRef}",
-                    body: "{$customerFirstName} placed a {$group['fulfillment']} order ({$orderRef}).",
+                    body: "{$customerFirstName} placed a {$group['fulfillment']} order ({$orderRef}) at {$restDisplayName}.",
                     relatedEntityType: 'order',
                     relatedEntityId: $orderId,
                 );

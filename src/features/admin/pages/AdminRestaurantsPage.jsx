@@ -15,6 +15,7 @@ import {
 import useAdminSession from '../contexts/useAdminSession';
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { formatDate } from '../utils/format';
+import { BRANCH_BROWSE_COPY } from '../../customer/content/branchBrowseContent';
 import './AdminPages.css';
 
 const STATUS_LABELS = {
@@ -45,6 +46,11 @@ function mapRestaurant(row) {
     id: row.restaurant_id,
     restaurant_id: row.restaurant_id,
     name: row.restaurant_name,
+    branchName: row.branch_name || null,
+    parentRestaurantId: row.parent_restaurant_id ?? null,
+    brandRestaurantId: row.brand_restaurant_id ?? row.restaurant_id,
+    isMainBranch: row.is_main_branch !== undefined ? Boolean(row.is_main_branch) : (row.parent_restaurant_id === null || row.parent_restaurant_id === undefined),
+    branchCount: Number(row.branch_count ?? 1),
     registeredName: row.registered_name,
     businessType: row.business_type,
     ownershipStructure: row.ownership_structure,
@@ -91,6 +97,7 @@ export default function AdminRestaurantsPage() {
   const [selected, setSelected] = useState(null);
   const [detailTab, setDetailTab] = useState('Profile');
   const [pendingAction, setPendingAction] = useState(null);
+  const [applyToAllBranches, setApplyToAllBranches] = useState(false);
   const [savingAction, setSavingAction] = useState(false);
   const [notice, setNotice] = useState('');
 
@@ -133,6 +140,7 @@ export default function AdminRestaurantsPage() {
   }, [loadRestaurants]);
   function askAction(restaurant, action) {
     setSelected(restaurant);
+    setApplyToAllBranches(false);
     setPendingAction({ restaurant, action });
   }
 
@@ -148,36 +156,68 @@ export default function AdminRestaurantsPage() {
     const backendStatus = statusMap[action];
     if (!backendStatus) {
       setPendingAction(null);
+      setApplyToAllBranches(false);
       return;
     }
 
     setSavingAction(true);
     setError('');
     try {
-      const updatedRow = await adminApiService.updateRestaurantStatus(restaurant.restaurant_id, {
+      const payload = {
         status: backendStatus,
         reason,
-      });
+      };
+      if (applyToAllBranches) {
+        payload.apply_to_all_branches = true;
+      }
+      const updatedRow = await adminApiService.updateRestaurantStatus(restaurant.restaurant_id, payload);
       const nextStatusLabel = STATUS_LABELS[String(updatedRow?.restaurant_status || backendStatus).toLowerCase()] || restaurant.status;
+      const affectedIds = new Set(Array.isArray(updatedRow?.affected_restaurant_ids) ? updatedRow.affected_restaurant_ids : [restaurant.restaurant_id]);
+      const updatedOperatingStatus = backendStatus === 'active' ? 'Open' : (backendStatus === 'suspended' ? 'Suspended' : 'Deactivated');
       const updated = {
         ...restaurant,
         rawStatus: updatedRow?.restaurant_status || backendStatus,
         status: nextStatusLabel,
-        operatingStatus: backendStatus === 'active' ? 'Open' : (backendStatus === 'suspended' ? 'Suspended' : 'Deactivated'),
+        operatingStatus: updatedOperatingStatus,
       };
-      setRestaurants((previous) => previous.map((item) => item.id === restaurant.id ? updated : item));
+      setRestaurants((previous) => previous.map((item) => (
+        affectedIds.has(item.restaurant_id)
+          ? { ...item, rawStatus: updatedRow?.restaurant_status || backendStatus, status: nextStatusLabel, operatingStatus: updatedOperatingStatus }
+          : item
+      )));
       setSelected(updated);
       setNotice(`${restaurant.name}: ${action.toLowerCase()} saved.`);
     } catch (err) {
-      setError(err?.message || 'Failed to update restaurant status.');
+      const fieldMsg = err?.errors?.apply_to_all_branches?.[0] || err?.errors?.status?.[0];
+      setError(fieldMsg || err?.message || 'Failed to update restaurant status.');
     } finally {
       setSavingAction(false);
       setPendingAction(null);
+      setApplyToAllBranches(false);
     }
   }
 
   const directoryColumns = [
-    { key: 'name', label: 'Restaurant', render: (restaurant) => <button className="admin-text-link" type="button" onClick={() => { setSelected(restaurant); setDetailTab('Profile'); }}><strong>{restaurant.name}</strong><span>{restaurant.ownerName} · {restaurant.ownerEmail}</span></button> },
+    {
+      key: 'name',
+      label: 'Restaurant',
+      render: (restaurant) => {
+        const showMainBadge = restaurant.isMainBranch && restaurant.branchCount > 1;
+        const showChildBadge = !restaurant.isMainBranch;
+        return (
+          <button className="admin-text-link" type="button" onClick={() => { setSelected(restaurant); setDetailTab('Profile'); }}>
+            <strong>{restaurant.name}{restaurant.branchName ? ` — ${restaurant.branchName}` : ''}</strong>
+            {showMainBadge && (
+              <span className="admin-muted">{BRANCH_BROWSE_COPY.adminMainBranchBadge(restaurant.branchCount)}</span>
+            )}
+            {showChildBadge && (
+              <span className="admin-muted">{BRANCH_BROWSE_COPY.adminChildBranchBadge(restaurant.name)}</span>
+            )}
+            <span>{restaurant.ownerName} · {restaurant.ownerEmail}</span>
+          </button>
+        );
+      },
+    },
     { key: 'address', label: 'Physical address / coverage', render: (restaurant) => <>{restaurant.address}<br /><span className="admin-muted">City: {restaurant.zone}</span></> },
     { key: 'status', label: 'Account / operating', render: (restaurant) => <><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><StatusBadge status={restaurant.status} /><StatusBadge status={restaurant.isPublished ? 'Published' : 'Not published'} /></div><span className="admin-muted">{restaurant.operatingStatus || '—'} · {restaurant.applicationStatus || '—'} · {restaurant.verificationStatus || '—'}</span></> },
     { key: 'businessType', label: 'Business type', render: (restaurant) => restaurant.businessType || '—' },
@@ -335,9 +375,30 @@ export default function AdminRestaurantsPage() {
         confirmLabel={savingAction ? 'Saving...' : (pendingAction?.action || 'Confirm')}
         requireReauthentication
         requireReason
-        onClose={() => setPendingAction(null)}
+        onClose={() => {
+          setPendingAction(null);
+          setApplyToAllBranches(false);
+        }}
         onConfirm={applyAction}
-      />
+      >
+        {pendingAction?.restaurant?.isMainBranch && pendingAction.restaurant.branchCount > 1 && (
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 10, fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={applyToAllBranches}
+              onChange={(e) => setApplyToAllBranches(e.target.checked)}
+            />
+            <span>
+              <strong>{BRANCH_BROWSE_COPY.adminApplyToAllLabel(pendingAction.restaurant.branchCount)}</strong>
+              {applyToAllBranches && (
+                <span style={{ display: 'block', marginTop: 2, color: 'var(--text-secondary)' }}>
+                  {BRANCH_BROWSE_COPY.adminApplyToAllWarning(pendingAction.restaurant.branchCount)}
+                </span>
+              )}
+            </span>
+          </label>
+        )}
+      </ConfirmDialog>
     </AdminLayout>
   );
 }

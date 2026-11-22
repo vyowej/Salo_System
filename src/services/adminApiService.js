@@ -72,11 +72,15 @@ export const adminApiService = {
     return response?.data ?? { items: [], meta: {} };
   },
 
-  async updateRestaurantStatus(restaurantId, { status, reason = '' }) {
-    const response = await apiClient.patch(`/admin/restaurants/${restaurantId}/status`, {
+  async updateRestaurantStatus(restaurantId, { status, reason = '', apply_to_all_branches = false }) {
+    const payload = {
       status,
       reason: reason || null,
-    });
+    };
+    if (apply_to_all_branches) {
+      payload.apply_to_all_branches = true;
+    }
+    const response = await apiClient.patch(`/admin/restaurants/${restaurantId}/status`, payload);
     return response?.data?.restaurant ?? null;
   },
 

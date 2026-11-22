@@ -60,3 +60,5 @@ Client-sent prices or totals are ignored.
 - **Customer cancellation:** Implemented in Step 9a via `POST /api/customer/orders/{id}/cancel` for `pending` orders only (see [ORDER_COMPLETION.md](./ORDER_COMPLETION.md)).
 - **Self-order restriction:** Implemented in Step 8b follow-up — owners (`restaurant_owners`) and active staff (`restaurant_staff`) cannot check out from their own restaurant (see [RESTAURANT_ORDERS.md](./RESTAURANT_ORDERS.md)).
 - **Delivery fee formula:** Currently a flat configurable placeholder (`SALO_FLAT_DELIVERY_FEE=49.00`) per delivery sub-order; distance/zone-based fees are future work.
+
+- **Multi-branch `restaurant_name` snapshot (Phase 6a):** `CheckoutService` snapshots `display_name` (`"<restaurant_name> — <branch_name>"`, or `<restaurant_name>` for single-location businesses) into `orders.restaurant_name`, `computedGroupsSummary`, and `order_received` notification text. Existing orders keep their original snapshot.

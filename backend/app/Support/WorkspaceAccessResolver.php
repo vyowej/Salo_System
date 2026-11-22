@@ -160,6 +160,66 @@ class WorkspaceAccessResolver
     }
 
     /**
+     * Resolve and authorize an active restaurant for reservation operations
+     * (owners, Manager, Reservation Handler, Reservation Staff).
+     */
+    public function requireActiveAuthorizedRestaurantForReservations(
+        User $user,
+        ?int $restaurantId = null,
+        string $permission = 'reservations.view',
+    ): object {
+        $resolvedId = $this->resolveRequestedRestaurantId($restaurantId);
+        $restaurant = $this->findOwnedOrStaffRestaurant(
+            user: $user,
+            restaurantId: $resolvedId,
+            positionCheck: static fn (?string $pos): bool => User::positionHasPermission($pos, $permission),
+        );
+
+        if (! $restaurant) {
+            abort(403, 'Forbidden: you are not authorized to manage reservations for this restaurant.');
+        }
+
+        if ($restaurant->restaurant_status !== 'active') {
+            abort(
+                403,
+                "Restaurant reservation management is only available for active restaurants (current status: {$restaurant->restaurant_status})."
+            );
+        }
+
+        return $restaurant;
+    }
+
+    /**
+     * Resolve and authorize an active restaurant for table management operations
+     * (owners, Manager, Reservation Handler, Reservation Staff).
+     */
+    public function requireActiveAuthorizedRestaurantForTables(
+        User $user,
+        ?int $restaurantId = null,
+        string $permission = 'tables.view',
+    ): object {
+        $resolvedId = $this->resolveRequestedRestaurantId($restaurantId);
+        $restaurant = $this->findOwnedOrStaffRestaurant(
+            user: $user,
+            restaurantId: $resolvedId,
+            positionCheck: static fn (?string $pos): bool => User::positionHasPermission($pos, $permission),
+        );
+
+        if (! $restaurant) {
+            abort(403, 'Forbidden: you are not authorized to manage tables for this restaurant.');
+        }
+
+        if ($restaurant->restaurant_status !== 'active') {
+            abort(
+                403,
+                "Restaurant table management is only available for active restaurants (current status: {$restaurant->restaurant_status})."
+            );
+        }
+
+        return $restaurant;
+    }
+
+    /**
      * Resolve and authorize an active rider whose user account is also active.
      */
     public function requireActiveRider(

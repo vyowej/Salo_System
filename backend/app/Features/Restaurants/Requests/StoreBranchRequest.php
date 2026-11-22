@@ -40,6 +40,10 @@ class StoreBranchRequest extends FormRequest
             'copy_operating_hours' => ['nullable', 'boolean'],
             'copy_menu' => ['nullable', 'boolean'],
             'copy_from_restaurant_id' => ['nullable', 'integer', 'min:1'],
+
+            'mayors_permit' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'is_required_locally' => ['nullable', 'boolean'],
+            'exemption_reason' => ['nullable', 'string', 'max:500'],
         ];
     }
 }

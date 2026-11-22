@@ -11,6 +11,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class AdminManagementService
 {
@@ -168,6 +169,7 @@ class AdminManagementService
             ->leftJoin('restaurant_applications as ra', 'ra.restaurant_id', '=', 'rest.restaurant_id')
             ->select([
                 'rest.restaurant_id', 'rest.restaurant_name', 'rest.registered_name',
+                'rest.parent_restaurant_id', 'rest.brand_restaurant_id', 'rest.branch_name',
                 'rest.business_type', 'rest.ownership_structure', 'rest.contact_phone',
                 'rest.business_email', 'rest.logo_image', 'rest.cover_image',
                 'rest.offers_delivery', 'rest.offers_pickup', 'rest.offers_dine_in',
@@ -177,7 +179,7 @@ class AdminManagementService
             ]);
 
         $this->applyLikeSearch($query, $search, [
-            'rest.restaurant_name', 'rest.business_email', 'c.city_name', 'ra.reference_number',
+            'rest.restaurant_name', 'rest.branch_name', 'rest.business_email', 'c.city_name', 'ra.reference_number',
         ]);
 
         if ($status !== '' && $status !== 'all') {
@@ -186,7 +188,25 @@ class AdminManagementService
 
         $paginator = $query->orderBy('rest.created_at', $sortDir)->paginate($perPage);
         $items = $paginator->items();
+        $brandIds = collect($items)
+            ->map(fn (object $item): int => (int) ($item->brand_restaurant_id ?? $item->restaurant_id))
+            ->unique()
+            ->values()
+            ->all();
+        $branchCounts = $brandIds === []
+            ? collect()
+            : DB::table('restaurants')
+                ->whereIn('brand_restaurant_id', $brandIds)
+                ->selectRaw('brand_restaurant_id, COUNT(*) as total')
+                ->groupBy('brand_restaurant_id')
+                ->pluck('total', 'brand_restaurant_id');
+
         foreach ($items as $item) {
+            $brandId = (int) ($item->brand_restaurant_id ?? $item->restaurant_id);
+            $item->brand_restaurant_id = $brandId;
+            $item->parent_restaurant_id = $item->parent_restaurant_id !== null ? (int) $item->parent_restaurant_id : null;
+            $item->is_main_branch = $item->parent_restaurant_id === null;
+            $item->branch_count = max(1, (int) ($branchCounts->get($brandId) ?? 1));
             $item->logo_image = $this->fileStorageService->publicUrl($item->logo_image);
             $item->cover_image = $this->fileStorageService->publicUrl($item->cover_image);
         }
@@ -198,30 +218,59 @@ class AdminManagementService
     /**
      * @return array<string, mixed>
      */
-    public function updateRestaurantStatus(int $restaurantId, string $status, ?string $reason, User $admin, Request $request): array
-    {
+    public function updateRestaurantStatus(
+        int $restaurantId,
+        string $status,
+        ?string $reason,
+        User $admin,
+        Request $request,
+        bool $applyToAllBranches = false,
+    ): array {
         $restaurant = DB::table('restaurants')->where('restaurant_id', $restaurantId)->first();
         abort_unless($restaurant !== null, 404, 'Restaurant not found.');
 
-        DB::transaction(function () use ($restaurantId, $restaurant, $status, $reason, $admin, $request): void {
-            DB::table('restaurants')->where('restaurant_id', $restaurantId)->update([
+        if ($applyToAllBranches && $restaurant->parent_restaurant_id !== null) {
+            throw ValidationException::withMessages([
+                'apply_to_all_branches' => ['apply_to_all_branches can only be used on the main (root) branch.'],
+            ]);
+        }
+
+        $affectedIds = DB::transaction(function () use ($restaurantId, $restaurant, $status, $reason, $admin, $request, $applyToAllBranches): array {
+            $targets = $applyToAllBranches
+                ? DB::table('restaurants')
+                    ->where('brand_restaurant_id', (int) ($restaurant->brand_restaurant_id ?? $restaurantId))
+                    ->orderBy('restaurant_id')
+                    ->get(['restaurant_id', 'restaurant_status'])
+                : collect([(object) ['restaurant_id' => $restaurantId, 'restaurant_status' => $restaurant->restaurant_status]]);
+
+            $now = now();
+            $targetIds = $targets->pluck('restaurant_id')->map(fn ($id): int => (int) $id)->all();
+
+            DB::table('restaurants')->whereIn('restaurant_id', $targetIds)->update([
                 'restaurant_status' => $status,
-                'updated_at' => now(),
+                'updated_at' => $now,
             ]);
 
-            $this->auditLogService->record(
-                actorUserId: (int) $admin->user_id,
-                action: 'admin_restaurant_status_updated',
-                entityType: 'restaurants',
-                entityId: $restaurantId,
-                oldValues: ['restaurant_status' => $restaurant->restaurant_status],
-                newValues: ['restaurant_status' => $status],
-                reason: $reason,
-                request: $request,
-            );
+            foreach ($targets as $target) {
+                $this->auditLogService->record(
+                    actorUserId: (int) $admin->user_id,
+                    action: 'admin_restaurant_status_updated',
+                    entityType: 'restaurants',
+                    entityId: (int) $target->restaurant_id,
+                    oldValues: ['restaurant_status' => $target->restaurant_status],
+                    newValues: ['restaurant_status' => $status, 'apply_to_all_branches' => $applyToAllBranches],
+                    reason: $reason,
+                    request: $request,
+                );
+            }
+
+            return $targetIds;
         });
 
-        return (array) DB::table('restaurants')->where('restaurant_id', $restaurantId)->first();
+        $updated = (array) DB::table('restaurants')->where('restaurant_id', $restaurantId)->first();
+        $updated['affected_restaurant_ids'] = $affectedIds;
+
+        return $updated;
     }
 
     /**

@@ -91,11 +91,23 @@ export default function OwnerDashboard() {
         soldOutItems: null,
       };
       const warnings = [];
-      try {
-        nextSummary.availableTables = ownerService.getTables(selectedRestaurantId, todayKey)
-          .filter((table) => table.status === 'Available').length;
-      } catch {
-        warnings.push('Table availability');
+      const canViewTables = access.canAccess(['tables.view']);
+      if (canViewTables) {
+        try {
+          const tablesResult = await ownerService.getTables(selectedRestaurantId, todayKey);
+          if (typeof tablesResult?.summary?.availableNow === 'number') {
+            nextSummary.availableTables = tablesResult.summary.availableNow;
+          } else {
+            const tableItems = Array.isArray(tablesResult)
+              ? tablesResult
+              : (Array.isArray(tablesResult?.items) ? tablesResult.items : []);
+            nextSummary.availableTables = tableItems.filter(
+              (table) => String(table.status || '').toLowerCase() === 'available',
+            ).length;
+          }
+        } catch {
+          warnings.push('Table availability');
+        }
       }
       try {
         const inventory = ownerService.getInventoryItems(selectedRestaurantId);

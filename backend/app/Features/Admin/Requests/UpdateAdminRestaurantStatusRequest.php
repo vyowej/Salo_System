@@ -20,6 +20,7 @@ class UpdateAdminRestaurantStatusRequest extends FormRequest
         return [
             'status' => ['required', 'string', Rule::in(['pending', 'approved', 'rejected', 'active', 'inactive', 'suspended'])],
             'reason' => ['nullable', 'string', 'max:255'],
+            'apply_to_all_branches' => ['sometimes', 'boolean'],
         ];
     }
 }

@@ -407,6 +407,17 @@ class OwnerBranchManagementTest extends TestCase
         ])->assertStatus(201);
         $branchId = (int) $res->json('data.branch.restaurant_id');
 
+        DB::table('branch_permits')
+            ->where('restaurant_id', $branchId)
+            ->update([
+                'permit_status' => 'approved',
+                'file_path' => "branch-permits/{$rootId}/branch-permit.pdf",
+                'original_filename' => 'branch-permit.pdf',
+                'mime_type' => 'application/pdf',
+                'file_size_bytes' => 1024,
+                'updated_at' => now(),
+            ]);
+
         // Publish blocked while offers_delivery=1 and 0 service_areas
         $this->actingAs($owner)
             ->withHeader('X-Restaurant-Id', (string) $branchId)

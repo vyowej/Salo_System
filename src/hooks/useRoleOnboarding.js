@@ -270,7 +270,13 @@ export function useRoleOnboarding(role, options = {}) {
         menuItems = rest.menu || null;
       }
       try {
-        tables = ownerService.getTables(targetRestId);
+        const maybeTables = ownerService.getTables(targetRestId);
+        if (maybeTables && typeof maybeTables.then === 'function') {
+          maybeTables.catch(() => null);
+          tables = rest.tables || null;
+        } else {
+          tables = Array.isArray(maybeTables) ? maybeTables : (maybeTables?.items || rest.tables || null);
+        }
       } catch {
         tables = rest.tables || null;
       }

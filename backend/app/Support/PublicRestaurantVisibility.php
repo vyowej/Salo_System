@@ -17,6 +17,15 @@ class PublicRestaurantVisibility
         return $query
             ->where("{$alias}.restaurant_status", 'active')
             ->where("{$alias}.is_published", 1)
+            ->where(function (Builder $q) use ($alias): void {
+                $q->whereNull("{$alias}.parent_restaurant_id")
+                    ->orWhereExists(function (Builder $sub) use ($alias): void {
+                        $sub->selectRaw('1')
+                            ->from('branch_permits as bp')
+                            ->whereColumn('bp.restaurant_id', "{$alias}.restaurant_id")
+                            ->whereIn('bp.permit_status', ['approved', 'waived']);
+                    });
+            })
             ->whereExists(function (Builder $sub) use ($alias): void {
                 $sub->selectRaw('1')
                     ->from('menu_items as mi')

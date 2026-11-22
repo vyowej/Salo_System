@@ -111,6 +111,7 @@ class User extends Authenticatable
             ->leftJoin('addresses as a', 'a.address_id', '=', 'r.address_id')
             ->leftJoin('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
             ->leftJoin('cities as c', 'c.city_id', '=', 'b.city_id')
+            ->leftJoin('branch_permits as bp', 'bp.restaurant_id', '=', 'ro.restaurant_id')
             ->where('ro.user_id', $this->user_id)
             ->select([
                 'ro.restaurant_id',
@@ -122,6 +123,10 @@ class User extends Authenticatable
                 'b.barangay_name',
                 'c.city_name',
                 'ro.joined_at',
+                'bp.permit_status',
+                'bp.is_required_locally',
+                'bp.review_note as permit_review_note',
+                'bp.uploaded_at as permit_uploaded_at',
             ])
             ->orderByRaw('CASE WHEN r.parent_restaurant_id IS NULL THEN 0 ELSE 1 END ASC')
             ->orderBy('ro.restaurant_id')
@@ -135,7 +140,7 @@ class User extends Authenticatable
                     $row->city_name ? trim((string) $row->city_name) : null,
                 ]));
 
-                return [
+                $entry = [
                     'restaurant_id' => $restaurantId,
                     'parent_restaurant_id' => $parentId,
                     'brand_restaurant_id' => $brandId,
@@ -148,6 +153,17 @@ class User extends Authenticatable
                     'permissions' => self::allRestaurantPermissions(),
                     'joined_at' => $row->joined_at,
                 ];
+
+                if ($parentId !== null) {
+                    $entry['permit_status'] = $row->permit_status ?? 'pending_submission';
+                    $entry['is_required_locally'] = $row->is_required_locally !== null ? (bool) $row->is_required_locally : true;
+                    $entry['review_note'] = $row->permit_review_note;
+                    $entry['uploaded_at'] = $row->permit_uploaded_at !== null
+                        ? \App\Features\Orders\Support\OrderTimestampFormatter::toManilaIso($row->permit_uploaded_at)
+                        : null;
+                }
+
+                return $entry;
             })
             ->values()
             ->all();
@@ -200,6 +216,8 @@ class User extends Authenticatable
                     'staff_position' => $row->staff_position,
                     'staff_status' => $row->staff_status,
                     'can_handle_orders' => self::isOrderHandlerPosition($row->staff_position),
+                    'can_handle_reservations' => self::isReservationHandlerPosition($row->staff_position),
+                    'can_manage_tables' => self::isTableManagerPosition($row->staff_position),
                     'can_publish_menu' => self::isMenuPublisherPosition($row->staff_position),
                     'permissions' => self::permissionsForPosition($row->staff_position),
                     'joined_at' => $row->joined_at,
@@ -256,6 +274,8 @@ class User extends Authenticatable
             'restaurant_ownerships' => $ownerships,
             'restaurant_staff_assignments' => $staffAssignments,
             'order_handler_positions' => array_values((array) config('salo.orders.handler_positions', [])),
+            'reservation_handler_positions' => array_values((array) config('salo.reservations.handler_positions', [])),
+            'table_manager_positions' => array_values((array) config('salo.tables.manager_positions', [])),
             'menu_publisher_positions' => array_values((array) config('salo.menu.publisher_positions', [])),
             'staff_positions' => array_values((array) config('salo.staff.positions', [])),
             'rider_profile' => $riderProfile,
@@ -336,6 +356,38 @@ class User extends Authenticatable
     public static function canViewMenuPosition(?string $position): bool
     {
         return self::positionHasPermission($position, 'menu.view');
+    }
+
+    public static function isReservationHandlerPosition(?string $position): bool
+    {
+        return self::matchesConfiguredPosition($position, 'salo.reservations.handler_positions');
+    }
+
+    public static function canViewReservationsPosition(?string $position): bool
+    {
+        return self::positionHasPermission($position, 'reservations.view');
+    }
+
+    public static function canManageReservationsPosition(?string $position): bool
+    {
+        return self::positionHasPermission($position, 'reservations.updateStatus')
+            || self::positionHasPermission($position, 'reservations.approve');
+    }
+
+    public static function isTableManagerPosition(?string $position): bool
+    {
+        return self::matchesConfiguredPosition($position, 'salo.tables.manager_positions');
+    }
+
+    public static function canViewTablesPosition(?string $position): bool
+    {
+        return self::positionHasPermission($position, 'tables.view');
+    }
+
+    public static function canManageTablesPosition(?string $position): bool
+    {
+        return self::positionHasPermission($position, 'tables.edit')
+            || self::positionHasPermission($position, 'tables.add');
     }
 
     private static function matchesConfiguredPosition(?string $position, string $configKey): bool

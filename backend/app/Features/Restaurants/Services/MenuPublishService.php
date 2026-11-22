@@ -130,6 +130,16 @@ class MenuPublishService
             }
         }
 
+        if ($restaurant->parent_restaurant_id !== null) {
+            $permitVerified = DB::table('branch_permits')
+                ->where('restaurant_id', (int) $restaurant->restaurant_id)
+                ->whereIn('permit_status', ['approved', 'waived'])
+                ->exists();
+            if (! $permitVerified) {
+                $blockers[] = "Branch Mayor's / Business Permit must be verified or waived before publishing.";
+            }
+        }
+
         $warnings = [];
         if (empty($restaurant->logo_image)) {
             $warnings[] = 'Add a restaurant logo so customers can recognize your brand.';

@@ -104,6 +104,7 @@ $positionPermissions = [
         ['menu.publish'],
         $orderHandlerPermissions,
         $inventoryManagerPermissions,
+        $reservationHandlerPermissions,
     ))),
     'Order Handler' => $orderHandlerPermissions,
     'Order Staff' => $orderHandlerPermissions,
@@ -157,6 +158,34 @@ return [
         'max_item_quantity' => max(1, (int) env('SALO_MAX_ORDER_ITEM_QUANTITY', 50)),
         // Derived from staff.position_permissions (single source of truth).
         'handler_positions' => $positionsWithPermission('orders.view'),
+    ],
+
+    'reservations' => [
+        'default_duration_minutes' => max(30, (int) env('SALO_RESERVATION_DURATION_MINUTES', 90)),
+        'slot_interval_minutes' => max(15, (int) env('SALO_RESERVATION_SLOT_INTERVAL_MINUTES', 30)),
+        'no_show_grace_minutes' => max(0, (int) env('SALO_RESERVATION_NO_SHOW_GRACE_MINUTES', 15)),
+        'max_active_pending_per_customer' => max(1, (int) env('SALO_RESERVATION_MAX_ACTIVE_PENDING', 3)),
+        'suggested_slot_window' => max(1, (int) env('SALO_RESERVATION_SUGGESTED_SLOT_WINDOW', 3)),
+        'reference_prefix' => 'SALO-RES',
+        'handler_positions' => $positionsWithPermission('reservations.view'),
+        'transitions' => [
+            'pending' => ['approved', 'confirmed', 'awaiting_payment', 'rejected', 'cancelled', 'expired'],
+            'approved' => ['confirmed', 'awaiting_payment', 'cancelled'],
+            'awaiting_payment' => ['confirmed', 'cancelled', 'expired'],
+            'confirmed' => ['arrived', 'seated', 'no_show', 'cancelled'],
+            'arrived' => ['seated', 'no_show', 'cancelled'],
+            'seated' => ['completed'],
+            'rejected' => [],
+            'completed' => [],
+            'cancelled' => [],
+            'no_show' => [],
+            'expired' => [],
+        ],
+    ],
+
+    'tables' => [
+        'handler_positions' => $positionsWithPermission('tables.view'),
+        'manager_positions' => $positionsWithPermission('tables.edit'),
     ],
 
     'staff' => [

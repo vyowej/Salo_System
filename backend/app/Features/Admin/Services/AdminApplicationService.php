@@ -574,6 +574,13 @@ class AdminApplicationService
                     'updated_at' => $now,
                 ]);
 
+            DB::table('branch_permits')
+                ->where('restaurant_id', $childRestaurantId)
+                ->update([
+                    'application_branch_id' => $appBranch->application_branch_id,
+                    'updated_at' => $now,
+                ]);
+
             $this->auditLogService->record(
                 actorUserId: (int) $admin->user_id,
                 action: 'restaurant_branch_created',

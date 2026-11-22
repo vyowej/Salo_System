@@ -17,7 +17,7 @@ export default function FeaturedRestaurantBanner({
       <div className="salo-featured-banner__media">
         <img
           src={featured.cover_photo || '/images/landing/hero-food.png'}
-          alt={`${featured.restaurant_name} — Featured Restaurant of the Week`}
+          alt={`${featured.display_name || featured.restaurant_name} — Featured Restaurant of the Week`}
           className="salo-featured-banner__img"
         />
         <span className="salo-featured-banner__ribbon">★ Featured Restaurant of the Week</span>
@@ -34,7 +34,7 @@ export default function FeaturedRestaurantBanner({
         </div>
 
         <div className="salo-featured-banner__title-row">
-          <h2 className="salo-featured-banner__title">{featured.restaurant_name}</h2>
+          <h2 className="salo-featured-banner__title">{featured.display_name || featured.restaurant_name}</h2>
           {featured.cuisine && (
             <span className="salo-featured-banner__cuisine">{featured.cuisine}</span>
           )}

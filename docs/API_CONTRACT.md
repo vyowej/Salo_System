@@ -219,6 +219,15 @@ CRUD operations for dish catalog, pricing, category taxonomy, and live availabil
 ### `GET /api/owner/reservations` & `PATCH /api/owner/reservations/{id}/status`
 Confirms or cancels table reservation requests, tracking guest deposit status.
 
+### `GET /api/restaurant/tables` & `POST /api/restaurant/tables` & `PATCH /api/restaurant/tables/{id}`
+Restaurant table floor plan management (`tables.view`, `tables.add`, `tables.edit`, `tables.manageAvailability`):
+- `GET /api/restaurant/tables?search=&dining_area=&status=active|archived|all&date=YYYY-MM-DD` — returns `{ items, summary, dining_areas }` with live `table_status` (`available` | `reserved` | `occupied` | `archived`), `reservations_count`, `next_reservation`, and `upcoming_reservations_count`.
+- `POST /api/restaurant/tables` — creates an active table (`table_name`, `seating_capacity`, `min_party_size`, `dining_area`, `description`).
+- `GET /api/restaurant/tables/{id}` — retrieves a single table (`404` for cross-tenant IDs).
+- `PATCH /api/restaurant/tables/{id}` — partially updates a table; returns `409` if reducing `seating_capacity` or raising `min_party_size` would break any future blocking reservation.
+- `POST /api/restaurant/tables/{id}/archive` — archives a table (`is_active = 0`); idempotent; returns `409` if future blocking reservations exist.
+- `POST /api/restaurant/tables/{id}/reactivate` — reactivates an archived table (`is_active = 1`); idempotent.
+
 ### `GET /api/owner/earnings` & `POST /api/owner/payouts`
 Returns 7-day sales velocity, platform commission ledger (10%), and submits bank disbursement requests.
 

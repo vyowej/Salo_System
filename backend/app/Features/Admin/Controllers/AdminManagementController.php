@@ -69,6 +69,7 @@ class AdminManagementController extends Controller
             reason: $validated['reason'] ?? null,
             admin: $request->user(),
             request: $request,
+            applyToAllBranches: (bool) ($validated['apply_to_all_branches'] ?? false),
         );
 
         return ApiResponse::success(

@@ -126,6 +126,32 @@ class NotificationService
     }
 
     /**
+     * Resolve active owners + active reservation-handler staff for a specific restaurant.
+     *
+     * @return array<int, int>
+     */
+    public function resolveRestaurantReservationHandlerUserIds(int $restaurantId): array
+    {
+        $ownerIds = $this->resolveRestaurantOwnerUserIds($restaurantId);
+
+        $staffRows = DB::table('restaurant_staff as rs')
+            ->join('users as u', 'u.user_id', '=', 'rs.user_id')
+            ->where('rs.restaurant_id', $restaurantId)
+            ->where('rs.staff_status', 'active')
+            ->where('u.account_status', 'active')
+            ->get(['rs.user_id', 'rs.staff_position']);
+
+        $handlerStaffIds = [];
+        foreach ($staffRows as $row) {
+            if (User::isReservationHandlerPosition($row->staff_position)) {
+                $handlerStaffIds[] = (int) $row->user_id;
+            }
+        }
+
+        return array_values(array_unique(array_merge($ownerIds, $handlerStaffIds)));
+    }
+
+    /**
      * Resolve active owner user IDs for a specific restaurant.
      *
      * @return array<int, int>

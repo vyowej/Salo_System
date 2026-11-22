@@ -6,6 +6,7 @@ use App\Features\Reviews\Services\ReviewAggregationService;
 use App\Models\User;
 use App\Support\FileStorageService;
 use App\Support\PublicRestaurantVisibility;
+use App\Support\RestaurantBranchService;
 use App\Support\SqlLike;
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
@@ -109,13 +110,21 @@ class RestaurantService
             ->join('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
             ->join('cities as c', 'c.city_id', '=', 'b.city_id');
 
+        $branchCountSub = $this->visibility->applyVisibleRestaurantScope(
+            DB::table('restaurants as rb')
+                ->whereColumn('rb.brand_restaurant_id', 'r.brand_restaurant_id')
+                ->selectRaw('COUNT(*)'),
+            'rb',
+        );
+
         $this->visibility->applyVisibleRestaurantScope($query, 'r')
             ->select([
-                'r.restaurant_id', 'r.restaurant_name', 'r.business_type', 'r.description',
+                'r.restaurant_id', 'r.restaurant_name', 'r.branch_name', 'r.brand_restaurant_id', 'r.business_type', 'r.description',
                 'r.logo_image', 'r.cover_image', 'r.offers_delivery', 'r.offers_pickup',
                 'r.offers_dine_in', 'r.accepts_reservations', 'r.accepting_orders',
                 'r.accepting_reservations', 'r.created_at', 'b.barangay_name', 'c.city_name',
-            ]);
+            ])
+            ->selectSub($branchCountSub, 'visible_branch_count');
 
         $this->applyPublicListSearchAndCategory($query, $filters);
 
@@ -143,6 +152,9 @@ class RestaurantService
             $pattern = '%'.SqlLike::escape($search).'%';
             $query->where(function ($sub) use ($pattern): void {
                 $sub->where('r.restaurant_name', 'like', $pattern)
+                    ->orWhere('r.branch_name', 'like', $pattern)
+                    ->orWhere('b.barangay_name', 'like', $pattern)
+                    ->orWhere('c.city_name', 'like', $pattern)
                     ->orWhereExists(function ($catSub) use ($pattern): void {
                         $catSub->selectRaw('1')
                             ->from('restaurant_category_map as rcm')
@@ -181,6 +193,8 @@ class RestaurantService
         Collection $ratingsByRestaurant,
     ): array {
         $id = (int) $row->restaurant_id;
+        $brandId = (int) ($row->brand_restaurant_id ?? $id);
+        $branchName = property_exists($row, 'branch_name') ? $row->branch_name : null;
         $availability = $this->availabilityService->compute(
             $row,
             $hoursByRestaurant->get($id, collect()),
@@ -190,6 +204,10 @@ class RestaurantService
         $item = [
             'id' => $id,
             'name' => $row->restaurant_name,
+            'branch_name' => $branchName,
+            'brand_restaurant_id' => $brandId,
+            'display_name' => RestaurantBranchService::formatDisplayName((string) $row->restaurant_name, $branchName),
+            'branch_count' => max(1, (int) ($row->visible_branch_count ?? 1)),
             'business_type' => $row->business_type,
             'description' => $row->description,
             'logo_path' => $this->fileStorageService->publicUrl($row->logo_image),
@@ -232,6 +250,9 @@ class RestaurantService
             ->first([
                 'r.restaurant_id',
                 'r.restaurant_name',
+                'r.branch_name',
+                'r.brand_restaurant_id',
+                'r.parent_restaurant_id',
                 'r.business_type',
                 'r.description',
                 'r.contact_phone',
@@ -256,10 +277,12 @@ class RestaurantService
             throw new NotFoundHttpException('Restaurant not found.');
         }
 
+        $brandId = (int) ($row->brand_restaurant_id ?? $restaurantId);
         $categories = $this->loadCategoriesForRestaurants([$restaurantId])->get($restaurantId, collect())->values()->all();
         $hours = $this->loadOperatingHoursForRestaurants([$restaurantId])->get($restaurantId, collect());
         $closures = $this->loadRelevantClosuresForRestaurants([$restaurantId])->get($restaurantId, collect());
         $ratingSummary = $this->loadRatingSummariesForRestaurants([$restaurantId])->get($restaurantId);
+        $siblings = $this->loadVisibleSiblings($brandId, $restaurantId);
 
         return $this->formatPublicRestaurantDetails(
             $row,
@@ -267,12 +290,84 @@ class RestaurantService
             $hours,
             $this->availabilityService->compute($row, $hours, $closures),
             $ratingSummary,
+            $siblings,
         );
+    }
+
+    /**
+     * @param  array<int, int>  $brandIds
+     * @return Collection<int, int>
+     */
+    private function loadVisibleBranchCountsForBrands(array $brandIds): Collection
+    {
+        if ($brandIds === []) {
+            return collect();
+        }
+
+        return $this->visibility->applyVisibleRestaurantScope(DB::table('restaurants as r'), 'r')
+            ->whereIn('r.brand_restaurant_id', $brandIds)
+            ->selectRaw('r.brand_restaurant_id, COUNT(*) as total')
+            ->groupBy('r.brand_restaurant_id')
+            ->pluck('total', 'brand_restaurant_id')
+            ->map(fn ($count): int => (int) $count);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function loadVisibleSiblings(int $brandId, int $excludeRestaurantId): array
+    {
+        $siblingRows = $this->visibility->applyVisibleRestaurantScope(
+            DB::table('restaurants as r')
+                ->join('addresses as a', 'a.address_id', '=', 'r.address_id')
+                ->join('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
+                ->join('cities as c', 'c.city_id', '=', 'b.city_id')
+                ->where('r.brand_restaurant_id', $brandId)
+                ->where('r.restaurant_id', '!=', $excludeRestaurantId),
+            'r',
+        )
+            ->orderByRaw('CASE WHEN r.parent_restaurant_id IS NULL THEN 0 ELSE 1 END ASC')
+            ->orderBy('r.restaurant_id')
+            ->get([
+                'r.restaurant_id',
+                'r.restaurant_name',
+                'r.branch_name',
+                'r.accepts_reservations',
+                'r.accepting_orders',
+                'r.accepting_reservations',
+                'b.barangay_name',
+                'c.city_name',
+            ]);
+
+        if ($siblingRows->isEmpty()) {
+            return [];
+        }
+
+        $sibIds = $siblingRows->pluck('restaurant_id')->map(fn ($id): int => (int) $id)->all();
+        $hoursBySib = $this->loadOperatingHoursForRestaurants($sibIds);
+        $closuresBySib = $this->loadRelevantClosuresForRestaurants($sibIds);
+
+        return $siblingRows->map(function (object $sib) use ($hoursBySib, $closuresBySib): array {
+            $sibId = (int) $sib->restaurant_id;
+
+            return [
+                'id' => $sibId,
+                'branch_name' => $sib->branch_name,
+                'display_name' => RestaurantBranchService::formatDisplayName((string) $sib->restaurant_name, $sib->branch_name),
+                'short_address' => implode(', ', array_filter([$sib->barangay_name, $sib->city_name])),
+                'availability' => $this->availabilityService->compute(
+                    $sib,
+                    $hoursBySib->get($sibId, collect()),
+                    $closuresBySib->get($sibId, collect()),
+                ),
+            ];
+        })->values()->all();
     }
 
     /**
      * @param  array<int, string>  $categories
      * @param  array<string, mixed>  $availability
+     * @param  array<int, array<string, mixed>>  $siblings
      * @return array<string, mixed>
      */
     private function formatPublicRestaurantDetails(
@@ -281,6 +376,7 @@ class RestaurantService
         Collection $hours,
         array $availability,
         ?object $ratingSummary,
+        array $siblings = [],
     ): array {
         $publicAddressParts = array_filter([
             $row->building_name,
@@ -290,10 +386,20 @@ class RestaurantService
             $row->province_name,
             $row->postal_code,
         ]);
+        $shortAddress = implode(', ', array_filter([$row->barangay_name, $row->city_name]));
+        $id = (int) $row->restaurant_id;
+        $brandId = (int) ($row->brand_restaurant_id ?? $id);
+        $branchName = property_exists($row, 'branch_name') ? $row->branch_name : null;
 
         $payload = [
-            'id' => (int) $row->restaurant_id,
+            'id' => $id,
             'name' => $row->restaurant_name,
+            'branch_name' => $branchName,
+            'brand_restaurant_id' => $brandId,
+            'display_name' => RestaurantBranchService::formatDisplayName((string) $row->restaurant_name, $branchName),
+            'branch_count' => 1 + count($siblings),
+            'short_address' => $shortAddress,
+            'siblings' => $siblings,
             'business_type' => $row->business_type,
             'description' => $row->description,
             'logo_path' => $this->fileStorageService->publicUrl($row->logo_image),

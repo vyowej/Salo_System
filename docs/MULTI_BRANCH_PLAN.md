@@ -528,6 +528,40 @@ Phase 5 (Staff Per Branch — Backend + Frontend) is complete (`salo_test` only)
 
 ---
 
+## Phase 6a implemented
+
+Phase 6a (Customer-Facing API, Checkout/Order Labels, & Admin Branch Controls — Backend) is complete (`salo_test` only):
+
+1. **Public Listing, Search, & Detail (`RestaurantService.php`):**
+   - Public listing and detail payloads include additive `branch_name`, `brand_restaurant_id`, `display_name`, `branch_count`, and `short_address`.
+   - Public search (`?search=`) matches `restaurant_name`, `branch_name`, `barangay_name`, `city_name`, and active categories.
+   - `GET /api/restaurants/{id}` includes `siblings[]` (`id`, `branch_name`, `display_name`, `short_address`, `availability`) containing only publicly visible sibling branches (`PublicRestaurantVisibility`).
+2. **Checkout, Orders, Rider Deliveries, & Notifications (`CheckoutService.php`, `RiderDeliveryService.php`):**
+   - `CheckoutService` snapshots `display_name` into `orders.restaurant_name` and includes it in `order_received` notifications; existing orders retain their prior snapshot.
+   - `RiderDeliveryService` formats `restaurant_name` and `pickup_address_text` with `display_name`.
+3. **Reviews, Featured Restaurant, & Favorites:**
+   - Verified reviews/ratings and `FeaturedRestaurantService` remain keyed per branch (`restaurant_id`) with additive `branch_name`/`display_name` on featured rows (two branches of the same brand can both be eligible if each meets thresholds; rule left unchanged). No backend favorites endpoints exist yet.
+4. **Admin Branch Controls (`AdminManagementService.php`, `UpdateAdminRestaurantStatusRequest.php`, `AdminManagementController.php`):**
+   - `GET /api/admin/restaurants` returns `branch_name`, `parent_restaurant_id`, `brand_restaurant_id`, `is_main_branch`, and `branch_count` (and searches `branch_name`).
+   - `PATCH /api/admin/restaurants/{id}/status` updates only `{id}` by default; optional `apply_to_all_branches` (valid only on root `parent_restaurant_id === null`, `422` on child branches) updates all branches of the brand in one transaction with an `audit_logs` row per affected restaurant.
+
+---
+
+## Phase 6b implemented
+
+Phase 6b (Customer Branch Display & Admin Branch Controls — Frontend) is complete:
+
+1. **Customer Listing, Featured Banner, & Detail Switcher (`publicRestaurantService.js`, `CustomerDashboard.jsx`, `FeaturedRestaurantBanner.jsx`, `RestaurantDetailPage.jsx`, `branchBrowseContent.js`):**
+   - Listing cards, spotlight card, and `FeaturedRestaurantBanner` display `display_name` (plus `short_address`), keeping single-location businesses visually unchanged.
+   - `RestaurantDetailPage.jsx` renders a keyboard-accessible branch switcher banner (`"You are viewing: ..."` + links to `siblings[]` with address and open/closed status) only when `siblings.length > 0`, and shows a non-blocking hint if the cart already holds items from a sibling branch.
+2. **Cart & Checkout (`ItemModal.jsx`, `CartContext.jsx`, `CartPage.jsx`, `CheckoutPage.jsx`):**
+   - Cart items use `restaurant.displayName || restaurant.name` so two branches of one brand appear as distinct sub-order groups with their own delivery fees and coverage.
+3. **Admin Branch Controls (`AdminRestaurantsPage.jsx`):**
+   - Restaurant list displays `Main branch (N branches)` / `Branch of <name>` badges for multi-branch rows (single-location rows unchanged).
+   - Status confirmation dialog includes an explicit `Apply to all N branches` checkbox for root rows with branches, sending `apply_to_all_branches: true` and surfacing any backend `422` errors.
+
+---
+
 ## Approved Decisions Baseline (Decisions 1–7)
 
 1. **Decision 1 — Core Data Model:** **Option B** — Each branch is a `restaurants` row linked to the root row via `parent_restaurant_id` + plain `brand_restaurant_id` + `branch_name` (accepting duplicated business-level columns on child rows as a tradeoff), plus `restaurant_application_branches` for pending application branches, and copying `restaurant_owners` rows to each branch on creation/approval.

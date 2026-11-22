@@ -128,3 +128,129 @@ All Step 5 endpoints use existing tables and columns from `database/salo_db.sql`
 | `add_on_options` | `add_on_option_id`, `add_on_group_id`, `option_name`, `additional_price`, `is_available`, `sort_order` | Returned per add-on group ordered by `sort_order`. |
 | `reviews` | `review_id`, `customer_id`, `restaurant_id`, `order_id`, `rating`, `comment`, `is_visible` | Only `is_visible = 1` rows are aggregated; rating fields are omitted when count is `0`. |
 
+
+## Multi-Branch Fields (Phase 6a)
+
+- `GET /api/restaurants` and `GET /api/restaurants/{id}` include additive fields on each visible branch: `branch_name`, `brand_restaurant_id`, `display_name` (`"<restaurant_name> — <branch_name>"` or `<restaurant_name>` when `branch_name` is null), `branch_count`, and `short_address`.
+- `GET /api/restaurants?search=` also matches `branch_name`, `barangay_name`, and `city_name`.
+- `GET /api/restaurants/{id}` includes `siblings[]` containing only the other publicly visible branches of the same `brand_restaurant_id` (`id`, `branch_name`, `display_name`, `short_address`, `availability`). Hidden, unpublished, or inactive siblings are never exposed.
+
+---
+
+## Owner & Staff Table Management (`/api/restaurant/tables*`)
+
+All table management endpoints require session authentication (`auth`), `role:owner,staff` middleware, and workspace scoping via `WorkspaceAccessResolver::requireActiveAuthorizedRestaurantForTables()` (resolved from `restaurant_id` query/body parameter, `X-Restaurant-Id` header, or the user's primary active restaurant).
+- Cross-tenant table IDs always return `404` (`NotFoundHttpException`), never `403`.
+- Staff without the required `tables.*` permission receive `403`.
+- There is intentionally **no** hard-delete route (`reservations` reference `restaurant_tables` with `ON DELETE RESTRICT`); removing a table from active service uses `POST /api/restaurant/tables/{id}/archive` (`is_active = 0`).
+
+### `GET /api/restaurant/tables` (`tables.view`)
+
+Lists restaurant tables with live reservation status for the selected date, summary metrics, and distinct dining areas in a single aggregated query.
+
+- **Query parameters:**
+  - `restaurant_id` (int, optional)
+  - `search` (string, optional, max `100` — matches `table_name`, `dining_area`, `description`)
+  - `dining_area` (string, optional, max `100`)
+  - `status` (`active` | `archived` | `all`, default `all`)
+  - `date` (`YYYY-MM-DD`, optional — defaults to today in `Asia/Manila`)
+
+**Response (`200`):**
+```json
+{
+  "success": true,
+  "message": "Restaurant tables retrieved.",
+  "data": {
+    "items": [
+      {
+        "table_id": 1,
+        "restaurant_id": 1,
+        "table_name": "T-01",
+        "seating_capacity": 4,
+        "min_party_size": 2,
+        "dining_area": "Indoor",
+        "description": "Window booth for four",
+        "is_active": true,
+        "table_status": "reserved",
+        "reservations_count": 1,
+        "next_reservation": {
+          "reservation_id": 14,
+          "reservation_reference": "SALO-RES-20261123-AB12",
+          "reservation_start": "2026-11-23T19:00:00+08:00",
+          "number_of_guests": 4,
+          "status": "confirmed"
+        },
+        "upcoming_reservations_count": 2,
+        "created_at": "2026-11-20T10:00:00+08:00",
+        "updated_at": "2026-11-22T15:30:00+08:00"
+      }
+    ],
+    "summary": {
+      "total_tables": 8,
+      "active_tables": 7,
+      "archived_tables": 1,
+      "total_seats": 34,
+      "available_now": 5,
+      "reserved_count": 1,
+      "occupied_count": 1
+    },
+    "dining_areas": ["Indoor", "Outdoor", "Private Room", "Terrace"]
+  }
+}
+```
+
+### `POST /api/restaurant/tables` (`tables.add`)
+
+Creates a new active table (`is_active = 1`) and records an `owner_table_created` audit log entry.
+
+- **Request body:**
+  ```json
+  {
+    "table_name": "T-09",
+    "seating_capacity": 6,
+    "min_party_size": 3,
+    "dining_area": "Terrace",
+    "description": "Garden view table for six"
+  }
+  ```
+- **Response (`201`):** `{ "success": true, "message": "Restaurant table created.", "data": { "table": { ... } } }`
+- **Error responses:**
+  - `422`: Validation failure (`table_name` blank, >50 chars, or case-insensitive duplicate within the restaurant; `seating_capacity` outside `1..100`; `min_party_size` < 1 or > `seating_capacity`).
+  - `403`: Staff lacks `tables.add` permission or restaurant is not active.
+
+### `GET /api/restaurant/tables/{id}` (`tables.view`)
+
+Returns a single table by ID with live status for `date` (defaults to today in `Asia/Manila`).
+- **Response (`200`):** `{ "success": true, "message": "Restaurant table retrieved.", "data": { "table": { ... } } }`
+- **Error responses:** `404` if not found or belongs to another restaurant.
+
+### `PATCH /api/restaurant/tables/{id}` (`tables.edit`)
+
+Partially updates table attributes and records an `owner_table_updated` audit log entry.
+
+- **Request body (partial):**
+  ```json
+  {
+    "table_name": "T-09A",
+    "seating_capacity": 4,
+    "min_party_size": 2,
+    "dining_area": "Indoor",
+    "description": "Updated indoor table"
+  }
+  ```
+- **Response (`200`):** `{ "success": true, "message": "Restaurant table updated.", "data": { "table": { ... } } }`
+- **Error responses:**
+  - `422`: Duplicate `table_name` in restaurant, or `min_party_size` exceeds new/existing `seating_capacity`.
+  - `409`: Reducing `seating_capacity` or raising `min_party_size` conflicts with future blocking reservations assigned to the table (message includes the count and earliest conflicting `reservation_reference`).
+  - `404`: Table does not exist or belongs to another restaurant.
+
+### `POST /api/restaurant/tables/{id}/archive` (`tables.manageAvailability`)
+
+Archives a table (`is_active = 0`, `table_status = 'archived'`) and records an `owner_table_archived` audit log entry. Idempotent (`200`) if already archived.
+- **Error responses:**
+  - `409`: Table has future blocking reservations (`reservation_start >= now` in `Asia/Manila` and status in `pending`, `approved`, `awaiting_payment`, `confirmed`, `arrived`, `seated`).
+  - `404`: Table does not exist or belongs to another restaurant.
+
+### `POST /api/restaurant/tables/{id}/reactivate` (`tables.manageAvailability`)
+
+Reactivates an archived table (`is_active = 1`) and records an `owner_table_reactivated` audit log entry. Idempotent (`200`) if already active.

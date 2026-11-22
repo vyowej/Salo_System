@@ -615,3 +615,118 @@ test('Phase 5: deactivated branch fallback for staff, inbox branch display_name,
     await server.close();
   }
 });
+
+test('Phase 6b: public listing/detail branch mapping, FeaturedRestaurantBanner, and admin branch badges', async () => {
+  const server = await createServer({
+    configFile: false,
+    root: fileURLToPath(new URL('../../../../', import.meta.url)),
+    plugins: [reactPlugin()],
+    server: { middlewareMode: true },
+    appType: 'custom',
+    logLevel: 'silent',
+  });
+
+  const originalFetch = globalThis.fetch;
+  const fetchCalls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const u = String(url);
+    fetchCalls.push({ url: u, method: options.method || 'GET', body: options.body || null });
+
+    if (u.includes('/sanctum/csrf-cookie')) {
+      return { ok: true, status: 204, headers: { get: () => null }, json: async () => ({}) };
+    }
+    if (u.endsWith('/restaurants')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            restaurants: [
+              { id: 1, name: 'Solo', branch_name: null, display_name: 'Solo', branch_count: 1, short_address: 'Diliman, QC' },
+              { id: 2, name: 'Bistro', branch_name: 'Makati', display_name: 'Bistro — Makati', brand_restaurant_id: 2, branch_count: 2, short_address: 'Bel-Air, Makati' },
+            ],
+            pagination: { current_page: 1, per_page: 12, total: 2, last_page: 1 },
+          },
+        }),
+      };
+    }
+    if (u.includes('/restaurants/2/menu')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { categories: [] } }),
+      };
+    }
+    if (u.includes('/restaurants/2')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            restaurant: {
+              id: 2,
+              name: 'Bistro',
+              branch_name: 'Main',
+              display_name: 'Bistro — Main',
+              brand_restaurant_id: 2,
+              branch_count: 2,
+              address: { short: 'Diliman, QC', full: '101 Main, Diliman, QC' },
+              siblings: [
+                { id: 3, branch_name: 'Makati', display_name: 'Bistro — Makati', short_address: 'Bel-Air, Makati', availability: { is_open: true } },
+              ],
+            },
+          },
+        }),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: true, data: { restaurant: { restaurant_id: 2, restaurant_status: 'inactive' } } }),
+    };
+  };
+
+  try {
+    const { default: publicRestaurantService } = await server.ssrLoadModule('/src/services/publicRestaurantService.js');
+    const { default: FeaturedRestaurantBanner } = await server.ssrLoadModule('/src/components/reviews/FeaturedRestaurantBanner.jsx');
+    const { default: adminApiService } = await server.ssrLoadModule('/src/services/adminApiService.js');
+    const { BRANCH_BROWSE_COPY } = await server.ssrLoadModule('/src/features/customer/content/branchBrowseContent.js');
+
+    const listRes = await publicRestaurantService.getRestaurants();
+    assert.equal(listRes.restaurants[0].displayName, 'Solo');
+    assert.equal(listRes.restaurants[0].branchCount, 1);
+    assert.equal(listRes.restaurants[1].displayName, 'Bistro — Makati');
+    assert.equal(listRes.restaurants[1].branchCount, 2);
+
+    const detailRes = await publicRestaurantService.getRestaurantWithMenu('2');
+    assert.equal(detailRes.displayName, 'Bistro — Main');
+    assert.equal(detailRes.siblings.length, 1);
+    assert.equal(detailRes.siblings[0].displayName, 'Bistro — Makati');
+
+    const bannerHtml = renderToStaticMarkup(React.createElement(FeaturedRestaurantBanner, {
+      featured: { restaurant_id: 2, restaurant_name: 'Bistro', display_name: 'Bistro — Makati', cuisine: 'Filipino', bayesian_score: 4.8, evaluation_review_count: 15 },
+    }));
+    assert.match(bannerHtml, /Bistro — Makati/);
+
+    assert.equal(BRANCH_BROWSE_COPY.adminMainBranchBadge(3), 'Main branch (3 branches)');
+    assert.equal(BRANCH_BROWSE_COPY.adminChildBranchBadge('Bistro'), 'Branch of Bistro');
+
+    await adminApiService.updateRestaurantStatus(2, {
+      status: 'inactive',
+      reason: 'Audit',
+      apply_to_all_branches: true,
+    });
+    const statusCall = fetchCalls.find((c) => c.url.includes('/admin/restaurants/2/status'));
+    assert.ok(statusCall);
+    assert.equal(JSON.parse(statusCall.body).apply_to_all_branches, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await server.close();
+  }
+});

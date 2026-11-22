@@ -207,6 +207,14 @@ CREATE TABLE restaurants (
     inventory_deduction_mode     ENUM('manual','on_completion') NOT NULL DEFAULT 'manual',
     reservation_min_notice_hours SMALLINT UNSIGNED NOT NULL DEFAULT 2,
     reservation_max_party_size   SMALLINT UNSIGNED NOT NULL DEFAULT 8,
+    reservation_duration_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 90,
+    reservation_max_advance_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+    reservation_cancellation_cutoff_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 120,
+    reservation_auto_confirm     TINYINT(1)      NOT NULL DEFAULT 0,
+    reservation_pending_expiry_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 120,
+    reservation_deposit_required TINYINT(1)      NOT NULL DEFAULT 0,
+    reservation_deposit_amount   DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
+    reservation_service_fee      DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
     reservation_notes            TEXT            NULL,
     restaurant_status            ENUM('pending','approved','rejected','active','inactive','suspended') NOT NULL DEFAULT 'pending',
     is_published                 TINYINT(1)      NOT NULL DEFAULT 0 COMMENT 'Owner-controlled customer visibility; restaurant_status still wins',
@@ -362,7 +370,10 @@ CREATE TABLE restaurant_tables (
     table_id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     restaurant_id        BIGINT UNSIGNED NOT NULL,
     table_name           VARCHAR(50)     NOT NULL,
+    dining_area          VARCHAR(100)    NULL DEFAULT NULL,
+    description          VARCHAR(255)    NULL DEFAULT NULL,
     seating_capacity     SMALLINT UNSIGNED NOT NULL,
+    min_party_size       SMALLINT UNSIGNED NOT NULL DEFAULT 1,
     is_active            TINYINT(1)      NOT NULL DEFAULT 1,
     created_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -371,7 +382,8 @@ CREATE TABLE restaurant_tables (
     UNIQUE KEY uk_restaurant_tables_id_restaurant (table_id, restaurant_id),
     KEY idx_restaurant_tables_active (restaurant_id, is_active),
     CONSTRAINT fk_restaurant_tables_restaurant FOREIGN KEY (restaurant_id) REFERENCES restaurants (restaurant_id) ON DELETE CASCADE ON UPDATE RESTRICT,
-    CONSTRAINT chk_restaurant_tables_capacity CHECK (seating_capacity > 0)
+    CONSTRAINT chk_restaurant_tables_capacity CHECK (seating_capacity > 0),
+    CONSTRAINT chk_restaurant_tables_min_party CHECK (min_party_size >= 1 AND min_party_size <= seating_capacity)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
@@ -1027,21 +1039,34 @@ CREATE TABLE deliveries (
 -- ----------------------------------------------------------------------------
 CREATE TABLE reservations (
     reservation_id       BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    reservation_reference VARCHAR(40)    NULL DEFAULT NULL,
     customer_id          BIGINT UNSIGNED NOT NULL,
     restaurant_id        BIGINT UNSIGNED NOT NULL,
     table_id             BIGINT UNSIGNED NULL,
+    contact_name         VARCHAR(150)    NULL DEFAULT NULL,
+    contact_phone        VARCHAR(30)     NULL DEFAULT NULL,
     reservation_start    DATETIME        NOT NULL,
     reservation_end      DATETIME        NOT NULL,
     number_of_guests     SMALLINT UNSIGNED NOT NULL,
     reservation_status   ENUM('pending','approved','awaiting_payment','confirmed','arrived','seated','completed','cancelled','no_show','rejected','expired') NOT NULL DEFAULT 'pending',
     deposit_amount       DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
+    deposit_status       ENUM('none','pending','paid','waived','refunded') NOT NULL DEFAULT 'none',
     service_fee          DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
     is_fee_refundable    TINYINT(1)      NOT NULL DEFAULT 1 COMMENT 'Default refundable; 0 only if non-refundable terms were disclosed and accepted',
     cancellation_fee     DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
     special_requests     TEXT            NULL,
+    idempotency_key      VARCHAR(64)     NULL DEFAULT NULL,
     cancelled_by         ENUM('customer','restaurant','admin','system') NULL,
     cancelled_at         TIMESTAMP       NULL,
     cancellation_reason  VARCHAR(255)    NULL,
+    rejection_reason     VARCHAR(255)    NULL DEFAULT NULL,
+    rejected_at          DATETIME        NULL DEFAULT NULL,
+    approved_at          DATETIME        NULL DEFAULT NULL,
+    confirmed_at         DATETIME        NULL DEFAULT NULL,
+    arrived_at           DATETIME        NULL DEFAULT NULL,
+    seated_at            DATETIME        NULL DEFAULT NULL,
+    completed_at         DATETIME        NULL DEFAULT NULL,
+    expired_at           DATETIME        NULL DEFAULT NULL,
     no_show_marked_at    DATETIME        NULL COMMENT 'Set with no_show, after the grace period',
     no_show_marked_by    BIGINT UNSIGNED NULL COMMENT 'Staff user who marked the no-show',
     created_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1051,6 +1076,11 @@ CREATE TABLE reservations (
     KEY idx_reservations_customer (customer_id),
     KEY idx_reservations_table (table_id, restaurant_id),
     KEY idx_reservations_status (reservation_status),
+    UNIQUE KEY uk_reservations_reference (reservation_reference),
+    UNIQUE KEY uk_reservations_customer_idempotency (customer_id, idempotency_key),
+    KEY idx_reservations_table_window (table_id, reservation_start, reservation_end),
+    KEY idx_reservations_customer_start (customer_id, reservation_start),
+    KEY idx_reservations_restaurant_status_start (restaurant_id, reservation_status, reservation_start),
     CONSTRAINT fk_reservations_customer FOREIGN KEY (customer_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_reservations_restaurant FOREIGN KEY (restaurant_id) REFERENCES restaurants (restaurant_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_reservations_table FOREIGN KEY (table_id, restaurant_id) REFERENCES restaurant_tables (table_id, restaurant_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
@@ -1061,6 +1091,25 @@ CREATE TABLE reservations (
     CONSTRAINT chk_reservations_time CHECK (reservation_end > reservation_start),
     CONSTRAINT chk_reservations_guests CHECK (number_of_guests > 0),
     CONSTRAINT chk_reservations_amounts CHECK (deposit_amount >= 0 AND service_fee >= 0 AND cancellation_fee >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
+-- 37b. RESERVATION STATUS HISTORY
+-- ----------------------------------------------------------------------------
+CREATE TABLE reservation_status_history (
+    history_id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    reservation_id      BIGINT UNSIGNED NOT NULL,
+    from_status         ENUM('pending','approved','awaiting_payment','confirmed','arrived','seated','completed','cancelled','no_show','rejected','expired') NULL DEFAULT NULL,
+    to_status           ENUM('pending','approved','awaiting_payment','confirmed','arrived','seated','completed','cancelled','no_show','rejected','expired') NOT NULL,
+    changed_by_user_id  BIGINT UNSIGNED NULL DEFAULT NULL,
+    changed_by_role     ENUM('customer','restaurant','admin','system') NOT NULL,
+    note                VARCHAR(255) NULL DEFAULT NULL,
+    created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (history_id),
+    KEY idx_res_status_history_reservation (reservation_id, created_at),
+    KEY idx_res_status_history_actor (changed_by_user_id),
+    CONSTRAINT fk_res_status_history_reservation FOREIGN KEY (reservation_id) REFERENCES reservations (reservation_id) ON DELETE CASCADE ON UPDATE RESTRICT,
+    CONSTRAINT fk_res_status_history_actor FOREIGN KEY (changed_by_user_id) REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ALTER TABLE payment_allocations

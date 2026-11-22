@@ -62,6 +62,47 @@ function normalizeRestaurantOrder(raw) {
   };
 }
 
+export function normalizeTable(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const isActive = raw.is_active !== undefined ? Boolean(raw.is_active) : Boolean(raw.isActive ?? true);
+  const rawStatus = String(raw.table_status ?? raw.status ?? (isActive ? 'available' : 'archived')).toLowerCase();
+  const capacity = Number(raw.seating_capacity ?? raw.capacity ?? 0);
+  const minPartySize = Number(raw.min_party_size ?? raw.minPartySize ?? 1);
+  const nextResRaw = raw.next_reservation ?? raw.nextReservation ?? null;
+
+  const nextReservation = nextResRaw && typeof nextResRaw === 'object'
+    ? {
+        id: nextResRaw.reservation_id ?? nextResRaw.id ?? null,
+        reservationId: nextResRaw.reservation_id ?? nextResRaw.reservationId ?? nextResRaw.id ?? null,
+        reservationReference: nextResRaw.reservation_reference ?? nextResRaw.reservationReference ?? null,
+        reservationStart: nextResRaw.reservation_start ?? nextResRaw.reservationStart ?? null,
+        numberOfGuests: Number(nextResRaw.number_of_guests ?? nextResRaw.numberOfGuests ?? 0),
+        status: String(nextResRaw.status ?? 'pending').toLowerCase(),
+      }
+    : null;
+
+  return {
+    id: raw.table_id ?? raw.id ?? null,
+    tableId: raw.table_id ?? raw.tableId ?? raw.id ?? null,
+    restaurantId: raw.restaurant_id ?? raw.restaurantId ?? null,
+    tableName: String(raw.table_name ?? raw.tableName ?? ''),
+    capacity,
+    seatingCapacity: capacity,
+    minPartySize,
+    diningArea: raw.dining_area ?? raw.diningArea ?? null,
+    description: raw.description ?? null,
+    isActive,
+    status: rawStatus,
+    tableStatus: rawStatus,
+    reservationsCount: Number(raw.reservations_count ?? raw.reservationsCount ?? 0),
+    nextReservation,
+    upcomingReservationsCount: Number(raw.upcoming_reservations_count ?? raw.upcomingReservationsCount ?? 0),
+    createdAt: raw.created_at ?? raw.createdAt ?? null,
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? null,
+  };
+}
+
 export const ownerService = {
   async getSetupStatus(restaurantId) {
     const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
@@ -378,28 +419,141 @@ export const ownerService = {
     notAvailable('Updating dining areas');
   },
 
-  getTables() {
-    return [];
+  async getTables(restaurantId = null, dateKey = '', filters = {}) {
+    let resolvedRestaurantId = restaurantId;
+    let resolvedDate = dateKey;
+    let resolvedFilters = filters || {};
+
+    if (restaurantId && typeof restaurantId === 'object') {
+      resolvedFilters = restaurantId;
+      resolvedRestaurantId = restaurantId.restaurantId ?? restaurantId.restaurant_id ?? null;
+      resolvedDate = restaurantId.date ?? restaurantId.dateKey ?? '';
+    } else if (dateKey && typeof dateKey === 'object') {
+      resolvedFilters = dateKey;
+      resolvedDate = dateKey.date ?? dateKey.dateKey ?? '';
+    }
+
+    const params = new URLSearchParams();
+    if (resolvedRestaurantId) {
+      params.set('restaurant_id', String(resolvedRestaurantId));
+    }
+    const targetDate = resolvedFilters.date || resolvedDate;
+    if (targetDate) {
+      params.set('date', String(targetDate));
+    }
+    if (resolvedFilters.search && String(resolvedFilters.search).trim()) {
+      params.set('search', String(resolvedFilters.search).trim());
+    }
+    const targetArea = resolvedFilters.dining_area ?? resolvedFilters.diningArea ?? '';
+    if (targetArea && targetArea !== 'all') {
+      params.set('dining_area', String(targetArea).trim());
+    }
+    const targetStatus = resolvedFilters.status ?? '';
+    if (targetStatus) {
+      params.set('status', String(targetStatus).toLowerCase());
+    }
+
+    const qs = params.toString();
+    const res = await apiClient.get(`/restaurant/tables${qs ? `?${qs}` : ''}`);
+    const payload = res?.data ?? {};
+    const items = Array.isArray(payload.items)
+      ? payload.items.map(normalizeTable).filter(Boolean)
+      : [];
+    const rawSummary = payload.summary ?? {};
+    const diningAreas = Array.isArray(payload.dining_areas)
+      ? payload.dining_areas.filter((area) => typeof area === 'string' && area.trim() !== '')
+      : [];
+
+    return {
+      items,
+      tables: items,
+      summary: {
+        totalTables: Number(rawSummary.total_tables ?? items.length),
+        activeTables: Number(rawSummary.active_tables ?? 0),
+        archivedTables: Number(rawSummary.archived_tables ?? 0),
+        totalSeats: Number(rawSummary.total_seats ?? 0),
+        availableNow: Number(rawSummary.available_now ?? 0),
+        reservedCount: Number(rawSummary.reserved_count ?? 0),
+        occupiedCount: Number(rawSummary.occupied_count ?? 0),
+        total_tables: Number(rawSummary.total_tables ?? items.length),
+        active_tables: Number(rawSummary.active_tables ?? 0),
+        archived_tables: Number(rawSummary.archived_tables ?? 0),
+        total_seats: Number(rawSummary.total_seats ?? 0),
+        available_now: Number(rawSummary.available_now ?? 0),
+        reserved_count: Number(rawSummary.reserved_count ?? 0),
+        occupied_count: Number(rawSummary.occupied_count ?? 0),
+      },
+      diningAreas,
+      dining_areas: diningAreas,
+    };
+  },
+
+  async getTable(restaurantId, tableId, dateKey = '') {
+    const params = new URLSearchParams();
+    if (restaurantId) params.set('restaurant_id', String(restaurantId));
+    if (dateKey) params.set('date', String(dateKey));
+    const qs = params.toString();
+    const res = await apiClient.get(`/restaurant/tables/${encodeURIComponent(tableId)}${qs ? `?${qs}` : ''}`);
+    return normalizeTable(res?.data?.table ?? null);
   },
 
   getTableSchedule() {
     return [];
   },
 
-  addTable() {
-    notAvailable('Adding tables');
+  async addTable(restaurantId, payload = {}) {
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      table_name: payload.table_name ?? payload.tableName ?? '',
+      seating_capacity: Number(payload.seating_capacity ?? payload.seatingCapacity ?? payload.capacity ?? 0),
+      min_party_size:
+        payload.min_party_size !== undefined || payload.minPartySize !== undefined
+          ? Number(payload.min_party_size ?? payload.minPartySize)
+          : 1,
+      dining_area: payload.dining_area ?? payload.diningArea ?? null,
+      description: payload.description ?? null,
+    };
+    const res = await apiClient.post('/restaurant/tables', body);
+    return normalizeTable(res?.data?.table ?? null);
   },
 
-  updateTable() {
-    notAvailable('Updating tables');
+  async updateTable(restaurantId, tableId, payload = {}) {
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+    };
+    if (payload.table_name !== undefined || payload.tableName !== undefined) {
+      body.table_name = payload.table_name ?? payload.tableName;
+    }
+    if (
+      payload.seating_capacity !== undefined ||
+      payload.seatingCapacity !== undefined ||
+      payload.capacity !== undefined
+    ) {
+      body.seating_capacity = Number(payload.seating_capacity ?? payload.seatingCapacity ?? payload.capacity);
+    }
+    if (payload.min_party_size !== undefined || payload.minPartySize !== undefined) {
+      body.min_party_size = Number(payload.min_party_size ?? payload.minPartySize);
+    }
+    if (payload.dining_area !== undefined || payload.diningArea !== undefined) {
+      body.dining_area = payload.dining_area ?? payload.diningArea;
+    }
+    if (payload.description !== undefined) {
+      body.description = payload.description;
+    }
+    const res = await apiClient.patch(`/restaurant/tables/${encodeURIComponent(tableId)}`, body);
+    return normalizeTable(res?.data?.table ?? null);
   },
 
-  archiveTable() {
-    notAvailable('Archiving tables');
+  async archiveTable(restaurantId, tableId) {
+    const body = restaurantId ? { restaurant_id: restaurantId } : {};
+    const res = await apiClient.post(`/restaurant/tables/${encodeURIComponent(tableId)}/archive`, body);
+    return normalizeTable(res?.data?.table ?? null);
   },
 
-  reactivateTable() {
-    notAvailable('Reactivating tables');
+  async reactivateTable(restaurantId, tableId) {
+    const body = restaurantId ? { restaurant_id: restaurantId } : {};
+    const res = await apiClient.post(`/restaurant/tables/${encodeURIComponent(tableId)}/reactivate`, body);
+    return normalizeTable(res?.data?.table ?? null);
   },
 
   updateReservationStatus() {

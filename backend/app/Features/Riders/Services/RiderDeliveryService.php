@@ -7,6 +7,7 @@ use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\Money;
+use App\Support\RestaurantBranchService;
 use App\Support\WorkspaceAccessResolver;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -96,6 +97,7 @@ class RiderDeliveryService
                 ->select([
                     'r.restaurant_id',
                     'r.restaurant_name as live_restaurant_name',
+                    'r.branch_name as live_branch_name',
                     'ra.street as pickup_street',
                     'rb.barangay_name as pickup_barangay',
                     'rc.city_name as pickup_city',
@@ -116,7 +118,9 @@ class RiderDeliveryService
         $deliveries = $rows->map(function (object $row) use ($itemCounts, $pickupAddressesByRestaurantId): array {
             $counts = $itemCounts->get((int) $row->order_id);
             $pickupAddr = $pickupAddressesByRestaurantId->get((int) $row->restaurant_id);
-            $restaurantName = $pickupAddr?->live_restaurant_name ?? $row->restaurant_name;
+            $restaurantName = $pickupAddr
+                ? RestaurantBranchService::formatDisplayName((string) $pickupAddr->live_restaurant_name, $pickupAddr->live_branch_name ?? null)
+                : $row->restaurant_name;
 
             return [
                 'order_id' => (int) $row->order_id,
@@ -543,6 +547,7 @@ class RiderDeliveryService
                 'o.order_type',
                 'o.restaurant_id',
                 'r.restaurant_name',
+                'r.branch_name',
                 'o.customer_name',
                 'o.delivery_phone',
                 'cu.phone_number as customer_phone',
@@ -591,6 +596,8 @@ class RiderDeliveryService
         $paymentStatus = $payment?->payment_status ?? 'pending';
         $requiresCod = $payment?->payment_method === 'cash' && $paymentStatus === 'pending';
 
+        $restaurantDisplayName = RestaurantBranchService::formatDisplayName((string) $row->restaurant_name, $row->branch_name ?? null);
+
         return [
             'delivery_id' => (int) $row->delivery_id,
             'order_id' => $orderId,
@@ -598,13 +605,13 @@ class RiderDeliveryService
             'order_status' => $row->order_status,
             'delivery_status' => $row->delivery_status,
             'restaurant_id' => (int) $row->restaurant_id,
-            'restaurant_name' => $row->restaurant_name,
+            'restaurant_name' => $restaurantDisplayName,
             'pickup_address_text' => $this->formatAddressText(
                 $row->pickup_street,
                 $row->pickup_barangay,
                 $row->pickup_city,
                 $row->pickup_province,
-                $row->restaurant_name,
+                $restaurantDisplayName,
             ),
             'dropoff_address_text' => $row->delivery_address_text,
             'delivery_notes' => $row->delivery_notes,

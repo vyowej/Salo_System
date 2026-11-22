@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import customerService from '../../../services/customerService';
 import publicRestaurantService from '../../../services/publicRestaurantService';
+import { useCart } from '../../../hooks/useCart';
+import { BRANCH_BROWSE_COPY } from '../content/branchBrowseContent';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import { StateView } from '../../../components/feedback';
@@ -43,6 +45,7 @@ export default function RestaurantDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const cart = useCart();
 
   const [restaurant, setRestaurant] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -307,7 +310,7 @@ export default function RestaurantDetailPage() {
               </div>
               <div className="rdp-hero-text">
                 <div className="rdp-hero-title-row">
-                  <h1>{restaurant.name}</h1>
+                  <h1>{restaurant.displayName || restaurant.name}</h1>
                   <Badge variant={restaurant.isOpen ? 'success' : 'default'} dot size="sm">
                     {restaurant.isOpen ? 'Open Now' : 'Closed'}
                   </Badge>
@@ -359,6 +362,39 @@ export default function RestaurantDetailPage() {
               This restaurant is not accepting orders right now.
             </p>
           )}
+
+          {Array.isArray(restaurant.siblings) && restaurant.siblings.length > 0 && (
+            <nav aria-label={BRANCH_BROWSE_COPY.switcherAriaLabel} className="rdp-branch-switcher">
+              <div className="rdp-branch-switcher__current">
+                <strong>{BRANCH_BROWSE_COPY.youAreViewingPrefix}</strong>{' '}
+                {restaurant.branchName || restaurant.displayName || restaurant.name}
+                {restaurant.shortAddress ? ` — ${restaurant.shortAddress}` : ''}
+              </div>
+              <div className="rdp-branch-switcher__links">
+                <span className="rdp-branch-switcher__label">{BRANCH_BROWSE_COPY.otherBranchesLabel}</span>
+                {restaurant.siblings.map((sib) => {
+                  const sibOpen = Boolean(sib.availability?.is_open);
+                  return (
+                    <Link key={sib.id} to={`/customer/restaurants/${sib.id}`} className="rdp-branch-pill">
+                      <strong>{sib.branchName || sib.displayName}</strong>
+                      {sib.shortAddress && <span className="rdp-branch-pill__addr">· {sib.shortAddress}</span>}
+                      <span className={`rdp-branch-pill__status ${sibOpen ? 'is-open' : 'is-closed'}`}>
+                        {sibOpen ? BRANCH_BROWSE_COPY.openLabel : BRANCH_BROWSE_COPY.closedLabel}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </nav>
+          )}
+
+          {Array.isArray(restaurant.siblings)
+            && restaurant.siblings.length > 0
+            && (cart?.items || []).some((item) => restaurant.siblings.some((sib) => String(sib.id) === String(item.restaurantId))) && (
+              <p role="status" className="rdp-sibling-cart-hint">
+                {BRANCH_BROWSE_COPY.siblingCartHint}
+              </p>
+            )}
           {!restaurant.isOpen && acceptingOrders && (
             <p role="status" className="rdp-hero-notice">
               Currently outside regular hours · Orders will be prepared upon opening.
@@ -535,7 +571,7 @@ export default function RestaurantDetailPage() {
           <div className="rdp-panel-col" aria-hidden="false">
             <OrderPanel
               restaurantId={restaurant.id}
-              restaurantName={restaurant.name}
+              restaurantName={restaurant.displayName || restaurant.name}
             />
           </div>
 
@@ -551,7 +587,7 @@ export default function RestaurantDetailPage() {
           Customer Reviews &amp; Ratings
         </h2>
         <RatingSummaryCard
-          title={`${restaurant.name} Ratings`}
+          title={`${restaurant.displayName || restaurant.name} Ratings`}
           subtitle={reviewsLoading ? 'Loading verified reviews…' : 'Based on verified, published customer reviews'}
           averageRating={ratingSummary.average_rating}
           totalCount={ratingSummary.total_count}
@@ -571,7 +607,7 @@ export default function RestaurantDetailPage() {
       {/* ── Mobile floating bar + bottom sheet ───────────── */}
       <MobileOrderBar
         restaurantId={restaurant.id}
-        restaurantName={restaurant.name}
+        restaurantName={restaurant.displayName || restaurant.name}
       />
 
     </CustomerLayout>

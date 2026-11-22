@@ -3,6 +3,7 @@
 namespace App\Features\Restaurants\Services;
 
 use App\Features\Notifications\Services\NotificationService;
+use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
 use App\Support\AddressService;
 use App\Support\AuditLogService;
@@ -10,6 +11,7 @@ use App\Support\RestaurantBranchService;
 use App\Support\WorkspaceAccessResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class OwnerBranchService
@@ -20,6 +22,7 @@ class OwnerBranchService
         private readonly AddressService $addressService,
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
+        private readonly BranchPermitService $branchPermitService,
     ) {}
 
     /**
@@ -58,6 +61,7 @@ class OwnerBranchService
             ->leftJoin('addresses as a', 'a.address_id', '=', 'r.address_id')
             ->leftJoin('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
             ->leftJoin('cities as c', 'c.city_id', '=', 'b.city_id')
+            ->leftJoin('branch_permits as bp', 'bp.restaurant_id', '=', 'r.restaurant_id')
             ->whereIn('r.restaurant_id', $accessibleIds)
             ->select([
                 'r.restaurant_id',
@@ -70,12 +74,16 @@ class OwnerBranchService
                 'r.accepting_orders',
                 'b.barangay_name',
                 'c.city_name',
+                'bp.permit_status',
+                'bp.is_required_locally',
+                'bp.review_note as permit_review_note',
+                'bp.uploaded_at as permit_uploaded_at',
             ])
             ->orderByRaw('CASE WHEN r.parent_restaurant_id IS NULL THEN 0 ELSE 1 END ASC')
             ->orderBy('r.restaurant_id')
             ->get();
 
-        return $rows->map(function (object $row) use ($pendingCounts): array {
+        return $rows->map(function (object $row) use ($pendingCounts, $ownedIds): array {
             $id = (int) $row->restaurant_id;
             $parentId = $row->parent_restaurant_id !== null ? (int) $row->parent_restaurant_id : null;
             $brandId = $row->brand_restaurant_id !== null ? (int) $row->brand_restaurant_id : ($parentId ?? $id);
@@ -84,7 +92,7 @@ class OwnerBranchService
                 $row->city_name ? trim((string) $row->city_name) : null,
             ]));
 
-            return [
+            $item = [
                 'restaurant_id' => $id,
                 'parent_restaurant_id' => $parentId,
                 'brand_restaurant_id' => $brandId,
@@ -97,6 +105,15 @@ class OwnerBranchService
                 'accepting_orders' => (bool) $row->accepting_orders,
                 'pending_order_count' => (int) ($pendingCounts[$id] ?? 0),
             ];
+
+            if ($parentId !== null && in_array($id, $ownedIds, true)) {
+                $item['permit_status'] = $row->permit_status ?? BranchPermitService::STATUS_PENDING_SUBMISSION;
+                $item['is_required_locally'] = $row->is_required_locally !== null ? (bool) $row->is_required_locally : true;
+                $item['review_note'] = $row->permit_review_note;
+                $item['uploaded_at'] = OrderTimestampFormatter::toManilaIso($row->permit_uploaded_at);
+            }
+
+            return $item;
         })->values()->all();
     }
 
@@ -170,24 +187,37 @@ class OwnerBranchService
             }
         }
 
-        $newBranchId = (int) DB::transaction(function () use (
-            $owner,
-            $root,
-            $rootId,
-            $brandId,
-            $rootNeedsBranchName,
-            $mainBranchName,
-            $branchName,
-            $validated,
-            $offersDelivery,
-            $offersPickup,
-            $offersDineIn,
-            $acceptsReservations,
-            $copyHours,
-            $copyMenu,
-            $copyFromId,
-            $request,
-        ): int {
+        $permitFile = $request->file('mayors_permit');
+        $permitInput = $this->branchPermitService->validateInitialPermitInput($permitFile, $validated);
+        $storedPermit = null;
+        $newlyStoredPath = null;
+
+        try {
+            if ($permitInput['mode'] === 'file' && $permitFile !== null) {
+                $storedPermit = $this->branchPermitService->storePermitFile($permitFile, $brandId, 'mayors_permit');
+                $newlyStoredPath = $storedPermit['path'] ?? null;
+            }
+
+            $newBranchId = (int) DB::transaction(function () use (
+                $owner,
+                $root,
+                $rootId,
+                $brandId,
+                $rootNeedsBranchName,
+                $mainBranchName,
+                $branchName,
+                $validated,
+                $offersDelivery,
+                $offersPickup,
+                $offersDineIn,
+                $acceptsReservations,
+                $copyHours,
+                $copyMenu,
+                $copyFromId,
+                $permitInput,
+                $storedPermit,
+                $request,
+            ): int {
             $now = now();
 
             if ($rootNeedsBranchName) {
@@ -279,6 +309,44 @@ class OwnerBranchService
                 $this->branchService->cloneMenuAsUnpublishedApproved($copyFromId, $childId, $now);
             }
 
+            if ($permitInput['mode'] !== 'none') {
+                $permitId = (int) DB::table('branch_permits')
+                    ->where('restaurant_id', $childId)
+                    ->value('permit_id');
+
+                $permitUpdate = [
+                    'is_required_locally' => $permitInput['mode'] === 'file' ? 1 : 0,
+                    'exemption_reason' => $permitInput['exemption_reason'],
+                    'permit_status' => BranchPermitService::STATUS_PENDING_REVIEW,
+                    'uploaded_by' => $owner->user_id,
+                    'uploaded_at' => $now,
+                    'updated_at' => $now,
+                ];
+                if ($storedPermit !== null) {
+                    $permitUpdate['file_path'] = $storedPermit['path'];
+                    $permitUpdate['original_filename'] = $storedPermit['original_filename'];
+                    $permitUpdate['mime_type'] = $storedPermit['mime_type'];
+                    $permitUpdate['file_size_bytes'] = $storedPermit['size_bytes'];
+                }
+
+                DB::table('branch_permits')->where('permit_id', $permitId)->update($permitUpdate);
+
+                $this->auditLogService->record(
+                    actorUserId: (int) $owner->user_id,
+                    action: 'branch_permit_submitted',
+                    entityType: 'branch_permits',
+                    entityId: $permitId,
+                    newValues: [
+                        'restaurant_id' => $childId,
+                        'permit_status' => BranchPermitService::STATUS_PENDING_REVIEW,
+                        'is_required_locally' => $permitInput['mode'] === 'file',
+                        'exemption_reason' => $permitInput['exemption_reason'],
+                        'file_path' => $storedPermit['path'] ?? null,
+                    ],
+                    request: $request,
+                );
+            }
+
             $this->auditLogService->record(
                 actorUserId: (int) $owner->user_id,
                 action: 'restaurant_branch_created',
@@ -307,10 +375,31 @@ class OwnerBranchService
                     relatedEntityType: 'restaurants',
                     relatedEntityId: $childId,
                 );
+
+                if ($permitInput['mode'] !== 'none') {
+                    $permitId = (int) DB::table('branch_permits')
+                        ->where('restaurant_id', $childId)
+                        ->value('permit_id');
+                    $this->notificationService->notifyUsers(
+                        userIds: $adminIds,
+                        workspace: 'admin',
+                        type: 'branch_permit_submitted',
+                        title: 'Branch permit submitted for review',
+                        body: "{$root->restaurant_name} — {$branchName} submitted a Mayor's / Business Permit for review.",
+                        relatedEntityType: 'branch_permits',
+                        relatedEntityId: $permitId,
+                    );
+                }
             }
 
             return $childId;
         });
+        } catch (\Throwable $e) {
+            if ($newlyStoredPath !== null && $newlyStoredPath !== '') {
+                Storage::disk('local')->delete($newlyStoredPath);
+            }
+            throw $e;
+        }
 
         $branches = $this->listAccessibleBranches($owner);
         foreach ($branches as $branch) {

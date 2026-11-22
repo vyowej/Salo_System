@@ -97,7 +97,7 @@ export default function ItemModal({ open, onClose, item, restaurant, orderingDis
       selectedAddOns: flattenedAddOns,
       specialInstructions: specialInstructions.trim(),
       restaurantId: restaurant.id,
-      restaurantName: restaurant.name,
+      restaurantName: restaurant.displayName || restaurant.name,
       deliveryFee: restaurant.deliveryFee,
       image: menuItem.photo || menuItem.image,
     });

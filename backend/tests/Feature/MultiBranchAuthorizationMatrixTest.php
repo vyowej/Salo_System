@@ -100,6 +100,17 @@ class MultiBranchAuthorizationMatrixTest extends TestCase
             'updated_at' => $now,
         ]);
 
+        DB::table('branch_permits')
+            ->where('restaurant_id', $branchBId)
+            ->update([
+                'permit_status' => 'approved',
+                'file_path' => "branch-permits/{$rootId}/branch-b-permit.pdf",
+                'original_filename' => 'branch-b-permit.pdf',
+                'mime_type' => 'application/pdf',
+                'file_size_bytes' => 1024,
+                'updated_at' => $now,
+            ]);
+
         foreach ([$rootId, $branchBId] as $rId) {
             for ($d = 0; $d <= 6; $d++) {
                 DB::table('operating_hours')->insert([

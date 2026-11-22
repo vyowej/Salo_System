@@ -45,6 +45,10 @@ function mapRestaurantListItem(raw) {
   return {
     id: String(raw.id),
     name: raw.name,
+    branchName: raw.branch_name || null,
+    brandRestaurantId: raw.brand_restaurant_id ? String(raw.brand_restaurant_id) : String(raw.id),
+    displayName: raw.display_name || raw.name,
+    branchCount: Number(raw.branch_count ?? 1),
     businessType: raw.business_type || '',
     cuisine: categoryNames.join(' · ') || raw.business_type || 'Restaurant',
     categories,
@@ -156,6 +160,19 @@ export const publicRestaurantService = {
     return {
       id: String(raw.id),
       name: raw.name,
+      branchName: raw.branch_name || null,
+      brandRestaurantId: raw.brand_restaurant_id ? String(raw.brand_restaurant_id) : String(raw.id),
+      displayName: raw.display_name || raw.name,
+      branchCount: Number(raw.branch_count ?? 1),
+      siblings: Array.isArray(raw.siblings)
+        ? raw.siblings.map((sib) => ({
+          id: String(sib.id),
+          branchName: sib.branch_name || null,
+          displayName: sib.display_name || sib.branch_name || raw.name,
+          shortAddress: sib.short_address || '',
+          availability: sib.availability || {},
+        }))
+        : [],
       businessType: raw.business_type || '',
       cuisine: categoryNames.join(' · ') || raw.business_type || 'Restaurant',
       foodCategories: categoryNames,

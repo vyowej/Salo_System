@@ -86,6 +86,17 @@ class RestaurantBranchService
 
             $this->syncOwnersFromRootToBranch((int) $parent->restaurant_id, $branchId);
 
+            if (\Illuminate\Support\Facades\Schema::hasTable('branch_permits')) {
+                $now = $attributes['created_at'] ?? now();
+                DB::table('branch_permits')->insert([
+                    'restaurant_id' => $branchId,
+                    'is_required_locally' => 1,
+                    'permit_status' => 'pending_submission',
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+
             return $branchId;
         });
     }

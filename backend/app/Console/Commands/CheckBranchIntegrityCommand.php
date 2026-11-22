@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Verifies multi-branch data integrity on `restaurants` and `restaurant_owners`:
@@ -97,6 +98,67 @@ class CheckBranchIntegrityCommand extends Command
         ));
 
         $totalAnomalies += $appBranchLinkMismatchCount;
+
+        if (Schema::hasTable('branch_permits')) {
+            $nonRootMissingPermitCount = (int) (DB::selectOne(
+                'SELECT COUNT(*) AS cnt
+                 FROM restaurants r
+                 WHERE r.parent_restaurant_id IS NOT NULL
+                   AND NOT EXISTS (
+                       SELECT 1 FROM branch_permits bp
+                       WHERE bp.restaurant_id = r.restaurant_id
+                   )'
+            )->cnt ?? 0);
+
+            $orphanPermitCount = (int) (DB::selectOne(
+                'SELECT COUNT(*) AS cnt
+                 FROM branch_permits
+                 WHERE restaurant_id IS NULL AND application_branch_id IS NULL'
+            )->cnt ?? 0);
+
+            $permitAppBranchMismatchCount = (int) (DB::selectOne(
+                'SELECT COUNT(*) AS cnt
+                 FROM branch_permits bp
+                 INNER JOIN restaurant_application_branches rab ON rab.application_branch_id = bp.application_branch_id
+                 WHERE (rab.created_branch_restaurant_id IS NOT NULL AND (bp.restaurant_id IS NULL OR bp.restaurant_id <> rab.created_branch_restaurant_id))
+                    OR (bp.restaurant_id IS NOT NULL AND rab.created_branch_restaurant_id IS NOT NULL AND bp.restaurant_id <> rab.created_branch_restaurant_id)'
+            )->cnt ?? 0);
+
+            $rootWithPermitCount = (int) (DB::selectOne(
+                'SELECT COUNT(*) AS cnt
+                 FROM branch_permits bp
+                 INNER JOIN restaurants r ON r.restaurant_id = bp.restaurant_id
+                 WHERE r.parent_restaurant_id IS NULL'
+            )->cnt ?? 0);
+
+            $publishedUnverifiedBranchCount = (int) (DB::selectOne(
+                "SELECT COUNT(*) AS cnt
+                 FROM restaurants r
+                 WHERE r.parent_restaurant_id IS NOT NULL
+                   AND r.is_published = 1
+                   AND NOT EXISTS (
+                       SELECT 1 FROM branch_permits bp
+                       WHERE bp.restaurant_id = r.restaurant_id
+                         AND bp.permit_status IN ('approved', 'waived')
+                   )"
+            )->cnt ?? 0);
+
+            $this->line(sprintf(
+                '[%s] non_root_missing_permit: %d | orphan_branch_permit: %d | permit_app_branch_mismatch: %d | root_with_branch_permit: %d | published_unverified_branch: %d',
+                $dbName,
+                $nonRootMissingPermitCount,
+                $orphanPermitCount,
+                $permitAppBranchMismatchCount,
+                $rootWithPermitCount,
+                $publishedUnverifiedBranchCount,
+            ));
+
+            $totalAnomalies += $nonRootMissingPermitCount
+                + $orphanPermitCount
+                + $permitAppBranchMismatchCount
+                + $rootWithPermitCount
+                + $publishedUnverifiedBranchCount;
+        }
 
         if ($totalAnomalies > 0) {
             $this->error('Branch integrity check failed.');

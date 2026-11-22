@@ -21,6 +21,7 @@ use App\Features\Media\Controllers\PublicImageProxyController;
 use App\Features\Notifications\Controllers\NotificationController;
 use App\Features\Orders\Controllers\CustomerOrderController;
 use App\Features\Orders\Controllers\RestaurantOrderController;
+use App\Features\Reservations\Controllers\OwnerTableController;
 use App\Features\Restaurants\Controllers\OwnerBranchController;
 use App\Features\Restaurants\Controllers\OwnerInventoryController;
 use App\Features\Restaurants\Controllers\OwnerMenuController;
@@ -172,6 +173,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
     Route::post('/applications', [RestaurantApplicationController::class, 'store']);
     Route::get('/applications/current', [RestaurantApplicationController::class, 'current']);
     Route::post('/applications/{id}/documents', [RestaurantApplicationController::class, 'uploadDocument'])->whereNumber('id');
+    Route::get('/branches/{id}/permit/file', [OwnerBranchController::class, 'permitFile'])->whereNumber('id');
 
     Route::middleware('role:owner')->group(function (): void {
         Route::get('/setup-status', [RestaurantController::class, 'setupStatus']);
@@ -198,6 +200,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::delete('/staff/{id}', [StaffInvitationController::class, 'remove'])->whereNumber('id');
 
         Route::post('/branches', [OwnerBranchController::class, 'store']);
+        Route::post('/branches/{id}/permit', [OwnerBranchController::class, 'submitPermit'])->whereNumber('id');
     });
 
     Route::middleware('role:owner,staff')->group(function (): void {
@@ -241,6 +244,13 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
 
         Route::get('/reviews', [OwnerReviewController::class, 'index']);
         Route::post('/reviews/{reviewId}/flag', [OwnerReviewController::class, 'flag'])->whereNumber('reviewId');
+
+        Route::get('/tables', [OwnerTableController::class, 'index']);
+        Route::post('/tables', [OwnerTableController::class, 'store']);
+        Route::get('/tables/{id}', [OwnerTableController::class, 'show'])->whereNumber('id');
+        Route::patch('/tables/{id}', [OwnerTableController::class, 'update'])->whereNumber('id');
+        Route::post('/tables/{id}/archive', [OwnerTableController::class, 'archive'])->whereNumber('id');
+        Route::post('/tables/{id}/reactivate', [OwnerTableController::class, 'reactivate'])->whereNumber('id');
     });
 });
 
