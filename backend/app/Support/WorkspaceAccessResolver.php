@@ -12,7 +12,8 @@ class WorkspaceAccessResolver
      */
     public function requireActiveOwnedRestaurant(User $user, ?int $restaurantId = null): object
     {
-        $restaurant = $this->findOwnedRestaurant($user, $restaurantId);
+        $resolvedId = $this->resolveRequestedRestaurantId($restaurantId);
+        $restaurant = $this->findOwnedRestaurant($user, $resolvedId);
 
         if (! $restaurant) {
             abort(403, 'Forbidden: you do not own this restaurant.');
@@ -33,9 +34,10 @@ class WorkspaceAccessResolver
      */
     public function requireActiveAuthorizedRestaurantForOrders(User $user, ?int $restaurantId = null): object
     {
+        $resolvedId = $this->resolveRequestedRestaurantId($restaurantId);
         $restaurant = $this->findOwnedOrStaffRestaurant(
             user: $user,
-            restaurantId: $restaurantId,
+            restaurantId: $resolvedId,
             positionCheck: static fn (?string $pos): bool => User::isOrderHandlerPosition($pos),
         );
 
@@ -58,9 +60,10 @@ class WorkspaceAccessResolver
      */
     public function requireActiveAuthorizedRestaurantForInventory(User $user, ?int $restaurantId = null): object
     {
+        $resolvedId = $this->resolveRequestedRestaurantId($restaurantId);
         $restaurant = $this->findOwnedOrStaffRestaurant(
             user: $user,
-            restaurantId: $restaurantId,
+            restaurantId: $resolvedId,
             positionCheck: static fn (?string $pos): bool => User::isInventoryManagerPosition($pos),
         );
 
@@ -83,9 +86,10 @@ class WorkspaceAccessResolver
      */
     public function requireActiveAuthorizedRestaurantForMenuPublish(User $user, ?int $restaurantId = null): object
     {
+        $resolvedId = $this->resolveRequestedRestaurantId($restaurantId);
         $restaurant = $this->findOwnedOrStaffRestaurant(
             user: $user,
-            restaurantId: $restaurantId,
+            restaurantId: $resolvedId,
             positionCheck: static fn (?string $pos): bool => User::isMenuPublisherPosition($pos),
         );
 
@@ -123,6 +127,51 @@ class WorkspaceAccessResolver
         return $rider;
     }
 
+    /**
+     * Resolve the requested restaurant_id from explicit argument (query/body/route)
+     * or optional X-Restaurant-Id header (explicit argument always wins).
+     */
+    public function resolveRequestedRestaurantId(?int $restaurantId = null): ?int
+    {
+        if ($restaurantId !== null) {
+            if ($restaurantId <= 0) {
+                abort(403, 'Forbidden: invalid restaurant context.');
+            }
+
+            return $restaurantId;
+        }
+
+        if (! app()->bound('request')) {
+            return null;
+        }
+
+        $rawParam = request()->input('restaurant_id') ?? request()->query('restaurant_id');
+        if ($rawParam !== null && $rawParam !== '') {
+            $paramStr = is_scalar($rawParam) ? trim((string) $rawParam) : '';
+            if (! ctype_digit($paramStr) || (int) $paramStr <= 0) {
+                abort(403, 'Forbidden: invalid restaurant_id.');
+            }
+
+            return (int) $paramStr;
+        }
+
+        $headerValue = request()->header('X-Restaurant-Id');
+        if ($headerValue === null) {
+            return null;
+        }
+
+        $trimmed = trim((string) $headerValue);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        if (! ctype_digit($trimmed) || (int) $trimmed <= 0) {
+            abort(403, 'Forbidden: invalid X-Restaurant-Id header.');
+        }
+
+        return (int) $trimmed;
+    }
+
     private function findOwnedRestaurant(User $user, ?int $restaurantId): ?object
     {
         $ownerQuery = DB::table('restaurant_owners as ro')
@@ -132,7 +181,9 @@ class WorkspaceAccessResolver
         if ($restaurantId !== null) {
             $ownerQuery->where('ro.restaurant_id', $restaurantId);
         } else {
-            $ownerQuery->orderBy('ro.restaurant_id');
+            $ownerQuery
+                ->orderByRaw('CASE WHEN r.parent_restaurant_id IS NULL THEN 0 ELSE 1 END ASC')
+                ->orderBy('ro.restaurant_id');
         }
 
         return $ownerQuery->select('r.*')->first();
@@ -156,7 +207,9 @@ class WorkspaceAccessResolver
         if ($restaurantId !== null) {
             $staffQuery->where('rs.restaurant_id', $restaurantId);
         } else {
-            $staffQuery->orderBy('rs.restaurant_id');
+            $staffQuery
+                ->orderByRaw('CASE WHEN r.parent_restaurant_id IS NULL THEN 0 ELSE 1 END ASC')
+                ->orderBy('rs.restaurant_id');
         }
 
         return $staffQuery

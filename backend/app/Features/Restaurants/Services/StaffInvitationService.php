@@ -6,6 +6,7 @@ use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
 use App\Support\AuditLogService;
+use App\Support\WorkspaceAccessResolver;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,7 @@ class StaffInvitationService
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
+        private readonly ?WorkspaceAccessResolver $workspaceAccessResolver = null,
     ) {}
 
     /**
@@ -400,28 +402,9 @@ class StaffInvitationService
 
     private function requireOwnedActiveRestaurant(User $owner, ?int $restaurantId = null): object
     {
-        $query = DB::table('restaurant_owners as ro')
-            ->join('restaurants as r', 'r.restaurant_id', '=', 'ro.restaurant_id')
-            ->where('ro.user_id', $owner->user_id)
-            ->select(['r.restaurant_id', 'r.restaurant_name', 'r.restaurant_status']);
+        $resolver = $this->workspaceAccessResolver ?? app(WorkspaceAccessResolver::class);
 
-        if ($restaurantId !== null) {
-            $query->where('ro.restaurant_id', $restaurantId);
-        } else {
-            $query->orderByRaw("CASE WHEN r.restaurant_status = 'active' THEN 0 ELSE 1 END")
-                ->orderBy('ro.restaurant_id');
-        }
-
-        $restaurant = $query->first();
-        if (! $restaurant) {
-            abort(403, 'Forbidden: restaurant ownership is required.');
-        }
-
-        if ($restaurant->restaurant_status !== 'active') {
-            abort(403, 'Forbidden: restaurant must be active.');
-        }
-
-        return $restaurant;
+        return $resolver->requireActiveOwnedRestaurant($owner, $restaurantId);
     }
 
     private function normalizeAndValidatePosition(string $rawPosition): string

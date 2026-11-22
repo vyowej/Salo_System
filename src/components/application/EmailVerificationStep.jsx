@@ -41,6 +41,7 @@ export default function EmailVerificationStep({
   const [secondsRemaining, setSecondsRemaining] = useState(COUNTDOWN_INITIAL_SECONDS);
   const [canResend, setCanResend] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
+  const sendingOtpRef = useRef(false);
   const [verifying, setVerifying] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [isEditingEmail, setIsEditingEmail] = useState(false);
@@ -143,6 +144,7 @@ export default function EmailVerificationStep({
 
   const handleSendOtp = async (e) => {
     e?.preventDefault();
+    if (sendingOtpRef.current) return;
 
     if (!activeEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(activeEmail)) {
       setStatusMessage({
@@ -152,6 +154,7 @@ export default function EmailVerificationStep({
       return;
     }
 
+    sendingOtpRef.current = true;
     setSendingOtp(true);
     setStatusMessage(null);
 
@@ -186,6 +189,7 @@ export default function EmailVerificationStep({
         text: error?.message || 'Failed to send verification code. Please try again.',
       });
     } finally {
+      sendingOtpRef.current = false;
       setSendingOtp(false);
     }
   };

@@ -6,6 +6,7 @@ use App\Features\Auth\Mail\EmailOtpMail;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -107,5 +108,141 @@ class OtpVerificationTest extends TestCase
             'purpose' => 'restaurant_application',
             'code' => '000000',
         ])->assertStatus(429);
+    }
+
+    public function test_otp_audit_logs_avoid_duplicates_and_omit_fake_value_changes(): void
+    {
+        Mail::fake();
+        $user = $this->createCustomer('auditcheck@example.com');
+
+        // 1. Single send creates exactly 1 email_otp_sent log without old/new values or OTP code.
+        $this->actingAs($user)->postJson('/api/otp/send', [
+            'email' => 'auditcheck@example.com',
+            'purpose' => 'rider_application',
+        ])->assertOk();
+
+        $sentCode = null;
+        Mail::assertSent(EmailOtpMail::class, function (EmailOtpMail $mail) use (&$sentCode) {
+            $sentCode = $mail->otpCode;
+
+            return true;
+        });
+
+        $logs = DB::table('audit_logs')
+            ->where('actor_user_id', $user->user_id)
+            ->where('action', 'email_otp_sent')
+            ->get();
+
+        $this->assertCount(1, $logs);
+        $this->assertNull($logs[0]->old_values);
+        $this->assertNull($logs[0]->new_values);
+        $this->assertStringContainsString('rider_application', (string) $logs[0]->reason);
+        $this->assertStringNotContainsString((string) $sentCode, (string) $logs[0]->reason);
+
+        // 2. Concurrent lock held blocks duplicate send & prevents duplicate audit log.
+        $lockKey = 'otp:send-lock:rider_application:'.$user->user_id.':'.sha1('auditcheck@example.com');
+        $heldLock = Cache::lock($lockKey, 10);
+        $this->assertTrue($heldLock->get());
+        try {
+            $this->actingAs($user)->postJson('/api/otp/send', [
+                'email' => 'auditcheck@example.com',
+                'purpose' => 'rider_application',
+            ])->assertStatus(429);
+        } finally {
+            $heldLock->release();
+        }
+
+        $this->assertSame(
+            1,
+            DB::table('audit_logs')
+                ->where('actor_user_id', $user->user_id)
+                ->where('action', 'email_otp_sent')
+                ->count(),
+        );
+
+        // 3. Legitimate resend after cooldown expires logs a second distinct audit record.
+        Cache::forget('otp:cooldown:rider_application:'.$user->user_id.':'.sha1('auditcheck@example.com'));
+        $this->actingAs($user)->postJson('/api/otp/send', [
+            'email' => 'auditcheck@example.com',
+            'purpose' => 'rider_application',
+        ])->assertOk();
+
+        $this->assertSame(
+            2,
+            DB::table('audit_logs')
+                ->where('actor_user_id', $user->user_id)
+                ->where('action', 'email_otp_sent')
+                ->count(),
+        );
+    }
+
+    public function test_otp_verify_audit_logs_only_record_real_email_verified_at_changes(): void
+    {
+        Mail::fake();
+        $user = $this->createCustomer('verifyaudit@example.com');
+
+        // 1. Account email starts unverified -> verify records real old/new email_verified_at change.
+        $this->actingAs($user)->postJson('/api/otp/send', [
+            'email' => 'verifyaudit@example.com',
+            'purpose' => 'rider_application',
+        ])->assertOk();
+
+        $firstCode = null;
+        Mail::assertSent(EmailOtpMail::class, function (EmailOtpMail $mail) use (&$firstCode) {
+            $firstCode = $mail->otpCode;
+
+            return true;
+        });
+
+        $this->actingAs($user)->postJson('/api/otp/verify', [
+            'email' => 'verifyaudit@example.com',
+            'purpose' => 'rider_application',
+            'code' => $firstCode,
+        ])->assertOk();
+
+        $firstVerifyLog = DB::table('audit_logs')
+            ->where('actor_user_id', $user->user_id)
+            ->where('action', 'email_otp_verified')
+            ->orderByDesc('log_id')
+            ->first();
+
+        $this->assertNotNull($firstVerifyLog);
+        $this->assertSame(['email_verified_at' => null], json_decode((string) $firstVerifyLog->old_values, true));
+        $newDecoded = json_decode((string) $firstVerifyLog->new_values, true);
+        $this->assertIsArray($newDecoded);
+        $this->assertNotEmpty($newDecoded['email_verified_at'] ?? null);
+        $this->assertStringNotContainsString((string) $firstCode, (string) $firstVerifyLog->reason);
+
+        // 2. Verifying a separate contact email does not modify users.email_verified_at -> no fake old/new values.
+        Mail::fake();
+        $this->actingAs($user)->postJson('/api/otp/send', [
+            'email' => 'altcontact@example.com',
+            'purpose' => 'restaurant_application',
+        ])->assertOk();
+
+        $secondCode = null;
+        Mail::assertSent(EmailOtpMail::class, function (EmailOtpMail $mail) use (&$secondCode) {
+            $secondCode = $mail->otpCode;
+
+            return true;
+        });
+
+        $this->actingAs($user)->postJson('/api/otp/verify', [
+            'email' => 'altcontact@example.com',
+            'purpose' => 'restaurant_application',
+            'code' => $secondCode,
+        ])->assertOk();
+
+        $secondVerifyLog = DB::table('audit_logs')
+            ->where('actor_user_id', $user->user_id)
+            ->where('action', 'email_otp_verified')
+            ->orderByDesc('log_id')
+            ->first();
+
+        $this->assertNotNull($secondVerifyLog);
+        $this->assertNull($secondVerifyLog->old_values);
+        $this->assertNull($secondVerifyLog->new_values);
+        $this->assertStringContainsString('restaurant_application', (string) $secondVerifyLog->reason);
+        $this->assertStringNotContainsString((string) $secondCode, (string) $secondVerifyLog->reason);
     }
 }

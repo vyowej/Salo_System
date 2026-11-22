@@ -4,6 +4,7 @@ import adminApiService from '../../../services/adminApiService';
 import { DataTable, DetailDrawer, FilterBar, PageHeader, StateView, StatusBadge } from '../components';
 import useAdminSession from '../contexts/useAdminSession';
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
+import { classifyAuditDisplay } from '../utils/auditDisplay';
 import { formatDateTime } from '../utils/format';
 
 function recordSummary(record) {
@@ -14,6 +15,30 @@ function recordSummary(record) {
 function valueSummary(value) {
   if (value === null || value === undefined || value === '') return '—';
   return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+function humanizeAction(action) {
+  if (!action) return 'Unknown action';
+  return String(action)
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (ch) => ch.toUpperCase())
+    .replace(/\bOtp\b/g, 'OTP')
+    .replace(/\bId\b/g, 'ID');
+}
+
+function getActionTone(action = '') {
+  const lower = String(action).toLowerCase();
+  if (/(delete|remove|reject|suspend|fail|revoke|cancel)/.test(lower)) return 'danger';
+  if (/(verify|verified|approve|approved|create|created|complete|completed|activate)/.test(lower)) return 'success';
+  if (/(update|edit|change|sent|submit|submitted)/.test(lower)) return 'info';
+  return 'neutral';
+}
+
+function getInitials(name) {
+  const parts = String(name || 'S').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'S';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
 export default function AdminActivityPage() {
@@ -93,13 +118,34 @@ export default function AdminActivityPage() {
   }
 
   const columns = [
-    { key: 'who', label: 'Actor' },
+    { key: 'who', label: 'Actor', render: (item) => <strong className="admin-table-actor">{item.who || '—'}</strong> },
     { key: 'role', label: 'Role', render: (item) => <StatusBadge status={item.role} /> },
-    { key: 'action', label: 'Action' },
-    { key: 'record', label: 'Affected record', render: (item) => recordSummary(item.record) },
+    {
+      key: 'action',
+      label: 'Action',
+      render: (item) => (
+        <span className={`admin-audit-action-badge is-${getActionTone(item.action)}`}>
+          {humanizeAction(item.action)}
+        </span>
+      ),
+    },
+    {
+      key: 'record',
+      label: 'Affected record',
+      render: (item) => (
+        <span className="admin-audit-record-chip">
+          <span className="admin-audit-entity-type">{item.record?.type || 'Record'}</span>
+          <code className="admin-audit-entity-id">#{item.record?.id || '—'}</code>
+        </span>
+      ),
+    },
     { key: 'time', label: 'Timestamp', render: (item) => formatDateTime(item.time || item.createdAt) },
-    { key: 'reference', label: 'Reference', render: (item) => item.reference || item.record?.id || '—' },
-    { key: 'details', label: 'Details', render: (item) => <button className="admin-action-button" type="button" onClick={() => setSelected(item)}>View details</button> },
+    {
+      key: 'reference',
+      label: 'Reference',
+      render: (item) => <code className="admin-audit-code-inline">{item.reference || item.record?.id || '—'}</code>,
+    },
+    { key: 'details', label: 'Details', render: (item) => <button className="admin-action-button admin-action-button--accent" type="button" onClick={() => setSelected(item)}>View details</button> },
   ];
 
   return (
@@ -122,19 +168,132 @@ export default function AdminActivityPage() {
         </StateView>
       </section>
       <DetailDrawer open={Boolean(selected)} title="Audit record details" onClose={() => setSelected(null)}>
-        {selected && (
-          <dl className="admin-audit-detail">
-            <div><dt>Actor</dt><dd>{selected.who || '—'}</dd></div>
-            <div><dt>Role</dt><dd>{selected.role || '—'}</dd></div>
-            <div><dt>Action</dt><dd>{selected.action || '—'}</dd></div>
-            <div><dt>Affected record</dt><dd>{recordSummary(selected.record)}</dd></div>
-            <div><dt>Timestamp</dt><dd>{formatDateTime(selected.time || selected.createdAt)}</dd></div>
-            <div><dt>Previous value</dt><dd>{valueSummary(selected.previousValue)}</dd></div>
-            <div><dt>New value</dt><dd>{valueSummary(selected.newValue)}</dd></div>
-            <div><dt>Reason</dt><dd>{selected.reason || 'Not recorded'}</dd></div>
-            <div><dt>Reference</dt><dd>{selected.reference || selected.record?.id || '—'}</dd></div>
-          </dl>
-        )}
+        {selected && (() => {
+          const { mode, prevFormatted, nextFormatted, hasEventContext } = classifyAuditDisplay(selected);
+          const actionTone = getActionTone(selected.action);
+          const recordType = selected.record?.type || 'Record';
+          const recordId = selected.record?.id || '—';
+
+          return (
+            <div className="admin-audit-modal">
+              <div className="admin-audit-hero">
+                <div className="admin-audit-actor">
+                  <span className="admin-audit-avatar" aria-hidden="true">
+                    {getInitials(selected.who)}
+                  </span>
+                  <div className="admin-audit-actor-copy">
+                    <div className="admin-audit-actor-row">
+                      <span className="admin-audit-value-strong">{selected.who || '—'}</span>
+                      <StatusBadge status={selected.role || 'User'} />
+                    </div>
+                    <span className="admin-audit-submeta">
+                      Ref <code className="admin-audit-code-plain">{selected.reference || selected.record?.id || '—'}</code>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="admin-audit-time">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <span>{formatDateTime(selected.time || selected.createdAt)}</span>
+                </div>
+              </div>
+
+              <div className="admin-audit-meta-grid">
+                <div className="admin-audit-field">
+                  <span className="admin-audit-label">Action</span>
+                  <div className="admin-audit-action-group">
+                    <span className={`admin-audit-action-badge is-${actionTone}`}>
+                      {humanizeAction(selected.action)}
+                    </span>
+                    {selected.action && (
+                      <code className="admin-audit-code-inline">{selected.action}</code>
+                    )}
+                  </div>
+                </div>
+
+                <div className="admin-audit-field">
+                  <span className="admin-audit-label">Affected record</span>
+                  <div className="admin-audit-record-chip">
+                    <span className="admin-audit-entity-type">{recordType}</span>
+                    <code className="admin-audit-entity-id">#{recordId}</code>
+                  </div>
+                </div>
+
+                <div className="admin-audit-field admin-audit-field--full">
+                  <span className="admin-audit-label">Reason</span>
+                  <p className={`admin-audit-reason ${!selected.reason ? 'is-muted' : ''}`}>
+                    {selected.reason || 'Not recorded'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="admin-audit-diff-section">
+                {mode === 'diff' ? (
+                  <>
+                    <h3 className="admin-audit-section-title">Value changes</h3>
+                    <div className="admin-audit-diff-grid">
+                      <div className="admin-audit-diff-card is-previous">
+                        <div className="admin-audit-diff-head">
+                          <span>Previous value</span>
+                        </div>
+                        <div className="admin-audit-diff-body">
+                          {prevFormatted.isEmpty ? (
+                            <span className="admin-audit-empty-val">No previous value</span>
+                          ) : prevFormatted.isJson ? (
+                            <pre className="admin-audit-pre">{prevFormatted.text}</pre>
+                          ) : (
+                            <p className="admin-audit-plain">{prevFormatted.text}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="admin-audit-diff-card is-new">
+                        <div className="admin-audit-diff-head">
+                          <span>New value</span>
+                        </div>
+                        <div className="admin-audit-diff-body">
+                          {nextFormatted.isEmpty ? (
+                            <span className="admin-audit-empty-val">No new value</span>
+                          ) : nextFormatted.isJson ? (
+                            <pre className="admin-audit-pre">{nextFormatted.text}</pre>
+                          ) : (
+                            <p className="admin-audit-plain">{nextFormatted.text}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="admin-audit-section-title">Event details</h3>
+                    <div className="admin-audit-event-note">
+                      <p className="admin-audit-plain">
+                        {selected.reason || 'Event logged without record field modifications.'}
+                      </p>
+                    </div>
+                    {hasEventContext && (
+                      <div className="admin-audit-diff-card">
+                        <div className="admin-audit-diff-head">
+                          <span>Event context</span>
+                        </div>
+                        <div className="admin-audit-diff-body">
+                          {nextFormatted.isJson ? (
+                            <pre className="admin-audit-pre">{nextFormatted.text}</pre>
+                          ) : (
+                            <p className="admin-audit-plain">{nextFormatted.text}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </DetailDrawer>
     </AdminLayout>
   );

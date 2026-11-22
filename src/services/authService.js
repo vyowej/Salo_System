@@ -44,9 +44,12 @@ export function getWorkspaceHomePath(role) {
 export function normalizeUser(rawUser, preferredWorkspace = null) {
   if (!rawUser) return null;
 
-  const roles = Array.isArray(rawUser.roles) && rawUser.roles.length > 0
+  const baseRoles = Array.isArray(rawUser.roles) && rawUser.roles.length > 0
     ? rawUser.roles
     : [rawUser.user_role === 'admin' ? 'admin' : 'customer'];
+  const roles = rawUser.user_role === 'admin' && !baseRoles.includes('admin')
+    ? [...baseRoles, 'admin']
+    : baseRoles;
 
   const fullName = [
     rawUser.first_name,

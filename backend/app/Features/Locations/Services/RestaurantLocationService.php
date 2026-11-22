@@ -5,6 +5,7 @@ namespace App\Features\Locations\Services;
 use App\Models\User;
 use App\Support\AddressService;
 use App\Support\AuditLogService;
+use App\Support\WorkspaceAccessResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -16,6 +17,7 @@ class RestaurantLocationService
         private readonly ServiceAreaValidationService $serviceAreaValidation,
         private readonly AdminServiceAreaService $adminServiceAreas,
         private readonly AuditLogService $auditLog,
+        private readonly WorkspaceAccessResolver $workspaceAccessResolver,
     ) {}
 
     /**
@@ -246,20 +248,6 @@ class RestaurantLocationService
 
     private function resolveAuthorizedRestaurant(User $user, ?int $restaurantId): object
     {
-        $query = DB::table('restaurants as r')
-            ->join('restaurant_owners as ro', 'ro.restaurant_id', '=', 'r.restaurant_id')
-            ->where('ro.user_id', $user->user_id)
-            ->select('r.*');
-
-        if ($restaurantId !== null) {
-            $query->where('r.restaurant_id', $restaurantId);
-        }
-
-        $restaurant = $query->first();
-        if (! $restaurant) {
-            abort(403, 'You are not authorized to manage this restaurant.');
-        }
-
-        return $restaurant;
+        return $this->workspaceAccessResolver->requireActiveOwnedRestaurant($user, $restaurantId);
     }
 }

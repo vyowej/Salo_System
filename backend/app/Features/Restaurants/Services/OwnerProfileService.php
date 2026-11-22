@@ -107,8 +107,20 @@ class OwnerProfileService
             'offers_pickup' => (bool) $updates['offers_pickup'],
         ];
 
-        DB::transaction(function () use ($targetId, $updates, $user, $oldValues, $newValues, $request): void {
+        DB::transaction(function () use ($targetId, $restaurant, $updates, $user, $oldValues, $newValues, $request): void {
             DB::table('restaurants')->where('restaurant_id', $targetId)->update($updates);
+
+            if (array_key_exists('description', $updates) && $updates['description'] !== $restaurant->description) {
+                $brandId = (int) ($restaurant->brand_restaurant_id ?: ($restaurant->parent_restaurant_id ?: $targetId));
+                DB::table('restaurants')
+                    ->where('brand_restaurant_id', $brandId)
+                    ->where('restaurant_id', '!=', $targetId)
+                    ->update([
+                        'description' => $updates['description'],
+                        'updated_at' => $updates['updated_at'],
+                    ]);
+            }
+
             $this->auditLogService->record(
                 actorUserId: (int) $user->user_id,
                 action: 'owner_profile_updated',
@@ -191,11 +203,24 @@ class OwnerProfileService
         Request $request,
     ): void {
         DB::transaction(function () use ($targetId, $newLogo, $newCover, $oldLogo, $oldCover, $user, $request): void {
-            DB::table('restaurants')->where('restaurant_id', $targetId)->update([
-                'logo_image' => $newLogo,
-                'cover_image' => $newCover,
-                'updated_at' => now(),
-            ]);
+            $restaurant = DB::table('restaurants')
+                ->where('restaurant_id', $targetId)
+                ->first(['restaurant_id', 'parent_restaurant_id', 'brand_restaurant_id']);
+            $brandId = $restaurant
+                ? (int) ($restaurant->brand_restaurant_id ?: ($restaurant->parent_restaurant_id ?: $targetId))
+                : $targetId;
+            $now = now();
+
+            DB::table('restaurants')
+                ->where(function ($query) use ($brandId, $targetId): void {
+                    $query->where('brand_restaurant_id', $brandId)
+                        ->orWhere('restaurant_id', $targetId);
+                })
+                ->update([
+                    'logo_image' => $newLogo,
+                    'cover_image' => $newCover,
+                    'updated_at' => $now,
+                ]);
 
             $this->auditLogService->record(
                 actorUserId: (int) $user->user_id,

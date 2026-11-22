@@ -23,11 +23,13 @@ export default function LoginPage({ embedded = false, onSwitch }) {
   const [reactivating, setReactivating] = useState(false);
 
   const getDestination = (resUser) => {
+    const workspace = resUser?.role || getDefaultWorkspace(resUser?.roles);
     if (location.state?.from?.pathname) {
       const { pathname, search = '', hash = '' } = location.state.from;
-      return `${pathname}${search}${hash}`;
+      if (workspace !== 'admin' || pathname.startsWith('/admin')) {
+        return `${pathname}${search}${hash}`;
+      }
     }
-    const workspace = resUser?.role || getDefaultWorkspace(resUser?.roles);
     return getWorkspaceHomePath(workspace);
   };
 

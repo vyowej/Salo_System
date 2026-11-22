@@ -74,6 +74,11 @@ return [
         ],
     ],
 
+    'restaurants' => [
+        'max_application_branches' => max(1, (int) env('SALO_MAX_APPLICATION_BRANCHES', 5)),
+        'max_branches_per_business' => max(1, (int) env('SALO_MAX_BRANCHES_PER_BUSINESS', 10)),
+    ],
+
     'reviews' => [
         // Default fallback values; runtime policy overrides live in platform_settings.
         'min_rating' => 1,

@@ -4,6 +4,7 @@ namespace App\Features\Auth\Services;
 
 use App\Features\Auth\Mail\EmailOtpMail;
 use App\Models\User;
+use App\Support\AuditLogService;
 use Carbon\Carbon;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
@@ -26,6 +27,10 @@ class OtpService
 
     private const HOURLY_DECAY_SECONDS = 3600;
 
+    public function __construct(
+        private readonly ?AuditLogService $auditLogService = null,
+    ) {}
+
     /**
      * Generate, store, and email an OTP verification code.
      *
@@ -40,12 +45,23 @@ class OtpService
 
         $cooldownKey = $this->cooldownKey($purpose, $normalizedEmail, $user->user_id);
         $hourlyKey = "otp:hourly:{$user->user_id}|{$request->ip()}";
-        $this->enforceSendLimits($cooldownKey, $hourlyKey);
+        $lockKey = "otp:send-lock:{$purpose}:{$user->user_id}:".sha1($normalizedEmail);
+        $lock = Cache::lock($lockKey, 10);
 
-        $code = $this->storePendingOtp($purpose, $normalizedEmail, (int) $user->user_id, $length, $expirationMinutes);
+        if (! $lock->get()) {
+            throw new ThrottleRequestsException('A verification code request is already in progress. Please wait.');
+        }
 
-        Cache::put($cooldownKey, now()->addSeconds($cooldownSeconds)->timestamp, $cooldownSeconds);
-        RateLimiter::hit($hourlyKey, self::HOURLY_DECAY_SECONDS);
+        try {
+            $this->enforceSendLimits($cooldownKey, $hourlyKey);
+
+            $code = $this->storePendingOtp($purpose, $normalizedEmail, (int) $user->user_id, $length, $expirationMinutes);
+
+            Cache::put($cooldownKey, now()->addSeconds($cooldownSeconds)->timestamp, $cooldownSeconds);
+            RateLimiter::hit($hourlyKey, self::HOURLY_DECAY_SECONDS);
+        } finally {
+            $lock->release();
+        }
 
         Mail::to($normalizedEmail)->send(new EmailOtpMail(
             otpCode: $code,
@@ -53,7 +69,12 @@ class OtpService
             expirationMinutes: $expirationMinutes,
         ));
 
-        $this->recordOtpAuditLog((int) $user->user_id, 'email_otp_sent', $normalizedEmail, $purpose, $request);
+        $this->recordOtpAuditLog(
+            userId: (int) $user->user_id,
+            action: 'email_otp_sent',
+            reason: "OTP verification email sent (purpose: {$purpose})",
+            request: $request,
+        );
 
         return [
             'email' => $normalizedEmail,
@@ -80,8 +101,15 @@ class OtpService
             $this->handleFailedAttempt($pendingKey, $record, (int) ($record['attempts'] ?? 0), $maxAttempts);
         }
 
-        $verifiedAt = $this->markVerified($purpose, $normalizedEmail, $user, $pendingKey);
-        $this->recordOtpAuditLog((int) $user->user_id, 'email_otp_verified', $normalizedEmail, $purpose, $request);
+        [$verifiedAt, $emailVerifiedAtUpdated] = $this->markVerified($purpose, $normalizedEmail, $user, $pendingKey);
+        $this->recordOtpAuditLog(
+            userId: (int) $user->user_id,
+            action: 'email_otp_verified',
+            reason: "Email verified via OTP (purpose: {$purpose})",
+            request: $request,
+            oldValues: $emailVerifiedAtUpdated ? ['email_verified_at' => null] : null,
+            newValues: $emailVerifiedAtUpdated ? ['email_verified_at' => $verifiedAt->toIso8601String()] : null,
+        );
 
         return [
             'email' => $normalizedEmail,
@@ -177,7 +205,10 @@ class OtpService
         ]);
     }
 
-    private function markVerified(string $purpose, string $normalizedEmail, User $user, string $pendingKey): Carbon
+    /**
+     * @return array{0: Carbon, 1: bool}
+     */
+    private function markVerified(string $purpose, string $normalizedEmail, User $user, string $pendingKey): array
     {
         // Single-use: invalidate immediately after successful check.
         Cache::forget($pendingKey);
@@ -192,27 +223,51 @@ class OtpService
             'verified_at' => $verifiedAt->toIso8601String(),
         ], now()->addMinutes($verifiedTtlMinutes));
 
+        $emailVerifiedAtUpdated = false;
         if (strtolower((string) $user->email) === $normalizedEmail && $user->email_verified_at === null) {
             $user->email_verified_at = $verifiedAt;
             $user->save();
+            $emailVerifiedAtUpdated = true;
         }
 
-        return $verifiedAt;
+        return [$verifiedAt, $emailVerifiedAtUpdated];
     }
 
+    /**
+     * @param  array<string, mixed>|null  $oldValues
+     * @param  array<string, mixed>|null  $newValues
+     */
     private function recordOtpAuditLog(
         int $userId,
         string $action,
-        string $normalizedEmail,
-        string $purpose,
+        string $reason,
         Request $request,
+        ?array $oldValues = null,
+        ?array $newValues = null,
     ): void {
+        if ($this->auditLogService !== null) {
+            $this->auditLogService->record(
+                actorUserId: $userId,
+                action: $action,
+                entityType: 'users',
+                entityId: $userId,
+                oldValues: $oldValues,
+                newValues: $newValues,
+                reason: $reason,
+                request: $request,
+            );
+
+            return;
+        }
+
         DB::table('audit_logs')->insert([
             'actor_user_id' => $userId,
             'action' => $action,
             'entity_type' => 'users',
             'entity_id' => (string) $userId,
-            'new_values' => json_encode(['email' => $normalizedEmail, 'purpose' => $purpose]),
+            'old_values' => $oldValues !== null ? json_encode($oldValues) : null,
+            'new_values' => $newValues !== null ? json_encode($newValues) : null,
+            'reason' => $reason,
             'ip_address' => $request->ip(),
             'created_at' => now(),
         ]);

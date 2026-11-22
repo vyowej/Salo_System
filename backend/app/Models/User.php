@@ -108,49 +108,100 @@ class User extends Authenticatable
 
         $ownerships = DB::table('restaurant_owners as ro')
             ->join('restaurants as r', 'r.restaurant_id', '=', 'ro.restaurant_id')
+            ->leftJoin('addresses as a', 'a.address_id', '=', 'r.address_id')
+            ->leftJoin('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
+            ->leftJoin('cities as c', 'c.city_id', '=', 'b.city_id')
             ->where('ro.user_id', $this->user_id)
             ->select([
                 'ro.restaurant_id',
+                'r.parent_restaurant_id',
+                'r.brand_restaurant_id',
                 'r.restaurant_name',
+                'r.branch_name',
                 'r.restaurant_status',
+                'b.barangay_name',
+                'c.city_name',
                 'ro.joined_at',
             ])
+            ->orderByRaw('CASE WHEN r.parent_restaurant_id IS NULL THEN 0 ELSE 1 END ASC')
             ->orderBy('ro.restaurant_id')
             ->get()
-            ->map(fn ($row) => [
-                'restaurant_id' => (int) $row->restaurant_id,
-                'restaurant_name' => $row->restaurant_name,
-                'restaurant_status' => $row->restaurant_status,
-                'joined_at' => $row->joined_at,
-            ])
+            ->map(function ($row): array {
+                $restaurantId = (int) $row->restaurant_id;
+                $parentId = $row->parent_restaurant_id !== null ? (int) $row->parent_restaurant_id : null;
+                $brandId = $row->brand_restaurant_id !== null ? (int) $row->brand_restaurant_id : ($parentId ?? $restaurantId);
+                $shortAddress = implode(', ', array_filter([
+                    $row->barangay_name ? trim((string) $row->barangay_name) : null,
+                    $row->city_name ? trim((string) $row->city_name) : null,
+                ]));
+
+                return [
+                    'restaurant_id' => $restaurantId,
+                    'parent_restaurant_id' => $parentId,
+                    'brand_restaurant_id' => $brandId,
+                    'restaurant_name' => $row->restaurant_name,
+                    'branch_name' => $row->branch_name,
+                    'display_name' => \App\Support\RestaurantBranchService::formatDisplayName((string) $row->restaurant_name, $row->branch_name),
+                    'is_main_branch' => $parentId === null,
+                    'short_address' => $shortAddress !== '' ? $shortAddress : null,
+                    'restaurant_status' => $row->restaurant_status,
+                    'joined_at' => $row->joined_at,
+                ];
+            })
             ->values()
             ->all();
 
         $staffAssignments = DB::table('restaurant_staff as rs')
             ->join('restaurants as r', 'r.restaurant_id', '=', 'rs.restaurant_id')
+            ->leftJoin('addresses as a', 'a.address_id', '=', 'r.address_id')
+            ->leftJoin('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
+            ->leftJoin('cities as c', 'c.city_id', '=', 'b.city_id')
             ->where('rs.user_id', $this->user_id)
             ->where('rs.staff_status', 'active')
             ->select([
                 'rs.staff_id',
                 'rs.restaurant_id',
+                'r.parent_restaurant_id',
+                'r.brand_restaurant_id',
                 'r.restaurant_name',
+                'r.branch_name',
+                'b.barangay_name',
+                'c.city_name',
                 'rs.staff_position',
                 'rs.staff_status',
                 'rs.joined_at',
             ])
+            ->orderByRaw('CASE WHEN r.parent_restaurant_id IS NULL THEN 0 ELSE 1 END ASC')
+            ->orderBy('rs.restaurant_id')
             ->orderBy('rs.staff_id')
             ->get()
-            ->map(fn ($row) => [
-                'staff_id' => (int) $row->staff_id,
-                'restaurant_id' => (int) $row->restaurant_id,
-                'restaurant_name' => $row->restaurant_name,
-                'staff_position' => $row->staff_position,
-                'staff_status' => $row->staff_status,
-                'can_handle_orders' => self::isOrderHandlerPosition($row->staff_position),
-                'can_publish_menu' => self::isMenuPublisherPosition($row->staff_position),
-                'permissions' => null,
-                'joined_at' => $row->joined_at,
-            ])
+            ->map(function ($row): array {
+                $restaurantId = (int) $row->restaurant_id;
+                $parentId = $row->parent_restaurant_id !== null ? (int) $row->parent_restaurant_id : null;
+                $brandId = $row->brand_restaurant_id !== null ? (int) $row->brand_restaurant_id : ($parentId ?? $restaurantId);
+                $shortAddress = implode(', ', array_filter([
+                    $row->barangay_name ? trim((string) $row->barangay_name) : null,
+                    $row->city_name ? trim((string) $row->city_name) : null,
+                ]));
+
+                return [
+                    'staff_id' => (int) $row->staff_id,
+                    'restaurant_id' => $restaurantId,
+                    'parent_restaurant_id' => $parentId,
+                    'brand_restaurant_id' => $brandId,
+                    'restaurant_name' => $row->restaurant_name,
+                    'branch_name' => $row->branch_name,
+                    'display_name' => \App\Support\RestaurantBranchService::formatDisplayName((string) $row->restaurant_name, $row->branch_name),
+                    'is_main_branch' => $parentId === null,
+                    'short_address' => $shortAddress !== '' ? $shortAddress : null,
+                    'staff_position' => $row->staff_position,
+                    'staff_status' => $row->staff_status,
+                    'can_handle_orders' => self::isOrderHandlerPosition($row->staff_position),
+                    'can_publish_menu' => self::isMenuPublisherPosition($row->staff_position),
+                    'permissions' => null,
+                    'joined_at' => $row->joined_at,
+                ];
+            })
             ->values()
             ->all();
 

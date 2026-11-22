@@ -182,7 +182,9 @@ class RestaurantApplicationService
         bool $offersDineIn,
         mixed $now,
     ): int {
-        return (int) DB::table('restaurants')->insertGetId([
+        $restaurantId = (int) DB::table('restaurants')->insertGetId([
+            'parent_restaurant_id' => null,
+            'brand_restaurant_id' => null,
             'restaurant_name' => trim((string) $validated['restaurant_name']),
             'registered_name' => ! empty($validated['registered_name']) ? trim((string) $validated['registered_name']) : null,
             'business_type' => $validated['business_type'],
@@ -200,6 +202,12 @@ class RestaurantApplicationService
             'created_at' => $now,
             'updated_at' => $now,
         ]);
+
+        DB::table('restaurants')
+            ->where('restaurant_id', $restaurantId)
+            ->update(['brand_restaurant_id' => $restaurantId]);
+
+        return $restaurantId;
     }
 
     /**

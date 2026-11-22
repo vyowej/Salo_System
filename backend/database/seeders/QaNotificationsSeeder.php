@@ -43,6 +43,8 @@ class QaNotificationsSeeder extends Seeder
                 'street' => '10 QA Test Ave',
             ]);
             $restaurantId = (int) DB::table('restaurants')->insertGetId([
+                'parent_restaurant_id' => null,
+                'brand_restaurant_id' => null,
                 'restaurant_name' => 'QA Bistro',
                 'business_type' => 'restaurant',
                 'ownership_structure' => 'sole_proprietorship',
@@ -56,6 +58,10 @@ class QaNotificationsSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            DB::table('restaurants')
+                ->where('restaurant_id', $restaurantId)
+                ->update(['brand_restaurant_id' => $restaurantId]);
         } else {
             $restaurantId = (int) $restaurant->restaurant_id;
         }

@@ -361,8 +361,19 @@ class ProfileChangeRequestService
                     $allowed = array_intersect_key($payload, array_flip(self::RESTAURANT_SENSITIVE_FIELDS));
                     if ($allowed !== []) {
                         $allowed['updated_at'] = now();
-                        DB::table('restaurants')
+                        $targetRestaurant = DB::table('restaurants')
                             ->where('restaurant_id', $row->entity_id)
+                            ->first(['restaurant_id', 'parent_restaurant_id', 'brand_restaurant_id']);
+
+                        $brandId = $targetRestaurant
+                            ? (int) ($targetRestaurant->brand_restaurant_id ?: ($targetRestaurant->parent_restaurant_id ?: $targetRestaurant->restaurant_id))
+                            : (int) $row->entity_id;
+
+                        DB::table('restaurants')
+                            ->where(function ($query) use ($brandId, $row): void {
+                                $query->where('brand_restaurant_id', $brandId)
+                                    ->orWhere('restaurant_id', $row->entity_id);
+                            })
                             ->update($allowed);
                     }
                 } elseif ($row->entity_type === 'rider') {

@@ -340,12 +340,74 @@ Each phase is small, independently testable, and has its own approval gate. Fron
 | Phase | Scope & Deliverables | Approval Gate & Verification | Risk Level |
 |---|---|---|---|
 | **Phase 1: Schema Proposal, Migration, & Backfill** | 1. SQL proposal + Laravel migration adding `parent_restaurant_id`, `brand_restaurant_id` (plain `BIGINT UNSIGNED NULL`), `branch_name`, and `uk_restaurants_brand_branch_name` to `restaurants`, backfilling `brand_restaurant_id = COALESCE(parent_restaurant_id, restaurant_id)`, and creating `restaurant_application_branches`.<br>2. Update `database/salo_db.sql` baseline.<br>3. Run migration on `salo_test` (and `salo_db` after approval). | Schema diff review + `MultiBranchSchemaBackfillTest` passing on `salo_test`. | **Low** |
-| **Phase 2a: Branch Context & Authorization Only** | 1. Update `User::resolveRoleContext()` to return `parent_restaurant_id`, `brand_restaurant_id`, `branch_name`, `display_name`, `is_main_branch`, and `short_address`.<br>2. Update `WorkspaceAccessResolver` to support `X-Restaurant-Id` header fallback and Main Branch default (`parent_restaurant_id IS NULL`).<br>3. Update `RestaurantLocationService` to use `WorkspaceAccessResolver` (supporting `role:owner,staff` + `active` status check).<br>4. Update `OwnerProfileService` & `ProfileChangeRequestService` to propagate shared brand fields (`restaurant_name`, `registered_name`, `business_type`, `ownership_structure`, `logo_image`, `cover_image`, `description`) across `brand_restaurant_id`. | `MultiBranchAuthorizationMatrixTest` (branch context & owner/staff isolation) + existing backend test suite passing. | **Low–Medium** |
+| **Phase 2a: Branch Context & Authorization Only** | 1. Update `User::resolveRoleContext()` to return `parent_restaurant_id`, `brand_restaurant_id`, `branch_name`, `display_name`, `is_main_branch`, and `short_address`.<br>2. Update `WorkspaceAccessResolver` to support `X-Restaurant-Id` header fallback and Main Branch default (`parent_restaurant_id IS NULL`).<br>3. Update `RestaurantLocationService` to use `WorkspaceAccessResolver` (supporting `role:owner,staff` + `active` status check).<br>4. Update `OwnerProfileService` & `ProfileChangeRequestService` to propagate shared brand fields (`restaurant_name`, `registered_name`, `business_type`, `ownership_structure`, `logo_image`, `cover_image`, `description`) across `brand_restaurant_id`.<br>5. Enforce single-level hierarchy (`parent.parent_restaurant_id IS NULL`) and self-parent prevention (`parent_restaurant_id <> restaurant_id`) at the service layer (Option 1, no triggers), and ensure every `restaurants` insert path (`RestaurantApplicationService::createRestaurantRecord()`, branch creation paths, test factories/helpers) sets `brand_restaurant_id` right after `insertGetId` in the same transaction. | `MultiBranchAuthorizationMatrixTest` (branch context & owner/staff isolation) + existing backend test suite passing. | **Low–Medium** |
 | **Phase 2b: Permission Map (`CLEAN-1(d)`) & Menu Route Changes** | 1. Centralize canonical position-to-permissions in `config('salo.staff.position_permissions')` and populate `permissions` on `restaurant_staff_assignments` in `User::resolveRoleContext()`.<br>2. Update `permissionMap.js` & `RestaurantAccessContext.jsx` to consume backend `permissions` directly (removing duplicate frontend position-matching rules).<br>3. Move `/menu/categories*` and `/menu/items*` to `role:owner,staff` guarded by `WorkspaceAccessResolver` for `Manager` and `Menu Manager`. | Dedicated `CLEAN-1(d)` permission & menu-route test cases + frontend `access.test.js` & `restaurantOrders.test.js` passing. | **Low–Medium** |
 | **Phase 3: Partner Application Wizard Branches & Admin Review** | 1. Backend: Update `SubmitRestaurantApplicationRequest`, `RestaurantApplicationService`, and `AdminApplicationService` for `has_branches`, `main_branch_name`, `branches[]` (max **5** total in application), `restaurant_application_branches`, and branch materialization + `restaurant_owners` copy on approval.<br>2. Frontend: Add branch question & repeatable branch name/location cards to `BusinessAddressStep.jsx`, summary to `ApplicationReviewStep.jsx`, and branch list to `ApplicationReviewModal.jsx`. | `RestaurantApplicationWorkflowTest`, `AdminApplicationReviewTest`, `businessApplication.test.js`, `adminApplicationReview.test.js`. | **Low** |
 | **Phase 4: Owner Branch Switcher, All-Branches Overview, & "Add Branch" Flow** | 1. Backend: Add `GET /api/restaurant/branches` and `POST /api/restaurant/branches` (owner-only, max **10** branches per business configurable in `config/salo.php`, copies `restaurant_owners`, optional hours/menu cloning, admin notification, audit log).<br>2. Frontend: Upgrade `RestaurantAccessContext.jsx` (`localStorage` persistence, Main Branch default), upgrade `OwnerLayout.jsx` topbar switcher (hidden for 1 branch) + `AddBranchModal`, fix `OwnerProfilePage.jsx` location call to pass `selectedRestaurantId`, and add All-Branches summary on `OwnerDashboard.jsx`. | `OwnerBranchManagementTest`, `ownerWorkspace.test.js`, `access.test.js`. | **Low–Medium** |
 | **Phase 5: Staff Management per Branch** | 1. Backend: Format branch display names in `StaffInvitationService` notifications/lists and support optional multi-branch invite targets.<br>2. Frontend: Update `TeamAndStaffPage.jsx` & `InvitationsInboxPage.jsx` with branch labels and verify multi-branch staff switcher behavior. | `StaffInvitationsTest`, `restaurantNotificationsPhase5.test.js`. | **Low** |
 | **Phase 6: Customer-Side Branch Display, Detail Switcher, & Admin Multi-Branch Controls** | 1. Backend: Return `branch_name`, `brand_restaurant_id`, `display_name`, and sibling `branches` in `GET /api/restaurants` and `GET /api/restaurants/{id}`; snapshot `display_name` in `CheckoutService`; add optional `apply_to_all_branches` to `PATCH /api/admin/restaurants/{id}/status`.<br>2. Frontend: Render branch cards on `CustomerDashboard.jsx`, Branch Switcher banner on `RestaurantDetailPage.jsx`, and branch badges on `AdminRestaurantsPage.jsx`. | `PublicRestaurantsTest`, `CheckoutOrderTest`, `AdminManagementTest`, `MultiBranchOrderDeliveryTest`, `checkoutOrders.test.js`. | **Low** |
+
+---
+
+## Phase 1 implemented (salo_test only)
+
+Phase 1 schema proposal (`database/proposals/2026_11_22_multi_branch_restaurants.sql`) and Laravel migration (`backend/database/migrations/2026_11_22_000002_add_multi_branch_support.php`) have been verified on a scratch MariaDB database (`_salo_scratch_multi_branch`, dropped after test) and applied to `salo_test` only (`salo_db` and `database/salo_db.sql` remain untouched).
+
+### Applied Schema Changes
+
+1. **`restaurants` table (3 columns, 3 indexes/unique keys, 2 foreign keys):**
+   - `parent_restaurant_id BIGINT UNSIGNED NULL DEFAULT NULL` (after `restaurant_id`)
+   - `brand_restaurant_id BIGINT UNSIGNED NULL DEFAULT NULL` (after `parent_restaurant_id`; remains `NULL`able permanently, backfilled for existing rows with `COALESCE(parent_restaurant_id, restaurant_id)`)
+   - `branch_name VARCHAR(150) NULL DEFAULT NULL` (after `restaurant_name`)
+   - `idx_restaurants_parent (parent_restaurant_id)`
+   - `idx_restaurants_brand_status (brand_restaurant_id, restaurant_status)`
+   - `uk_restaurants_brand_branch_name (brand_restaurant_id, branch_name)`
+   - `fk_restaurants_parent`: `FOREIGN KEY (parent_restaurant_id) REFERENCES restaurants (restaurant_id) ON DELETE RESTRICT ON UPDATE RESTRICT`
+   - `fk_restaurants_brand`: `FOREIGN KEY (brand_restaurant_id) REFERENCES restaurants (restaurant_id) ON DELETE RESTRICT ON UPDATE RESTRICT`
+2. **`restaurant_application_branches` table (new):**
+   - `application_branch_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT` (PK)
+   - `restaurant_application_id BIGINT UNSIGNED NOT NULL` (`fk_app_branches_application` -> `restaurant_applications.restaurant_application_id`, `ON DELETE CASCADE ON UPDATE RESTRICT`)
+   - `branch_name VARCHAR(150) NOT NULL`
+   - `address_id BIGINT UNSIGNED NOT NULL` (`fk_app_branches_address` -> `addresses.address_id`, `ON DELETE RESTRICT ON UPDATE RESTRICT`)
+   - `contact_phone VARCHAR(30) NULL DEFAULT NULL`
+   - `sort_order SMALLINT UNSIGNED NOT NULL DEFAULT 1`
+   - `created_branch_restaurant_id BIGINT UNSIGNED NULL DEFAULT NULL` (`fk_app_branches_created_restaurant` -> `restaurants.restaurant_id`, `ON DELETE SET NULL ON UPDATE RESTRICT`)
+   - `created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`
+   - `updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`
+   - `uk_app_branch_name (restaurant_application_id, branch_name)`
+   - `idx_app_branches_application (restaurant_application_id, sort_order)`
+   - `idx_app_branches_address (address_id)`
+
+### Phase 1 Schema & Testing Findings
+
+- **MariaDB 10.11 `CHECK` Constraint Limitation (`ERROR 1901`):** Testing on `10.11.16-MariaDB-log` failed when attempting `CHECK (parent_restaurant_id IS NULL OR parent_restaurant_id <> restaurant_id)` with `ERROR 1901 (HY000): Function or expression 'AUTO_INCREMENT' cannot be used in the CHECK clause of 'restaurant_id'`. Therefore, `chk_restaurants_no_self_parent` was omitted from the SQL proposal and migration.
+- **Single-Level Hierarchy & Self-Parent Prevention (Option 1 — Service-Level Check):** Enforce `parent.parent_restaurant_id IS NULL` and `parent_restaurant_id <> restaurant_id` at the service layer in Phase 2a (`AdminApplicationService` and `OwnerBranchService`), with no database triggers.
+- **`brand_restaurant_id` Permanently `NULL`able + Integrity Check Replacement:** `brand_restaurant_id` stays `BIGINT UNSIGNED NULL` permanently because a root row must reference its own `AUTO_INCREMENT` `restaurant_id` (unknown before `INSERT`), and MariaDB/MySQL have no deferred FK constraints (nor can triggers bypass a `NOT NULL` self-FK on insert). `fk_restaurants_brand` (`RESTRICT`), `idx_restaurants_brand_status`, `uk_restaurants_brand_branch_name`, and the backfill `UPDATE` are all retained.
+  - **Operational replacement for `NOT NULL`:** Run `SELECT COUNT(*) FROM restaurants WHERE brand_restaurant_id IS NULL` (expected `0`) or `php artisan salo:check-branch-integrity` (`backend/app/Console/Commands/CheckBranchIntegrityCommand.php`).
+  - **Phase 2a insert requirement:** Every code path that inserts into `restaurants` (`RestaurantApplicationService::createRestaurantRecord()`, branch creation paths, and test factories/helpers) must set `brand_restaurant_id` right after `insertGetId` in the same transaction.
+
+---
+
+## Phase 2a implemented (salo_test only)
+
+Phase 2a backend branch context, hierarchy/owner-sync helpers, authorization enforcement, and brand-level propagation have been implemented and verified on `salo_test` only (`salo_db` and `database/salo_db.sql` remain untouched; Phase 2b and frontend changes are not started).
+
+### Implemented Components
+
+1. **Config & Shared Branch Service:**
+   - `backend/config/salo.php`: Added `salo.restaurants.max_application_branches` (`5`) and `salo.restaurants.max_branches_per_business` (`10`).
+   - `backend/app/Support/RestaurantBranchService.php`: Added `createRootRestaurant()` (sets `brand_restaurant_id = restaurant_id` immediately after `insertGetId` in transaction), `createChildBranch()`, `assertValidNewBranch()` (enforcing single-level hierarchy / no grandchildren, no self-parenting, brand ID consistency, case-insensitive unique `branch_name` per brand including root's `branch_name`, and `max_branches_per_business`), Strategy B owner sync helpers (`syncOwnersFromRootToBranch()`, `addOwnerToBrand()`, `removeOwnerFromBrand()`), and `formatDisplayName()`.
+   - Updated `RestaurantApplicationService::createRestaurantRecord()` and `QaNotificationsSeeder` to set `brand_restaurant_id` immediately after `insertGetId`.
+2. **Role Context (`User::resolveRoleContext()`):**
+   - `backend/app/Models/User.php`: Added `parent_restaurant_id`, `brand_restaurant_id`, `branch_name`, `display_name`, `is_main_branch`, and `short_address` to both `restaurant_ownerships` and `restaurant_staff_assignments`, ordered deterministically root-first (`parent_restaurant_id IS NULL`), then lowest `restaurant_id`.
+3. **Centralized Branch Context & Active Guards:**
+   - `backend/app/Support/WorkspaceAccessResolver.php`: Added `resolveRequestedRestaurantId()` honoring explicit `restaurant_id` (query/body) first, optional `X-Restaurant-Id` header fallback, rejecting invalid non-positive/non-integer values with `403`, and defaulting deterministically to Main Branch (`parent_restaurant_id IS NULL`, lowest `restaurant_id`) for owners and assigned branch for staff.
+   - `backend/app/Features/Locations/Services/RestaurantLocationService.php` & `StaffInvitationService.php`: Replaced ad-hoc `restaurant_owners` queries (which lacked `restaurant_status = 'active'` and `X-Restaurant-Id` support) with `WorkspaceAccessResolver::requireActiveOwnedRestaurant()`.
+4. **Brand-Level Propagation (Transaction-Safe):**
+   - `ProfileChangeRequestService::decideChangeRequest()`: Approved `restaurant_name`, `registered_name`, `business_type`, `ownership_structure` updates propagate across all rows sharing `brand_restaurant_id`.
+   - `OwnerProfileService`: `description` updates (`persistProfileUpdate()`) and `logo_image` / `cover_image` updates (`persistMediaUpdate()`) propagate across all rows sharing `brand_restaurant_id`.
+5. **Extended Integrity Command:**
+   - `backend/app/Console/Commands/CheckBranchIntegrityCommand.php` (`salo:check-branch-integrity`): Now also verifies single-level hierarchy (no non-root parents), child `brand_restaurant_id === parent.brand_restaurant_id`, and zero owner mismatches between child branches and their root (`Strategy B`).
 
 ---
 

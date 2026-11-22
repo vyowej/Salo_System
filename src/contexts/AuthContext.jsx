@@ -141,13 +141,15 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     setLoading(true);
+    const currentUserId = user?.user_id ?? user?.id ?? null;
     try {
       await authService.logout();
+      writeStoredWorkspaceForUser(currentUserId, null);
       applyAuthenticatedUser(null);
     } finally {
       setLoading(false);
     }
-  }, [applyAuthenticatedUser]);
+  }, [applyAuthenticatedUser, user]);
 
   const setActiveWorkspace = useCallback((workspaceRole) => {
     setUser((prev) => {
