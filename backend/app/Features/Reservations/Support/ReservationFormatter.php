@@ -258,6 +258,8 @@ class ReservationFormatter
         ?int $cancellationCutoffMinutes = null,
         ?array $statusHistory = null,
         ?string $attention = null,
+        ?array $customerHistory = null,
+        ?array $restaurantSettings = null,
     ): array {
         $data = is_array($row) ? (object) $row : $row;
         $base = self::format($data, $now, $cancellationCutoffMinutes, $statusHistory);
@@ -289,6 +291,19 @@ class ReservationFormatter
             'name' => isset($data->restaurant_name) ? (string) $data->restaurant_name : null,
         ];
 
+        if ($customerHistory !== null) {
+            $base['customer_history'] = [
+                'visits' => (int) ($customerHistory['visits'] ?? 0),
+                'no_shows' => (int) ($customerHistory['no_shows'] ?? 0),
+                'cancellations' => (int) ($customerHistory['cancellations'] ?? 0),
+                'total_reservations' => (int) ($customerHistory['total_reservations'] ?? 0),
+            ];
+        }
+
+        if ($restaurantSettings !== null) {
+            $base['restaurant_settings'] = $restaurantSettings;
+        }
+
         return $base;
     }
 
@@ -299,6 +314,11 @@ class ReservationFormatter
     public static function formatHistoryEntry(object|array $entry): array
     {
         $row = is_array($entry) ? (object) $entry : $entry;
+        $actorName = trim(sprintf(
+            '%s %s',
+            (string) ($row->actor_first_name ?? ''),
+            (string) ($row->actor_last_name ?? ''),
+        ));
 
         return [
             'history_id' => (int) ($row->history_id ?? 0),
@@ -309,6 +329,7 @@ class ReservationFormatter
                 ? (int) $row->changed_by_user_id
                 : null,
             'changed_by_role' => (string) ($row->changed_by_role ?? 'system'),
+            'actor_name' => $actorName !== '' ? $actorName : null,
             'note' => isset($row->note) && $row->note !== null ? (string) $row->note : null,
             'created_at' => OrderTimestampFormatter::toManilaIso($row->created_at ?? null),
         ];

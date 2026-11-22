@@ -223,10 +223,16 @@ The restaurant partner onboarding workflow operates across three interconnected 
 ### Step 4: Business Address & Physical Location
 
 - **Step Number:** 4
-- **Exact Step Title Displayed in UI:** Business Address & Physical Location
+- **Exact Step Title Displayed in UI:** Business Address & Physical Location (Step 5 in the live wizard `applicationDefaults.js`; earlier draft section header below listed Step 4 — see Multi-Branch & Two-Step Permit Update below)
 - **Component File:** `src/pages/BusinessApplication/components/BusinessAddressStep.jsx`
-- **Supporting Components:** `LocationPickerModal.jsx`
-- **Purpose:** Capture administrative hierarchy, street address, postal code, dispatch directions, and map pin coordinates for rider dispatch routing.
+- **Supporting Components:** `LocationPickerModal.jsx`, `BranchPermitFields.jsx`
+- **Purpose:** Capture administrative hierarchy, street address, postal code, dispatch directions, map pin coordinates, and optional additional branches (up to 5 total locations) with per-branch permit upload or local exemption.
+
+> **Multi-Branch & Branch Permit Update (2026-11-23):**
+> - In the live wizard (`src/pages/BusinessApplication/constants/applicationDefaults.js`), Step 4 is **Business Documents & Permits** (`BusinessDocumentsStep.jsx`) and Step 5 is **Business Address & Physical Location** (`BusinessAddressStep.jsx`).
+> - On Step 5, when *"Yes, we have multiple branches"* is enabled, each additional branch card requires either a Mayor's / Business Permit file (`PDF`/`JPG`/`PNG`, `<= 10 MB`) or `"Not required in this branch's locality"` with a `10–500` character explanation.
+> - Submission uses a **two-step flow**: (1) `POST /api/restaurant/applications` submits the application and `branches[]` metadata (returning `application_branch_id`s); (2) each required branch permit is uploaded in its own request to `POST /api/restaurant/applications/{id}/branches/{branchId}/permit` (with per-branch Retry on failure).
+> - The main/root branch's `mayors_permit` remains mandatory and unchanged in Step 4 (`application_documents`).
 
 #### Required Information and Input Fields
 

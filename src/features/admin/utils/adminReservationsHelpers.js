@@ -13,6 +13,23 @@ export const RESERVATION_STATUS_OPTIONS = [
   { value: 'expired', label: 'Expired' },
 ];
 
+export const RESERVATION_GROUP_OPTIONS = [
+  { value: 'all', label: 'All groups' },
+  { value: 'active', label: 'Active' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'attention', label: 'Needs attention' },
+  { value: 'history', label: 'History' },
+];
+
+export const DEPOSIT_STATUS_OPTIONS = [
+  { value: 'all', label: 'All deposits' },
+  { value: 'none', label: 'No deposit' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'waived', label: 'Waived' },
+  { value: 'refunded', label: 'Refunded' },
+];
+
 export const RESERVATION_ATTENTION_OPTIONS = [
   { value: 'all', label: 'All reservations' },
   { value: 'any', label: 'Needs attention (any)' },
@@ -44,7 +61,9 @@ export function validateDateRange(dateFrom, dateTo) {
 export function buildAdminReservationsQuery({
   search = '',
   status = 'all',
+  group = 'all',
   attention = 'all',
+  depositStatus = 'all',
   restaurantId = '',
   dateFrom = '',
   dateTo = '',
@@ -64,7 +83,9 @@ export function buildAdminReservationsQuery({
   const trimmedSearch = String(search || '').trim();
   if (trimmedSearch) params.search = trimmedSearch;
   if (status && status !== 'all') params.status = status;
+  if (group && group !== 'all') params.group = group;
   if (attention && attention !== 'all') params.attention = attention;
+  if (depositStatus && depositStatus !== 'all') params.deposit_status = depositStatus;
   const parsedRestaurantId = Number.parseInt(String(restaurantId || ''), 10);
   if (Number.isFinite(parsedRestaurantId) && parsedRestaurantId > 0) {
     params.restaurant_id = parsedRestaurantId;

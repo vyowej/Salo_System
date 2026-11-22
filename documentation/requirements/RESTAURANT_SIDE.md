@@ -93,11 +93,11 @@ The available workspace features for ordinary staff members must depend on their
 
 ## 2.3 Multiple Restaurant Management
 
-If an owner is associated with multiple approved restaurants or branches, the workspace should provide a way to select which restaurant or branch they are currently managing.
+If an owner is associated with multiple approved restaurants or branches, the workspace provides a branch switcher in the header to select which restaurant or branch they are currently managing.
 
-Information and operations must be associated with the correct restaurant.
-
-The owner must be able to distinguish between restaurant-wide information and branch-specific information where applicable.
+- **Branch Representation (Decided 2026-11-23):** Each branch is a `restaurants` row linked to the main (root) restaurant via `parent_restaurant_id` and `brand_restaurant_id`. Owners of the business (`restaurant_owners`) own all branches of that business automatically.
+- **Branch Creation:** Only approved business owners can add branches (`Add Branch`); staff (including `Manager`) never see or access branch creation or branch permit controls.
+- **Scope Separation:** Information and operations are scoped to the selected branch where branch-specific, while brand identity, business-level legal documents, and payout accounts remain shared at the business level (see §16).
 
 This functionality is separate from multiple ownership of one restaurant.
 
@@ -1174,9 +1174,12 @@ Owners should be able to change a staff member's position and assigned responsib
 
 ## 12.8 Permission Assignment
 
-The system should provide permission controls for assigning access to specific restaurant functions.
+**Implemented Model (Decided 2026-11-23):** Staff are assigned **per branch** (`restaurant_staff.restaurant_id`, one invitation per branch). Permissions are **position-derived from the canonical backend configuration map** (`backend/config/salo.php`: `Manager`, `Order Handler`, `Order Staff`, `Reservation Handler`, `Reservation Staff`, `Inventory Manager`, `Menu Manager`), exposed to the frontend via `/api/auth/me`.
 
-Possible permission groups include:
+- **Deliberate Simplification:** Per-user permission checkboxes/overrides are deferred to future work; assigning or updating a staff member's position determines their exact permissions on that branch.
+- **Manager Scope Boundary:** `Manager` can manage menu, publishing (subject to branch permit & coverage gates), orders, inventory, and reservations on their assigned branch only. `Manager` **cannot** manage staff/invitations, edit business profile/branding, edit operating hours or delivery coverage, create branches, or view/upload branch permits.
+
+The conceptual permission groups remain:
 
 **Business Profile**
 
@@ -1659,9 +1662,42 @@ Changes to one branch must not unintentionally modify unrelated branches.
 
 ## 16.5 Owner Access Across Branches
 
-All approved owners of a restaurant should be able to access the restaurant's workspace and its applicable branch management features.
+All approved owners of a restaurant have owner-level access to the restaurant workspace and all of its branches.
 
-If branch-specific restrictions are introduced in the future, they must be handled through explicitly approved ownership or access policies rather than silently treating a co-owner as ordinary staff.
+If branch-specific owner restrictions are introduced in the future, they must be handled through explicitly approved ownership or access policies rather than silently treating a co-owner as ordinary staff.
+
+## 16.6 Shared vs. Per-Branch Information (Decided 2026-11-23)
+
+| Data / Feature | Scope | Notes |
+|---|---|---|
+| Brand name, registered name, business type, ownership structure | **Shared (Business)** | Approved profile change requests propagate across all branches of `brand_restaurant_id`. |
+| Logo, cover photo, description, cuisine categories | **Shared (Business)** | Owner updates propagate to all branches of the business. |
+| Business-level documents (DTI/SEC/CDA, Gov ID, Auth Letter, Main `mayors_permit`) & Payout account | **Shared (Business)** | Stored once on the application / root `brand_restaurant_id`. |
+| Branch name, address, map pin, contact phone | **Per Branch** | Each branch has its own physical location and `branch_name`. |
+| Operating hours, delivery coverage (`service_areas`), fulfillment toggles | **Per Branch** | Each branch manages its own schedule and delivery areas. |
+| Menu categories, items, add-ons, availability, `is_published` | **Per Branch** | Cloned on creation/approval (unpublished); edited and published independently per branch. |
+| Orders, reservations, tables, inventory, staff (`restaurant_staff`) | **Per Branch** | Strictly isolated to the selected branch; staff never see other branches. |
+| Branch Mayor's / Business Permit (`branch_permits`) | **Per Additional Branch** | Root branch stays in `application_documents`; each additional branch has its own `branch_permits` row. |
+
+## 16.7 Branch Visibility, Publishing & Permit Rules (Decided 2026-11-23)
+
+- **Fail-Closed Visibility & Publishing:** Every non-root branch is created with `restaurant_status = 'active'` and `is_published = 0`. It remains **hidden from customers and unpublishable** (`422`) until its `branch_permits.permit_status` is `approved` or `waived`. First-time publishing also requires at least one delivery service area when delivery is enabled.
+- **Additional Branch Permits vs. Main Branch:**
+  - The **main (root) branch** Mayor's / Business Permit remains mandatory and is reviewed in `application_documents`.
+  - Each **additional branch** must submit its own Mayor's / Business Permit (`PDF`/`JPG`/`PNG`, max 10 MB), or an owner declaration that a permit is not required in that branch's locality (`10–500` character explanation), which an admin must explicitly `waive` or `reject`.
+  - Business-level legal documents remain shared.
+- **Independent Branch Approval:** Business/application approval never depends on additional-branch permit statuses. An approved application still materializes additional branches as `active`, `is_published = 0` even if their permits are `pending_submission`, `pending_review`, `additional_info_required`, or `rejected`.
+- **Permit Statuses & Access:**
+  - Statuses: `pending_submission`, `pending_review`, `under_review`, `additional_info_required`, `approved`, `rejected`, `waived`.
+  - Private permit files can be viewed/streamed **only** by the applicant (pre-approval), business owners (post-approval), and active admins (`403` for all staff, including `Manager`).
+  - Transitioning a permit away from `approved` or `waived` (`reject`, `request-info`, `reopen`) immediately sets `restaurants.is_published = 0` in the same transaction.
+  - **Open Item:** Permit expiry dates, renewal reminders, and expiry auto-unpublish are **not implemented** in this phase.
+
+## 16.8 Partner Application Multi-Branch Flow (Decided 2026-11-23)
+
+- The Partner Application collects additional branches on Step 5 (maximum **5 total locations** per application; maximum **10 total branches** per business post-approval, configurable in `backend/config/salo.php`).
+- Submission uses a **two-step flow** (to stay within PHP upload limits): (1) `POST /api/restaurant/applications` saves the application, `restaurant_application_branches`, and `branch_permits` rows (`restaurant_id = NULL`); (2) each required branch permit file is uploaded sequentially to `POST /api/restaurant/applications/{id}/branches/{branchId}/permit` (idempotent by SHA-256 content hash).
+- On application approval, each `restaurant_application_branches` row is materialized as an active, unpublished child `restaurants` row reusing its existing `branch_permits` row (`restaurant_id` populated).
 
 ---
 
@@ -1945,15 +1981,15 @@ Verification must include:
 
 The following topics require approved platform-wide policies or operational decisions. Their authoritative policies must be maintained in SALO's separate Business Rules documentation.
 
-| Feature | Decision Required |
+| Feature | Decision Required / Status |
 |---|---|
-| Staff Hierarchy | Final position structure and staff permissions. |
-| Staff Invitations | Invitation expiration and handling of repeated invitations. |
-| Staff Permissions | Exact permissions available for each management function. |
+| Staff Hierarchy | **Decided (2026-11-23):** Canonical position structure (`Manager`, `Order Handler`, `Order Staff`, `Reservation Handler`, `Reservation Staff`, `Inventory Manager`, `Menu Manager`) defined in `backend/config/salo.php`; per-branch assignment. |
+| Staff Invitations | Invitation expiration (`7` days default) and handling of repeated invitations; multi-branch single invitation deferred. |
+| Staff Permissions | **Decided (2026-11-23):** Position-derived permissions from `config/salo.php` (deliberate simplification of per-user checkboxes; per-user overrides deferred). |
 | Ownership Invitations | Invitation expiration, repeated invitations, and approval requirements. |
 | Ownership Changes | Ownership transfer, owner removal, ownership disputes, and owner deactivation procedures. |
 | Owner Authority | Whether any ownership actions require agreement or approval from other owners. |
-| Restaurant Locations | Whether one restaurant account can manage multiple branches. |
+| Restaurant Locations | **Decided (2026-11-23):** Multi-branch supported (`restaurants` rows linked via `parent_restaurant_id`/`brand_restaurant_id`, max 5 in application / 10 per business, per-branch permits via `branch_permits`). Permit expiry/renewal remains open. |
 | Delivery Coverage | Exact supported geographic coverage and delivery fee configuration. |
 | Order Acceptance | Acceptance time limits and handling of unprocessed orders. |
 | Reservation Management | Approval deadlines, temporary table holds, and reservation capacity. |

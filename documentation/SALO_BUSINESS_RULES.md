@@ -150,6 +150,11 @@ SALO creates:
 - One payment attempt or an appropriate collection of payment transactions.
 - Separate restaurant financial allocations.
 
+### 3.1.1 Multi-Branch Fulfillment & Sub-Orders (Decided 2026-11-23)
+
+- Each branch is an **independent fulfillment unit** with its own pickup address, delivery coverage (`service_areas`), operating hours, menu, and orders.
+- **One sub-order = one branch:** A customer checkout containing items from multiple branches of the same brand (or different brands) creates one independent sub-order per branch (`orders.restaurant_id = branch.restaurant_id`), with independent acceptance, preparation, pickup, and rider assignment.
+
 ### 3.2 Independent Restaurant Statuses
 
 Each sub-order must have its own lifecycle.
@@ -1261,6 +1266,13 @@ If a restaurant becomes suspended:
 - Hold or review unsettled amounts according to the agreement and legal requirements.
 - Do not automatically confiscate valid earnings.
 - Allow authorized Finance personnel to resolve outstanding liabilities and refunds.
+
+### 40.4 Multi-Branch Payout & Commission Scope (Decided 2026-11-23)
+
+- **Business-Level Payout & Commission:** `payout_accounts` and platform commission settings are configured at the **business level** (shared on the root `brand_restaurant_id`), not per branch.
+- **Open Financial Questions (Undecided):**
+  - Whether payout settlement statements will be presented consolidated per business or broken down per branch.
+  - Whether branch-level commission overrides or inter-branch refund/adjustment netting will ever be supported.
 
 ---
 

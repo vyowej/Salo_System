@@ -16,7 +16,9 @@ import {
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { formatDateTime, formatPeso } from '../utils/format';
 import {
+  DEPOSIT_STATUS_OPTIONS,
   RESERVATION_ATTENTION_OPTIONS,
+  RESERVATION_GROUP_OPTIONS,
   RESERVATION_STATUS_OPTIONS,
   buildAdminReservationsQuery,
   formatAttentionLabel,
@@ -37,6 +39,7 @@ export default function AdminReservationsPage() {
 
   const [reservations, setReservations] = useState([]);
   const [meta, setMeta] = useState({ current_page: 1, last_page: 1, per_page: 15, total: 0 });
+  const [summary, setSummary] = useState(null);
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -44,7 +47,9 @@ export default function AdminReservationsPage() {
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
+  const [group, setGroup] = useState('all');
   const [attention, setAttention] = useState('all');
+  const [depositStatus, setDepositStatus] = useState('all');
   const [restaurantId, setRestaurantId] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -66,7 +71,9 @@ export default function AdminReservationsPage() {
   const hasActiveFilters = Boolean(
     effectiveSearch ||
       status !== 'all' ||
+      group !== 'all' ||
       attention !== 'all' ||
+      depositStatus !== 'all' ||
       restaurantId ||
       dateFrom ||
       dateTo,
@@ -87,7 +94,9 @@ export default function AdminReservationsPage() {
       const params = buildAdminReservationsQuery({
         search: effectiveSearch,
         status,
+        group,
         attention,
+        depositStatus,
         restaurantId,
         dateFrom,
         dateTo,
@@ -109,6 +118,7 @@ export default function AdminReservationsPage() {
           total: items.length,
         },
       );
+      setSummary(data?.summary || null);
     } catch (err) {
       if (seq !== listSeqRef.current) return;
       setError(err?.message || 'Unable to load platform reservations.');
@@ -117,7 +127,7 @@ export default function AdminReservationsPage() {
         setLoading(false);
       }
     }
-  }, [attention, dateFrom, dateRangeError, dateTo, direction, effectiveSearch, page, perPage, restaurantId, status]);
+  }, [attention, dateFrom, dateRangeError, dateTo, depositStatus, direction, effectiveSearch, group, page, perPage, restaurantId, status]);
 
   const loadStats = useCallback(async () => {
     if (dateRangeError) return;
@@ -134,7 +144,6 @@ export default function AdminReservationsPage() {
       setStats(data);
     } catch {
       if (seq !== statsSeqRef.current) return;
-      // Keep page usable even if stats call fails transiently
     } finally {
       if (seq === statsSeqRef.current) {
         setStatsLoading(false);
@@ -212,7 +221,9 @@ export default function AdminReservationsPage() {
   const clearFilters = () => {
     setSearch('');
     setStatus('all');
+    setGroup('all');
     setAttention('all');
+    setDepositStatus('all');
     setRestaurantId('');
     setDateFrom('');
     setDateTo('');
@@ -318,9 +329,14 @@ export default function AdminReservationsPage() {
     },
   ];
 
+  const hasRangeVolume = (stats?.totals?.total ?? 0) > 0;
   const maxDailyTotal = Math.max(
     1,
-    ...(stats?.daily_trend || []).map((day) => Number(day.total || 0)),
+    ...(stats?.by_day || []).map((day) => Number(day.total || 0)),
+  );
+  const maxHourTotal = Math.max(
+    1,
+    ...(stats?.by_hour || []).map((hr) => Number(hr.total || 0)),
   );
 
   return (
@@ -341,25 +357,30 @@ export default function AdminReservationsPage() {
             <div className="admin-stat-grid" style={{ marginBottom: 'var(--space-4)' }}>
               <StatCard
                 label="Reservations (range)"
-                value={stats.total_reservations}
-                hint={`${stats.total_guests} guests · ${stats.date_from} to ${stats.date_to}`}
+                value={stats.totals.total}
+                hint={`${stats.totals.covers_total} covers · avg ${stats.totals.average_party_size} guests · ${stats.date_from} to ${stats.date_to}`}
               />
               <StatCard
                 label="Active upcoming"
                 value={stats.active_upcoming}
-                hint="Pending, approved, confirmed, arrived, seated"
+                hint={`Confirmation rate: ${stats.rates.confirmation_rate}%`}
               />
               <StatCard
-                label="Completion / No-show"
-                value={`${stats.completion_rate}% / ${stats.no_show_rate}%`}
-                hint={`Cancellation rate: ${stats.cancellation_rate}%`}
+                label="No-show / Cancellation"
+                value={`${stats.rates.no_show_rate}% / ${stats.rates.cancellation_rate}%`}
+                hint={`Completion rate: ${stats.rates.completion_rate}%`}
               />
               <StatCard
-                label="Needs attention"
-                value={stats.attention_counts.total}
+                label="Needs attention (now)"
+                value={stats.attention_count}
                 danger={stats.attention_counts.no_show_candidate + stats.attention_counts.overdue_seated > 0}
                 warning={stats.attention_counts.pending_expiring > 0}
                 hint={`${stats.attention_counts.pending_expiring} expiring · ${stats.attention_counts.no_show_candidate} no-show · ${stats.attention_counts.overdue_seated} overdue`}
+              />
+              <StatCard
+                label="Deposits paid / Fees"
+                value={formatPeso(stats.deposits.total_deposit_amount_paid)}
+                hint={`${stats.deposits.paid_count}/${stats.deposits.required_count} paid · ${formatPeso(stats.service_fee_total)} completed fees`}
               />
             </div>
 
@@ -368,23 +389,59 @@ export default function AdminReservationsPage() {
                 <div className="admin-reservations-chart-header">
                   <h3>Daily reservation volume</h3>
                   <span className="admin-muted">
-                    {statsLoading ? 'Updating...' : `${stats.daily_trend.length} active day${stats.daily_trend.length === 1 ? '' : 's'}`}
+                    {statsLoading ? 'Updating...' : `${stats.by_day.length} day${stats.by_day.length === 1 ? '' : 's'} in range`}
                   </span>
                 </div>
-                {stats.daily_trend.length === 0 ? (
+                {!hasRangeVolume ? (
                   <p className="admin-muted">No reservations recorded in this date range.</p>
                 ) : (
                   <div className="admin-reservations-bars" role="img" aria-label="Daily reservation volume chart">
-                    {stats.daily_trend.slice(-14).map((day) => {
-                      const heightPct = Math.max(8, Math.round((Number(day.total || 0) / maxDailyTotal) * 100));
+                    {stats.by_day.slice(-14).map((day) => {
+                      const heightPct = day.total > 0
+                        ? Math.max(8, Math.round((Number(day.total || 0) / maxDailyTotal) * 100))
+                        : 2;
                       return (
                         <div
                           key={day.date}
                           className="admin-reservations-bar-col"
-                          title={`${day.date}: ${day.total} total (${day.completed} completed, ${day.no_show} no-show, ${day.cancelled} cancelled)`}
+                          title={`${day.date}: ${day.total} total (${day.completed} completed, ${day.cancelled_or_missed} cancelled/missed, ${day.covers} covers)`}
                         >
-                          <div className="admin-reservations-bar" style={{ height: `${heightPct}%` }} />
+                          <div
+                            className="admin-reservations-bar"
+                            style={{ height: `${heightPct}%`, opacity: day.total > 0 ? 1 : 0.2 }}
+                          />
                           <span className="admin-reservations-bar-label">{day.date.slice(5)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="admin-reservations-chart-card">
+                <div className="admin-reservations-chart-header">
+                  <h3>Peak start hours (Manila)</h3>
+                  <span className="admin-muted">00:00 – 23:00</span>
+                </div>
+                {!hasRangeVolume ? (
+                  <p className="admin-muted">No hourly booking distribution in this date range.</p>
+                ) : (
+                  <div className="admin-reservations-bars" role="img" aria-label="Peak reservation start hours chart">
+                    {stats.by_hour.map((hr) => {
+                      const heightPct = hr.total > 0
+                        ? Math.max(8, Math.round((Number(hr.total || 0) / maxHourTotal) * 100))
+                        : 2;
+                      return (
+                        <div
+                          key={hr.hour}
+                          className="admin-reservations-bar-col"
+                          title={`${hr.label}: ${hr.total} reservation${hr.total === 1 ? '' : 's'}`}
+                        >
+                          <div
+                            className="admin-reservations-bar"
+                            style={{ height: `${heightPct}%`, opacity: hr.total > 0 ? 1 : 0.15 }}
+                          />
+                          <span className="admin-reservations-bar-label">{String(hr.hour).padStart(2, '0')}</span>
                         </div>
                       );
                     })}
@@ -422,10 +479,10 @@ export default function AdminReservationsPage() {
                             setPage(1);
                           }}
                         >
-                          <strong>{rest.restaurant_name}</strong>
-                          <span>{rest.completed_count} completed · {rest.no_show_count} no-show</span>
+                          <strong>{rest.name}</strong>
+                          <span>{rest.completed} completed · {rest.no_show_rate}% no-show</span>
                         </button>
-                        <strong>{rest.total_reservations}</strong>
+                        <strong>{rest.total}</strong>
                       </li>
                     ))}
                   </ul>
@@ -434,7 +491,7 @@ export default function AdminReservationsPage() {
             </div>
 
             <div className="admin-reservations-status-strip" aria-label="Quick status counts">
-              {Object.entries(stats.status_counts).map(([key, count]) => (
+              {Object.entries(stats.totals.by_status).map(([key, count]) => (
                 <button
                   key={key}
                   type="button"
@@ -458,13 +515,29 @@ export default function AdminReservationsPage() {
             <input
               type="search"
               aria-label="Search reservations"
-              placeholder="Reference, guest, customer, restaurant"
+              placeholder="Reference, guest, phone, email, restaurant"
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value);
                 setPage(1);
               }}
             />
+          </label>
+
+          <label className="admin-filter-control">
+            Group
+            <select
+              aria-label="Filter by reservation group"
+              value={group}
+              onChange={(event) => {
+                setGroup(event.target.value);
+                setPage(1);
+              }}
+            >
+              {RESERVATION_GROUP_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </label>
 
           <label className="admin-filter-control">
@@ -494,6 +567,22 @@ export default function AdminReservationsPage() {
               }}
             >
               {RESERVATION_ATTENTION_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="admin-filter-control">
+            Deposit
+            <select
+              aria-label="Filter by deposit status"
+              value={depositStatus}
+              onChange={(event) => {
+                setDepositStatus(event.target.value);
+                setPage(1);
+              }}
+            >
+              {DEPOSIT_STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
@@ -567,6 +656,13 @@ export default function AdminReservationsPage() {
             </button>
           )}
         </div>
+
+        {summary && (
+          <div className="admin-muted" style={{ marginBottom: 10 }}>
+            Filtered total: <strong>{summary.total}</strong> reservation{summary.total === 1 ? '' : 's'} ·{' '}
+            <strong>{summary.total_guests}</strong> guests · {summary.active_count} active · {summary.pending_count} pending · {summary.completed_count} completed
+          </div>
+        )}
 
         {error && reservations.length > 0 && (
           <div role="alert" className="admin-error-banner" style={{ marginBottom: 12 }}>
@@ -707,6 +803,30 @@ export default function AdminReservationsPage() {
                 </li>
               </ul>
 
+              {selectedDetail.customer_history && (
+                <div className="admin-record-panel">
+                  <h3>Customer platform history</h3>
+                  <p style={{ margin: 0 }}>
+                    {selectedDetail.customer_history.total_reservations} total ·{' '}
+                    {selectedDetail.customer_history.visits} completed ·{' '}
+                    {selectedDetail.customer_history.no_shows} no-shows ·{' '}
+                    {selectedDetail.customer_history.cancellations} cancellations
+                  </p>
+                </div>
+              )}
+
+              {selectedDetail.restaurant_settings && (
+                <div className="admin-record-panel">
+                  <h3>Restaurant reservation settings</h3>
+                  <p style={{ margin: 0 }}>
+                    {selectedDetail.restaurant_settings.duration_minutes}m slot ·{' '}
+                    {selectedDetail.restaurant_settings.min_notice_hours}h notice ·{' '}
+                    {selectedDetail.restaurant_settings.cancellation_cutoff_minutes}m cancel cutoff ·{' '}
+                    {selectedDetail.restaurant_settings.auto_confirm ? 'Auto-confirm' : 'Manual approval'}
+                  </p>
+                </div>
+              )}
+
               {selectedDetail.special_requests && (
                 <div className="admin-record-panel">
                   <h3>Special requests</h3>
@@ -730,7 +850,7 @@ export default function AdminReservationsPage() {
                   items={(selectedDetail.status_history || []).map((entry) => ({
                     id: entry.history_id,
                     title: `${entry.from_status ? `${entry.from_status} → ` : ''}${entry.to_status}`,
-                    description: `${entry.changed_by_role || 'system'}${entry.note ? ` · ${entry.note}` : ''}`,
+                    description: `${entry.actor_name ? `${entry.actor_name} (${entry.changed_by_role || 'system'})` : (entry.changed_by_role || 'system')}${entry.note ? ` · ${entry.note}` : ''}`,
                     time: entry.created_at,
                   }))}
                 />

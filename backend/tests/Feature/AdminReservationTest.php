@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Features\Reservations\Support\ReservationAttention;
 use App\Features\Reservations\Support\ReservationStatus;
 use App\Models\User;
+use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,13 @@ class AdminReservationTest extends TestCase
 {
     use DatabaseTransactions;
 
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        CarbonImmutable::setTestNow();
+        parent::tearDown();
+    }
+
     public function test_unauthenticated_and_non_admin_users_are_rejected(): void
     {
         $this->getJson('/api/admin/reservations')->assertStatus(401);
@@ -22,156 +30,272 @@ class AdminReservationTest extends TestCase
         $this->getJson('/api/admin/reservations/1')->assertStatus(401);
 
         $customer = $this->createUser('customer');
+        $owner = $this->createUser('customer');
+        $staff = $this->createUser('customer');
 
-        $this->actingAs($customer)->getJson('/api/admin/reservations')->assertStatus(403);
-        $this->actingAs($customer)->getJson('/api/admin/reservations/stats')->assertStatus(403);
-        $this->actingAs($customer)->getJson('/api/admin/reservations/1')->assertStatus(403);
+        foreach ([$customer, $owner, $staff] as $user) {
+            $this->actingAs($user)->getJson('/api/admin/reservations')->assertStatus(403);
+            $this->actingAs($user)->getJson('/api/admin/reservations/stats')->assertStatus(403);
+            $this->actingAs($user)->getJson('/api/admin/reservations/1')->assertStatus(403);
+        }
     }
 
-    public function test_admin_can_list_search_filter_and_paginate_reservations(): void
+    public function test_list_supports_filters_groups_search_sort_pagination_summary_and_366_day_cap(): void
     {
-        [$admin, $fixtures] = $this->seedFixtures();
+        $fixedNow = CarbonImmutable::create(2026, 11, 22, 14, 0, 0, 'Asia/Manila');
+        Carbon::setTestNow($fixedNow);
+        CarbonImmutable::setTestNow($fixedNow);
 
-        $res = $this->actingAs($admin)
-            ->getJson('/api/admin/reservations')
+        [$admin, $fixtures] = $this->seedFixtures($fixedNow);
+
+        // Default window (-30d to +30d) returns all seeded reservations
+        $defaultRes = $this->actingAs($admin)
+            ->getJson('/api/admin/reservations?restaurant_id='.$fixtures['rest1Id'])
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonStructure([
-                'success',
-                'message',
-                'data' => [
-                    'items' => [
-                        '*' => [
-                            'reservation_id',
-                            'reservation_reference',
-                            'reference',
-                            'status',
-                            'status_label',
-                            'party_size',
-                            'attention',
-                            'can_admin_cancel',
-                            'restaurant' => ['restaurant_id', 'name'],
-                        ],
-                    ],
-                    'meta' => ['current_page', 'last_page', 'per_page', 'total'],
-                ],
-            ]);
+            ->assertJsonPath('data.meta.date_from', $fixedNow->subDays(30)->format('Y-m-d'))
+            ->assertJsonPath('data.meta.date_to', $fixedNow->addDays(30)->format('Y-m-d'))
+            ->assertJsonPath('data.summary.total', 4);
 
-        $this->assertGreaterThanOrEqual(4, $res->json('data.meta.total'));
+        foreach ($defaultRes->json('data.items') as $item) {
+            $this->assertFalse($item['can_admin_cancel']);
+        }
 
-        // Search by reference
+        // 366-day cap rejected with 422
+        $this->actingAs($admin)
+            ->getJson('/api/admin/reservations?date_from=2025-01-01&date_to=2026-01-05')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['date_to']);
+
+        // Search by reference, contact_name, contact_phone, customer_email, restaurant_name
         $this->actingAs($admin)
             ->getJson('/api/admin/reservations?search='.urlencode($fixtures['ref1']))
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
-            ->assertJsonPath('data.items.0.reservation_id', $fixtures['res1Id'])
-            ->assertJsonPath('data.items.0.can_admin_cancel', false);
+            ->assertJsonPath('data.items.0.reservation_id', $fixtures['res1Id']);
 
-        // Search by guest contact name
         $this->actingAs($admin)
             ->getJson('/api/admin/reservations?search='.urlencode('Mateo Guest'))
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.items.0.reservation_id', $fixtures['res2Id']);
 
-        // Search by restaurant name
+        $this->actingAs($admin)
+            ->getJson('/api/admin/reservations?search='.urlencode('09173334444'))
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.reservation_id', $fixtures['res3Id']);
+
+        $this->actingAs($admin)
+            ->getJson('/api/admin/reservations?search='.urlencode($fixtures['customerEmail']))
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 5);
+
         $this->actingAs($admin)
             ->getJson('/api/admin/reservations?search='.urlencode('Intramuros Bistro'))
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.items.0.reservation_id', $fixtures['res3Id']);
 
-        // Filter by status
+        // Status single & comma-separated list
         $this->actingAs($admin)
             ->getJson('/api/admin/reservations?status=completed&restaurant_id='.$fixtures['rest1Id'])
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items');
+
+        $this->actingAs($admin)
+            ->getJson('/api/admin/reservations?status=completed,seated&restaurant_id='.$fixtures['rest1Id'])
+            ->assertOk()
+            ->assertJsonCount(2, 'data.items');
+
+        // Deposit status filter
+        $this->actingAs($admin)
+            ->getJson('/api/admin/reservations?deposit_status=paid&restaurant_id='.$fixtures['rest1Id'])
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.items.0.reservation_id', $fixtures['res1Id']);
 
-        // Filter by attention=any and specific attention flags
+        // Groups: pending, active, history, attention
         $this->actingAs($admin)
-            ->getJson('/api/admin/reservations?attention='.ReservationAttention::PENDING_EXPIRING.'&restaurant_id='.$fixtures['rest1Id'])
+            ->getJson('/api/admin/reservations?group=pending&restaurant_id='.$fixtures['rest1Id'])
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
-            ->assertJsonPath('data.items.0.reservation_id', $fixtures['res2Id'])
-            ->assertJsonPath('data.items.0.attention', ReservationAttention::PENDING_EXPIRING);
+            ->assertJsonPath('data.items.0.reservation_id', $fixtures['res2Id']);
 
         $this->actingAs($admin)
-            ->getJson('/api/admin/reservations?attention='.ReservationAttention::NO_SHOW_CANDIDATE.'&restaurant_id='.$fixtures['rest2Id'])
+            ->getJson('/api/admin/reservations?group=active&restaurant_id='.$fixtures['rest1Id'])
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
-            ->assertJsonPath('data.items.0.reservation_id', $fixtures['res3Id'])
-            ->assertJsonPath('data.items.0.attention', ReservationAttention::NO_SHOW_CANDIDATE);
+            ->assertJsonPath('data.items.0.reservation_id', $fixtures['res4Id']);
 
         $this->actingAs($admin)
-            ->getJson('/api/admin/reservations?attention='.ReservationAttention::OVERDUE_SEATED.'&restaurant_id='.$fixtures['rest1Id'])
+            ->getJson('/api/admin/reservations?group=history&restaurant_id='.$fixtures['rest1Id'])
+            ->assertOk()
+            ->assertJsonCount(2, 'data.items');
+
+        // Attention group contains ONLY stale pending (res2), no-show candidate (res3), overdue seated (res4)
+        $attRes = $this->actingAs($admin)
+            ->getJson('/api/admin/reservations?group=attention&search='.urlencode($fixtures['customerEmail']))
+            ->assertOk()
+            ->assertJsonCount(3, 'data.items');
+        $attIds = collect($attRes->json('data.items'))->pluck('reservation_id')->sort()->values()->all();
+        $expectedAttIds = [$fixtures['res2Id'], $fixtures['res3Id'], $fixtures['res4Id']];
+        sort($expectedAttIds);
+        $this->assertSame($expectedAttIds, $attIds);
+
+        // Sort by party_size asc & desc
+        $sortedAsc = $this->actingAs($admin)
+            ->getJson('/api/admin/reservations?restaurant_id='.$fixtures['rest1Id'].'&sort=party_size&direction=asc')
+            ->assertOk();
+        $this->assertSame(2, $sortedAsc->json('data.items.0.party_size'));
+
+        // Summary stays independent of pagination
+        $paged = $this->actingAs($admin)
+            ->getJson('/api/admin/reservations?restaurant_id='.$fixtures['rest1Id'].'&per_page=1&page=2')
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
-            ->assertJsonPath('data.items.0.reservation_id', $fixtures['res4Id'])
-            ->assertJsonPath('data.items.0.attention', ReservationAttention::OVERDUE_SEATED);
-
-        // Pagination
-        $this->actingAs($admin)
-            ->getJson('/api/admin/reservations?per_page=2&page=1&restaurant_id='.$fixtures['rest1Id'])
-            ->assertOk()
-            ->assertJsonCount(2, 'data.items')
-            ->assertJsonPath('data.meta.total', 3)
-            ->assertJsonPath('data.meta.last_page', 2);
-
-        $this->actingAs($admin)
-            ->getJson('/api/admin/reservations?per_page=2&page=2&restaurant_id='.$fixtures['rest1Id'])
-            ->assertOk()
-            ->assertJsonCount(1, 'data.items');
+            ->assertJsonPath('data.meta.total', 4)
+            ->assertJsonPath('data.meta.last_page', 4)
+            ->assertJsonPath('data.summary.total', 4)
+            ->assertJsonPath('data.summary.completed_count', 1)
+            ->assertJsonPath('data.summary.pending_count', 1);
+        $this->assertSame(15, $paged->json('data.summary.total_guests'));
     }
 
-    public function test_list_and_stats_reject_invalid_query_parameters(): void
+    public function test_list_query_count_is_bounded_for_20_rows(): void
     {
-        $admin = $this->createUser('admin');
+        $fixedNow = CarbonImmutable::create(2026, 11, 22, 14, 0, 0, 'Asia/Manila');
+        Carbon::setTestNow($fixedNow);
+        CarbonImmutable::setTestNow($fixedNow);
 
-        $this->actingAs($admin)->getJson('/api/admin/reservations?status=bogus')->assertStatus(422);
-        $this->actingAs($admin)->getJson('/api/admin/reservations?attention=magic')->assertStatus(422);
-        $this->actingAs($admin)->getJson('/api/admin/reservations?per_page=500')->assertStatus(422);
-        $this->actingAs($admin)->getJson('/api/admin/reservations?page=0')->assertStatus(422);
-        $this->actingAs($admin)->getJson('/api/admin/reservations?direction=sideways')->assertStatus(422);
-        $this->actingAs($admin)->getJson('/api/admin/reservations?date_from=2026-10-20&date_to=2026-10-01')->assertStatus(422);
+        [$admin, $fixtures] = $this->seedFixtures($fixedNow);
+        $this->insertBulkReservations($fixtures['rest1Id'], $fixtures['customerId'], $fixedNow, 20);
 
-        $this->actingAs($admin)->getJson('/api/admin/reservations/stats?date_from=2026-10-20&date_to=2026-10-01')->assertStatus(422);
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->actingAs($admin)
+            ->getJson('/api/admin/reservations?per_page=20&restaurant_id='.$fixtures['rest1Id'])
+            ->assertOk()
+            ->assertJsonCount(20, 'data.items');
+        $queryCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertLessThanOrEqual(4, $queryCount);
     }
 
-    public function test_admin_can_fetch_stats_and_detail_with_404_on_missing(): void
+    public function test_detail_returns_ordered_history_with_actor_name_customer_history_and_settings(): void
     {
-        [$admin, $fixtures] = $this->seedFixtures();
+        $fixedNow = CarbonImmutable::create(2026, 11, 22, 14, 0, 0, 'Asia/Manila');
+        Carbon::setTestNow($fixedNow);
+        CarbonImmutable::setTestNow($fixedNow);
 
-        $dateFrom = $fixtures['dateFrom'];
-        $dateTo = $fixtures['dateTo'];
+        [$admin, $fixtures] = $this->seedFixtures($fixedNow);
 
-        $stats = $this->actingAs($admin)
-            ->getJson("/api/admin/reservations/stats?date_from={$dateFrom}&date_to={$dateTo}&restaurant_id={$fixtures['rest1Id']}")
-            ->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.total_reservations', 3)
-            ->assertJsonPath('data.status_counts.completed', 1)
-            ->assertJsonPath('data.status_counts.pending', 1)
-            ->assertJsonPath('data.status_counts.seated', 1)
-            ->assertJsonPath('data.attention_counts.pending_expiring', 1)
-            ->assertJsonPath('data.attention_counts.overdue_seated', 1);
-
-        $this->assertNotEmpty($stats->json('data.daily_trend'));
-        $this->assertNotEmpty($stats->json('data.top_restaurants'));
-
-        // Detail endpoint
-        $this->actingAs($admin)
+        $detail = $this->actingAs($admin)
             ->getJson('/api/admin/reservations/'.$fixtures['res1Id'])
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.reservation.reservation_id', $fixtures['res1Id'])
             ->assertJsonPath('data.reservation.can_admin_cancel', false)
-            ->assertJsonCount(1, 'data.reservation.status_history');
+            ->assertJsonPath('data.reservation.status_history.0.actor_name', 'Admin Tester')
+            ->assertJsonPath('data.reservation.customer_history.total_reservations', 5)
+            ->assertJsonPath('data.reservation.customer_history.visits', 1)
+            ->assertJsonPath('data.reservation.customer_history.cancellations', 1)
+            ->assertJsonPath('data.reservation.restaurant_settings.duration_minutes', 90);
 
-        // Missing reservation returns 404
+        $this->assertNotNull($detail->json('data.reservation.completed_at'));
+
         $this->actingAs($admin)
             ->getJson('/api/admin/reservations/999999999')
             ->assertStatus(404);
+    }
+
+    public function test_stats_computes_exact_rates_zero_filled_days_by_hour_top_restaurants_deposits_and_fixed_queries(): void
+    {
+        $fixedNow = CarbonImmutable::create(2026, 11, 22, 14, 0, 0, 'Asia/Manila');
+        Carbon::setTestNow($fixedNow);
+        CarbonImmutable::setTestNow($fixedNow);
+
+        [$admin, $fixtures] = $this->seedFixtures($fixedNow);
+
+        $dateFrom = $fixedNow->subDays(3)->format('Y-m-d');
+        $dateTo = $fixedNow->addDays(1)->format('Y-m-d');
+
+        // Hand-computed expectations for rest1 (4 reservations in range: 1 completed, 1 pending, 1 seated, 1 cancelled):
+        // completed=1, no_show=0, cancelled_total=1, total=4, covers=15, avg_party=3.8
+        // no_show_rate = 0/(1+0)*100 = 0.0
+        // cancellation_rate = 1/4*100 = 25.0
+        // completion_rate = 1/(1+0+1)*100 = 50.0
+        // confirmation_rate = (0+0+1+1+0)/4*100 = 50.0
+        $stats = $this->actingAs($admin)
+            ->getJson("/api/admin/reservations/stats?date_from={$dateFrom}&date_to={$dateTo}&restaurant_id={$fixtures['rest1Id']}")
+            ->assertOk()
+            ->assertJsonPath('data.totals.total', 4)
+            ->assertJsonPath('data.totals.completed', 1)
+            ->assertJsonPath('data.totals.no_show', 0)
+            ->assertJsonPath('data.totals.cancelled_total', 1)
+            ->assertJsonPath('data.totals.covers_total', 15)
+            ->assertJsonPath('data.totals.average_party_size', 3.8)
+            ->assertJsonPath('data.rates.no_show_rate', 0)
+            ->assertJsonPath('data.rates.cancellation_rate', 25)
+            ->assertJsonPath('data.rates.completion_rate', 50)
+            ->assertJsonPath('data.rates.confirmation_rate', 50)
+            ->assertJsonPath('data.by_cancelled_by.customer', 1)
+            ->assertJsonPath('data.deposits.paid_count', 1)
+            ->assertJsonPath('data.deposits.total_deposit_amount_paid', 500)
+            ->assertJsonPath('data.service_fee_total', 50)
+            ->assertJsonPath('data.attention_count', 2)
+            ->assertJsonCount(5, 'data.by_day')
+            ->assertJsonCount(24, 'data.by_hour');
+
+        $this->assertArrayHasKey('expired', $stats->json('data.totals.by_status'));
+        $this->assertArrayHasKey('no_show_rate', $stats->json('data.rates.definitions'));
+        $this->assertSame('Malate Heritage Kitchen', $stats->json('data.top_restaurants.0.name'));
+
+        // Zero-data range returns zeros with no division errors and by_day still lists every day
+        $this->actingAs($admin)
+            ->getJson('/api/admin/reservations/stats?date_from=2024-01-01&date_to=2024-01-03&restaurant_id='.$fixtures['rest1Id'])
+            ->assertOk()
+            ->assertJsonPath('data.totals.total', 0)
+            ->assertJsonPath('data.rates.no_show_rate', 0)
+            ->assertJsonPath('data.rates.cancellation_rate', 0)
+            ->assertJsonPath('data.rates.completion_rate', 0)
+            ->assertJsonPath('data.rates.confirmation_rate', 0)
+            ->assertJsonCount(3, 'data.by_day')
+            // attention_count ignores date range!
+            ->assertJsonPath('data.attention_count', 2);
+
+        // Fixed query count with 5 vs 50 reservations
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->actingAs($admin)
+            ->getJson("/api/admin/reservations/stats?date_from={$dateFrom}&date_to={$dateTo}&restaurant_id={$fixtures['rest1Id']}")
+            ->assertOk();
+        $queriesBefore = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->insertBulkReservations($fixtures['rest1Id'], $fixtures['customerId'], $fixedNow, 46);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->actingAs($admin)
+            ->getJson("/api/admin/reservations/stats?date_from={$dateFrom}&date_to={$dateTo}&restaurant_id={$fixtures['rest1Id']}")
+            ->assertOk()
+            ->assertJsonPath('data.totals.total', 50);
+        $queriesAfter = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertSame($queriesBefore, $queriesAfter);
+    }
+
+    public function test_admin_reservation_routes_are_strictly_read_only(): void
+    {
+        $admin = $this->createUser('admin');
+
+        $this->actingAs($admin)->postJson('/api/admin/reservations', [])->assertStatus(405);
+        $this->actingAs($admin)->patchJson('/api/admin/reservations/1', [])->assertStatus(405);
+        $this->actingAs($admin)->deleteJson('/api/admin/reservations/1')->assertStatus(405);
+        $this->actingAs($admin)->postJson('/api/admin/reservations/1/cancel', [])->assertStatus(404);
     }
 
     private function createUser(string $role): User
@@ -192,11 +316,10 @@ class AdminReservationTest extends TestCase
     /**
      * @return array{0: User, 1: array<string, mixed>}
      */
-    private function seedFixtures(): array
+    private function seedFixtures(CarbonImmutable $now): array
     {
         $admin = $this->createUser('admin');
         $customer = $this->createUser('customer');
-        $now = CarbonImmutable::now('Asia/Manila');
 
         $barangayId = (int) DB::table('barangays')->value('barangay_id');
         $addressId = DB::table('addresses')->insertGetId([
@@ -215,6 +338,7 @@ class AdminReservationTest extends TestCase
             'accepts_reservations' => 1,
             'accepting_reservations' => 1,
             'reservation_pending_expiry_minutes' => 120,
+            'reservation_duration_minutes' => 90,
         ]);
 
         $rest2Id = DB::table('restaurants')->insertGetId([
@@ -240,6 +364,10 @@ class AdminReservationTest extends TestCase
             'reservation_end' => $now->subDays(1)->setTime(19, 30)->format('Y-m-d H:i:s'),
             'number_of_guests' => 4,
             'reservation_status' => ReservationStatus::COMPLETED,
+            'deposit_amount' => 500.00,
+            'deposit_status' => 'paid',
+            'service_fee' => 50.00,
+            'completed_at' => $now->subDays(1)->setTime(19, 30)->format('Y-m-d H:i:s'),
             'created_at' => $now->subDays(2)->format('Y-m-d H:i:s'),
         ]);
 
@@ -295,9 +423,27 @@ class AdminReservationTest extends TestCase
             'created_at' => $now->subHours(6)->format('Y-m-d H:i:s'),
         ]);
 
+        // Cancelled by customer (rest1)
+        DB::table('reservations')->insert([
+            'reservation_reference' => 'SALO-RES-ADM-'.random_int(1000, 9999),
+            'customer_id' => $customer->user_id,
+            'restaurant_id' => $rest1Id,
+            'contact_name' => 'Elena Cancelled',
+            'contact_phone' => '09175556666',
+            'reservation_start' => $now->subDays(2)->setTime(12, 0)->format('Y-m-d H:i:s'),
+            'reservation_end' => $now->subDays(2)->setTime(13, 30)->format('Y-m-d H:i:s'),
+            'number_of_guests' => 3,
+            'reservation_status' => ReservationStatus::CANCELLED,
+            'cancelled_by' => 'customer',
+            'cancelled_at' => $now->subDays(2)->setTime(10, 0)->format('Y-m-d H:i:s'),
+            'created_at' => $now->subDays(3)->format('Y-m-d H:i:s'),
+        ]);
+
         return [
             $admin,
             [
+                'customerId' => $customer->user_id,
+                'customerEmail' => $customer->email,
                 'rest1Id' => $rest1Id,
                 'rest2Id' => $rest2Id,
                 'res1Id' => $res1Id,
@@ -305,9 +451,27 @@ class AdminReservationTest extends TestCase
                 'res3Id' => $res3Id,
                 'res4Id' => $res4Id,
                 'ref1' => $ref1,
-                'dateFrom' => $now->subDays(2)->format('Y-m-d'),
-                'dateTo' => $now->addDays(1)->format('Y-m-d'),
             ],
         ];
+    }
+
+    private function insertBulkReservations(int $restaurantId, int $customerId, CarbonImmutable $now, int $count): void
+    {
+        $rows = [];
+        for ($i = 0; $i < $count; $i++) {
+            $rows[] = [
+                'reservation_reference' => 'SALO-RES-BLK-'.random_int(100000, 999999).'-'.$i,
+                'customer_id' => $customerId,
+                'restaurant_id' => $restaurantId,
+                'contact_name' => "Bulk Guest {$i}",
+                'contact_phone' => '09170000000',
+                'reservation_start' => $now->setTime(18, 0)->format('Y-m-d H:i:s'),
+                'reservation_end' => $now->setTime(19, 30)->format('Y-m-d H:i:s'),
+                'number_of_guests' => 2,
+                'reservation_status' => ReservationStatus::COMPLETED,
+                'created_at' => $now->subHours(4)->format('Y-m-d H:i:s'),
+            ];
+        }
+        DB::table('reservations')->insert($rows);
     }
 }

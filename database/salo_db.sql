@@ -4,9 +4,11 @@
 -- ============================================================================
 -- Load on a server that has no `salo` database yet:
 --   mariadb -u root -p < salo_database.sql
--- The script creates the database with 41 tables, one reconciliation view, and
+-- The script creates the database with 54 tables, one reconciliation view, and
 -- immutability triggers. Requires MariaDB 10.2.1+ or MySQL 8.0.16+ (CHECK constraints).
 -- If a table already exists, the load stops at that table and drops nothing.
+-- Updated 2026-11-23: synced multi-branch columns on `restaurants`,
+-- `restaurant_application_branches`, and `branch_permits`.
 --
 -- Design principles
 --   • 3NF. Historical snapshots (names, prices, addresses, fees, identity on
@@ -187,7 +189,10 @@ CREATE TABLE user_addresses (
 -- ----------------------------------------------------------------------------
 CREATE TABLE restaurants (
     restaurant_id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    parent_restaurant_id         BIGINT UNSIGNED NULL DEFAULT NULL COMMENT 'NULL = main/root restaurant row for the business; set to root restaurant_id for additional branches',
+    brand_restaurant_id          BIGINT UNSIGNED NULL DEFAULT NULL COMMENT 'Plain column: equals restaurant_id for root, or parent_restaurant_id for child branches',
     restaurant_name              VARCHAR(200)    NOT NULL,
+    branch_name                  VARCHAR(150)    NULL DEFAULT NULL COMMENT 'Branch label (e.g. Main Branch, SM North EDSA, BGC). NULL for single-location restaurants',
     registered_name              VARCHAR(200)    NULL COMMENT 'Legal name on SEC / DTI papers; NULL = same as restaurant_name',
     business_type                ENUM('restaurant','cafe','bakery','fast_food','food_stall','food_kiosk','cloud_kitchen','other') NULL COMMENT 'Required; see chk_restaurants_required',
     ownership_structure          ENUM('sole_proprietorship','partnership','corporation','cooperative','other') NULL COMMENT 'Required; see chk_restaurants_required',
@@ -224,10 +229,15 @@ CREATE TABLE restaurants (
     created_at                   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at                   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (restaurant_id),
+    UNIQUE KEY uk_restaurants_brand_branch_name (brand_restaurant_id, branch_name),
     KEY idx_restaurants_status (restaurant_status),
     KEY idx_restaurants_public (restaurant_status, is_published),
     KEY idx_restaurants_address (address_id),
+    KEY idx_restaurants_parent (parent_restaurant_id),
+    KEY idx_restaurants_brand_status (brand_restaurant_id, restaurant_status),
     CONSTRAINT fk_restaurants_address FOREIGN KEY (address_id) REFERENCES addresses (address_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_restaurants_parent FOREIGN KEY (parent_restaurant_id) REFERENCES restaurants (restaurant_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_restaurants_brand FOREIGN KEY (brand_restaurant_id) REFERENCES restaurants (restaurant_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_restaurants_last_published_by FOREIGN KEY (last_published_by) REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE RESTRICT,
     CONSTRAINT chk_restaurants_one_service CHECK (offers_delivery = 1 OR offers_pickup = 1 OR offers_dine_in = 1),
     CONSTRAINT chk_restaurants_required CHECK (business_type IS NOT NULL AND ownership_structure IS NOT NULL),
@@ -497,6 +507,69 @@ CREATE TABLE restaurant_applications (
     CONSTRAINT chk_restaurant_applications_decided CHECK (
         application_status NOT IN ('approved','rejected') OR decided_at IS NOT NULL
     )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
+-- 17A. RESTAURANT APPLICATION BRANCHES
+-- ----------------------------------------------------------------------------
+CREATE TABLE restaurant_application_branches (
+    application_branch_id        BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    restaurant_application_id    BIGINT UNSIGNED NOT NULL,
+    branch_name                  VARCHAR(150)    NOT NULL COMMENT 'e.g. SM North EDSA Branch, BGC Branch',
+    address_id                   BIGINT UNSIGNED NOT NULL COMMENT 'Normalized Philippine address + coordinates in addresses table',
+    contact_phone                VARCHAR(30)     NULL DEFAULT NULL COMMENT 'Optional branch-specific phone; falls back to business phone',
+    sort_order                   SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    created_branch_restaurant_id BIGINT UNSIGNED NULL DEFAULT NULL COMMENT 'Populated with the new restaurants.restaurant_id when approved',
+    created_at                   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (application_branch_id),
+    UNIQUE KEY uk_app_branch_name (restaurant_application_id, branch_name),
+    KEY idx_app_branches_application (restaurant_application_id, sort_order),
+    KEY idx_app_branches_address (address_id),
+    CONSTRAINT fk_app_branches_application FOREIGN KEY (restaurant_application_id) REFERENCES restaurant_applications (restaurant_application_id) ON DELETE CASCADE ON UPDATE RESTRICT,
+    CONSTRAINT fk_app_branches_address FOREIGN KEY (address_id) REFERENCES addresses (address_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_app_branches_created_restaurant FOREIGN KEY (created_branch_restaurant_id) REFERENCES restaurants (restaurant_id) ON DELETE SET NULL ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
+-- 17B. BRANCH PERMITS (per-branch Mayor's / Business Permit verification)
+-- ----------------------------------------------------------------------------
+CREATE TABLE branch_permits (
+    permit_id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    restaurant_id          BIGINT UNSIGNED NULL DEFAULT NULL COMMENT 'Set for post-approval branches and materialized application branches; NULL only while application is pending',
+    application_branch_id  BIGINT UNSIGNED NULL DEFAULT NULL COMMENT 'Set when branch was declared in an initial partner application',
+    is_required_locally    TINYINT(1)      NOT NULL DEFAULT 1 COMMENT '1 = permit file required; 0 = applicant/owner declared not required locally',
+    exemption_reason       VARCHAR(500)    NULL DEFAULT NULL COMMENT 'Required when is_required_locally = 0',
+    file_path              VARCHAR(500)    NULL DEFAULT NULL COMMENT 'Private storage path; never a public URL',
+    original_filename      VARCHAR(255)    NULL DEFAULT NULL,
+    mime_type              VARCHAR(50)     NULL DEFAULT NULL,
+    file_size_bytes        INT UNSIGNED    NULL DEFAULT NULL,
+    permit_status          ENUM('pending_submission','pending_review','under_review','additional_info_required','approved','rejected','waived') NOT NULL DEFAULT 'pending_submission',
+    review_note            VARCHAR(500)    NULL DEFAULT NULL COMMENT 'Required when permit_status is rejected, additional_info_required, or waived',
+    uploaded_by            BIGINT UNSIGNED NULL DEFAULT NULL,
+    uploaded_at            DATETIME        NULL DEFAULT NULL,
+    reviewed_by            BIGINT UNSIGNED NULL DEFAULT NULL,
+    reviewed_at            DATETIME        NULL DEFAULT NULL,
+    created_at             TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at             TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (permit_id),
+    UNIQUE KEY uk_branch_permits_restaurant (restaurant_id),
+    UNIQUE KEY uk_branch_permits_app_branch (application_branch_id),
+    UNIQUE KEY uk_branch_permits_path (file_path),
+    KEY idx_branch_permits_rest_status (restaurant_id, permit_status),
+    KEY idx_branch_permits_status (permit_status),
+    KEY idx_branch_permits_uploaded_by (uploaded_by),
+    KEY idx_branch_permits_reviewed_by (reviewed_by),
+    CONSTRAINT fk_branch_permits_restaurant FOREIGN KEY (restaurant_id) REFERENCES restaurants (restaurant_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_branch_permits_app_branch FOREIGN KEY (application_branch_id) REFERENCES restaurant_application_branches (application_branch_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_branch_permits_uploaded_by FOREIGN KEY (uploaded_by) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_branch_permits_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT chk_branch_permits_owner CHECK (restaurant_id IS NOT NULL OR application_branch_id IS NOT NULL),
+    CONSTRAINT chk_branch_permits_exemption_reason CHECK (is_required_locally = 1 OR CHAR_LENGTH(TRIM(COALESCE(exemption_reason, ''))) > 0),
+    CONSTRAINT chk_branch_permits_pending_submission_file CHECK (permit_status = 'pending_submission' OR is_required_locally = 0 OR file_path IS NOT NULL),
+    CONSTRAINT chk_branch_permits_mime CHECK (mime_type IS NULL OR mime_type IN ('application/pdf','image/jpeg','image/png')),
+    CONSTRAINT chk_branch_permits_size CHECK (file_size_bytes IS NULL OR (file_size_bytes BETWEEN 1 AND 10485760)),
+    CONSTRAINT chk_branch_permits_review_note CHECK (permit_status NOT IN ('rejected','additional_info_required','waived') OR CHAR_LENGTH(TRIM(COALESCE(review_note, ''))) > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------

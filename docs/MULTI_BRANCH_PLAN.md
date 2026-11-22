@@ -250,9 +250,9 @@ CREATE TABLE restaurant_application_branches (
    - `RestaurantApplicationService::submit()` inserts the additional branches into `restaurant_application_branches` with normalized `addresses`.
    - `AdminApplicationService::getApplicationDetail()` and `ApplicationReviewModal.jsx` display all branches for admin verification.
    - On approval (`AdminApplicationService::decideApplication()`), each `restaurant_application_branches` row is materialized as an active (`restaurant_status = 'active'`, `is_published = 0`) child `restaurants` row with `parent_restaurant_id = root_id`, `brand_restaurant_id = root_id`, copied `restaurant_owners`, copied `restaurant_category_map`, copied `operating_hours`, and cloned initial `menu_categories` / `menu_items` (`approval_status = 'approved'`, `is_published = 0`).
-2. **Post-Approval "Add Branch" Policy (Decision 5 — Approved):**
+2. **Post-Approval "Add Branch" Policy (Decision 5 — Amended by `BRANCH_PERMITS_PLAN.md`):**
    - Approved owners can add branches up to **10 total branches per business** (`config('salo.restaurants.max_branches_per_business', 10)`, configurable).
-   - New branches are created with **`restaurant_status = 'active'` and `is_published = 0`**, writing an `audit_logs` record and sending an in-app `restaurant_branch_created` notification to all active admins. The branch remains hidden from customers until its setup passes `MenuPublishService::publish()`.
+   - New branches are created with **`restaurant_status = 'active'` and `is_published = 0`** (for setup), with an `audit_logs` record and admin notification. **Fail-closed gate:** the branch remains **hidden from customers and unpublishable** (`422`) until its `branch_permits.permit_status` is `approved` or `waived` AND its menu/hours/delivery-coverage setup passes `MenuPublishService::publish()`.
 
 ---
 
@@ -568,7 +568,7 @@ Phase 6b (Customer Branch Display & Admin Branch Controls — Frontend) is compl
 2. **Decision 2 — Brand Profile Assets:** **Shared across the business** (`logo_image`, `cover_image`, `description`, cuisine categories).
 3. **Decision 3 — Payout Account:** **Shared at business level** (one verified `payout_accounts` row on root `brand_restaurant_id`).
 4. **Decision 4 — Menu Architecture:** **Cloned per-branch menu rows** with a *"Copy Menu from Branch"* convenience.
-5. **Decision 5 — Post-Approval Add Branch Activation:** **Immediate `restaurant_status = 'active'` + `is_published = 0`** with admin notification and audit log.
+5. **Decision 5 — Post-Approval Add Branch Activation (Amended 2026-11-23):** **`restaurant_status = 'active'` + `is_published = 0`** for setup, **fail-closed gated** from publishing and public visibility until `branch_permits.permit_status IN ('approved', 'waived')` (and delivery coverage is configured when delivery is enabled).
 6. **Decision 6 — Staff Assignment & `CLEAN-1(d)`:** **Per-branch staff assignment** (`restaurant_staff.restaurant_id = branch.restaurant_id`), with **`CLEAN-1(d)` resolved in Phase 2b** under its own approval gate.
 7. **Decision 7 — Customer-Side Branch Display:** **One card per active published branch** in listings (`"{restaurant_name} — {branch_name}"`) + a **Branch Switcher** on `RestaurantDetailPage.jsx`.
 8. **Branch Limits (Configurable in `backend/config/salo.php`):** Maximum **5 branches** during initial Partner Application (`max_application_branches = 5`) and maximum **10 total branches** per business (`max_branches_per_business = 10`).
@@ -578,4 +578,41 @@ Phase 6b (Customer Branch Display & Admin Branch Controls — Frontend) is compl
 ## Remaining Open Questions
 
 1. **Co-Owner Invitation UI:** Confirming that co-owner invitation/transfer UI (`RESTAURANT_SIDE.md` §12.12) remains out of scope for this multi-branch rollout (existing `restaurant_owners` rows are copied to new branches automatically).
-2. **Documentation Updates:** `documentation/requirements/RESTAURANT_SIDE.md` §20 and `documentation/SALO_BUSINESS_RULES.md` §3 will be updated alongside Phase 1/Phase 2a to record these approved decisions.
+2. **Documentation Sync:** `documentation/requirements/RESTAURANT_SIDE.md`, `RESTAURANT_REQUIREMENTS_REPORT.md`, `docs/BUSINESS_APPLICATION_IMPLEMENTATION_REPORT.md`, and `documentation/SALO_BUSINESS_RULES.md` synced on 2026-11-23.
+
+---
+
+## Status and Known Limitations (2026-11-23)
+
+- **Implemented Phases:** Multi-Branch Phases 1, 2a, 2b, 3a, 3b, 4a, 4b, 5, 6a, 6b, plus Branch Permits Permit-1, Permit-2a, Permit-2b, Permit-3, Permit-4a, and Permit-4b (and `branch_permits` migration applied to `salo_db`).
+- **Deferred / Future Work:**
+  - Per-branch and consolidated all-branch financial/sales reports.
+  - Multi-branch single staff invitation (currently one invitation per branch).
+  - Per-user staff permission overrides (permissions are position-derived from `config/salo.php`).
+  - Favorites backend and multi-branch favorites UX.
+  - Branch permit expiry dates, renewal reminders, and expiry auto-unpublish.
+- **Known Limitations:**
+  - **First-publish delivery coverage rule:** Restaurants published *before* the delivery coverage publish gate was added remain `is_published = 1` until unpublished and re-published (at which point coverage is enforced).
+  - **Frontend test coverage:** Frontend verification uses `node --test` unit/helper tests, `vite build`, and `eslint` (no headless browser E2E runner yet).
+  - **Permit notification payload:** Backend `branch_permit_*` notifications carry `related_entity_type = 'branch_permits'` and `related_entity_id = permit_id` without a `restaurant_id` field, so clicking a restaurant-workspace permit notification navigates to `/owner/profile#branch-permit` without auto-switching branches unless `restaurant_id` is present.
+
+## How to Verify
+
+Run the integrity command against the target database (`--env=testing` for `salo_test`, or default for `salo_db`):
+```bash
+php artisan salo:check-branch-integrity
+php artisan salo:check-branch-integrity --env=testing
+```
+It exits `0` only when all **12** anomaly counters are `0`:
+1. `brand_restaurant_id IS NULL`
+2. `root brand mismatch` (`parent_restaurant_id IS NULL` and `brand_restaurant_id <> restaurant_id`)
+3. `non-root parent` (grandchild branches: parent also has `parent_restaurant_id IS NOT NULL`)
+4. `child brand mismatch` (child `brand_restaurant_id <> parent_restaurant_id`)
+5. `owner mismatch` (root/child `restaurant_owners` divergence)
+6. `app branch link mismatch` (`restaurant_application_branches.created_branch_restaurant_id` mismatch)
+7. `non_root_missing_permit` (non-root `restaurants` row without a `branch_permits` row)
+8. `orphan_branch_permit` (`branch_permits` row with both `restaurant_id` and `application_branch_id` NULL)
+9. `permit_app_branch_mismatch` (`branch_permits.restaurant_id` vs `created_branch_restaurant_id` mismatch)
+10. `app_branch_duplicate_permit` (application branch with more than one `branch_permits` row)
+11. `approved_app_branch_missing_restaurant_id` (approved application branch permit with `restaurant_id IS NULL`)
+12. `root_with_branch_permit` & `published_unverified_branch` (root attached to `branch_permits`, or published non-root branch without `approved`/`waived` permit)

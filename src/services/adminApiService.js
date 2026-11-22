@@ -55,31 +55,77 @@ export function normalizeAdminReservation(row = {}) {
     rejection_reason: row.rejection_reason || null,
     created_at: row.created_at ?? null,
     status_history: Array.isArray(row.status_history) ? row.status_history : [],
+    customer_history: row.customer_history ?? null,
+    restaurant_settings: row.restaurant_settings ?? null,
   };
 }
 
 export function normalizeReservationStats(raw = {}) {
+  const totals = raw.totals || {};
+  const rates = raw.rates || {};
+  const deposits = raw.deposits || {};
   const attention = raw.attention_counts || {};
+  const byCancelledBy = raw.by_cancelled_by || {};
+
+  const safeNum = (val) => {
+    const n = Number(val ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   return {
     date_from: raw.date_from || '',
     date_to: raw.date_to || '',
     restaurant_id: raw.restaurant_id ?? null,
-    total_reservations: Number(raw.total_reservations ?? 0),
-    active_upcoming: Number(raw.active_upcoming ?? 0),
-    total_guests: Number(raw.total_guests ?? 0),
-    completed_guests: Number(raw.completed_guests ?? 0),
-    no_show_rate: Number(raw.no_show_rate ?? 0),
-    cancellation_rate: Number(raw.cancellation_rate ?? 0),
-    completion_rate: Number(raw.completion_rate ?? 0),
-    status_counts: raw.status_counts || {},
-    attention_counts: {
-      pending_expiring: Number(attention.pending_expiring ?? 0),
-      no_show_candidate: Number(attention.no_show_candidate ?? 0),
-      overdue_seated: Number(attention.overdue_seated ?? 0),
-      total: Number(attention.total ?? 0),
+    totals: {
+      total: safeNum(totals.total ?? raw.total_reservations),
+      by_status: totals.by_status || raw.status_counts || {},
+      completed: safeNum(totals.completed),
+      no_show: safeNum(totals.no_show),
+      cancelled_total: safeNum(totals.cancelled_total),
+      covers_total: safeNum(totals.covers_total ?? raw.total_guests),
+      average_party_size: safeNum(totals.average_party_size),
     },
-    daily_trend: Array.isArray(raw.daily_trend) ? raw.daily_trend : [],
-    top_restaurants: Array.isArray(raw.top_restaurants) ? raw.top_restaurants : [],
+    rates: {
+      no_show_rate: safeNum(rates.no_show_rate ?? raw.no_show_rate),
+      cancellation_rate: safeNum(rates.cancellation_rate ?? raw.cancellation_rate),
+      completion_rate: safeNum(rates.completion_rate ?? raw.completion_rate),
+      confirmation_rate: safeNum(rates.confirmation_rate),
+      definitions: rates.definitions || {},
+    },
+    by_day: Array.isArray(raw.by_day) ? raw.by_day : [],
+    by_cancelled_by: {
+      customer: safeNum(byCancelledBy.customer),
+      restaurant: safeNum(byCancelledBy.restaurant),
+      admin: safeNum(byCancelledBy.admin),
+      system: safeNum(byCancelledBy.system),
+    },
+    by_hour: Array.isArray(raw.by_hour) ? raw.by_hour : [],
+    top_restaurants: Array.isArray(raw.top_restaurants)
+      ? raw.top_restaurants.map((r) => ({
+          restaurant_id: r.restaurant_id,
+          name: r.name || r.restaurant_name || '—',
+          total: safeNum(r.total ?? r.total_reservations),
+          completed: safeNum(r.completed ?? r.completed_count),
+          no_show_rate: safeNum(r.no_show_rate),
+        }))
+      : [],
+    deposits: {
+      required_count: safeNum(deposits.required_count),
+      paid_count: safeNum(deposits.paid_count),
+      pending_count: safeNum(deposits.pending_count),
+      waived_count: safeNum(deposits.waived_count),
+      refunded_count: safeNum(deposits.refunded_count),
+      total_deposit_amount_paid: safeNum(deposits.total_deposit_amount_paid),
+    },
+    service_fee_total: safeNum(raw.service_fee_total),
+    attention_count: safeNum(raw.attention_count ?? attention.total),
+    attention_counts: {
+      pending_expiring: safeNum(attention.pending_expiring),
+      no_show_candidate: safeNum(attention.no_show_candidate),
+      overdue_seated: safeNum(attention.overdue_seated),
+      total: safeNum(attention.total ?? raw.attention_count),
+    },
+    active_upcoming: safeNum(raw.active_upcoming),
   };
 }
 
@@ -189,10 +235,19 @@ export const adminApiService = {
 
   async getReservations(params = {}) {
     const response = await apiClient.get(`/admin/reservations${toQueryString(params)}`);
-    const payload = response?.data ?? { items: [], meta: {} };
+    const payload = response?.data ?? { items: [], meta: {}, summary: {} };
     return {
       items: Array.isArray(payload.items) ? payload.items.map(normalizeAdminReservation) : [],
       meta: payload.meta ?? { current_page: 1, last_page: 1, per_page: 15, total: 0 },
+      summary: payload.summary ?? {
+        total: 0,
+        total_guests: 0,
+        pending_count: 0,
+        active_count: 0,
+        completed_count: 0,
+        cancelled_count: 0,
+        no_show_count: 0,
+      },
     };
   },
 
