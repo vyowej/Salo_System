@@ -258,22 +258,28 @@ class OrderingCompletionTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.payment.payment_status', 'paid');
 
-        // 3. Cancel paid pending order -> triggers refund + balanced ledger
+        // 3. Cancel paid pending order -> creates requested refund (not prematurely successful or ledger-posted)
         $this->actingAs($customer)
             ->postJson("/api/customer/orders/{$orderId}/cancel", ['reason' => 'Changed mind'])
             ->assertOk()
             ->assertJsonPath('data.order.order_status', 'cancelled');
 
         $originalPayment = DB::table('payments')->where('payment_id', $paymentId)->first();
-        $this->assertSame('refunded', $originalPayment->payment_status);
+        $this->assertSame('paid', $originalPayment->payment_status);
 
         $refundRow = DB::table('payments')
             ->where('related_payment_id', $paymentId)
             ->where('payment_type', 'refund')
             ->first();
         $this->assertNotNull($refundRow);
-        $this->assertSame('successful', $refundRow->refund_status);
+        $this->assertSame('requested', $refundRow->refund_status);
         $this->assertSame('300.00', (string) $refundRow->amount);
+        $this->assertSame(0, DB::table('ledger_journals')->where('journal_type', 'refund')->where('payment_id', $refundRow->payment_id)->count());
+
+        // Confirm refund via domain method -> marks original payment refunded & posts balanced ledger
+        app(\App\Features\Payments\Services\RefundService::class)->confirmRefundSucceeded((int) $refundRow->payment_id, 'rfd_test_1', (int) $admin->user_id);
+        $this->assertSame('refunded', DB::table('payments')->where('payment_id', $paymentId)->value('payment_status'));
+        $this->assertSame(1, DB::table('ledger_journals')->where('journal_type', 'refund')->where('payment_id', $refundRow->payment_id)->count());
 
         // 4. Verify Admin Ledger & Owner Sales Report
         $this->actingAs($admin)
