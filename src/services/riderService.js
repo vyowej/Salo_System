@@ -70,6 +70,11 @@ export const riderService = {
     return response?.data?.delivery ?? null;
   },
 
+  async declineDelivery(orderId) {
+    const response = await apiClient.post(`/rider/deliveries/${encodeURIComponent(orderId)}/decline`, {});
+    return response?.data ?? null;
+  },
+
   async markPickedUp(orderId) {
     const response = await apiClient.post(`/rider/deliveries/${encodeURIComponent(orderId)}/picked-up`, {});
     return response?.data?.delivery ?? null;

@@ -49,6 +49,16 @@ class RiderDeliveryController extends Controller
         );
     }
 
+    public function decline(Request $request, int $orderId): JsonResponse
+    {
+        $result = $this->riderDeliveryService->declineDelivery($request->user(), $orderId, $request);
+
+        return ApiResponse::success(
+            data: $result,
+            message: 'Delivery offer declined.',
+        );
+    }
+
     public function pickedUp(Request $request, int $orderId): JsonResponse
     {
         $delivery = $this->riderDeliveryService->markPickedUp($request->user(), $orderId, $request);

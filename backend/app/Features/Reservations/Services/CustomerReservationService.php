@@ -3,6 +3,7 @@
 namespace App\Features\Reservations\Services;
 
 use App\Features\Notifications\Services\NotificationService;
+use App\Features\Payments\Services\PaymentService;
 use App\Features\Reservations\Support\ReservationBookingException;
 use App\Features\Reservations\Support\ReservationExpiry;
 use App\Features\Reservations\Support\ReservationFormatter;
@@ -760,6 +761,37 @@ class CustomerReservationService
                 request: $request,
             );
 
+            app(PaymentService::class)->voidPendingReservationPayments(
+                reservationId: $reservationId,
+                reason: $cleanReason ?? 'Cancelled by customer.',
+                actorUserId: $customerId,
+                request: $request,
+            );
+
+            if (((string) ($row->deposit_status ?? 'none')) === 'paid') {
+                $this->auditLogService->record(
+                    actorUserId: $customerId,
+                    action: 'customer_paid_reservation_cancelled_review',
+                    entityType: 'reservations',
+                    entityId: $reservationId,
+                    oldValues: ['deposit_status' => 'paid', 'reservation_status' => $currentStatus],
+                    newValues: ['deposit_status' => 'paid', 'reservation_status' => ReservationStatus::CANCELLED, 'flagged_for_admin_review' => true],
+                    reason: 'Customer cancelled a deposit-paid reservation; deposit held pending admin review (refund policy not approved).',
+                    request: $request,
+                );
+
+                $reference = $row->reservation_reference ?: ('#' . $reservationId);
+                $this->notificationService->notifyUser(
+                    userId: $customerId,
+                    workspace: 'customer',
+                    type: 'reservation_deposit_under_review',
+                    title: "Deposit Under Review ({$reference})",
+                    body: 'Your reservation was cancelled. Your deposit of PHP '.number_format((float) ($row->deposit_amount ?? 0), 2).' is being held pending admin review.',
+                    relatedEntityType: 'reservation',
+                    relatedEntityId: $reservationId,
+                );
+            }
+
             $handlerUserIds = $this->notificationService->resolveRestaurantReservationHandlerUserIds($restaurantId);
             if ($handlerUserIds !== []) {
                 $reference = $row->reservation_reference ?: ('#' . $reservationId);
@@ -969,7 +1001,7 @@ class CustomerReservationService
         $row->restaurant_address = $addressParts !== [] ? implode(', ', $addressParts) : null;
         $row->restaurant_logo_path = $this->fileStorageService->publicUrl($row->logo_image ?? null);
 
-        return ReservationFormatter::format(
+        $formatted = ReservationFormatter::format(
             row: $row,
             now: $manilaNow,
             cancellationCutoffMinutes: isset($row->reservation_cancellation_cutoff_minutes)
@@ -977,6 +1009,27 @@ class CustomerReservationService
                 : null,
             statusHistory: $statusHistory,
         );
+
+        $reservationId = (int) $row->reservation_id;
+        $paymentRows = DB::table('payment_allocations as pa')
+            ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
+            ->where('pa.reservation_id', $reservationId)
+            ->whereIn('pa.allocation_type', ['reservation_payment', 'reservation_refund'])
+            ->orderByDesc('p.payment_id')
+            ->select(['p.*', 'pa.allocation_type'])
+            ->get();
+
+        $paymentService = app(PaymentService::class);
+        $latestPaymentRow = $paymentRows->firstWhere('allocation_type', 'reservation_payment');
+        $latestRefundRow = $paymentRows->firstWhere('allocation_type', 'reservation_refund');
+
+        $formatted['latest_payment'] = $latestPaymentRow ? $paymentService->formatPayment($latestPaymentRow) : null;
+        $formatted['latest_refund'] = $latestRefundRow ? $paymentService->formatPayment($latestRefundRow) : null;
+        $formatted['deposit_under_review'] = ((string) ($row->reservation_status ?? '')) === ReservationStatus::CANCELLED
+            && ((string) ($row->cancelled_by ?? '')) === 'customer'
+            && ((string) ($row->deposit_status ?? 'none')) === 'paid';
+
+        return $formatted;
     }
 
     private function toManilaImmutable(?CarbonInterface $value = null): CarbonImmutable

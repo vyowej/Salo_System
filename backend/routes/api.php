@@ -31,6 +31,7 @@ use App\Features\Reservations\Controllers\CustomerReservationController;
 use App\Features\Reservations\Controllers\OwnerReservationController;
 use App\Features\Reservations\Controllers\OwnerTableController;
 use App\Features\Reservations\Controllers\ReservationAvailabilityController;
+use App\Features\Restaurants\Controllers\CustomerFavoriteController;
 use App\Features\Restaurants\Controllers\OwnerBranchController;
 use App\Features\Restaurants\Controllers\OwnerInventoryController;
 use App\Features\Restaurants\Controllers\OwnerMenuController;
@@ -157,6 +158,7 @@ Route::prefix('rider')->middleware('auth')->group(function (): void {
         Route::get('/deliveries/current', [RiderDeliveryController::class, 'current']);
         Route::get('/deliveries/history', [RiderDeliveryController::class, 'history']);
         Route::post('/deliveries/{orderId}/accept', [RiderDeliveryController::class, 'accept'])->whereNumber('orderId');
+        Route::post('/deliveries/{orderId}/decline', [RiderDeliveryController::class, 'decline'])->whereNumber('orderId')->middleware('throttle:60,1');
         Route::post('/deliveries/{orderId}/picked-up', [RiderDeliveryController::class, 'pickedUp'])->whereNumber('orderId');
         Route::post('/deliveries/{orderId}/delivered', [RiderDeliveryController::class, 'delivered'])->whereNumber('orderId');
         Route::post('/deliveries/{orderId}/fail', [RiderDeliveryController::class, 'fail'])->whereNumber('orderId');
@@ -196,6 +198,13 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
     Route::get('/reservations', [CustomerReservationController::class, 'index']);
     Route::get('/reservations/{id}', [CustomerReservationController::class, 'show'])->whereNumber('id');
     Route::post('/reservations/{id}/cancel', [CustomerReservationController::class, 'cancel'])->whereNumber('id')->middleware('throttle:30,1');
+    Route::post('/reservations/{id}/deposit/initiate', [CustomerReservationController::class, 'initiateDeposit'])->whereNumber('id')->middleware('throttle:20,1');
+
+    Route::middleware('role:customer')->group(function (): void {
+        Route::get('/favorites', [CustomerFavoriteController::class, 'index']);
+        Route::put('/favorites/{restaurantId}', [CustomerFavoriteController::class, 'store'])->whereNumber('restaurantId');
+        Route::delete('/favorites/{restaurantId}', [CustomerFavoriteController::class, 'destroy'])->whereNumber('restaurantId');
+    });
 });
 
 Route::prefix('restaurant')->middleware('auth')->group(function (): void {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import BrandMark from '../../components/common/BrandMark';
 import Button from '../../components/common/Button';
 import RiderApplicationStatus from './components/RiderApplicationStatus';
@@ -7,6 +7,8 @@ import applicationService, { mapBackendApplicationStatus } from '../../services/
 import './RiderApplicationStatusPage.css';
 
 export default function RiderApplicationStatusPage() {
+  const location = useLocation();
+  const redirectNotice = typeof location.state?.notice === 'string' ? location.state.notice : '';
   const [applicationData, setApplicationData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -71,6 +73,23 @@ export default function RiderApplicationStatusPage() {
 
       <main className="rider-status-content">
         <div className="rider-status-inner">
+          {redirectNotice && (
+            <div
+              role="status"
+              style={{
+                marginBottom: '16px',
+                padding: '12px 16px',
+                borderRadius: '10px',
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                color: '#1e3a8a',
+                fontSize: '14px',
+                fontWeight: 600,
+              }}
+            >
+              {redirectNotice}
+            </div>
+          )}
           {loading && <p>Loading application status...</p>}
           {!loading && error && <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>}
           {!loading && !error && !applicationData && (

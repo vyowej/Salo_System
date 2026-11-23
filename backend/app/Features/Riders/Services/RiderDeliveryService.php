@@ -15,6 +15,7 @@ use App\Support\WorkspaceAccessResolver;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,6 +24,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class RiderDeliveryService
 {
+    private const DECLINED_OFFER_TTL_MINUTES = 720;
+
     public function __construct(
         private readonly RiderService $riderService,
         private readonly AuditLogService $auditLogService,
@@ -70,6 +73,16 @@ class RiderDeliveryService
                             ->whereIn('d.delivery_status', ['pending_assignment', 'offered']);
                     });
             });
+
+        $candidateOrderIds = (clone $baseQuery)->pluck('o.order_id')->all();
+        $declinedOrderIds = array_values(array_filter(
+            array_map('intval', $candidateOrderIds),
+            fn (int $orderId): bool => Cache::has($this->declinedOfferCacheKey($riderId, $orderId)),
+        ));
+
+        if ($declinedOrderIds !== []) {
+            $baseQuery->whereNotIn('o.order_id', $declinedOrderIds);
+        }
 
         $total = (int) (clone $baseQuery)->count();
         $lastPage = max(1, (int) ceil($total / $perPage));
@@ -276,6 +289,86 @@ class RiderDeliveryService
                 'last_page' => $lastPage,
             ],
         ];
+    }
+
+    /**
+     * Decline / skip an available delivery offer for the authenticated rider only.
+     * Stores a volatile cache marker and records an audit log without modifying orders/deliveries.
+     *
+     * @return array<string, mixed>
+     */
+    public function declineDelivery(User $user, int $orderId, Request $request): array
+    {
+        $rider = $this->requireActiveRider($user);
+        $riderId = (int) $rider->rider_id;
+
+        if (! $this->riderService->isOnline($riderId)) {
+            abort(403, 'Forbidden: go online to manage delivery offers.');
+        }
+
+        $order = DB::table('orders as o')
+            ->leftJoin('deliveries as d', 'd.order_id', '=', 'o.order_id')
+            ->where('o.order_id', $orderId)
+            ->select([
+                'o.order_id',
+                'o.order_type',
+                'o.order_status',
+                'd.delivery_id',
+                'd.rider_id',
+                'd.delivery_status',
+            ])
+            ->first();
+
+        if (! $order) {
+            throw new NotFoundHttpException('Order not found.');
+        }
+
+        $isUnassignedOffer = $order->delivery_id === null
+            || ($order->rider_id === null && in_array((string) $order->delivery_status, ['pending_assignment', 'offered'], true));
+
+        if ((string) $order->order_type !== 'delivery' || (string) $order->order_status !== 'ready' || ! $isUnassignedOffer) {
+            throw new ConflictHttpException('This delivery offer is no longer available.');
+        }
+
+        $cacheKey = $this->declinedOfferCacheKey($riderId, $orderId);
+        if (Cache::has($cacheKey)) {
+            return [
+                'order_id' => $orderId,
+                'declined' => true,
+                'already_declined' => true,
+            ];
+        }
+
+        Cache::put($cacheKey, [
+            'rider_id' => $riderId,
+            'order_id' => $orderId,
+            'declined_at' => now()->toIso8601String(),
+        ], now()->addMinutes(self::DECLINED_OFFER_TTL_MINUTES));
+
+        $this->auditLogService->record(
+            actorUserId: (int) $user->user_id,
+            action: 'rider_delivery_offer_declined',
+            entityType: 'orders',
+            entityId: $orderId,
+            oldValues: null,
+            newValues: [
+                'rider_id' => $riderId,
+                'order_id' => $orderId,
+                'ttl_minutes' => self::DECLINED_OFFER_TTL_MINUTES,
+            ],
+            request: $request,
+        );
+
+        return [
+            'order_id' => $orderId,
+            'declined' => true,
+            'already_declined' => false,
+        ];
+    }
+
+    private function declinedOfferCacheKey(int $riderId, int $orderId): string
+    {
+        return "rider:declined:{$riderId}:{$orderId}";
     }
 
     /**

@@ -46,3 +46,6 @@ backend/storage/app/public/**/*.webp
 backend/storage/app/public/**/*.pdf
 !storage/app/public/**/.gitkeep
 !backend/storage/app/public/**/.gitkeep
+
+# Local database backups
+database/backups/

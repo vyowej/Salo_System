@@ -47,6 +47,7 @@ class LedgerService
         ?int $paymentId = null,
         ?int $postedBy = null,
         ?string $providerReference = null,
+        ?int $reservationId = null,
     ): ?int {
         $existing = DB::table('ledger_journals')
             ->where('idempotency_key', $idempotencyKey)
@@ -101,6 +102,7 @@ class LedgerService
             'description' => mb_substr($description, 0, 255),
             'checkout_id' => $checkoutId,
             'order_id' => $orderId,
+            'reservation_id' => $reservationId,
             'payment_id' => $paymentId,
             'provider_reference' => $providerReference,
             'posted_by' => $postedBy,
@@ -125,16 +127,19 @@ class LedgerService
 
     public function postOnlinePaymentConfirmed(
         int $paymentId,
-        int $checkoutId,
+        ?int $checkoutId,
         int $customerUserId,
         float $amount,
         ?string $providerReference = null,
         ?int $postedBy = null,
+        ?int $reservationId = null,
     ): ?int {
         return $this->postBalancedJournal(
             journalType: 'payment',
             idempotencyKey: "payment_confirmed_{$paymentId}",
-            description: "Online payment #{$paymentId} confirmed",
+            description: $reservationId !== null
+                ? "Reservation #{$reservationId} deposit payment #{$paymentId} confirmed"
+                : "Online payment #{$paymentId} confirmed",
             lines: [
                 [
                     'account_code' => '1020',
@@ -152,6 +157,36 @@ class LedgerService
             paymentId: $paymentId,
             postedBy: $postedBy,
             providerReference: $providerReference,
+            reservationId: $reservationId,
+        );
+    }
+
+    public function postReservationRefund(
+        int $refundPaymentId,
+        int $reservationId,
+        int $customerUserId,
+        float $amount,
+        ?int $postedBy = null,
+    ): ?int {
+        return $this->postBalancedJournal(
+            journalType: 'refund',
+            idempotencyKey: "reservation_refund_{$refundPaymentId}_{$reservationId}",
+            description: "Reservation #{$reservationId} deposit refund #{$refundPaymentId}",
+            lines: [
+                [
+                    'account_code' => '5010',
+                    'direction' => 'debit',
+                    'amount' => $amount,
+                ],
+                [
+                    'account_code' => '1020',
+                    'direction' => 'credit',
+                    'amount' => $amount,
+                ],
+            ],
+            paymentId: $refundPaymentId,
+            postedBy: $postedBy,
+            reservationId: $reservationId,
         );
     }
 

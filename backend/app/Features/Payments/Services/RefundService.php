@@ -40,6 +40,148 @@ class RefundService
     ) {}
 
     /**
+     * Request a full refund for a reservation deposit if it was paid via an online payment method.
+     * Safe and idempotent to call inside an existing DB::transaction().
+     *
+     * Does NOT mark deposit_status = 'refunded' or post a refund ledger journal until
+     * confirmed by confirmRefundSucceeded().
+     *
+     * @return array<string, mixed>|null
+     */
+    public function refundReservationDepositIfPaid(
+        int $reservationId,
+        int $actorUserId,
+        string $reason,
+        ?Request $request = null,
+    ): ?array {
+        $reservation = DB::table('reservations')
+            ->where('reservation_id', $reservationId)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $reservation) {
+            return null;
+        }
+
+        $resAllocation = DB::table('payment_allocations as pa')
+            ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
+            ->where('pa.reservation_id', $reservationId)
+            ->where('pa.allocation_type', 'reservation_payment')
+            ->where('p.payment_type', 'payment')
+            ->orderByDesc('p.payment_id')
+            ->first(['pa.amount as allocated_amount', 'p.payment_id']);
+
+        if (! $resAllocation) {
+            return null;
+        }
+
+        $originalPayment = DB::table('payments')
+            ->where('payment_id', $resAllocation->payment_id)
+            ->lockForUpdate()
+            ->first();
+
+        if (
+            ! $originalPayment
+            || $originalPayment->payment_method === 'cash'
+            || $originalPayment->payment_type !== 'payment'
+            || ! in_array((string) $originalPayment->payment_status, ['paid', 'partially_refunded'], true)
+        ) {
+            return null;
+        }
+
+        $collectedCents = Money::parseStrictCents((string) $originalPayment->amount);
+        if ($collectedCents <= 0) {
+            return null;
+        }
+
+        $existingRefundAmounts = DB::table('payments')
+            ->where('related_payment_id', $originalPayment->payment_id)
+            ->where('payment_type', 'refund')
+            ->whereIn('refund_status', self::RESERVED_OR_SUCCESSFUL_STATUSES)
+            ->lockForUpdate()
+            ->pluck('amount');
+
+        $alreadyReservedCents = 0;
+        foreach ($existingRefundAmounts as $amt) {
+            $parsed = Money::parseStrictCents((string) $amt);
+            if ($parsed > 0) {
+                $alreadyReservedCents += $parsed;
+            }
+        }
+
+        $remainingCents = $collectedCents - $alreadyReservedCents;
+        if ($remainingCents <= 0) {
+            return null;
+        }
+
+        $now = now();
+        $refundAmountStr = Money::fromCents($remainingCents);
+        $refundRef = 'RESRFD-'.now()->format('Ymd').'-'.strtoupper(Str::random(8));
+        $cleanReason = mb_substr(trim($reason), 0, 255);
+
+        $refundRow = [
+            'payment_reference' => $refundRef,
+            'checkout_id' => null,
+            'customer_id' => (int) $originalPayment->customer_id,
+            'payment_method' => $originalPayment->payment_method,
+            'payment_type' => 'refund',
+            'payment_status' => 'pending',
+            'refund_status' => 'requested',
+            'amount' => $refundAmountStr,
+            'related_payment_id' => (int) $originalPayment->payment_id,
+            'provider_response' => json_encode([
+                'reason' => $cleanReason,
+                'reservation_id' => $reservationId,
+                'reservation_reference' => $reservation->reservation_reference,
+                'channel' => $originalPayment->payment_channel ?? null,
+            ], JSON_UNESCAPED_SLASHES),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
+
+        if (Schema::hasColumn('payments', 'provider_name')) {
+            $refundRow['provider_name'] = $originalPayment->provider_name ?? null;
+        }
+        if (Schema::hasColumn('payments', 'payment_channel')) {
+            $refundRow['payment_channel'] = $originalPayment->payment_channel ?? null;
+        }
+
+        $refundPaymentId = (int) DB::table('payments')->insertGetId($refundRow);
+
+        DB::table('payment_allocations')->insert([
+            'payment_id' => $refundPaymentId,
+            'order_id' => null,
+            'reservation_id' => $reservationId,
+            'allocation_type' => 'reservation_refund',
+            'amount' => $refundAmountStr,
+            'created_at' => $now,
+        ]);
+
+        $this->auditLogService->record(
+            actorUserId: $actorUserId,
+            action: 'reservation_refund_requested',
+            entityType: 'payments',
+            entityId: $refundPaymentId,
+            oldValues: null,
+            newValues: [
+                'refund_reference' => $refundRef,
+                'reservation_id' => $reservationId,
+                'amount' => $refundAmountStr,
+                'refund_status' => 'requested',
+            ],
+            reason: $cleanReason,
+            request: $request,
+        );
+
+        return [
+            'refund_payment_id' => $refundPaymentId,
+            'payment_reference' => $refundRef,
+            'refund_status' => 'requested',
+            'amount' => (float) $refundAmountStr,
+        ];
+    }
+
+    /**
      * Request a refund for a single order if it was paid via an online payment method.
      * Safe and idempotent to call inside an existing DB::transaction().
      *
@@ -296,15 +438,18 @@ class RefundService
 
             $allocation = DB::table('payment_allocations')
                 ->where('payment_id', $refundPaymentId)
-                ->where('allocation_type', 'order_refund')
+                ->whereIn('allocation_type', ['order_refund', 'reservation_refund'])
                 ->first();
 
-            if (! $allocation || $allocation->order_id === null) {
+            if (! $allocation || ($allocation->order_id === null && $allocation->reservation_id === null)) {
                 throw new ConflictHttpException('Refund allocation record is missing.');
             }
 
-            $orderId = (int) $allocation->order_id;
-            $order = DB::table('orders')->where('order_id', $orderId)->first();
+            $isReservationRefund = $allocation->allocation_type === 'reservation_refund' && $allocation->reservation_id !== null;
+            $orderId = $allocation->order_id !== null ? (int) $allocation->order_id : null;
+            $reservationId = $allocation->reservation_id !== null ? (int) $allocation->reservation_id : null;
+            $order = $orderId !== null ? DB::table('orders')->where('order_id', $orderId)->first() : null;
+            $reservation = $reservationId !== null ? DB::table('reservations')->where('reservation_id', $reservationId)->lockForUpdate()->first() : null;
 
             $now = now();
             $meta = json_decode((string) ($refund->provider_response ?? ''), true);
@@ -342,13 +487,13 @@ class RefundService
                 }
             }
 
-            $allocatedOrderAmounts = DB::table('payment_allocations')
+            $allocatedAmounts = DB::table('payment_allocations')
                 ->where('payment_id', $originalPayment->payment_id)
-                ->where('allocation_type', 'order_payment')
+                ->where('allocation_type', $isReservationRefund ? 'reservation_payment' : 'order_payment')
                 ->pluck('amount');
 
             $totalAllocatedCents = 0;
-            foreach ($allocatedOrderAmounts as $amt) {
+            foreach ($allocatedAmounts as $amt) {
                 $parsed = Money::parseStrictCents((string) $amt);
                 if ($parsed > 0) {
                     $totalAllocatedCents += $parsed;
@@ -366,47 +511,92 @@ class RefundService
                     'updated_at' => $now,
                 ]);
 
-            $this->ledgerService->postOrderRefund(
-                refundPaymentId: $refundPaymentId,
-                orderId: $orderId,
-                checkoutId: (int) ($order?->checkout_id ?? $refund->checkout_id),
-                customerUserId: (int) $refund->customer_id,
-                amount: (float) $refund->amount,
-                postedBy: $actorUserId,
-            );
+            if ($isReservationRefund && $reservationId !== null) {
+                DB::table('reservations')
+                    ->where('reservation_id', $reservationId)
+                    ->update([
+                        'deposit_status' => 'refunded',
+                        'updated_at' => $now,
+                    ]);
 
-            $this->auditLogService->record(
-                actorUserId: $actorUserId ?? (int) $refund->customer_id,
-                action: 'order_payment_refunded',
-                entityType: 'payments',
-                entityId: $refundPaymentId,
-                oldValues: ['refund_status' => $refund->refund_status, 'original_payment_status' => $originalPayment->payment_status],
-                newValues: [
-                    'refund_reference' => $refund->payment_reference,
-                    'refund_status' => 'successful',
-                    'amount' => (string) $refund->amount,
-                    'original_payment_status' => $nextOriginalStatus,
-                ],
-                request: $request,
-            );
+                $this->ledgerService->postReservationRefund(
+                    refundPaymentId: $refundPaymentId,
+                    reservationId: $reservationId,
+                    customerUserId: (int) $refund->customer_id,
+                    amount: (float) $refund->amount,
+                    postedBy: $actorUserId,
+                );
 
-            $alreadyNotified = DB::table('notifications')
-                ->where('type', 'payment_refunded')
-                ->where('related_entity_type', 'order')
-                ->where('related_entity_id', $orderId)
-                ->exists();
+                $this->auditLogService->record(
+                    actorUserId: $actorUserId ?? (int) $refund->customer_id,
+                    action: 'reservation_deposit_refunded',
+                    entityType: 'payments',
+                    entityId: $refundPaymentId,
+                    oldValues: ['refund_status' => $refund->refund_status, 'original_payment_status' => $originalPayment->payment_status],
+                    newValues: [
+                        'refund_reference' => $refund->payment_reference,
+                        'refund_status' => 'successful',
+                        'reservation_id' => $reservationId,
+                        'deposit_status' => 'refunded',
+                        'amount' => (string) $refund->amount,
+                        'original_payment_status' => $nextOriginalStatus,
+                    ],
+                    request: $request,
+                );
 
-            if (! $alreadyNotified) {
-                $orderRef = $order?->order_reference ?? ($meta['order_reference'] ?? "#{$orderId}");
+                $resRef = $reservation?->reservation_reference ?? ($meta['reservation_reference'] ?? "#{$reservationId}");
                 $this->notificationService->notifyUser(
                     userId: (int) $refund->customer_id,
                     workspace: 'customer',
-                    type: 'payment_refunded',
-                    title: "Refund processed for {$orderRef}",
+                    type: 'reservation_deposit_refunded',
+                    title: "Deposit refunded for {$resRef}",
                     body: 'PHP '.number_format((float) $refund->amount, 2)." has been refunded ({$refund->payment_reference}).",
-                    relatedEntityType: 'order',
-                    relatedEntityId: $orderId,
+                    relatedEntityType: 'reservation',
+                    relatedEntityId: $reservationId,
                 );
+            } else {
+                $this->ledgerService->postOrderRefund(
+                    refundPaymentId: $refundPaymentId,
+                    orderId: $orderId,
+                    checkoutId: (int) ($order?->checkout_id ?? $refund->checkout_id),
+                    customerUserId: (int) $refund->customer_id,
+                    amount: (float) $refund->amount,
+                    postedBy: $actorUserId,
+                );
+
+                $this->auditLogService->record(
+                    actorUserId: $actorUserId ?? (int) $refund->customer_id,
+                    action: 'order_payment_refunded',
+                    entityType: 'payments',
+                    entityId: $refundPaymentId,
+                    oldValues: ['refund_status' => $refund->refund_status, 'original_payment_status' => $originalPayment->payment_status],
+                    newValues: [
+                        'refund_reference' => $refund->payment_reference,
+                        'refund_status' => 'successful',
+                        'amount' => (string) $refund->amount,
+                        'original_payment_status' => $nextOriginalStatus,
+                    ],
+                    request: $request,
+                );
+
+                $alreadyNotified = DB::table('notifications')
+                    ->where('type', 'payment_refunded')
+                    ->where('related_entity_type', 'order')
+                    ->where('related_entity_id', $orderId)
+                    ->exists();
+
+                if (! $alreadyNotified) {
+                    $orderRef = $order?->order_reference ?? ($meta['order_reference'] ?? "#{$orderId}");
+                    $this->notificationService->notifyUser(
+                        userId: (int) $refund->customer_id,
+                        workspace: 'customer',
+                        type: 'payment_refunded',
+                        title: "Refund processed for {$orderRef}",
+                        body: 'PHP '.number_format((float) $refund->amount, 2)." has been refunded ({$refund->payment_reference}).",
+                        relatedEntityType: 'order',
+                        relatedEntityId: $orderId,
+                    );
+                }
             }
 
             return [

@@ -2,6 +2,7 @@
 
 namespace App\Features\Reservations\Controllers;
 
+use App\Features\Payments\Services\PaymentService;
 use App\Features\Reservations\Requests\CancelCustomerReservationRequest;
 use App\Features\Reservations\Requests\ListCustomerReservationsRequest;
 use App\Features\Reservations\Requests\StoreCustomerReservationRequest;
@@ -10,11 +11,13 @@ use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class CustomerReservationController extends Controller
 {
     public function __construct(
         private readonly CustomerReservationService $customerReservationService,
+        private readonly PaymentService $paymentService,
     ) {}
 
     public function index(ListCustomerReservationsRequest $request): JsonResponse
@@ -60,6 +63,28 @@ class CustomerReservationController extends Controller
         return ApiResponse::success(
             data: ['reservation' => $reservation],
             message: 'Reservation cancelled.',
+        );
+    }
+
+    public function initiateDeposit(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'payment_method' => ['required', 'string', Rule::in(['gcash', 'maya', 'card'])],
+            'idempotency_key' => ['required', 'string', 'min:8', 'max:64'],
+        ]);
+
+        $payment = $this->paymentService->initiateReservationDepositPayment(
+            user: $request->user(),
+            reservationId: $id,
+            channel: (string) $validated['payment_method'],
+            idempotencyKey: (string) $validated['idempotency_key'],
+            request: $request,
+        );
+
+        return ApiResponse::success(
+            data: ['payment' => $payment],
+            message: 'Reservation deposit payment initiated.',
+            status: 201,
         );
     }
 }

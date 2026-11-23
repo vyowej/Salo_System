@@ -77,7 +77,9 @@ export default function RestaurantDetailPage() {
         setRestaurant(null);
       } else {
         setRestaurant(data);
-        setIsFavorite(customerService.getFavoriteRestaurants().includes(data.id));
+        customerService.fetchFavorites()
+          .then((res) => setIsFavorite(res.favoriteIds.includes(String(data.id))))
+          .catch(() => setIsFavorite(false));
       }
     } catch (err) {
       if (err?.status === 404) {
@@ -97,11 +99,30 @@ export default function RestaurantDetailPage() {
 
   useEffect(() => {
     const syncFavoriteState = () => {
-      setIsFavorite(Boolean(restaurant && customerService.getFavoriteRestaurants().includes(restaurant.id)));
+      if (!restaurant) return;
+      customerService.fetchFavorites()
+        .then((res) => setIsFavorite(res.favoriteIds.includes(String(restaurant.id))))
+        .catch(() => {});
     };
     window.addEventListener('salo:favoritesUpdated', syncFavoriteState);
     return () => window.removeEventListener('salo:favoritesUpdated', syncFavoriteState);
   }, [restaurant]);
+
+  const handleToggleFavorite = async () => {
+    if (!restaurant) return;
+    const next = !isFavorite;
+    setIsFavorite(next);
+    try {
+      if (next) {
+        await customerService.addFavorite(restaurant.id);
+      } else {
+        await customerService.removeFavorite(restaurant.id);
+      }
+      window.dispatchEvent(new Event('salo:favoritesUpdated'));
+    } catch {
+      setIsFavorite(!next);
+    }
+  };
 
   // ── Derived restaurant state ───────────────────────────────
   const offersDelivery = restaurant?.fulfillment?.delivery !== false;
@@ -283,11 +304,10 @@ export default function RestaurantDetailPage() {
           <div className="rdp-hero-scrim" aria-hidden="true" />
           <button
             type="button"
-            onClick={() => {}}
+            onClick={handleToggleFavorite}
             className={`rdp-hero-favorite${isFavorite ? ' is-favorite' : ''}`}
             aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-            disabled
-            title="Favorites are not available yet"
+            title={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
           >
             {isFavorite ? '♥' : '♡'}
           </button>

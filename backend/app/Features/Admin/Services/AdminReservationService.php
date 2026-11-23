@@ -86,8 +86,7 @@ class AdminReservationService
 
         $items = $rows->map(function (object $row) use ($manilaNow): array {
             $attention = ReservationAttention::compute($row, $row, $manilaNow);
-
-            return ReservationFormatter::formatAdmin(
+            $formatted = ReservationFormatter::formatAdmin(
                 row: $row,
                 now: $manilaNow,
                 cancellationCutoffMinutes: isset($row->reservation_cancellation_cutoff_minutes)
@@ -95,6 +94,11 @@ class AdminReservationService
                     : null,
                 attention: $attention,
             );
+            $formatted['needs_admin_review'] = ((string) ($row->reservation_status ?? '')) === ReservationStatus::CANCELLED
+                && ((string) ($row->cancelled_by ?? '')) === 'customer'
+                && ((string) ($row->deposit_status ?? 'none')) === 'paid';
+
+            return $formatted;
         })->all();
 
         return [
@@ -462,7 +466,7 @@ class AdminReservationService
             'service_fee' => round((float) ($row->reservation_service_fee ?? 0), 2),
         ];
 
-        return ReservationFormatter::formatAdmin(
+        $formatted = ReservationFormatter::formatAdmin(
             row: $row,
             now: $manilaNow,
             cancellationCutoffMinutes: isset($row->reservation_cancellation_cutoff_minutes)
@@ -473,6 +477,21 @@ class AdminReservationService
             customerHistory: $customerHistory,
             restaurantSettings: $restaurantSettings,
         );
+
+        $reviewLog = DB::table('audit_logs')
+            ->where('entity_type', 'reservations')
+            ->where('entity_id', $reservationId)
+            ->whereIn('action', ['customer_paid_reservation_cancelled_review', 'reservation_late_payment_review'])
+            ->orderByDesc('log_id')
+            ->first(['action', 'reason']);
+
+        $formatted['needs_admin_review'] = $reviewLog !== null
+            || (((string) ($row->reservation_status ?? '')) === ReservationStatus::CANCELLED
+                && ((string) ($row->cancelled_by ?? '')) === 'customer'
+                && ((string) ($row->deposit_status ?? 'none')) === 'paid');
+        $formatted['admin_review_reason'] = $reviewLog?->reason ?? null;
+
+        return $formatted;
     }
 
     /**
