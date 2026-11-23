@@ -299,7 +299,7 @@ class XenditPaymentProvider implements PaymentProviderInterface
         return match (true) {
             str_contains($upper, 'DUPLICATE') => 'DUPLICATE',
             str_contains($upper, 'FRAUD') => 'FRAUDULENT',
-            str_contains($upper, 'CANCEL') || str_contains($upper, 'REJECT') => 'CANCELED',
+            str_contains($upper, 'CANCEL') || str_contains($upper, 'REJECT') => 'CANCELLATION',
             default => 'REQUESTED_BY_CUSTOMER',
         };
     }
