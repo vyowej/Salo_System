@@ -1,4 +1,4 @@
-import { SettingsGearIcon } from '../../config/navigationConfig';
+import { SettingsGearIcon } from '../../config/SettingsGearIcon';
 
 /**
  * Shared owner navigation configuration.

@@ -1,5 +1,5 @@
 import SideBar from '../../../components/navigation/SideBar';
-import { SettingsGearIcon } from '../../../config/navigationConfig';
+import { SettingsGearIcon } from '../../../config/SettingsGearIcon';
 import {
   ADMIN_COLLAPSED_IMPORTANT_IDS,
   getAdminNavItems,

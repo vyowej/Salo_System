@@ -1,7 +1,8 @@
 import { useContext } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { buildRestaurantAccess, canAccessNavigationItem } from './permissionMap';
-import RestaurantAccessContext, { resolveBackendAccessData } from './RestaurantAccessContext.jsx';
+import RestaurantAccessContext from './RestaurantAccessContext.jsx';
+import { resolveBackendAccessData } from './resolveBackendAccessData.js';
 import RestaurantAccessStore from './restaurantAccessContext';
 
 export function useRestaurantAccess() {

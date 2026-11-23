@@ -3,7 +3,7 @@
  * Single source of truth for the customer sidebar items and icons.
  */
 
-import { SettingsGearIcon } from '../../config/navigationConfig';
+import { SettingsGearIcon } from '../../config/SettingsGearIcon';
 
 const iconProps = {
   width: 20,

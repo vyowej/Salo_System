@@ -5,7 +5,7 @@ import Modal from '../../../components/common/Modal';
 import { BRANCH_PERMIT_COPY } from '../content/branchContent';
 import './MenuPublishBar.css';
 
-export function getPublishBadgeMeta(publishStatus) {
+function getPublishBadgeMeta(publishStatus) {
   if (!publishStatus) {
     return { tone: 'neutral', label: 'Not published' };
   }

@@ -439,7 +439,7 @@ test('RestaurantAccessContext consumes server-provided permissions directly for 
 
   try {
     const { resolveBackendAccessData } = await server.ssrLoadModule(
-      '/src/features/restaurant/access/RestaurantAccessContext.jsx',
+      '/src/features/restaurant/access/resolveBackendAccessData.js',
     );
     const { buildRestaurantAccess, canAccessNavigationItem } = await server.ssrLoadModule(
       '/src/features/restaurant/access/permissionMap.js',
@@ -496,7 +496,7 @@ test('Phase 5: deactivated branch fallback for staff, inbox branch display_name,
 
   try {
     const { resolveBackendAccessData } = await server.ssrLoadModule(
-      '/src/features/restaurant/access/RestaurantAccessContext.jsx',
+      '/src/features/restaurant/access/resolveBackendAccessData.js',
     );
     const { buildRestaurantAccess } = await server.ssrLoadModule(
       '/src/features/restaurant/access/permissionMap.js',
