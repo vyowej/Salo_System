@@ -10,6 +10,7 @@ use App\Support\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -30,6 +31,22 @@ class PaymentService
             'online_banking' => 'online_banking',
             default => 'other',
         };
+    }
+
+    public function assertSandboxEndpointAllowed(): void
+    {
+        $driver = strtolower(trim((string) config('salo.payments.driver', '')));
+        $sandboxEnabled = (bool) config('salo.payments.sandbox_enabled', false);
+        $allowedEnvs = config('salo.payments.sandbox_allowed_environments', ['local', 'testing']);
+
+        if (
+            $driver !== 'sandbox'
+            || ! $sandboxEnabled
+            || ! is_array($allowedEnvs)
+            || ! app()->environment($allowedEnvs)
+        ) {
+            throw new AccessDeniedHttpException('Sandbox payment endpoints are disabled in this environment.');
+        }
     }
 
     public function getCustomerPayment(User $user, int $paymentId): array
@@ -149,6 +166,8 @@ class PaymentService
                 relatedEntityId: $paymentId,
             );
 
+            $this->notifyRestaurantsOfPaidOnlineOrders($paymentId, (int) $payment->customer_id);
+
             $fresh = DB::table('payments')->where('payment_id', $paymentId)->first();
 
             return $this->formatPayment($fresh);
@@ -166,9 +185,10 @@ class PaymentService
         int $paymentId,
         ?User $customer = null,
         ?string $reason = null,
+        ?string $eventKey = null,
         ?Request $request = null,
     ): array {
-        return DB::transaction(function () use ($paymentId, $customer, $reason, $request): array {
+        return DB::transaction(function () use ($paymentId, $customer, $reason, $eventKey, $request): array {
             $query = DB::table('payments')->where('payment_id', $paymentId)->lockForUpdate();
             if ($customer !== null) {
                 $query->where('customer_id', $customer->user_id);
@@ -179,8 +199,16 @@ class PaymentService
                 throw new NotFoundHttpException('Payment not found.');
             }
 
-            if ($payment->payment_status === 'paid') {
-                throw new ConflictHttpException('Paid payments cannot be marked failed.');
+            if ($payment->payment_type !== 'payment' || $payment->payment_method === 'cash') {
+                throw new ConflictHttpException('Only online payments can be marked failed via this endpoint.');
+            }
+
+            if ($payment->payment_status === 'failed') {
+                return $this->formatPayment($payment);
+            }
+
+            if (! in_array($payment->payment_status, ['pending', 'requires_customer_action', 'processing', 'authorized'], true)) {
+                throw new ConflictHttpException("Payment cannot be marked failed from status '{$payment->payment_status}'.");
             }
 
             $now = now();
@@ -196,9 +224,10 @@ class PaymentService
                     'updated_at' => $now,
                 ]);
 
+            $resolvedEventKey = $eventKey ?: "fail_{$paymentId}";
             DB::table('payment_events')->insertOrIgnore([
                 'provider_name' => $channel,
-                'event_key' => "fail_{$paymentId}_".Str::random(6),
+                'event_key' => $resolvedEventKey,
                 'payment_id' => $paymentId,
                 'payload' => json_encode(['status' => 'failed', 'reason' => $meta['failure_reason']]),
                 'processing_status' => 'processed',
@@ -244,6 +273,56 @@ class PaymentService
             'paid_at' => OrderTimestampFormatter::toManilaIso($payment->paid_at),
             'created_at' => OrderTimestampFormatter::toManilaIso($payment->created_at),
         ];
+    }
+
+    private function notifyRestaurantsOfPaidOnlineOrders(int $paymentId, int $customerId): void
+    {
+        $orders = DB::table('payment_allocations as pa')
+            ->join('orders as o', 'o.order_id', '=', 'pa.order_id')
+            ->where('pa.payment_id', $paymentId)
+            ->where('pa.allocation_type', 'order_payment')
+            ->whereNotIn('o.order_status', ['cancelled', 'rejected', 'failed'])
+            ->select([
+                'o.order_id',
+                'o.restaurant_id',
+                'o.restaurant_name',
+                'o.order_reference',
+                'o.order_type',
+            ])
+            ->get();
+
+        if ($orders->isEmpty()) {
+            return;
+        }
+
+        $firstName = trim((string) (DB::table('users')->where('user_id', $customerId)->value('first_name') ?? '')) ?: 'A customer';
+
+        foreach ($orders as $order) {
+            $alreadyNotified = DB::table('notifications')
+                ->where('type', 'order_received')
+                ->where('related_entity_type', 'order')
+                ->where('related_entity_id', $order->order_id)
+                ->exists();
+
+            if ($alreadyNotified) {
+                continue;
+            }
+
+            $recipientIds = $this->notificationService->resolveRestaurantOrderHandlerUserIds((int) $order->restaurant_id);
+            if ($recipientIds === []) {
+                continue;
+            }
+
+            $this->notificationService->notifyUsers(
+                userIds: $recipientIds,
+                workspace: 'restaurant',
+                type: 'order_received',
+                title: "New order {$order->order_reference}",
+                body: "{$firstName} placed a {$order->order_type} order ({$order->order_reference}) at {$order->restaurant_name}.",
+                relatedEntityType: 'order',
+                relatedEntityId: (int) $order->order_id,
+            );
+        }
     }
 
     /**

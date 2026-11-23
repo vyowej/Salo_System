@@ -297,6 +297,15 @@ class RestaurantOrderService
                 throw new ConflictHttpException('Only pickup orders can be completed by the restaurant.');
             }
 
+            if (in_array($nextStatus, ['accepted', 'preparing', 'ready', 'completed'], true)) {
+                $payment = OrderPaymentSnapshotLoader::loadByOrderIds([$orderId])->get($orderId);
+                if ($payment !== null && $payment->payment_method !== 'cash' && $payment->payment_status !== 'paid') {
+                    throw new ConflictHttpException(
+                        "Online payment must be completed before moving this order to '{$nextStatus}'."
+                    );
+                }
+            }
+
             $now = now();
             $updates = [
                 'order_status' => $nextStatus,

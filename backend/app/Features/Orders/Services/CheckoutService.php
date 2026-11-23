@@ -626,17 +626,19 @@ class CheckoutService
                     request: $request,
                 );
 
-                $recipientIds = $this->notificationService->resolveRestaurantOrderHandlerUserIds((int) $rest->restaurant_id);
-                $customerFirstName = trim((string) ($user->first_name ?? '')) ?: 'A customer';
-                $this->notificationService->notifyUsers(
-                    userIds: $recipientIds,
-                    workspace: 'restaurant',
-                    type: 'order_received',
-                    title: "New order {$orderRef}",
-                    body: "{$customerFirstName} placed a {$group['fulfillment']} order ({$orderRef}) at {$restDisplayName}.",
-                    relatedEntityType: 'order',
-                    relatedEntityId: $orderId,
-                );
+                if ($paymentChannel === 'cod' || $checkoutTotalCents === 0) {
+                    $recipientIds = $this->notificationService->resolveRestaurantOrderHandlerUserIds((int) $rest->restaurant_id);
+                    $customerFirstName = trim((string) ($user->first_name ?? '')) ?: 'A customer';
+                    $this->notificationService->notifyUsers(
+                        userIds: $recipientIds,
+                        workspace: 'restaurant',
+                        type: 'order_received',
+                        title: "New order {$orderRef}",
+                        body: "{$customerFirstName} placed a {$group['fulfillment']} order ({$orderRef}) at {$restDisplayName}.",
+                        relatedEntityType: 'order',
+                        relatedEntityId: $orderId,
+                    );
+                }
             }
 
             if ($paymentChannel !== 'cod' && $checkoutTotalCents > 0) {

@@ -162,6 +162,12 @@ return [
         'handler_positions' => $positionsWithPermission('orders.view'),
     ],
 
+    'payments' => [
+        'driver' => strtolower(trim((string) env('SALO_PAYMENT_DRIVER', 'sandbox'))),
+        'sandbox_enabled' => filter_var(env('SALO_SANDBOX_PAYMENTS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'sandbox_allowed_environments' => ['local', 'testing'],
+    ],
+
     'reservations' => [
         'default_duration_minutes' => max(30, (int) env('SALO_RESERVATION_DURATION_MINUTES', 90)),
         'slot_interval_minutes' => max(15, (int) env('SALO_RESERVATION_SLOT_INTERVAL_MINUTES', 30)),

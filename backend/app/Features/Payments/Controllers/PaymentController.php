@@ -24,6 +24,8 @@ class PaymentController extends Controller
 
     public function confirm(Request $request, int $paymentId): JsonResponse
     {
+        $this->paymentService->assertSandboxEndpointAllowed();
+
         $validated = $request->validate([
             'provider_reference' => ['nullable', 'string', 'max:100'],
         ]);
@@ -43,6 +45,8 @@ class PaymentController extends Controller
 
     public function fail(Request $request, int $paymentId): JsonResponse
     {
+        $this->paymentService->assertSandboxEndpointAllowed();
+
         $validated = $request->validate([
             'reason' => ['nullable', 'string', 'max:255'],
         ]);
@@ -62,6 +66,8 @@ class PaymentController extends Controller
 
     public function webhook(Request $request): JsonResponse
     {
+        $this->paymentService->assertSandboxEndpointAllowed();
+
         $validated = $request->validate([
             'payment_id' => ['required', 'integer', 'min:1'],
             'status' => ['required', 'string', 'in:paid,failed'],
@@ -82,6 +88,7 @@ class PaymentController extends Controller
                 paymentId: (int) $validated['payment_id'],
                 customer: null,
                 reason: $validated['reason'] ?? null,
+                eventKey: $validated['event_key'] ?? null,
                 request: $request,
             );
 
