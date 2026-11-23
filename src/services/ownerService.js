@@ -1180,6 +1180,57 @@ export const ownerService = {
     );
     return response?.data?.item ?? null;
   },
+
+  async updateMenuItemStock(itemId, stockQuantity, reason = '', restaurantId = null, lowStockThreshold = undefined) {
+    const payload = {
+      stock_quantity: stockQuantity,
+      ...(lowStockThreshold !== undefined ? { low_stock_threshold: lowStockThreshold } : {}),
+      ...(reason ? { reason } : {}),
+    };
+    const response = await apiClient.patch(
+      `/restaurant/inventory/items/${encodeURIComponent(itemId)}`,
+      payload,
+      restaurantId ? { headers: { 'X-Restaurant-Id': String(restaurantId) } } : undefined,
+    );
+    return response?.data?.item ?? null;
+  },
+
+  async getPromos(restaurantId, params = {}) {
+    const sp = new URLSearchParams();
+    if (restaurantId) sp.set('restaurant_id', String(restaurantId));
+    if (params.search) sp.set('search', params.search);
+    if (params.status) sp.set('status', params.status);
+    if (params.page) sp.set('page', String(params.page));
+    const qs = sp.toString();
+    const res = await apiClient.get(`/restaurant/promos${qs ? `?${qs}` : ''}`);
+    return res?.data ?? { items: [], meta: {} };
+  },
+
+  async createPromo(restaurantId, payload) {
+    const res = await apiClient.post('/restaurant/promos', {
+      ...payload,
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+    });
+    return res?.data?.promo ?? null;
+  },
+
+  async updatePromo(restaurantId, promoId, payload) {
+    const res = await apiClient.patch(`/restaurant/promos/${encodeURIComponent(promoId)}`, {
+      ...payload,
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+    });
+    return res?.data?.promo ?? null;
+  },
+
+  async getSalesReport(restaurantId, params = {}) {
+    const sp = new URLSearchParams();
+    if (restaurantId) sp.set('restaurant_id', String(restaurantId));
+    if (params.from) sp.set('from', params.from);
+    if (params.to) sp.set('to', params.to);
+    const qs = sp.toString();
+    const res = await apiClient.get(`/restaurant/reports/sales${qs ? `?${qs}` : ''}`);
+    return res?.data ?? null;
+  },
 };
 
 export default ownerService;

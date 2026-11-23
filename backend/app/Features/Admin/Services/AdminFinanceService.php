@@ -18,7 +18,63 @@ class AdminFinanceService
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
+        private readonly LedgerService $ledgerService,
     ) {}
+
+    /**
+     * Summarize posted double-entry ledger journals, online payments, and refunds.
+     *
+     * @return array<string, mixed>
+     */
+    public function ledgerOverview(): array
+    {
+        $totalJournals = (int) DB::table('ledger_journals')->count();
+        $unbalancedCount = (int) DB::table('ledger_unbalanced_journals')->count();
+
+        $onlinePaymentsTotal = (float) DB::table('payments')
+            ->where('payment_type', 'payment')
+            ->where('payment_method', '<>', 'cash')
+            ->whereIn('payment_status', ['paid', 'partially_refunded', 'refunded'])
+            ->sum('amount');
+
+        $refundsTotal = (float) DB::table('payments')
+            ->where('payment_type', 'refund')
+            ->where('refund_status', 'successful')
+            ->sum('amount');
+
+        $recentJournals = DB::table('ledger_journals')
+            ->orderByDesc('journal_id')
+            ->limit(15)
+            ->get([
+                'journal_id',
+                'journal_reference',
+                'journal_type',
+                'description',
+                'order_id',
+                'payment_id',
+                'posted_at',
+            ])
+            ->map(static fn (object $j): array => [
+                'journal_id' => (int) $j->journal_id,
+                'journal_reference' => $j->journal_reference,
+                'journal_type' => $j->journal_type,
+                'description' => $j->description,
+                'order_id' => $j->order_id !== null ? (int) $j->order_id : null,
+                'payment_id' => $j->payment_id !== null ? (int) $j->payment_id : null,
+                'posted_at' => OrderTimestampFormatter::toManilaIso($j->posted_at),
+            ])
+            ->all();
+
+        return [
+            'summary' => [
+                'total_journals' => $totalJournals,
+                'unbalanced_count' => $unbalancedCount,
+                'online_payments_total' => round($onlinePaymentsTotal, 2),
+                'refunds_total' => round($refundsTotal, 2),
+            ],
+            'recent_journals' => $recentJournals,
+        ];
+    }
 
     /**
      * List COD remittance records and platform COD summary for admin verification.
@@ -195,6 +251,16 @@ class AdminFinanceService
                     'cod_remitted_at' => $delivery->cod_remitted_at ?? $now,
                     'updated_at' => $now,
                 ]);
+
+            if ($newStatus === 'confirmed' && (float) ($delivery->cod_collected_amount ?? 0) > 0 && $delivery->rider_id) {
+                $this->ledgerService->postCodRemittanceVerified(
+                    deliveryId: $deliveryId,
+                    orderId: (int) $delivery->order_id,
+                    riderId: (int) $delivery->rider_id,
+                    amount: (float) $delivery->cod_collected_amount,
+                    adminUserId: (int) $admin->user_id,
+                );
+            }
 
             $this->auditLogService->record(
                 actorUserId: (int) $admin->user_id,

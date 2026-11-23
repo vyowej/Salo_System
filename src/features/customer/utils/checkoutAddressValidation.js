@@ -430,14 +430,18 @@ export function buildCheckoutPayload({
   idempotencyKey,
   expectedTotalsByRestaurant = {},
   contactNumberId = null,
+  paymentMethod = 'cod',
+  promoCode = '',
 }) {
   const trimmedNotes = String(orderNotes || '').trim();
+  const trimmedPromo = String(promoCode || '').trim().toUpperCase();
   const subOrders = expandRestaurantGroupsToSubOrders(restaurantGroups);
   const parsedContactId = Number(contactNumberId);
 
   const payload = {
-    payment_method: 'cod',
+    payment_method: paymentMethod || 'cod',
     idempotency_key: idempotencyKey,
+    ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
     groups: subOrders.map((subOrder, groupIndex) => {
       const addressIdForKey = getCheckoutAddressId(subOrder.deliveryAddress);
       const overrideTotal =

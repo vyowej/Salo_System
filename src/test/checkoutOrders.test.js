@@ -120,16 +120,18 @@ test('customerService calls checkout and order endpoints and surfaces per-group 
   }
 });
 
-test('CheckoutPage enforces COD-only, estimated total note, per-group errors, expected_total 409 review, and removes pending stub', async () => {
+test('CheckoutPage supports COD & online payments, promo codes, estimated total note, per-group errors, expected_total 409 review, and removes pending stub', async () => {
   const checkoutSrc = await fs.readFile(
     new URL('../features/customer/pages/CheckoutPage.jsx', import.meta.url),
     'utf8',
   );
   assert.equal(checkoutSrc.includes('endpoint is pending backend implementation'), false);
+  assert.equal(checkoutSrc.includes('Coming soon'), false);
   assert.ok(checkoutSrc.includes('placeCheckoutOrder'));
   assert.ok(checkoutSrc.includes('Estimated Total'));
   assert.ok(checkoutSrc.includes('groupErrors[idx]'));
-  assert.ok(checkoutSrc.includes('Coming soon'));
+  assert.ok(checkoutSrc.includes("id: 'gcash'") && checkoutSrc.includes("id: 'maya'") && checkoutSrc.includes("id: 'card'"));
+  assert.ok(checkoutSrc.includes('validatePromoCode'));
   assert.ok(checkoutSrc.includes('Prices changed, please review'));
   assert.ok(checkoutSrc.includes('err?.status === 409'));
   assert.ok(checkoutSrc.includes('expectedTotalsByRestaurant'));

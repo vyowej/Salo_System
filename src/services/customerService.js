@@ -243,6 +243,29 @@ export const customerService = {
     return res?.data?.checkout ?? null;
   },
 
+  async validatePromoCode({ promoCode, subtotal, restaurantId = null }) {
+    const res = await apiClient.post('/customer/promos/validate', {
+      promo_code: promoCode,
+      subtotal,
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+    });
+    return res?.data?.promo ?? null;
+  },
+
+  async confirmPayment(paymentId, providerReference = null) {
+    const res = await apiClient.post(`/customer/payments/${encodeURIComponent(paymentId)}/confirm`, {
+      ...(providerReference ? { provider_reference: providerReference } : {}),
+    });
+    return res?.data?.payment ?? null;
+  },
+
+  async failPayment(paymentId, reason = null) {
+    const res = await apiClient.post(`/customer/payments/${encodeURIComponent(paymentId)}/fail`, {
+      ...(reason ? { reason } : {}),
+    });
+    return res?.data?.payment ?? null;
+  },
+
   async fetchOrders(params = {}) {
     const sp = new URLSearchParams();
     if (params.page) sp.set('page', String(params.page));

@@ -5,6 +5,7 @@ namespace App\Features\Orders\Services;
 use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderPaymentSnapshotLoader;
 use App\Features\Orders\Support\OrderTimestampFormatter;
+use App\Features\Payments\Services\RefundService;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
@@ -19,6 +20,7 @@ class CustomerOrderService
         private readonly FileStorageService $fileStorageService,
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
+        private readonly RefundService $refundService,
     ) {}
 
     /**
@@ -327,6 +329,16 @@ class CustomerOrderService
 
                 $oldAuditValues['payment_status'] = (string) $codPayment->payment_status;
                 $newAuditValues['payment_status'] = 'cancelled';
+            } else {
+                $refund = $this->refundService->refundOrderIfPaid(
+                    orderId: $orderId,
+                    actorUserId: (int) $user->user_id,
+                    reason: $cleanReason ?? 'Customer cancelled order',
+                    request: $request,
+                );
+                if ($refund !== null) {
+                    $newAuditValues['refund_reference'] = $refund['payment_reference'];
+                }
             }
 
             $this->auditLogService->record(

@@ -197,7 +197,7 @@ export function normalizeNotification(raw) {
   const isRead = Boolean(raw.is_read ?? (raw.read_at != null));
   const relatedEntityId = raw.related_entity_id != null ? Number(raw.related_entity_id) : null;
 
-  return {
+  const normalized = {
     // Original backend fields
     notification_id: notificationId,
     user_id: userId,
@@ -224,6 +224,21 @@ export function normalizeNotification(raw) {
       related_entity_id: relatedEntityId,
     }),
   };
+
+  if (raw.restaurant_id != null) {
+    normalized.restaurant_id = Number(raw.restaurant_id);
+  }
+  if ('application_id' in raw) {
+    normalized.application_id = raw.application_id != null ? Number(raw.application_id) : null;
+  }
+  if ('application_branch_id' in raw) {
+    normalized.application_branch_id = raw.application_branch_id != null ? Number(raw.application_branch_id) : null;
+  }
+  if (raw.meta && typeof raw.meta === 'object') {
+    normalized.meta = raw.meta;
+  }
+
+  return normalized;
 }
 
 export function normalizeUnreadCounts(raw) {

@@ -3,10 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import Popover from '../../../components/common/Popover';
 import { useWorkspaceNotifications } from '../../../hooks/useWorkspaceNotifications';
 import { formatDateTimeManila } from '../../../utils/format';
-import { getNotificationRoute } from '../../../utils/notificationUtils';
+import { useRestaurantAccess } from '../access/useRestaurantAccess';
+import {
+  getNotificationRoute,
+  resolveNotificationRestaurantId,
+} from '../../../utils/notificationUtils';
 
 export default function OwnerNotificationsMenu() {
   const navigate = useNavigate();
+  const access = useRestaurantAccess();
   const bellRef = useRef(null);
   const [open, setOpen] = useState(false);
 
@@ -34,6 +39,14 @@ export default function OwnerNotificationsMenu() {
         await markAsRead(item.id);
       } catch {
         // Proceed with navigation even if mark-read fails transiently.
+      }
+    }
+    const targetRestaurantId = resolveNotificationRestaurantId(item, access.restaurants);
+    if (targetRestaurantId && targetRestaurantId !== access.selectedRestaurantId) {
+      try {
+        access.selectRestaurant(targetRestaurantId);
+      } catch {
+        // Ignore if branch is not accessible
       }
     }
     navigate(getNotificationRoute(item));

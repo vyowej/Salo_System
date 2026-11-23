@@ -5,6 +5,7 @@ import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import { StateView } from '../../../components/feedback';
 import { RatingSummaryCard, ReviewList } from '../../../components/reviews';
+import ownerService from '../../../services/ownerService';
 import reviewService from '../../../services/reviewService';
 import { formatFeaturePeriod } from '../../../utils/reviewDisplayUtils';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
@@ -13,6 +14,8 @@ export default function OwnerReportsPage() {
   const { selectedRestaurantId, selectedRestaurant } = useRestaurantAccess();
 
   const [feedback, setFeedback] = useState(null);
+  const [salesReport, setSalesReport] = useState(null);
+  const [salesLoading, setSalesLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [dateRange, setDateRange] = useState({ key: 'all', days: null });
@@ -45,6 +48,26 @@ export default function OwnerReportsPage() {
   useEffect(() => {
     loadFeedback();
   }, [loadFeedback]);
+
+  useEffect(() => {
+    if (!selectedRestaurantId) return;
+    let active = true;
+    setSalesLoading(true);
+    ownerService
+      .getSalesReport(selectedRestaurantId)
+      .then((data) => {
+        if (active) setSalesReport(data);
+      })
+      .catch(() => {
+        if (active) setSalesReport(null);
+      })
+      .finally(() => {
+        if (active) setSalesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedRestaurantId]);
 
   const handleOpenFlag = (review) => {
     setFlagTarget(review);
@@ -100,6 +123,67 @@ export default function OwnerReportsPage() {
             </Badge>
           )}
         </div>
+
+        <section aria-label="Sales and revenue summary" style={{ background: 'var(--surface-primary)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 700 }}>Sales &amp; Revenue (Last 30 Days)</h2>
+              <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                Completed &amp; delivered orders · COD vs Online breakdown
+              </p>
+            </div>
+            {salesReport?.range && (
+              <Badge variant="default" size="sm">
+                {salesReport.range.from} to {salesReport.range.to}
+              </Badge>
+            )}
+          </div>
+
+          {salesLoading && !salesReport ? (
+            <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-muted)' }}>Loading sales summary...</p>
+          ) : salesReport?.summary ? (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+                <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-secondary)' }}>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>Net Revenue</div>
+                  <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700 }}>₱{Number(salesReport.summary.net_revenue || 0).toFixed(2)}</div>
+                </div>
+                <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-secondary)' }}>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>Completed Orders</div>
+                  <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700 }}>{salesReport.summary.completed_count} / {salesReport.summary.orders_count}</div>
+                </div>
+                <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-secondary)' }}>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>COD Sales</div>
+                  <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700 }}>₱{Number(salesReport.summary.cod_sales || 0).toFixed(2)}</div>
+                </div>
+                <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-secondary)' }}>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>Online Sales</div>
+                  <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700 }}>₱{Number(salesReport.summary.online_sales || 0).toFixed(2)}</div>
+                </div>
+                <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-secondary)' }}>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>Promo Discounts</div>
+                  <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700 }}>₱{Number(salesReport.summary.discount_total || 0).toFixed(2)}</div>
+                </div>
+              </div>
+
+              {Array.isArray(salesReport.top_items) && salesReport.top_items.length > 0 && (
+                <div>
+                  <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, marginBottom: 8 }}>Top Selling Items</h3>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {salesReport.top_items.slice(0, 5).map((item) => (
+                      <div key={item.menu_item_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-xs)', padding: '6px 10px', borderRadius: 'var(--radius-md)', background: 'var(--surface-secondary)' }}>
+                        <span>{item.item_name} ({item.units_sold} sold)</span>
+                        <strong>₱{Number(item.revenue || 0).toFixed(2)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-muted)' }}>No sales data available yet.</p>
+          )}
+        </section>
 
         {loading && !feedback ? (
           <StateView state="loading" title="Loading restaurant ratings and reviews…" />

@@ -138,11 +138,11 @@ export default function OwnerLayout({ children }) {
     onLogout: requestLogout,
   });
 
-  const hasMultipleRestaurants = access.restaurants.length > 1;
+  const showBranchSwitcher = access.restaurants.length > 1 || (access.isOwner && selectedRestaurant?.status === 'active');
   const currentBranchLabel = selectedRestaurant?.branchName || selectedRestaurant?.displayName || selectedRestaurant?.name || 'Workspace';
   const restaurantControl = selectedRestaurant ? (
     <div className="owner-topbar-controls">
-      {hasMultipleRestaurants ? (
+      {showBranchSwitcher ? (
         <div className="owner-branch-switcher" ref={branchSwitcherRef}>
           <button
             type="button"

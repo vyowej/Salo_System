@@ -363,6 +363,11 @@ export const adminApiService = {
     return response?.data ?? { summary: {}, items: [], meta: {} };
   },
 
+  async getFinanceLedger() {
+    const response = await apiClient.get('/admin/finance/ledger');
+    return response?.data ?? { summary: {}, recent_journals: [] };
+  },
+
   async verifyCodRemittance(deliveryId, { action, notes = null }) {
     const response = await apiClient.post(`/admin/finance/cod-remittances/${encodeURIComponent(deliveryId)}/verify`, {
       action,

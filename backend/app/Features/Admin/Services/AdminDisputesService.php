@@ -4,6 +4,7 @@ namespace App\Features\Admin\Services;
 
 use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderTimestampFormatter;
+use App\Features\Payments\Services\RefundService;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\RestaurantBranchService;
@@ -18,6 +19,7 @@ class AdminDisputesService
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
+        private readonly RefundService $refundService,
     ) {}
 
     /**
@@ -221,7 +223,17 @@ class AdminDisputesService
                         ]);
                 }
 
+                $refund = $this->refundService->refundOrderIfPaid(
+                    orderId: $orderId,
+                    actorUserId: (int) $admin->user_id,
+                    reason: $trimmedNotes,
+                    request: $request,
+                );
+
                 $newValues = ['order_status' => 'cancelled', 'delivery_status' => 'cancelled'];
+                if ($refund !== null) {
+                    $newValues['refund_reference'] = $refund['payment_reference'];
+                }
                 $customerTitle = "Order {$order->order_reference} cancelled";
                 $customerBody = "Your failed delivery has been closed and cancelled: {$trimmedNotes}";
             }

@@ -4,6 +4,7 @@ namespace App\Features\Riders\Services;
 
 use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderTimestampFormatter;
+use App\Features\Restaurants\Services\OwnerInventoryService;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
@@ -28,6 +29,7 @@ class RiderDeliveryService
         private readonly NotificationService $notificationService,
         private readonly WorkspaceAccessResolver $workspaceAccessResolver,
         private readonly FileStorageService $fileStorageService,
+        private readonly OwnerInventoryService $ownerInventoryService,
     ) {}
 
     public function requireActiveRider(User $user): object
@@ -648,6 +650,8 @@ class RiderDeliveryService
                         'order_status' => 'delivered',
                         'updated_at' => $now,
                     ]);
+
+                $this->ownerInventoryService->deductStockForOrderIfConfigured($orderId, (int) $user->user_id);
 
                 $this->auditLogService->record(
                     actorUserId: (int) $user->user_id,

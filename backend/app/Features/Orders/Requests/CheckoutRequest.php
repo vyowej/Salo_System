@@ -20,7 +20,8 @@ class CheckoutRequest extends FormRequest
         $maxQty = max(1, (int) config('salo.orders.max_item_quantity', 50));
 
         return [
-            'payment_method' => ['required', 'string', Rule::in(['cod'])],
+            'payment_method' => ['required', 'string', Rule::in(['cod', 'gcash', 'maya', 'card'])],
+            'promo_code' => ['nullable', 'string', 'max:50'],
             'idempotency_key' => ['required', 'string', 'min:8', 'max:64'],
             'contact_number_id' => ['nullable', 'integer', 'min:1'],
             'groups' => ['required', 'array', 'min:1', 'max:20'],
@@ -43,7 +44,7 @@ class CheckoutRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'payment_method.in' => 'Only Cash on Delivery (cod) is supported.',
+            'payment_method.in' => 'Payment method must be one of: cod, gcash, maya, card.',
         ];
     }
 }

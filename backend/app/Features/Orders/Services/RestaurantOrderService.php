@@ -5,6 +5,8 @@ namespace App\Features\Orders\Services;
 use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderPaymentSnapshotLoader;
 use App\Features\Orders\Support\OrderTimestampFormatter;
+use App\Features\Payments\Services\RefundService;
+use App\Features\Restaurants\Services\OwnerInventoryService;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\WorkspaceAccessResolver;
@@ -35,6 +37,8 @@ class RestaurantOrderService
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
         private readonly WorkspaceAccessResolver $workspaceAccessResolver,
+        private readonly OwnerInventoryService $ownerInventoryService,
+        private readonly RefundService $refundService,
     ) {}
 
     public function requireActiveAuthorizedRestaurant(User $user, ?int $restaurantId = null): object
@@ -320,6 +324,16 @@ class RestaurantOrderService
 
                     $oldAuditValues['payment_status'] = (string) $codPayment->payment_status;
                     $newAuditValues['payment_status'] = 'cancelled';
+                } else {
+                    $refund = $this->refundService->refundOrderIfPaid(
+                        orderId: $orderId,
+                        actorUserId: (int) $user->user_id,
+                        reason: $cleanReason ?? 'Restaurant rejected order',
+                        request: $request,
+                    );
+                    if ($refund !== null) {
+                        $newAuditValues['refund_reference'] = $refund['payment_reference'];
+                    }
                 }
             } elseif ($nextStatus === 'completed') {
                 $updates['completed_at'] = $now;
@@ -342,6 +356,10 @@ class RestaurantOrderService
             }
 
             DB::table('orders')->where('order_id', $orderId)->update($updates);
+
+            if ($nextStatus === 'completed') {
+                $this->ownerInventoryService->deductStockForOrderIfConfigured($orderId, (int) $user->user_id);
+            }
 
             $this->auditLogService->record(
                 actorUserId: (int) $user->user_id,

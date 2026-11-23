@@ -197,8 +197,7 @@ export default function OwnerInventoryPage() {
       return;
     }
 
-    runAction(() => {
-      ownerService.updateMenuItemStock(actionItem.id, nextQuantity, actionReason.trim(), restaurantId);
+    runAction(async () => {      await ownerService.updateMenuItemStock(actionItem.id, nextQuantity, actionReason.trim(), restaurantId);
       setActionItem(null);
       setActionQuantity('');
       setActionReason('');

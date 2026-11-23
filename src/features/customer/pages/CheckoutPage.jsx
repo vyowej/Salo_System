@@ -24,9 +24,9 @@ import {
 
 const PAYMENT_METHODS = [
   { id: 'cod', name: 'Cash on Delivery (COD)', desc: 'Pay with cash upon arrival of each delivery', icon: '💵', enabled: true },
-  { id: 'gcash', name: 'GCash (Coming soon)', desc: 'Online e-wallet payments are not enabled yet', icon: '📱', enabled: false },
-  { id: 'maya', name: 'Maya (Coming soon)', desc: 'Online e-wallet payments are not enabled yet', icon: '💳', enabled: false },
-  { id: 'card', name: 'Credit or Debit Card (Coming soon)', desc: 'Card payments are not enabled yet', icon: '💳', enabled: false },
+  { id: 'gcash', name: 'GCash', desc: 'Pay instantly via GCash e-wallet', icon: '📱', enabled: true },
+  { id: 'maya', name: 'Maya', desc: 'Pay instantly via Maya e-wallet', icon: '💳', enabled: true },
+  { id: 'card', name: 'Credit or Debit Card', desc: 'Visa / Mastercard online card payment', icon: '💳', enabled: true },
 ];
 
 function createIdempotencyKey() {
@@ -71,6 +71,12 @@ export default function CheckoutPage() {
   const [targetForNewAddress, setTargetForNewAddress] = useState(null);
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState('');
+  const [paymentActionLoading, setPaymentActionLoading] = useState(false);
+  const [paymentActionError, setPaymentActionError] = useState('');
   const idempotencyKeyRef = useRef(createIdempotencyKey());
 
   const subOrders = useMemo(
@@ -140,17 +146,96 @@ export default function CheckoutPage() {
     setError(null);
   };
 
+  const handleApplyPromo = async () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) {
+      setPromoError('Enter a promo code first.');
+      return;
+    }
+    setPromoLoading(true);
+    setPromoError('');
+    try {
+      const uniqueRestIds = [...new Set(subOrders.map((s) => s.restaurantId))];
+      const singleRestId = uniqueRestIds.length === 1 ? uniqueRestIds[0] : null;
+      const result = await customerService.validatePromoCode({
+        promoCode: code,
+        subtotal: displayedItemsSubtotal,
+        restaurantId: singleRestId,
+      });
+      setAppliedPromo(result);
+    } catch (err) {
+      setAppliedPromo(null);
+      setPromoError(err?.message || 'Promo code is invalid or cannot be applied.');
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoInput('');
+    setPromoError('');
+  };
+
+  const handleConfirmOnlinePayment = async () => {
+    if (!confirmedCheckout?.payment?.payment_id) return;
+    setPaymentActionLoading(true);
+    setPaymentActionError('');
+    try {
+      const updated = await customerService.confirmPayment(confirmedCheckout.payment.payment_id);
+      setConfirmedCheckout((prev) => (prev ? { ...prev, checkout_status: 'paid', payment: updated } : prev));
+    } catch (err) {
+      setPaymentActionError(err?.message || 'Unable to confirm payment.');
+    } finally {
+      setPaymentActionLoading(false);
+    }
+  };
+
   if (confirmedCheckout) {
+    const paymentObj = confirmedCheckout.payment;
+    const needsOnlineAction = paymentObj && paymentObj.payment_status === 'requires_customer_action';
+    const isOnlinePaid = paymentObj && paymentObj.payment_status === 'paid';
+
     return (
       <CustomerLayout>
         <section style={{ maxWidth: 720, margin: '24px auto', padding: 'var(--space-6)', background: 'var(--surface-primary)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-xl)' }}>
-          <Badge variant="success" size="md">Order Confirmed (COD)</Badge>
+          <Badge variant={needsOnlineAction ? 'warning' : 'success'} size="md">
+            {needsOnlineAction
+              ? `Payment Pending (${String(confirmedCheckout.payment_method || '').toUpperCase()})`
+              : isOnlinePaid
+                ? `Order & Payment Confirmed (${String(confirmedCheckout.payment_method || '').toUpperCase()})`
+                : 'Order Confirmed (COD)'}
+          </Badge>
           <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, margin: '12px 0 6px' }}>
-            Maraming salamat! Your order has been placed.
+            {needsOnlineAction
+              ? 'Complete your online payment to finalize your order.'
+              : 'Maraming salamat! Your order has been placed.'}
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-5)' }}>
-            Total Confirmed Amount: <strong>₱{Number(confirmedCheckout.total_amount || 0).toFixed(2)}</strong> · Payment: Cash on Delivery (Pending collection)
+            Total Confirmed Amount: <strong>₱{Number(confirmedCheckout.total_amount || 0).toFixed(2)}</strong> · Payment:{' '}
+            {paymentObj
+              ? `${String(paymentObj.payment_channel || confirmedCheckout.payment_method).toUpperCase()} (${paymentObj.payment_status})`
+              : 'Cash on Delivery (Pending collection)'}
           </p>
+
+          {needsOnlineAction && (
+            <div style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-5)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-secondary)' }}>
+              <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, marginBottom: 6 }}>
+                Payment Reference: {paymentObj.payment_reference}
+              </div>
+              <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-3)' }}>
+                Authorize your {String(paymentObj.payment_channel || '').toUpperCase()} payment of ₱{Number(paymentObj.amount || 0).toFixed(2)}.
+              </p>
+              {paymentActionError && (
+                <p role="alert" style={{ color: 'var(--status-error-text)', fontSize: 'var(--font-size-xs)', marginBottom: 8 }}>
+                  {paymentActionError}
+                </p>
+              )}
+              <Button variant="primary" onClick={handleConfirmOnlinePayment} disabled={paymentActionLoading}>
+                {paymentActionLoading ? 'Confirming Payment...' : `Pay ₱${Number(paymentObj.amount || 0).toFixed(2)} Now`}
+              </Button>
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
             {(confirmedCheckout.orders || []).map((ord) => (
@@ -258,6 +343,8 @@ export default function CheckoutPage() {
         idempotencyKey: idempotencyKeyRef.current,
         expectedTotalsByRestaurant,
         contactNumberId: hasDeliverySubOrders && selectedContact?.id ? selectedContact.id : null,
+        paymentMethod,
+        promoCode: appliedPromo?.promo_code || '',
       });
 
       const checkout = await customerService.placeCheckoutOrder(submittedPayload);
@@ -912,6 +999,44 @@ export default function CheckoutPage() {
               <span>₱0 (Free)</span>
             </div>
 
+            <div style={{ paddingTop: 'var(--space-2)', borderTop: '1px dashed var(--border-secondary)' }}>
+              <label htmlFor="checkout-promo-code" style={{ display: 'block', fontSize: 'var(--font-size-xs)', fontWeight: 600, marginBottom: 6 }}>
+                Promo Code
+              </label>
+              <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                <input
+                  id="checkout-promo-code"
+                  type="text"
+                  className="input"
+                  placeholder="Enter promo code"
+                  value={promoInput}
+                  onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                  disabled={Boolean(appliedPromo) || promoLoading}
+                  style={{ flex: 1 }}
+                />
+                {appliedPromo ? (
+                  <Button type="button" variant="outline" size="sm" onClick={handleRemovePromo}>
+                    Remove
+                  </Button>
+                ) : (
+                  <Button type="button" variant="secondary" size="sm" onClick={handleApplyPromo} disabled={promoLoading}>
+                    {promoLoading ? 'Checking...' : 'Apply'}
+                  </Button>
+                )}
+              </div>
+              {promoError && (
+                <div role="alert" style={{ marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)' }}>
+                  {promoError}
+                </div>
+              )}
+              {appliedPromo && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, color: 'var(--status-success-text)', fontWeight: 600 }}>
+                  <span>Promo ({appliedPromo.promo_code})</span>
+                  <span>-₱{Number(appliedPromo.discount_amount || 0).toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -922,7 +1047,9 @@ export default function CheckoutPage() {
               color: 'var(--text-primary)',
             }}>
               <span>Estimated Total</span>
-              <span style={{ color: 'var(--accent)' }}>₱{displayedGrandTotal.toLocaleString()}</span>
+              <span style={{ color: 'var(--accent)' }}>
+                ₱{Math.max(0, displayedGrandTotal - Number(appliedPromo?.discount_amount || 0)).toLocaleString()}
+              </span>
             </div>
             <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
               Estimated total — final prices and delivery fees are confirmed by the server on checkout.

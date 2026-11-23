@@ -26,6 +26,7 @@ use App\Features\Media\Controllers\PublicImageProxyController;
 use App\Features\Notifications\Controllers\NotificationController;
 use App\Features\Orders\Controllers\CustomerOrderController;
 use App\Features\Orders\Controllers\RestaurantOrderController;
+use App\Features\Payments\Controllers\PaymentController;
 use App\Features\Reservations\Controllers\CustomerReservationController;
 use App\Features\Reservations\Controllers\OwnerReservationController;
 use App\Features\Reservations\Controllers\OwnerTableController;
@@ -35,6 +36,8 @@ use App\Features\Restaurants\Controllers\OwnerInventoryController;
 use App\Features\Restaurants\Controllers\OwnerMenuController;
 use App\Features\Restaurants\Controllers\OwnerMenuPublishController;
 use App\Features\Restaurants\Controllers\OwnerProfileController;
+use App\Features\Restaurants\Controllers\OwnerPromoController;
+use App\Features\Restaurants\Controllers\OwnerReportsController;
 use App\Features\Restaurants\Controllers\RestaurantApplicationController;
 use App\Features\Restaurants\Controllers\RestaurantChangeRequestController;
 use App\Features\Restaurants\Controllers\RestaurantController;
@@ -177,6 +180,9 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
 
     Route::post('/checkout', [CustomerOrderController::class, 'checkout']);
     Route::post('/promos/validate', [AdminPromoController::class, 'validateForCustomer']);
+    Route::get('/payments/{paymentId}', [PaymentController::class, 'show'])->whereNumber('paymentId');
+    Route::post('/payments/{paymentId}/confirm', [PaymentController::class, 'confirm'])->whereNumber('paymentId');
+    Route::post('/payments/{paymentId}/fail', [PaymentController::class, 'fail'])->whereNumber('paymentId');
     Route::get('/orders', [CustomerOrderController::class, 'index']);
     Route::get('/orders/{id}', [CustomerOrderController::class, 'show'])->whereNumber('id');
     Route::post('/orders/{id}/cancel', [CustomerOrderController::class, 'cancel'])->whereNumber('id');
@@ -274,6 +280,12 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::get('/reviews', [OwnerReviewController::class, 'index']);
         Route::post('/reviews/{reviewId}/flag', [OwnerReviewController::class, 'flag'])->whereNumber('reviewId');
 
+        Route::get('/promos', [OwnerPromoController::class, 'index']);
+        Route::post('/promos', [OwnerPromoController::class, 'store']);
+        Route::patch('/promos/{id}', [OwnerPromoController::class, 'update'])->whereNumber('id');
+
+        Route::get('/reports/sales', [OwnerReportsController::class, 'sales']);
+
         Route::get('/tables', [OwnerTableController::class, 'index']);
         Route::post('/tables', [OwnerTableController::class, 'store'])->middleware('throttle:60,1');
         Route::get('/tables/{id}', [OwnerTableController::class, 'show'])->whereNumber('id');
@@ -344,6 +356,7 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
 
     Route::get('/finance/cod-remittances', [AdminFinanceController::class, 'codRemittances']);
     Route::post('/finance/cod-remittances/{deliveryId}/verify', [AdminFinanceController::class, 'verifyCodRemittance'])->whereNumber('deliveryId');
+    Route::get('/finance/ledger', [AdminFinanceController::class, 'ledger']);
 
     Route::get('/promos', [AdminPromoController::class, 'index']);
     Route::post('/promos', [AdminPromoController::class, 'store']);
@@ -371,6 +384,8 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::post('/featured-restaurants/evaluate', [AdminReviewController::class, 'evaluateFeatured']);
     Route::post('/featured-restaurants/override', [AdminReviewController::class, 'overrideFeatured']);
 });
+
+Route::post('/payments/webhook', [PaymentController::class, 'webhook'])->middleware('throttle:60,1');
 
 Route::prefix('locations')->middleware('throttle:120,1')->group(function (): void {
     Route::get('/provinces', [LocationLookupController::class, 'provinces']);

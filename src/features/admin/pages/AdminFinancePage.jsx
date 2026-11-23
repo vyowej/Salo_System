@@ -20,6 +20,7 @@ export default function AdminFinancePage() {
   });
 
   const [summary, setSummary] = useState({});
+  const [ledgerSummary, setLedgerSummary] = useState({});
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -30,12 +31,16 @@ export default function AdminFinancePage() {
   const loadRemittances = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await adminApiService.getCodRemittances({
-        remittance_status: statusFilter,
-        search: search.trim() || undefined,
-        per_page: 50,
-      });
+      const [res, ledgerRes] = await Promise.all([
+        adminApiService.getCodRemittances({
+          remittance_status: statusFilter,
+          search: search.trim() || undefined,
+          per_page: 50,
+        }),
+        adminApiService.getFinanceLedger().catch(() => ({ summary: {} })),
+      ]);
       setSummary(res.summary || {});
+      setLedgerSummary(ledgerRes?.summary || {});
       setItems(res.items || []);
     } catch (err) {
       setNotice(err?.message || 'Unable to load COD remittance records.');
@@ -109,6 +114,18 @@ export default function AdminFinancePage() {
             <div className="admin-muted">Discrepancies</div>
             <strong>{formatPeso(summary.discrepancy_amount || 0)}</strong>
             <div className="admin-muted">{summary.discrepancy_count || 0} delivery(ies)</div>
+          </div>
+          <div className="admin-record-panel">
+            <div className="admin-muted">Online Payments</div>
+            <strong>{formatPeso(ledgerSummary.online_payments_total || 0)}</strong>
+            <div className="admin-muted">{ledgerSummary.total_journals || 0} ledger journal(s)</div>
+          </div>
+          <div className="admin-record-panel">
+            <div className="admin-muted">Refunds Processed</div>
+            <strong>{formatPeso(ledgerSummary.refunds_total || 0)}</strong>
+            <div className="admin-muted">
+              {(ledgerSummary.unbalanced_count || 0) === 0 ? 'Ledger balanced' : `${ledgerSummary.unbalanced_count} unbalanced`}
+            </div>
           </div>
         </div>
 

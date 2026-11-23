@@ -59,9 +59,22 @@ class OwnerInventoryController extends Controller
     public function updateItem(Request $request, int $itemId): JsonResponse
     {
         $validated = $request->validate([
-            'availability_status' => ['required', 'string', 'in:available,temporarily_unavailable,sold_out'],
+            'availability_status' => ['nullable', 'string', 'in:available,temporarily_unavailable,sold_out'],
+            'stock_quantity' => ['nullable', 'integer', 'min:0'],
+            'low_stock_threshold' => ['nullable', 'integer', 'min:0'],
+            'reason' => ['nullable', 'string', 'max:255'],
             'restaurant_id' => ['nullable', 'integer', 'min:1'],
         ]);
+
+        if (
+            ! $request->has('availability_status')
+            && ! $request->has('stock_quantity')
+            && ! $request->has('low_stock_threshold')
+        ) {
+            $request->validate([
+                'availability_status' => ['required', 'string', 'in:available,temporarily_unavailable,sold_out'],
+            ]);
+        }
 
         $restaurantId = isset($validated['restaurant_id'])
             ? (int) $validated['restaurant_id']
@@ -72,12 +85,17 @@ class OwnerInventoryController extends Controller
                 'item' => $this->ownerInventoryService->updateItemAvailability(
                     user: $request->user(),
                     itemId: $itemId,
-                    availabilityStatus: (string) $validated['availability_status'],
+                    availabilityStatus: isset($validated['availability_status']) ? (string) $validated['availability_status'] : null,
                     restaurantId: $restaurantId,
                     request: $request,
+                    hasStockQuantity: $request->has('stock_quantity'),
+                    stockQuantity: isset($validated['stock_quantity']) ? (int) $validated['stock_quantity'] : null,
+                    hasLowStockThreshold: $request->has('low_stock_threshold'),
+                    lowStockThreshold: isset($validated['low_stock_threshold']) ? (int) $validated['low_stock_threshold'] : null,
+                    reason: isset($validated['reason']) ? (string) $validated['reason'] : null,
                 ),
             ],
-            message: 'Inventory item availability updated.',
+            message: 'Inventory item updated.',
         );
     }
 }

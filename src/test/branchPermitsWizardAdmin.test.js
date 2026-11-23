@@ -21,6 +21,7 @@ import {
 import {
   getNotificationRoute,
   getNotificationTitle,
+  normalizeNotification,
   resolveNotificationRestaurantId,
 } from '../utils/notificationUtils.js';
 
@@ -185,6 +186,31 @@ test('Notification mapping for customer/admin branch_permit_* and restaurant bra
     resolveNotificationRestaurantId({ related_entity_type: 'branch_permits', related_entity_id: 8 }, [{ id: '10' }]),
     null,
   );
+
+  const normalizedPermitNotif = normalizeNotification({
+    notification_id: 99,
+    workspace: 'restaurant',
+    type: 'branch_permit_reopened',
+    title: 'Branch permit reopened for review',
+    body: 'Please upload a clearer scan.',
+    related_entity_type: 'branch_permits',
+    related_entity_id: 8,
+    restaurant_id: 42,
+    application_id: 12,
+    application_branch_id: 34,
+    is_read: false,
+  });
+  assert.equal(normalizedPermitNotif.restaurant_id, 42);
+  assert.equal(normalizedPermitNotif.application_id, 12);
+  assert.equal(normalizedPermitNotif.application_branch_id, 34);
+  assert.equal(
+    resolveNotificationRestaurantId(normalizedPermitNotif, [{ id: '10' }, { id: '42' }]),
+    '42',
+  );
+
+  const ownerMenuSrc = fs.readFileSync(path.resolve('src/features/restaurant/components/OwnerNotificationsMenu.jsx'), 'utf8');
+  assert.ok(ownerMenuSrc.includes('resolveNotificationRestaurantId'));
+  assert.ok(ownerMenuSrc.includes('access.selectRestaurant'));
 });
 
 test('Admin queue params, drawer actions, waive visibility, note validation, 403/409/422 errors, and root derived badges', () => {

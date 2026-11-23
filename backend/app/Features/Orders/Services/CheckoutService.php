@@ -5,6 +5,7 @@ namespace App\Features\Orders\Services;
 use App\Features\Account\Requests\UpdateProfileRequest;
 use App\Features\Locations\Services\ServiceAreaValidationService;
 use App\Features\Notifications\Services\NotificationService;
+use App\Features\Payments\Services\PaymentService;
 use App\Features\Restaurants\Services\AvailabilityService;
 use App\Models\User;
 use App\Support\AuditLogService;
@@ -27,6 +28,7 @@ class CheckoutService
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
         private readonly PublicRestaurantVisibility $visibility,
+        private readonly PaymentService $paymentService,
     ) {}
 
     /**
@@ -38,6 +40,8 @@ class CheckoutService
     public function placeOrder(User $user, array $validated, Request $request): array
     {
         $idempotencyKey = trim((string) $validated['idempotency_key']);
+        $paymentChannel = strtolower(trim((string) ($validated['payment_method'] ?? 'cod')));
+        $promoCode = isset($validated['promo_code']) ? strtoupper(trim((string) $validated['promo_code'])) : '';
 
         $existingCheckout = DB::table('checkouts')
             ->where('idempotency_key', $idempotencyKey)
@@ -223,6 +227,7 @@ class CheckoutService
             $seenConfigIndices = [];
             $preparedItems = [];
             $subtotalCents = 0;
+            $requestedStockByItemId = [];
 
             foreach ($itemsInput as $iIdx => $itemInput) {
                 $menuItemId = (int) $itemInput['menu_item_id'];
@@ -242,6 +247,7 @@ class CheckoutService
                         DB::raw('COALESCE(mi.published_item_name, mi.item_name) as display_name'),
                         'mi.published_item_name as item_name',
                         'mi.published_base_price as base_price',
+                        'mi.stock_quantity',
                         'mi.availability_status',
                         'mi.approval_status',
                         'mi.is_published',
@@ -274,6 +280,17 @@ class CheckoutService
                     };
                     $groupErrors["groups.{$gIdx}.items.{$iIdx}.menu_item_id"][] = "{$menuItem->item_name} is currently {$label}.";
                     continue;
+                }
+
+                if ($menuItem->stock_quantity !== null) {
+                    $requestedStockByItemId[$menuItemId] = ($requestedStockByItemId[$menuItemId] ?? 0) + $quantity;
+                    if ($requestedStockByItemId[$menuItemId] > (int) $menuItem->stock_quantity) {
+                        $remaining = max(0, (int) $menuItem->stock_quantity);
+                        $groupErrors["groups.{$gIdx}.items.{$iIdx}.quantity"][] = $remaining === 0
+                            ? "{$menuItem->item_name} is out of stock."
+                            : "Only {$remaining} left in stock for {$menuItem->item_name}.";
+                        continue;
+                    }
                 }
 
                 $rawAddOnIds = isset($itemInput['add_on_option_ids']) && is_array($itemInput['add_on_option_ids'])
@@ -424,6 +441,11 @@ class CheckoutService
             throw ValidationException::withMessages($groupErrors);
         }
 
+        $appliedPromo = null;
+        if ($promoCode !== '') {
+            $appliedPromo = $this->applyPromoToPreparedGroups($promoCode, $preparedGroups);
+        }
+
         $totalMismatch = false;
         $computedGroupsSummary = [];
         foreach ($preparedGroups as $group) {
@@ -433,6 +455,7 @@ class CheckoutService
                 'restaurant_name' => RestaurantBranchService::formatDisplayName((string) $groupRest->restaurant_name, $groupRest->branch_name ?? null),
                 'subtotal_amount' => (float) Money::fromCents($group['subtotal_cents']),
                 'delivery_fee' => (float) Money::fromCents($group['delivery_fee_cents']),
+                'discount_amount' => (float) Money::fromCents($group['discount_cents'] ?? 0),
                 'total_amount' => (float) Money::fromCents($group['total_cents']),
             ];
             if ($group['expected_total'] !== null && Money::toCents($group['expected_total']) !== $group['total_cents']) {
@@ -454,8 +477,41 @@ class CheckoutService
         $customerName = trim("{$user->first_name} {$user->last_name}") ?: $user->username;
 
         try {
-            $checkoutId = DB::transaction(function () use ($user, $idempotencyKey, $checkoutTotalCents, $preparedGroups, $customerName, $request): int {
+            $checkoutId = DB::transaction(function () use (
+                $user,
+                $idempotencyKey,
+                $checkoutTotalCents,
+                $preparedGroups,
+                $customerName,
+                $paymentChannel,
+                $appliedPromo,
+                $request
+            ): int {
             $now = now();
+
+            if ($appliedPromo !== null) {
+                $lockedPromo = DB::table('promos')
+                    ->where('promo_id', $appliedPromo['promo_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                if (
+                    ! $lockedPromo
+                    || (int) $lockedPromo->is_active !== 1
+                    || ($lockedPromo->usage_limit !== null && (int) $lockedPromo->used_count >= (int) $lockedPromo->usage_limit)
+                ) {
+                    throw ValidationException::withMessages([
+                        'promo_code' => ['This promo code is no longer available or has reached its usage limit.'],
+                    ]);
+                }
+
+                DB::table('promos')
+                    ->where('promo_id', $lockedPromo->promo_id)
+                    ->update([
+                        'used_count' => (int) $lockedPromo->used_count + 1,
+                        'updated_at' => $now,
+                    ]);
+            }
 
             $checkoutId = (int) DB::table('checkouts')->insertGetId([
                 'customer_id' => $user->user_id,
@@ -467,6 +523,7 @@ class CheckoutService
             ]);
 
             $createdOrderIds = [];
+            $orderTotalsById = [];
 
             foreach ($preparedGroups as $group) {
                 $rest = $group['restaurant'];
@@ -494,6 +551,11 @@ class CheckoutService
                     'delivery_notes' => $addr['notes'] ?? null,
                     'subtotal_amount' => Money::fromCents($group['subtotal_cents']),
                     'delivery_fee' => Money::fromCents($group['delivery_fee_cents']),
+                    'discount_amount' => Money::fromCents($group['discount_cents'] ?? 0),
+                    'platform_discount_amount' => Money::fromCents($group['platform_discount_cents'] ?? 0),
+                    'restaurant_discount_amount' => Money::fromCents($group['restaurant_discount_cents'] ?? 0),
+                    'provider_discount_amount' => Money::fromCents($group['provider_discount_cents'] ?? 0),
+                    'promo_id' => $group['promo_id'] ?? null,
                     'total_amount' => $orderTotalDecimal,
                     'placed_at' => $now,
                     'created_at' => $now,
@@ -501,6 +563,7 @@ class CheckoutService
                 ]);
 
                 $createdOrderIds[] = $orderId;
+                $orderTotalsById[$orderId] = $orderTotalDecimal;
 
                 foreach ($group['items'] as $item) {
                     $orderItemId = (int) DB::table('order_items')->insertGetId([
@@ -525,26 +588,28 @@ class CheckoutService
                     }
                 }
 
-                $paymentRef = $this->generateUniqueReference('payments', 'payment_reference', 'SALO-PAY');
-                $paymentId = (int) DB::table('payments')->insertGetId([
-                    'payment_reference' => $paymentRef,
-                    'checkout_id' => $checkoutId,
-                    'customer_id' => $user->user_id,
-                    'payment_method' => 'cash',
-                    'payment_type' => 'payment',
-                    'payment_status' => 'pending',
-                    'amount' => $orderTotalDecimal,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]);
+                if ($paymentChannel === 'cod') {
+                    $paymentRef = $this->generateUniqueReference('payments', 'payment_reference', 'SALO-PAY');
+                    $paymentId = (int) DB::table('payments')->insertGetId([
+                        'payment_reference' => $paymentRef,
+                        'checkout_id' => $checkoutId,
+                        'customer_id' => $user->user_id,
+                        'payment_method' => 'cash',
+                        'payment_type' => 'payment',
+                        'payment_status' => 'pending',
+                        'amount' => $orderTotalDecimal,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
 
-                DB::table('payment_allocations')->insert([
-                    'payment_id' => $paymentId,
-                    'order_id' => $orderId,
-                    'allocation_type' => 'order_payment',
-                    'amount' => $orderTotalDecimal,
-                    'created_at' => $now,
-                ]);
+                    DB::table('payment_allocations')->insert([
+                        'payment_id' => $paymentId,
+                        'order_id' => $orderId,
+                        'allocation_type' => 'order_payment',
+                        'amount' => $orderTotalDecimal,
+                        'created_at' => $now,
+                    ]);
+                }
 
                 $this->auditLogService->record(
                     actorUserId: (int) $user->user_id,
@@ -556,7 +621,7 @@ class CheckoutService
                         'restaurant_id' => (int) $rest->restaurant_id,
                         'order_type' => $group['fulfillment'],
                         'total_amount' => $orderTotalDecimal,
-                        'payment_method' => 'cod',
+                        'payment_method' => $paymentChannel,
                     ],
                     request: $request,
                 );
@@ -572,6 +637,44 @@ class CheckoutService
                     relatedEntityType: 'order',
                     relatedEntityId: $orderId,
                 );
+            }
+
+            if ($paymentChannel !== 'cod' && $checkoutTotalCents > 0) {
+                $paymentRef = $this->generateUniqueReference('payments', 'payment_reference', 'SALO-PAY');
+                $onlinePaymentId = (int) DB::table('payments')->insertGetId([
+                    'payment_reference' => $paymentRef,
+                    'checkout_id' => $checkoutId,
+                    'customer_id' => $user->user_id,
+                    'payment_method' => PaymentService::mapChannelToDbMethod($paymentChannel),
+                    'payment_type' => 'payment',
+                    'payment_status' => 'requires_customer_action',
+                    'amount' => Money::fromCents($checkoutTotalCents),
+                    'provider_response' => json_encode(['channel' => $paymentChannel], JSON_UNESCAPED_SLASHES),
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+                foreach ($orderTotalsById as $orderId => $orderTotalDecimal) {
+                    if ((float) $orderTotalDecimal > 0) {
+                        DB::table('payment_allocations')->insert([
+                            'payment_id' => $onlinePaymentId,
+                            'order_id' => $orderId,
+                            'allocation_type' => 'order_payment',
+                            'amount' => $orderTotalDecimal,
+                            'created_at' => $now,
+                        ]);
+                    }
+                }
+
+                DB::table('payment_events')->insertOrIgnore([
+                    'provider_name' => $paymentChannel,
+                    'event_key' => "init_{$onlinePaymentId}",
+                    'payment_id' => $onlinePaymentId,
+                    'payload' => json_encode(['status' => 'requires_customer_action', 'channel' => $paymentChannel]),
+                    'processing_status' => 'processed',
+                    'processed_at' => $now,
+                    'created_at' => $now,
+                ]);
             }
 
             $this->auditLogService->record(
@@ -628,14 +731,138 @@ class CheckoutService
             $orderIds,
         );
 
+        $checkoutPayment = DB::table('payments')
+            ->where('checkout_id', $checkout->checkout_id)
+            ->where('payment_type', 'payment')
+            ->orderBy('payment_id')
+            ->first();
+
+        $formattedPayment = $checkoutPayment ? $this->paymentService->formatPayment($checkoutPayment) : null;
+        $resolvedChannel = $formattedPayment['payment_channel'] ?? 'cod';
+
         return [
             'checkout_id' => (int) $checkout->checkout_id,
             'idempotency_key' => $checkout->idempotency_key,
             'checkout_status' => $checkout->checkout_status,
             'total_amount' => (float) $checkout->total_amount,
-            'payment_method' => 'cod',
+            'payment_method' => $resolvedChannel,
+            'payment' => $resolvedChannel === 'cod' ? null : $formattedPayment,
             'orders' => $orders,
         ];
+    }
+
+    /**
+     * Validate and distribute a promo code discount across eligible prepared groups.
+     *
+     * @param  array<int, array<string, mixed>>  $preparedGroups
+     * @return array<string, mixed>
+     */
+    private function applyPromoToPreparedGroups(string $promoCode, array &$preparedGroups): array
+    {
+        $promo = DB::table('promos')
+            ->where('promo_code', $promoCode)
+            ->where('is_active', 1)
+            ->first();
+
+        if (! $promo) {
+            throw ValidationException::withMessages(['promo_code' => ['Promo code is invalid or inactive.']]);
+        }
+
+        $nowTs = time();
+        if ($nowTs < strtotime((string) $promo->starts_at) || $nowTs > strtotime((string) $promo->ends_at)) {
+            throw ValidationException::withMessages(['promo_code' => ['This promo code has expired or is not yet active.']]);
+        }
+
+        if ($promo->usage_limit !== null && (int) $promo->used_count >= (int) $promo->usage_limit) {
+            throw ValidationException::withMessages(['promo_code' => ['This promo code has reached its usage limit.']]);
+        }
+
+        $eligibleIndices = [];
+        $eligibleSubtotalCents = 0;
+        foreach ($preparedGroups as $idx => $group) {
+            $groupRestaurantId = (int) $group['restaurant']->restaurant_id;
+            if ($promo->restaurant_id === null || (int) $promo->restaurant_id === $groupRestaurantId) {
+                $eligibleIndices[] = $idx;
+                $eligibleSubtotalCents += (int) $group['subtotal_cents'];
+            }
+        }
+
+        if ($eligibleIndices === []) {
+            throw ValidationException::withMessages([
+                'promo_code' => ['This promo code is not valid for the selected restaurant.'],
+            ]);
+        }
+
+        $minOrderCents = Money::toCents((string) $promo->minimum_order_amount);
+        if ($eligibleSubtotalCents < $minOrderCents) {
+            throw ValidationException::withMessages([
+                'promo_code' => ['Minimum order amount of PHP '.number_format((float) $promo->minimum_order_amount, 2).' is required for this promo.'],
+            ]);
+        }
+
+        if ($promo->discount_type === 'percentage') {
+            $discountCents = (int) round($eligibleSubtotalCents * ((float) $promo->discount_value / 100.0));
+        } else {
+            $discountCents = Money::toCents((string) $promo->discount_value);
+        }
+
+        if ($promo->maximum_discount !== null) {
+            $discountCents = min($discountCents, Money::toCents((string) $promo->maximum_discount));
+        }
+
+        $discountCents = max(0, min($discountCents, $eligibleSubtotalCents));
+        if ($discountCents === 0) {
+            return ['promo_id' => (int) $promo->promo_id, 'discount_cents' => 0];
+        }
+
+        $remainingDiscount = $discountCents;
+        $lastPos = count($eligibleIndices) - 1;
+        foreach ($eligibleIndices as $pos => $idx) {
+            $groupSubtotal = (int) $preparedGroups[$idx]['subtotal_cents'];
+            if ($pos === $lastPos) {
+                $groupDiscount = min($remainingDiscount, (int) $preparedGroups[$idx]['total_cents']);
+            } else {
+                $share = $eligibleSubtotalCents > 0
+                    ? (int) floor($discountCents * ($groupSubtotal / $eligibleSubtotalCents))
+                    : 0;
+                $groupDiscount = min($share, $remainingDiscount, (int) $preparedGroups[$idx]['total_cents']);
+            }
+
+            $remainingDiscount -= $groupDiscount;
+
+            [$platformShare, $restaurantShare, $providerShare] = $this->splitDiscountByFunding($promo, $groupDiscount);
+
+            $preparedGroups[$idx]['promo_id'] = (int) $promo->promo_id;
+            $preparedGroups[$idx]['discount_cents'] = $groupDiscount;
+            $preparedGroups[$idx]['platform_discount_cents'] = $platformShare;
+            $preparedGroups[$idx]['restaurant_discount_cents'] = $restaurantShare;
+            $preparedGroups[$idx]['provider_discount_cents'] = $providerShare;
+            $preparedGroups[$idx]['total_cents'] = max(0, (int) $preparedGroups[$idx]['total_cents'] - $groupDiscount);
+        }
+
+        return [
+            'promo_id' => (int) $promo->promo_id,
+            'discount_cents' => $discountCents,
+        ];
+    }
+
+    /**
+     * @return array{0: int, 1: int, 2: int}
+     */
+    private function splitDiscountByFunding(object $promo, int $discountCents): array
+    {
+        return match ($promo->funding_source) {
+            'restaurant' => [0, $discountCents, 0],
+            'provider' => [0, 0, $discountCents],
+            'joint' => (function () use ($promo, $discountCents): array {
+                $platPct = (float) ($promo->platform_share_percent ?? 50);
+                $platCents = (int) round($discountCents * ($platPct / 100.0));
+                $restCents = max(0, $discountCents - $platCents);
+
+                return [$platCents, $restCents, 0];
+            })(),
+            default => [$discountCents, 0, 0],
+        };
     }
 
     private function generateUniqueReference(string $table, string $column, string $prefix): string

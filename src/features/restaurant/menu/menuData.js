@@ -17,6 +17,8 @@ export function normalizeMenuItem(item = {}) {
     discountedPrice: item.discountedPrice ?? '',
     availability: normalizeMenuAvailability(item),
     isAvailable: normalizeMenuAvailability(item) === 'available',
+    stockQuantity: item.stock_quantity ?? item.stockQuantity ?? null,
+    minimumLevel: item.low_stock_threshold ?? item.minimumLevel ?? null,
     photo: item.photo || null,
     is_published: Boolean(item.is_published),
     publish_state: item.publish_state || (item.is_published ? 'published' : 'new'),

@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   BRANCH_PERMIT_MAX_BYTES,
   BRANCH_PERMIT_STATUS_META,
@@ -201,4 +203,10 @@ test('branch_permit_* notification types map to branch_permit category, readable
       '/business-application/status',
     );
   });
+});
+
+test('OwnerLayout shows branch switcher and Add Branch trigger for active single-restaurant owners', () => {
+  const layoutSrc = fs.readFileSync(path.resolve('src/layouts/OwnerLayout.jsx'), 'utf8');
+  assert.ok(layoutSrc.includes("access.isOwner && selectedRestaurant?.status === 'active'"));
+  assert.ok(layoutSrc.includes('BRANCH_WORKSPACE_COPY.switcherAddBranchButton'));
 });

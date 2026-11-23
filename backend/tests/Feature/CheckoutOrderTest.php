@@ -345,10 +345,10 @@ class CheckoutOrderTest extends TestCase
             ]],
         ])->assertStatus(422)->assertJsonValidationErrors(['groups.0.restaurant_id']);
 
-        // 6. Non-COD payment method -> 422
+        // 6. Unsupported payment method -> 422
         $this->actingAs($buyer)->postJson('/api/customer/checkout', [
-            'payment_method' => 'gcash',
-            'idempotency_key' => 'idem-gcash-'.random_int(10000, 99999),
+            'payment_method' => 'bitcoin',
+            'idempotency_key' => 'idem-invalid-pay-'.random_int(10000, 99999),
             'groups' => [[
                 'restaurant_id' => $restOpen,
                 'fulfillment' => 'pickup',

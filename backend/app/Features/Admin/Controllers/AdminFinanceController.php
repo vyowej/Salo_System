@@ -22,6 +22,14 @@ class AdminFinanceController extends Controller
         );
     }
 
+    public function ledger(): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->adminFinanceService->ledgerOverview(),
+            message: 'Ledger overview retrieved.',
+        );
+    }
+
     public function verifyCodRemittance(Request $request, int $deliveryId): JsonResponse
     {
         $verification = $this->adminFinanceService->verifyCodRemittance(
