@@ -1,12 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   appendBranchPayloadToFormData,
   executeTwoStepApplicationSubmit,
   getApplicationBranchPermitViewModel,
+  resolveActiveApplicationConflictRedirect,
   stripFilesFromAddressDraft,
   validateAddressStep,
 } from '../pages/BusinessApplication/utils/branchHelpers.js';
+import { APPLICATION_CONFLICT_COPY } from '../pages/BusinessApplication/constants/applicationDefaults.js';
 import {
   buildAdminBranchPermitQueryParams,
   getAdminBranchPermitBadge,
@@ -221,4 +225,70 @@ test('Admin queue params, drawer actions, waive visibility, note validation, 403
 
   assert.equal(getAdminBranchPermitBadge('not_submitted', true).label, 'Not submitted');
   assert.equal(getAdminBranchPermitBadge('approved', true).label, 'Verified');
+});
+
+test('409 ACTIVE_APPLICATION_EXISTS maps to status redirect + notice, stops two-step submit without retry, clears draft, and status page exposes pending permit upload', async () => {
+  const conflictErr = {
+    status: 409,
+    code: 'ACTIVE_APPLICATION_EXISTS',
+    message: 'You already have an active restaurant partner application.',
+    data: {
+      success: false,
+      code: 'ACTIVE_APPLICATION_EXISTS',
+      data: {
+        restaurant_application_id: 77,
+        application_id: 77,
+        application_status: 'submitted',
+      },
+    },
+  };
+
+  const redirect = resolveActiveApplicationConflictRedirect(conflictErr);
+  assert.deepEqual(redirect, {
+    shouldRedirect: true,
+    to: '/business-application/status',
+    notice: APPLICATION_CONFLICT_COPY.activeApplicationExistsNotice,
+    existingApplicationId: 77,
+  });
+  assert.equal(redirect.notice, 'You already have an application in progress.');
+
+  // Non-matching 409 or 422 does not trigger redirect
+  assert.equal(resolveActiveApplicationConflictRedirect({ status: 409, code: 'OTHER_CONFLICT' }), null);
+  assert.equal(resolveActiveApplicationConflictRedirect({ status: 422, code: 'ACTIVE_APPLICATION_EXISTS' }), null);
+
+  // Two-step submit stops immediately with no second POST and no branch permit uploads
+  let appPostCount = 0;
+  let permitPostCount = 0;
+  await assert.rejects(
+    () => executeTwoStepApplicationSubmit({
+      applicationFormData: new FormData(),
+      branches: [{ branchName: 'Makati', permitRequiredLocally: true, permitFile: new File(['%PDF'], 'a.pdf', { type: 'application/pdf' }) }],
+      submitApplication: async () => {
+        appPostCount += 1;
+        throw conflictErr;
+      },
+      submitBranchPermit: async () => {
+        permitPostCount += 1;
+        return {};
+      },
+    }),
+    (err) => err === conflictErr,
+  );
+  assert.equal(appPostCount, 1);
+  assert.equal(permitPostCount, 0);
+
+  // Verify wizard clears draft & redirects without setting generic submit error, and status page renders notice + Upload/Retry
+  const wizardSrc = fs.readFileSync(path.resolve('src/pages/BusinessApplication/BusinessApplicationPage.jsx'), 'utf8');
+  assert.ok(wizardSrc.includes('resolveActiveApplicationConflictRedirect(error)'));
+  assert.ok(wizardSrc.includes('sessionStorage.removeItem(SESSION_DRAFT_KEY)'));
+  assert.ok(wizardSrc.includes('navigate(conflictRedirect.to'));
+
+  const statusPageSrc = fs.readFileSync(path.resolve('src/pages/BusinessApplication/BusinessApplicationStatusPage.jsx'), 'utf8');
+  assert.ok(statusPageSrc.includes('location.state?.notice'));
+
+  const statusComponentSrc = fs.readFileSync(path.resolve('src/pages/BusinessApplication/components/ApplicationStatus.jsx'), 'utf8');
+  assert.ok(statusComponentSrc.includes('APPLICATION_CONFLICT_COPY.pendingBranchPermitsNotice'));
+
+  const permitCardSrc = fs.readFileSync(path.resolve('src/pages/BusinessApplication/components/ApplicationBranchPermitCard.jsx'), 'utf8');
+  assert.ok(permitCardSrc.includes('APPLICATION_CONFLICT_COPY.uploadOrRetryPermitButton'));
 });

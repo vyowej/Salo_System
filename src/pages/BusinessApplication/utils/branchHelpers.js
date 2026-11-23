@@ -1,4 +1,7 @@
-import { MAX_APPLICATION_BRANCHES } from '../constants/applicationDefaults.js';
+import {
+  APPLICATION_CONFLICT_COPY,
+  MAX_APPLICATION_BRANCHES,
+} from '../constants/applicationDefaults.js';
 import {
   getBranchPermitMeta,
   isBranchPermitEditable,
@@ -223,6 +226,27 @@ export async function executeTwoStepApplicationSubmit({
     application: created,
     progress,
     hasFailure,
+  };
+}
+
+export function isActiveApplicationConflictError(error) {
+  if (!error || Number(error?.status) !== 409) {
+    return false;
+  }
+  const code = error?.code || error?.data?.code || null;
+  return code === 'ACTIVE_APPLICATION_EXISTS';
+}
+
+export function resolveActiveApplicationConflictRedirect(error) {
+  if (!isActiveApplicationConflictError(error)) {
+    return null;
+  }
+  const data = error?.data?.data || error?.data || {};
+  return {
+    shouldRedirect: true,
+    to: '/business-application/status',
+    notice: APPLICATION_CONFLICT_COPY.activeApplicationExistsNotice,
+    existingApplicationId: data?.restaurant_application_id ?? data?.application_id ?? null,
   };
 }
 

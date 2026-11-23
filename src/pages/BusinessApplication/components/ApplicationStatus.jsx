@@ -4,6 +4,7 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import { Card, CardBody } from '../../../components/common/Card';
 import {
+  APPLICATION_CONFLICT_COPY,
   APPLICATION_STATUS_CONFIG,
 } from '../constants/applicationDefaults';
 import { extractApplicationLocations, formatBranchAddressSummary } from '../utils/branchHelpers';
@@ -430,11 +431,31 @@ export default function ApplicationStatus({
             {(() => {
               const locSummary = extractApplicationLocations(applicationData);
               if (!locSummary.hasBranches) return null;
+              const hasPendingSubmission = locSummary.branches.some(
+                (b) => (b?.permit_status || 'pending_submission') === 'pending_submission',
+              );
               return (
                 <div style={{ marginBottom: '16px' }}>
                   <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
                     Locations ({locSummary.totalLocations})
                   </div>
+                  {hasPendingSubmission && (
+                    <div
+                      role="status"
+                      style={{
+                        marginBottom: '10px',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        background: '#fffbeb',
+                        border: '1px solid #fde68a',
+                        color: '#92400e',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {APPLICATION_CONFLICT_COPY.pendingBranchPermitsNotice}
+                    </div>
+                  )}
                   <div style={{ display: 'grid', gap: '8px' }}>
                     <div style={{ padding: '10px 12px', border: '1px solid var(--border-secondary, #e5e7eb)', borderRadius: '8px' }}>
                       <div style={{ fontSize: '13px', fontWeight: 600 }}>

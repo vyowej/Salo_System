@@ -4,6 +4,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import BranchPermitFields from '../../../features/restaurant/components/BranchPermitFields';
 import { BRANCH_PERMIT_COPY } from '../../../features/restaurant/content/branchContent';
+import { APPLICATION_CONFLICT_COPY } from '../constants/applicationDefaults';
 import {
   mapAddBranchBackendErrors,
   validateBranchPermitInput,
@@ -180,7 +181,9 @@ export default function ApplicationBranchPermitCard({
           />
           <div>
             <Button type="submit" variant="primary" size="sm" loading={submitting}>
-              {BRANCH_PERMIT_COPY.submitUpdateButton}
+              {vm.permitStatus === 'pending_submission'
+                ? APPLICATION_CONFLICT_COPY.uploadOrRetryPermitButton
+                : BRANCH_PERMIT_COPY.submitUpdateButton}
             </Button>
           </div>
         </form>

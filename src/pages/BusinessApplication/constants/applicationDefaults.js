@@ -324,6 +324,12 @@ export const APPLICATION_STATUS_CONFIG = {
   },
 };
 
+export const APPLICATION_CONFLICT_COPY = {
+  activeApplicationExistsNotice: 'You already have an application in progress.',
+  pendingBranchPermitsNotice: 'Some branches still need a permit upload. Complete or retry them in the Locations section below.',
+  uploadOrRetryPermitButton: 'Upload / Retry Permit',
+};
+
 /**
  * Validates Step 7 fulfillment services.
  * Backend requires at least Delivery or Pickup / Takeout (Table Reservations is optional).

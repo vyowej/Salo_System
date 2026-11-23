@@ -25,6 +25,7 @@ import { resolveUploadableFile, mapAccountTypeToEnum } from '../../services/form
 import {
   appendBranchPayloadToFormData,
   executeTwoStepApplicationSubmit,
+  resolveActiveApplicationConflictRedirect,
   stripFilesFromAddressDraft,
   validateAddressStep,
 } from './utils/branchHelpers';
@@ -469,6 +470,23 @@ export default function BusinessApplicationPage() {
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
+      const conflictRedirect = resolveActiveApplicationConflictRedirect(error);
+      if (conflictRedirect) {
+        try {
+          sessionStorage.removeItem(SESSION_DRAFT_KEY);
+        } catch {
+          // Ignore storage removal errors
+        }
+        navigate(conflictRedirect.to, {
+          replace: true,
+          state: {
+            notice: conflictRedirect.notice,
+            existingApplicationId: conflictRedirect.existingApplicationId,
+          },
+        });
+        return;
+      }
+
       const fieldErrors = {};
       if (error?.errors && typeof error.errors === 'object') {
         Object.entries(error.errors).forEach(([key, msgs]) => {
