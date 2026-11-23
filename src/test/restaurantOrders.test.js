@@ -431,8 +431,8 @@ test('Step 9b riderService, admin activation, rider UI states, and no fake remit
     assert.ok(activeSrc.includes('disabled={submitting'));
     assert.ok(dashboardSrc.includes('Awaiting activation'));
     assert.ok(layoutSrc.includes('Awaiting activation'));
-    assert.ok(earningsSrc.includes('not available yet'));
-    assert.equal(earningsSrc.includes('Confirm Remittance'), false);
+    assert.ok(earningsSrc.includes('getFinanceSummary'));
+    assert.ok(earningsSrc.includes('submitCodRemittance'));
     assert.ok(ownerOrdersSrc.includes('out_for_delivery'));
     assert.ok(ownerOrdersSrc.includes('delivered'));
     assert.ok(ownerOrdersSrc.includes('riderFirstName'));

@@ -57,11 +57,39 @@ class RiderDeliveryController extends Controller
             orderId: $orderId,
             collectedAmount: $request->input('collected_amount'),
             request: $request,
+            pod: [
+                'recipient_name' => $request->input('recipient_name'),
+                'delivery_notes' => $request->input('delivery_notes'),
+                'proof_photo' => $request->file('proof_photo'),
+                'proof_latitude' => $request->input('proof_latitude'),
+                'proof_longitude' => $request->input('proof_longitude'),
+            ],
         );
 
         return ApiResponse::success(
             data: ['delivery' => $delivery],
             message: 'Delivery marked as delivered.',
         );
+    }
+
+    public function fail(Request $request, int $orderId): JsonResponse
+    {
+        $delivery = $this->riderDeliveryService->markFailed(
+            user: $request->user(),
+            orderId: $orderId,
+            failureReason: (string) $request->input('failure_reason', ''),
+            deliveryNotes: $request->input('delivery_notes'),
+            request: $request,
+        );
+
+        return ApiResponse::success(
+            data: ['delivery' => $delivery],
+            message: 'Delivery marked as failed.',
+        );
+    }
+
+    public function proof(Request $request, int $orderId)
+    {
+        return $this->riderDeliveryService->streamProofPhoto($request->user(), $orderId);
     }
 }

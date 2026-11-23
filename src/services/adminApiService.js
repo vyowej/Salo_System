@@ -327,6 +327,32 @@ export const adminApiService = {
     );
     return response?.data?.permit ?? null;
   },
+
+  async getDisputes(params = {}) {
+    const response = await apiClient.get(`/admin/disputes${toQueryString(params)}`);
+    return response?.data ?? { items: [], meta: {} };
+  },
+
+  async resolveDispute(orderId, { action, notes }) {
+    const response = await apiClient.post(`/admin/disputes/${encodeURIComponent(orderId)}/resolve`, {
+      action,
+      notes,
+    });
+    return response?.data?.resolution ?? null;
+  },
+
+  async getCodRemittances(params = {}) {
+    const response = await apiClient.get(`/admin/finance/cod-remittances${toQueryString(params)}`);
+    return response?.data ?? { summary: {}, items: [], meta: {} };
+  },
+
+  async verifyCodRemittance(deliveryId, { action, notes = null }) {
+    const response = await apiClient.post(`/admin/finance/cod-remittances/${encodeURIComponent(deliveryId)}/verify`, {
+      action,
+      notes: notes || undefined,
+    });
+    return response?.data?.remittance ?? null;
+  },
 };
 
 export default adminApiService;

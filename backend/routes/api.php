@@ -7,6 +7,8 @@ use App\Features\Account\Controllers\AccountSettingsController;
 use App\Features\Account\Controllers\AccountStaffInvitationController;
 use App\Features\Admin\Controllers\AdminApplicationController;
 use App\Features\Admin\Controllers\AdminBranchPermitController;
+use App\Features\Admin\Controllers\AdminDisputesController;
+use App\Features\Admin\Controllers\AdminFinanceController;
 use App\Features\Admin\Controllers\AdminManagementController;
 use App\Features\Admin\Controllers\AdminOrderController;
 use App\Features\Admin\Controllers\AdminReservationController;
@@ -45,6 +47,7 @@ use App\Features\Riders\Controllers\RiderApplicationController;
 use App\Features\Riders\Controllers\RiderChangeRequestController;
 use App\Features\Riders\Controllers\RiderController;
 use App\Features\Riders\Controllers\RiderDeliveryController;
+use App\Features\Riders\Controllers\RiderFinanceController;
 use App\Support\ApiResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -151,6 +154,11 @@ Route::prefix('rider')->middleware('auth')->group(function (): void {
         Route::post('/deliveries/{orderId}/accept', [RiderDeliveryController::class, 'accept'])->whereNumber('orderId');
         Route::post('/deliveries/{orderId}/picked-up', [RiderDeliveryController::class, 'pickedUp'])->whereNumber('orderId');
         Route::post('/deliveries/{orderId}/delivered', [RiderDeliveryController::class, 'delivered'])->whereNumber('orderId');
+        Route::post('/deliveries/{orderId}/fail', [RiderDeliveryController::class, 'fail'])->whereNumber('orderId');
+        Route::get('/deliveries/{orderId}/proof', [RiderDeliveryController::class, 'proof'])->whereNumber('orderId');
+
+        Route::get('/finance', [RiderFinanceController::class, 'index']);
+        Route::post('/finance/remit', [RiderFinanceController::class, 'remit']);
 
         Route::get('/reviews', [RiderReviewController::class, 'index']);
     });
@@ -316,6 +324,12 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::get('/locations/overview', [AdminServiceAreaController::class, 'locationsOverview']);
     Route::get('/orders', [AdminOrderController::class, 'index']);
     Route::get('/orders/{id}/tracking', [TrackingController::class, 'adminOrderTracking'])->whereNumber('id');
+
+    Route::get('/disputes', [AdminDisputesController::class, 'index']);
+    Route::post('/disputes/{orderId}/resolve', [AdminDisputesController::class, 'resolve'])->whereNumber('orderId');
+
+    Route::get('/finance/cod-remittances', [AdminFinanceController::class, 'codRemittances']);
+    Route::post('/finance/cod-remittances/{deliveryId}/verify', [AdminFinanceController::class, 'verifyCodRemittance'])->whereNumber('deliveryId');
 
     Route::get('/reservations', [AdminReservationController::class, 'index']);
     Route::get('/reservations/stats', [AdminReservationController::class, 'stats']);

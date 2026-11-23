@@ -64,12 +64,60 @@ export const riderService = {
     return response?.data?.delivery ?? null;
   },
 
-  async markDelivered(orderId, collectedAmount = null) {
-    const payload = collectedAmount !== null && collectedAmount !== undefined
-      ? { collected_amount: collectedAmount }
-      : {};
+  async markDelivered(orderId, collectedAmount = null, pod = {}) {
+    const hasFile = typeof File !== 'undefined' && pod?.proofPhoto instanceof File;
+    let payload;
+    if (hasFile) {
+      payload = new FormData();
+      if (collectedAmount !== null && collectedAmount !== undefined) {
+        payload.append('collected_amount', String(collectedAmount));
+      }
+      if (pod.recipientName) payload.append('recipient_name', String(pod.recipientName));
+      if (pod.deliveryNotes) payload.append('delivery_notes', String(pod.deliveryNotes));
+      if (pod.proofLatitude !== undefined && pod.proofLatitude !== null) {
+        payload.append('proof_latitude', String(pod.proofLatitude));
+      }
+      if (pod.proofLongitude !== undefined && pod.proofLongitude !== null) {
+        payload.append('proof_longitude', String(pod.proofLongitude));
+      }
+      payload.append('proof_photo', pod.proofPhoto);
+    } else {
+      payload = {};
+      if (collectedAmount !== null && collectedAmount !== undefined) {
+        payload.collected_amount = collectedAmount;
+      }
+      if (pod?.recipientName) payload.recipient_name = pod.recipientName;
+      if (pod?.deliveryNotes) payload.delivery_notes = pod.deliveryNotes;
+    }
+
     const response = await apiClient.post(`/rider/deliveries/${encodeURIComponent(orderId)}/delivered`, payload);
     return response?.data?.delivery ?? null;
+  },
+
+  async markFailed(orderId, failureReason, deliveryNotes = '') {
+    const response = await apiClient.post(`/rider/deliveries/${encodeURIComponent(orderId)}/fail`, {
+      failure_reason: failureReason,
+      delivery_notes: deliveryNotes || undefined,
+    });
+    return response?.data?.delivery ?? null;
+  },
+
+  async getFinanceSummary({ page = 1, perPage = 20, remittanceStatus = '' } = {}) {
+    const params = new URLSearchParams();
+    if (page) params.set('page', String(page));
+    if (perPage) params.set('per_page', String(perPage));
+    if (remittanceStatus && remittanceStatus !== 'all') params.set('remittance_status', remittanceStatus);
+    const qs = params.toString();
+    const response = await apiClient.get(`/rider/finance${qs ? `?${qs}` : ''}`);
+    return response?.data ?? { summary: {}, deliveries: [], pagination: { current_page: 1, last_page: 1, per_page: perPage, total: 0 } };
+  },
+
+  async submitCodRemittance(deliveryIds, notes = '') {
+    const response = await apiClient.post('/rider/finance/remit', {
+      delivery_ids: deliveryIds,
+      notes: notes || undefined,
+    });
+    return response?.data ?? null;
   },
 
   async getChangeRequests() {
