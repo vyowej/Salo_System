@@ -30,6 +30,14 @@ class RiderDeliveryController extends Controller
         );
     }
 
+    public function history(Request $request): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->riderDeliveryService->listHistory($request->user(), $request->query()),
+            message: 'Delivery history retrieved.',
+        );
+    }
+
     public function accept(Request $request, int $orderId): JsonResponse
     {
         $delivery = $this->riderDeliveryService->acceptDelivery($request->user(), $orderId, $request);

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\AddressService;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
@@ -97,9 +98,16 @@ class RiderApplicationService
             ->first();
 
         if ($existingActive) {
-            throw ValidationException::withMessages([
-                'application' => ["You already have an active or approved rider application ({$existingActive->reference_number})."],
-            ]);
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'code' => 'ACTIVE_APPLICATION_EXISTS',
+                'message' => "You already have an active or approved rider application ({$existingActive->reference_number}).",
+                'data' => [
+                    'rider_application_id' => (int) $existingActive->rider_application_id,
+                    'application_id' => (int) $existingActive->rider_application_id,
+                    'application_status' => (string) $existingActive->application_status,
+                ],
+            ], 409));
         }
 
         $contactEmail = strtolower(trim((string) $validated['contact_email']));

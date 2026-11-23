@@ -54,6 +54,17 @@ export const riderService = {
     return response?.data?.delivery ?? null;
   },
 
+  async getDeliveryHistory({ page = 1, perPage = 20, status = 'all', search = '' } = {}) {
+    const params = new URLSearchParams();
+    if (page) params.set('page', String(page));
+    if (perPage) params.set('per_page', String(perPage));
+    if (status && status !== 'all') params.set('status', status);
+    if (search && search.trim()) params.set('search', search.trim());
+    const qs = params.toString();
+    const response = await apiClient.get(`/rider/deliveries/history${qs ? `?${qs}` : ''}`);
+    return response?.data ?? { deliveries: [], pagination: { current_page: 1, last_page: 1, per_page: perPage, total: 0 } };
+  },
+
   async acceptDelivery(orderId) {
     const response = await apiClient.post(`/rider/deliveries/${encodeURIComponent(orderId)}/accept`, {});
     return response?.data?.delivery ?? null;

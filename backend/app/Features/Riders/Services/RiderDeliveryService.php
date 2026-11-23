@@ -175,6 +175,107 @@ class RiderDeliveryService
     }
 
     /**
+     * List past (delivered, failed, cancelled) deliveries for the active rider.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function listHistory(User $user, array $filters = []): array
+    {
+        $rider = $this->requireActiveRider($user);
+        $riderId = (int) $rider->rider_id;
+
+        $perPage = max(1, min(50, (int) ($filters['per_page'] ?? 20)));
+        $page = max(1, (int) ($filters['page'] ?? 1));
+        $status = trim((string) ($filters['status'] ?? ''));
+        $search = trim((string) ($filters['search'] ?? ''));
+
+        $baseQuery = DB::table('deliveries as d')
+            ->join('orders as o', 'o.order_id', '=', 'd.order_id')
+            ->join('restaurants as r', 'r.restaurant_id', '=', 'o.restaurant_id')
+            ->where('d.rider_id', $riderId)
+            ->whereIn('d.delivery_status', ['delivered', 'failed', 'cancelled']);
+
+        if ($status !== '' && $status !== 'all' && in_array($status, ['delivered', 'failed', 'cancelled'], true)) {
+            $baseQuery->where('d.delivery_status', $status);
+        }
+
+        if ($search !== '') {
+            $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $search).'%';
+            $baseQuery->where(function ($q) use ($like): void {
+                $q->where('o.order_reference', 'like', $like)
+                    ->orWhere('r.restaurant_name', 'like', $like);
+            });
+        }
+
+        $total = (int) (clone $baseQuery)->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+
+        $rows = $baseQuery
+            ->select([
+                'd.delivery_id',
+                'd.order_id',
+                'o.order_reference',
+                'o.order_status',
+                'd.delivery_status',
+                'r.restaurant_name',
+                'r.branch_name',
+                'o.delivery_address_text',
+                'o.total_amount',
+                'o.delivery_fee',
+                'd.rider_compensation',
+                'd.cod_amount_collected',
+                'd.cod_remittance_status',
+                'd.proof_photo',
+                'd.recipient_name',
+                'd.failure_reason',
+                'd.delivered_at',
+                'd.failed_at',
+                'o.placed_at',
+            ])
+            ->orderByDesc('d.updated_at')
+            ->orderByDesc('d.delivery_id')
+            ->forPage($page, $perPage)
+            ->get();
+
+        $deliveries = $rows->map(static function (object $row): array {
+            $earning = (float) $row->rider_compensation > 0
+                ? (float) $row->rider_compensation
+                : (float) $row->delivery_fee;
+
+            return [
+                'delivery_id' => (int) $row->delivery_id,
+                'order_id' => (int) $row->order_id,
+                'order_reference' => $row->order_reference,
+                'order_status' => $row->order_status,
+                'delivery_status' => $row->delivery_status,
+                'restaurant_name' => RestaurantBranchService::formatDisplayName((string) $row->restaurant_name, $row->branch_name ?? null),
+                'dropoff_address_text' => $row->delivery_address_text,
+                'order_total' => (float) $row->total_amount,
+                'rider_earning' => $row->delivery_status === 'delivered' ? round($earning, 2) : 0.0,
+                'cod_amount_collected' => $row->cod_amount_collected !== null ? (float) $row->cod_amount_collected : 0.0,
+                'cod_remittance_status' => (string) $row->cod_remittance_status,
+                'has_proof_photo' => ! empty($row->proof_photo),
+                'recipient_name' => $row->recipient_name,
+                'failure_reason' => $row->failure_reason,
+                'delivered_at' => OrderTimestampFormatter::toManilaIso($row->delivered_at),
+                'failed_at' => OrderTimestampFormatter::toManilaIso($row->failed_at),
+                'placed_at' => OrderTimestampFormatter::toManilaIso($row->placed_at),
+            ];
+        })->all();
+
+        return [
+            'deliveries' => $deliveries,
+            'pagination' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => $lastPage,
+            ],
+        ];
+    }
+
+    /**
      * Accept a ready, unassigned delivery order (first rider wins).
      *
      * @return array<string, mixed>

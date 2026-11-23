@@ -165,5 +165,38 @@ class RiderApplicationWorkflowTest extends TestCase
             'action' => 'rider_application_approved',
             'actor_user_id' => $admin->user_id,
         ]);
+
+        // 6. Duplicate submission returns 409 ACTIVE_APPLICATION_EXISTS (parity with restaurant applications)
+        $this->actingAs($applicant)->post('/api/rider/applications', [
+            'legal_first_name' => 'Carlos',
+            'legal_last_name' => 'Reyes',
+            'date_of_birth' => '1995-05-10',
+            'gender' => 'male',
+            'contact_phone' => '09171234567',
+            'contact_email' => 'carlos@example.com',
+            'province' => 'Metro Manila',
+            'city' => 'Quezon City',
+            'barangay' => 'South Triangle',
+            'street' => '123 Mother Ignacia',
+            'postal_code' => '1103',
+            'gov_id_type' => 'philid',
+            'gov_id_number' => '1234-5678-9012',
+            'gov_id_is_permanent' => true,
+            'vehicle_type' => 'walking',
+            'emergency_contact_name' => 'Maria Reyes',
+            'emergency_contact_relationship' => 'parent',
+            'emergency_contact_phone' => '09181234567',
+            'base_city' => 'Quezon City',
+            'payout_provider' => 'GCash',
+            'payout_account_type' => 'e_wallet',
+            'payout_account_holder_name' => 'Carlos Reyes',
+            'payout_account_number' => '09171234567',
+            'terms_accepted' => true,
+            'documents' => [
+                'government_id_front' => UploadedFile::fake()->image('id_front.jpg'),
+            ],
+        ])->assertStatus(409)
+            ->assertJsonPath('code', 'ACTIVE_APPLICATION_EXISTS')
+            ->assertJsonPath('data.rider_application_id', $appId);
     }
 }

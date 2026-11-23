@@ -171,6 +171,12 @@ class PodFailedDeliveryAndCodRemittanceTest extends TestCase
 
         $this->actingAs($riderUser)->get("/api/rider/deliveries/{$orderId}/proof")->assertOk();
 
+        $this->actingAs($riderUser)->get('/api/rider/deliveries/history?status=delivered')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 1)
+            ->assertJsonPath('data.deliveries.0.order_id', $orderId)
+            ->assertJsonPath('data.deliveries.0.has_proof_photo', true);
+
         // Rider finance summary & COD remittance submission
         $this->actingAs($riderUser)->getJson('/api/rider/finance')
             ->assertOk()
