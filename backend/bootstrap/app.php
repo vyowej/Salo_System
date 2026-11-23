@@ -37,6 +37,10 @@ return Application::configure(basePath: dirname(__DIR__))
             EnsureAccountIsActive::class,
         ]);
 
+        $middleware->preventRequestForgery(except: [
+            'api/payments/xendit/webhook',
+        ]);
+
         $middleware->alias([
             'role' => RequireRole::class,
         ]);
