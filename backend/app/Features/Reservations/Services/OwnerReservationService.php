@@ -3,6 +3,8 @@
 namespace App\Features\Reservations\Services;
 
 use App\Features\Notifications\Services\NotificationService;
+use App\Features\Payments\Services\PaymentService;
+use App\Features\Payments\Services\RefundService;
 use App\Features\Reservations\Support\ReservationAttention;
 use App\Features\Reservations\Support\ReservationBookingException;
 use App\Features\Reservations\Support\ReservationFormatter;
@@ -31,6 +33,8 @@ class OwnerReservationService
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
         private readonly ReservationExpiryService $expiryService,
+        private readonly PaymentService $paymentService,
+        private readonly RefundService $refundService,
     ) {}
 
     /**
@@ -483,6 +487,12 @@ class OwnerReservationService
                 ];
             },
             now: $now,
+            afterUpdate: function (object $row, User $actor, Request $req) use ($reservationId, $cleanReason): void {
+                $this->paymentService->voidPendingReservationPayments($reservationId, $cleanReason, (int) $actor->user_id, $req);
+                if (((string) ($row->deposit_status ?? 'none')) === 'paid') {
+                    $this->refundService->refundReservationDepositIfPaid($reservationId, (int) $actor->user_id, $cleanReason, $req);
+                }
+            },
         );
     }
 
@@ -953,7 +963,7 @@ class OwnerReservationService
             reservationId: $reservationId,
             action: 'cancel',
             toStatus: ReservationStatus::CANCELLED,
-            extraFields: static function (object $row, CarbonImmutable $manilaNow) use ($cleanReason, $refundDeposit): array {
+            extraFields: static function (object $row, CarbonImmutable $manilaNow) use ($cleanReason, $refundDeposit, $reservationId): array {
                 $fields = [
                     'cancelled_by' => 'restaurant',
                     'cancelled_at' => $manilaNow->format('Y-m-d H:i:s'),
@@ -961,7 +971,17 @@ class OwnerReservationService
                     'cancellation_fee' => '0.00',
                 ];
 
-                if ($refundDeposit && ((string) ($row->deposit_status ?? 'none')) === 'paid') {
+                $hasOnlinePaidDeposit = DB::table('payment_allocations as pa')
+                    ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
+                    ->where('pa.reservation_id', $reservationId)
+                    ->where('pa.allocation_type', 'reservation_payment')
+                    ->where('p.payment_type', 'payment')
+                    ->where('p.payment_method', '!=', 'cash')
+                    ->where('p.payment_status', 'paid')
+                    ->exists();
+
+                // Online refunds only mark deposit_status = 'refunded' once provider confirms via RefundService::confirmRefundSucceeded().
+                if ($refundDeposit && ! $hasOnlinePaidDeposit && ((string) ($row->deposit_status ?? 'none')) === 'paid') {
                     $fields['deposit_status'] = 'refunded';
                 }
 
@@ -973,8 +993,10 @@ class OwnerReservationService
             checks: static function (): void {},
             notificationFactory: static function (object $row, object $rest, CarbonImmutable $start) use ($cleanReason, $refundDeposit): array {
                 $ref = $row->reservation_reference ?: ('#' . $row->reservation_id);
-                $refundNote = ($refundDeposit && ((string) ($row->deposit_status ?? 'none')) === 'paid')
-                    ? ' Your deposit of ₱'.number_format((float) ($row->deposit_amount ?? 0), 2).' was marked as refunded.'
+                $refundNote = ((string) ($row->deposit_status ?? 'none')) === 'paid'
+                    ? ($refundDeposit
+                        ? ' A full refund of your ₱'.number_format((float) ($row->deposit_amount ?? 0), 2).' deposit has been initiated.'
+                        : ' A full refund of your ₱'.number_format((float) ($row->deposit_amount ?? 0), 2).' deposit has been requested.')
                     : '';
 
                 return [
@@ -984,6 +1006,12 @@ class OwnerReservationService
                 ];
             },
             now: $now,
+            afterUpdate: function (object $row, User $actor, Request $req) use ($reservationId, $cleanReason): void {
+                $this->paymentService->voidPendingReservationPayments($reservationId, $cleanReason, (int) $actor->user_id, $req);
+                if (((string) ($row->deposit_status ?? 'none')) === 'paid') {
+                    $this->refundService->refundReservationDepositIfPaid($reservationId, (int) $actor->user_id, $cleanReason, $req);
+                }
+            },
         );
     }
 
@@ -1192,6 +1220,7 @@ class OwnerReservationService
         callable $checks,
         ?callable $notificationFactory = null,
         ?CarbonInterface $now = null,
+        ?callable $afterUpdate = null,
     ): array {
         $targetRestaurantId = (int) $restaurant->restaurant_id;
         $manilaNow = $this->toManilaImmutable($now);
@@ -1215,6 +1244,7 @@ class OwnerReservationService
             $checks,
             $notificationFactory,
             $manilaNow,
+            $afterUpdate,
         ): array {
             $row = DB::table('reservations')
                 ->where('reservation_id', $reservationId)
@@ -1258,6 +1288,10 @@ class OwnerReservationService
                 ->where('reservation_id', $reservationId)
                 ->where('restaurant_id', $targetRestaurantId)
                 ->update($updatePayload);
+
+            if ($afterUpdate !== null) {
+                $afterUpdate($row, $actor, $request);
+            }
 
             $resolvedNote = is_callable($note) ? $note($row) : $note;
             $startCarbon = CarbonImmutable::parse((string) $row->reservation_start, self::TIMEZONE);

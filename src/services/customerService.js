@@ -163,6 +163,9 @@ export function normalizeReservation(raw) {
     noShowMarkedAt: raw.no_show_marked_at ?? raw.noShowMarkedAt ?? null,
     createdAt: raw.created_at ?? raw.createdAt ?? null,
     updatedAt: raw.updated_at ?? raw.updatedAt ?? null,
+    latestPayment: raw.latest_payment ?? raw.latestPayment ?? null,
+    latestRefund: raw.latest_refund ?? raw.latestRefund ?? null,
+    depositUnderReview: Boolean(raw.deposit_under_review ?? raw.depositUnderReview ?? false),
     history,
     statusHistory: history,
   };
@@ -416,9 +419,50 @@ export const customerService = {
     return normalizeReservation(res?.data?.reservation ?? null);
   },
 
-  // Favorites (Category B: no customer favorites backend endpoint yet)
+  async initiateReservationDeposit(id, { paymentMethod, idempotencyKey }) {
+    const res = await apiClient.post(`/customer/reservations/${encodeURIComponent(id)}/deposit/initiate`, {
+      payment_method: paymentMethod,
+      idempotency_key: idempotencyKey,
+    });
+    return res?.data?.payment ?? null;
+  },
+
+  // Favorites (Backend-connected via /api/customer/favorites*)
   getFavoriteRestaurants() {
     return [];
+  },
+
+  async fetchFavorites() {
+    const res = await apiClient.get('/customer/favorites');
+    const raw = Array.isArray(res?.data?.favorites) ? res.data.favorites : [];
+    const favorites = raw.map((row) => ({
+      id: String(row.restaurant_id),
+      restaurantId: Number(row.restaurant_id),
+      name: row.display_name || row.restaurant_name || 'Restaurant',
+      cuisine: row.cuisine_type || 'Filipino',
+      coverPhoto: row.cover_url || null,
+      logoPhoto: row.logo_url || null,
+      rating: row.average_rating != null ? Number(row.average_rating).toFixed(1) : null,
+      reviewCount: Number(row.review_count ?? 0),
+      isAvailable: Boolean(row.is_available),
+      restaurantStatus: row.restaurant_status || 'active',
+      cityName: row.city_name || '',
+      barangayName: row.barangay_name || '',
+    }));
+    const favoriteIds = Array.isArray(res?.data?.favorite_ids)
+      ? res.data.favorite_ids.map((id) => String(id))
+      : favorites.map((f) => f.id);
+    return { favorites, favoriteIds };
+  },
+
+  async addFavorite(restaurantId) {
+    const res = await apiClient.put(`/customer/favorites/${encodeURIComponent(restaurantId)}`, {});
+    return res?.data ?? { restaurant_id: Number(restaurantId), favorited: true };
+  },
+
+  async removeFavorite(restaurantId) {
+    const res = await apiClient.delete(`/customer/favorites/${encodeURIComponent(restaurantId)}`);
+    return res?.data ?? { restaurant_id: Number(restaurantId), favorited: false };
   },
 
   // Notifications (Category B: no customer notifications backend endpoint yet)

@@ -59,6 +59,9 @@ export default function ReservationsPage() {
 
   const [detailsRes, setDetailsRes] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [depositChannel, setDepositChannel] = useState('gcash');
+  const [depositBusy, setDepositBusy] = useState(false);
+  const [depositError, setDepositError] = useState('');
   const [copiedId, setCopiedId] = useState(null);
 
   const todayKey = localDateKey(new Date());
@@ -232,6 +235,7 @@ export default function ReservationsPage() {
 
   const handleOpenDetails = async (res) => {
     setDetailsRes(res);
+    setDepositError('');
     const numericId = res.reservationId || res.id;
     if (!numericId) return;
 
@@ -245,6 +249,64 @@ export default function ReservationsPage() {
       // Keep list item details if detail fetch fails
     } finally {
       setDetailsLoading(false);
+    }
+  };
+
+  const refreshDetailsFromServer = async (numericId) => {
+    const [full] = await Promise.all([
+      customerService.getReservation(numericId),
+      loadReservations(),
+    ]);
+    if (full) setDetailsRes(full);
+  };
+
+  const handleInitiateDeposit = async () => {
+    if (!detailsRes || depositBusy) return;
+    const numericId = detailsRes.reservationId || detailsRes.id;
+    setDepositBusy(true);
+    setDepositError('');
+    try {
+      const idemKey = `resdep-${numericId}-${Date.now()}`;
+      await customerService.initiateReservationDeposit(numericId, {
+        paymentMethod: depositChannel,
+        idempotencyKey: idemKey,
+      });
+      await refreshDetailsFromServer(numericId);
+    } catch (err) {
+      setDepositError(err?.message || 'Unable to initiate deposit payment.');
+    } finally {
+      setDepositBusy(false);
+    }
+  };
+
+  const handleConfirmSandboxDeposit = async (paymentId) => {
+    if (!detailsRes || depositBusy) return;
+    const numericId = detailsRes.reservationId || detailsRes.id;
+    setDepositBusy(true);
+    setDepositError('');
+    try {
+      await customerService.confirmPayment(paymentId);
+      await refreshDetailsFromServer(numericId);
+      setSuccessBanner('Deposit payment confirmed and reservation is now confirmed.');
+    } catch (err) {
+      setDepositError(err?.message || 'Unable to confirm deposit payment.');
+    } finally {
+      setDepositBusy(false);
+    }
+  };
+
+  const handleFailSandboxDeposit = async (paymentId) => {
+    if (!detailsRes || depositBusy) return;
+    const numericId = detailsRes.reservationId || detailsRes.id;
+    setDepositBusy(true);
+    setDepositError('');
+    try {
+      await customerService.failPayment(paymentId, 'Customer simulated payment failure.');
+      await refreshDetailsFromServer(numericId);
+    } catch (err) {
+      setDepositError(err?.message || 'Unable to update payment status.');
+    } finally {
+      setDepositBusy(false);
     }
   };
 
@@ -961,7 +1023,7 @@ export default function ReservationsPage() {
 
             {selectedRes?.depositStatus === 'paid' && (
               <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', padding: '8px 10px', borderRadius: 6, background: 'var(--bg-secondary, #f8fafc)' }}>
-                Refunds are decided by the restaurant.
+                If you cancel after paying a deposit, your deposit will be held pending admin review.
               </p>
             )}
 
@@ -1066,6 +1128,110 @@ export default function ReservationsPage() {
                   </p>
                 )}
               </div>
+
+              {/* Deposit Payment & Refund Status */}
+              {Number(detailsRes.depositAmount || 0) > 0 && (
+                <div style={{ padding: 12, border: '1px solid var(--border-primary)', borderRadius: 10, fontSize: 13 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                      Reservation Deposit · ₱{Number(detailsRes.depositAmount).toFixed(2)}
+                    </span>
+                    <Badge
+                      variant={
+                        detailsRes.depositStatus === 'paid'
+                          ? 'success'
+                          : detailsRes.depositStatus === 'refunded'
+                            ? 'info'
+                            : 'warning'
+                      }
+                      size="sm"
+                    >
+                      {detailsRes.paymentStatus}
+                    </Badge>
+                  </div>
+
+                  {depositError && (
+                    <p role="alert" style={{ margin: '8px 0 0', color: '#b91c1c', fontSize: 12, fontWeight: 600 }}>
+                      {depositError}
+                    </p>
+                  )}
+
+                  {detailsRes.depositUnderReview && (
+                    <p role="status" style={{ margin: '8px 0 0', padding: '8px 10px', borderRadius: 8, background: '#fffbeb', color: '#92400e', fontSize: 12, fontWeight: 600 }}>
+                      Your deposit is currently under admin review.
+                    </p>
+                  )}
+
+                  {detailsRes.latestRefund && (
+                    <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                      Refund ({detailsRes.latestRefund.payment_reference}): <strong>{detailsRes.latestRefund.refund_status}</strong> · ₱{Number(detailsRes.latestRefund.amount).toFixed(2)}
+                    </p>
+                  )}
+
+                  {detailsRes.rawStatus === 'awaiting_payment' && detailsRes.depositStatus === 'pending' && (
+                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {(!detailsRes.latestPayment || ['failed', 'expired', 'voided', 'cancelled'].includes(detailsRes.latestPayment.payment_status)) ? (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <select
+                            value={depositChannel}
+                            onChange={(e) => setDepositChannel(e.target.value)}
+                            disabled={depositBusy}
+                            aria-label="Deposit payment method"
+                            style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', fontSize: 12 }}
+                          >
+                            <option value="gcash">GCash</option>
+                            <option value="maya">Maya</option>
+                            <option value="card">Card</option>
+                          </select>
+                          <Button variant="primary" size="sm" onClick={handleInitiateDeposit} disabled={depositBusy}>
+                            {depositBusy ? 'Initiating...' : `Pay Deposit (₱${Number(detailsRes.depositAmount).toFixed(2)})`}
+                          </Button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                          {detailsRes.latestPayment.checkout_url ? (
+                            <a
+                              href={detailsRes.latestPayment.checkout_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}
+                            >
+                              Open Payment Page ↗
+                            </a>
+                          ) : (
+                            <>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleConfirmSandboxDeposit(detailsRes.latestPayment.payment_id)}
+                                disabled={depositBusy}
+                              >
+                                {depositBusy ? 'Processing...' : `Complete Sandbox Payment (₱${Number(detailsRes.depositAmount).toFixed(2)})`}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleFailSandboxDeposit(detailsRes.latestPayment.payment_id)}
+                                disabled={depositBusy}
+                              >
+                                Simulate Failure
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => refreshDetailsFromServer(detailsRes.reservationId || detailsRes.id)}
+                            disabled={depositBusy}
+                          >
+                            Refresh Status
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Special Requests */}
               {detailsRes.specialRequests && (

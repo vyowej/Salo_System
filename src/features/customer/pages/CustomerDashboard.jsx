@@ -205,7 +205,9 @@ export default function CustomerDashboard() {
   }, [loadRestaurants]);
 
   useEffect(() => {
-    setFavoriteIds(customerService.getFavoriteRestaurants());
+    customerService.fetchFavorites()
+      .then((res) => setFavoriteIds(res.favoriteIds))
+      .catch(() => setFavoriteIds([]));
     setActiveOrders(customerService.getOrders());
     Promise.resolve(customerService.getReservations({ tab: 'upcoming', perPage: 5 }))
       .then((res) => {
@@ -219,7 +221,11 @@ export default function CustomerDashboard() {
   }, []);
 
   useEffect(() => {
-    const syncFavorites = () => setFavoriteIds(customerService.getFavoriteRestaurants());
+    const syncFavorites = () => {
+      customerService.fetchFavorites()
+        .then((res) => setFavoriteIds(res.favoriteIds))
+        .catch(() => {});
+    };
     window.addEventListener('salo:favoritesUpdated', syncFavorites);
     return () => window.removeEventListener('salo:favoritesUpdated', syncFavorites);
   }, []);
@@ -232,8 +238,21 @@ export default function CustomerDashboard() {
 
   const filteredRestaurants = restaurants;
 
-  const handleToggleFavorite = (_restaurantId, event) => {
+  const handleToggleFavorite = async (restaurantId, event) => {
     if (event) event.stopPropagation();
+    const key = String(restaurantId);
+    const currentlyFav = favoriteIds.includes(key);
+    setFavoriteIds((prev) => (currentlyFav ? prev.filter((id) => id !== key) : [...prev, key]));
+    try {
+      if (currentlyFav) {
+        await customerService.removeFavorite(restaurantId);
+      } else {
+        await customerService.addFavorite(restaurantId);
+      }
+      window.dispatchEvent(new Event('salo:favoritesUpdated'));
+    } catch {
+      setFavoriteIds((prev) => (currentlyFav ? [...prev, key] : prev.filter((id) => id !== key)));
+    }
   };
 
   const isDefaultExploreView = activeCategory === 'All' && !search.trim();

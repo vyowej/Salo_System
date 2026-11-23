@@ -9,8 +9,11 @@ use App\Features\Payments\Exceptions\XenditTimeoutException;
 use App\Features\Payments\Providers\PaymentProviderInterface;
 use App\Features\Payments\Providers\PaymentProviderResolver;
 use App\Features\Payments\Support\PaymentStatusMapper;
+use App\Features\Reservations\Support\ReservationStatus;
+use App\Features\Reservations\Support\ReservationStatusHistoryRecorder;
 use App\Models\User;
 use App\Support\AuditLogService;
+use App\Support\Money;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -30,6 +33,7 @@ class PaymentService
         private readonly NotificationService $notificationService,
         private readonly LedgerService $ledgerService,
         private readonly PaymentProviderResolver $providerResolver,
+        private readonly ReservationStatusHistoryRecorder $reservationHistoryRecorder,
     ) {}
 
     public function activeProvider(): PaymentProviderInterface
@@ -84,6 +88,179 @@ class PaymentService
         }
     }
 
+    public function initiateReservationDepositPayment(
+        User $user,
+        int $reservationId,
+        string $channel,
+        string $idempotencyKey,
+        Request $request,
+    ): array {
+        $cleanChannel = strtolower(trim($channel));
+        if (! in_array($cleanChannel, ['gcash', 'maya', 'card'], true)) {
+            throw ValidationException::withMessages([
+                'payment_method' => ['Payment method must be one of: gcash, maya, card.'],
+            ]);
+        }
+
+        $cleanIdem = trim($idempotencyKey);
+        if (mb_strlen($cleanIdem) < 8 || mb_strlen($cleanIdem) > 64) {
+            throw ValidationException::withMessages([
+                'idempotency_key' => ['Idempotency key must be between 8 and 64 characters.'],
+            ]);
+        }
+
+        $paymentId = DB::transaction(function () use ($user, $reservationId, $cleanChannel, $cleanIdem, $request): int {
+            $reservation = DB::table('reservations')
+                ->where('reservation_id', $reservationId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $reservation || (int) $reservation->customer_id !== (int) $user->user_id) {
+                throw new NotFoundHttpException('Reservation not found.');
+            }
+
+            if ((string) $reservation->reservation_status !== ReservationStatus::AWAITING_PAYMENT) {
+                throw new ConflictHttpException(
+                    "Deposit payment is only allowed after restaurant approval while awaiting payment (current status: {$reservation->reservation_status})."
+                );
+            }
+
+            $depositCents = Money::parseStrictCents((string) ($reservation->deposit_amount ?? '0.00'));
+            if ($depositCents <= 0 || (string) $reservation->deposit_status !== 'pending') {
+                throw new ConflictHttpException('This reservation does not have a pending deposit.');
+            }
+
+            $existingActiveOrPaid = DB::table('payment_allocations as pa')
+                ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
+                ->where('pa.reservation_id', $reservationId)
+                ->where('pa.allocation_type', 'reservation_payment')
+                ->where('p.payment_type', 'payment')
+                ->whereIn('p.payment_status', ['pending', 'requires_customer_action', 'processing', 'authorized', 'paid'])
+                ->lockForUpdate()
+                ->first(['p.payment_id', 'p.payment_status']);
+
+            if ($existingActiveOrPaid) {
+                throw new ConflictHttpException('A deposit payment is already pending or completed for this reservation.');
+            }
+
+            $now = now();
+            $amountStr = Money::fromCents($depositCents);
+            $driver = strtolower(trim((string) config('salo.payments.driver', 'sandbox')));
+            $reference = 'RESPAY-'.now()->format('Ymd').'-'.strtoupper(Str::random(8));
+
+            $paymentRow = [
+                'payment_reference' => $reference,
+                'checkout_id' => null,
+                'customer_id' => (int) $user->user_id,
+                'payment_method' => self::mapChannelToDbMethod($cleanChannel),
+                'payment_type' => 'payment',
+                'payment_status' => 'pending',
+                'amount' => $amountStr,
+                'provider_response' => json_encode([
+                    'channel' => $cleanChannel,
+                    'provider' => $driver,
+                    'reservation_id' => $reservationId,
+                    'idempotency_key' => $cleanIdem,
+                ], JSON_UNESCAPED_SLASHES),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if (Schema::hasColumn('payments', 'provider_name')) {
+                $paymentRow['provider_name'] = $driver;
+            }
+            if (Schema::hasColumn('payments', 'payment_channel')) {
+                $paymentRow['payment_channel'] = $cleanChannel;
+            }
+
+            $newPaymentId = (int) DB::table('payments')->insertGetId($paymentRow);
+
+            DB::table('payment_allocations')->insert([
+                'payment_id' => $newPaymentId,
+                'order_id' => null,
+                'reservation_id' => $reservationId,
+                'allocation_type' => 'reservation_payment',
+                'amount' => $amountStr,
+                'created_at' => $now,
+            ]);
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: 'reservation_deposit_payment_created',
+                entityType: 'payments',
+                entityId: $newPaymentId,
+                oldValues: null,
+                newValues: [
+                    'reservation_id' => $reservationId,
+                    'amount' => $amountStr,
+                    'channel' => $cleanChannel,
+                    'idempotency_key' => $cleanIdem,
+                ],
+                request: $request,
+            );
+
+            return $newPaymentId;
+        });
+
+        $driver = strtolower(trim((string) config('salo.payments.driver', 'sandbox')));
+        if ($driver === 'xendit') {
+            $this->initiateProviderPayment($paymentId, [
+                'payer_email' => $user->email,
+            ], $user);
+        }
+
+        return $this->getCustomerPayment($user, $paymentId);
+    }
+
+    public function voidPendingReservationPayments(
+        int $reservationId,
+        string $reason,
+        int $actorUserId,
+        ?Request $request = null,
+    ): int {
+        $pendingPayments = DB::table('payment_allocations as pa')
+            ->join('payments as p', 'p.payment_id', '=', 'pa.payment_id')
+            ->where('pa.reservation_id', $reservationId)
+            ->where('pa.allocation_type', 'reservation_payment')
+            ->where('p.payment_type', 'payment')
+            ->whereIn('p.payment_status', ['pending', 'requires_customer_action', 'processing', 'authorized'])
+            ->lockForUpdate()
+            ->select(['p.payment_id', 'p.payment_status', 'p.provider_response'])
+            ->get();
+
+        $voidedCount = 0;
+        $now = now();
+
+        foreach ($pendingPayments as $payment) {
+            $meta = $this->decodeMeta($payment->provider_response ?? null);
+            $meta['voided_at'] = $now->toIso8601String();
+            $meta['void_reason'] = $reason;
+
+            DB::table('payments')
+                ->where('payment_id', $payment->payment_id)
+                ->update([
+                    'payment_status' => 'voided',
+                    'provider_response' => json_encode($meta, JSON_UNESCAPED_SLASHES),
+                    'updated_at' => $now,
+                ]);
+
+            $this->auditLogService->record(
+                actorUserId: $actorUserId,
+                action: 'reservation_pending_payment_voided',
+                entityType: 'payments',
+                entityId: (int) $payment->payment_id,
+                oldValues: ['payment_status' => $payment->payment_status],
+                newValues: ['payment_status' => 'voided', 'reservation_id' => $reservationId],
+                reason: $reason,
+                request: $request,
+            );
+
+            $voidedCount++;
+        }
+
+        return $voidedCount;
+    }
+
     public function getCustomerPayment(User $user, int $paymentId): array
     {
         $payment = DB::table('payments')
@@ -130,7 +307,10 @@ class PaymentService
                 return $this->formatPayment($payment);
             }
 
-            if (! in_array($payment->payment_status, ['pending', 'requires_customer_action', 'processing', 'authorized'], true)) {
+            $wasVoided = $payment->payment_status === 'voided';
+            $allowLateWebhookOnVoided = $wasVoided && $customer === null && $providerName === 'xendit';
+
+            if (! $allowLateWebhookOnVoided && ! in_array($payment->payment_status, ['pending', 'requires_customer_action', 'processing', 'authorized'], true)) {
                 throw new ConflictHttpException("Payment cannot be confirmed from status '{$payment->payment_status}'.");
             }
 
@@ -188,6 +368,12 @@ class PaymentService
                 'created_at' => $now,
             ]);
 
+            $reservationAllocation = DB::table('payment_allocations')
+                ->where('payment_id', $paymentId)
+                ->where('allocation_type', 'reservation_payment')
+                ->whereNotNull('reservation_id')
+                ->first(['reservation_id']);
+
             if ($payment->checkout_id !== null) {
                 $this->ledgerService->postOnlinePaymentConfirmed(
                     paymentId: $paymentId,
@@ -196,6 +382,27 @@ class PaymentService
                     amount: (float) $payment->amount,
                     providerReference: $resolvedRef,
                     postedBy: $customer?->user_id ? (int) $customer->user_id : null,
+                );
+            } elseif ($reservationAllocation) {
+                $this->ledgerService->postOnlinePaymentConfirmed(
+                    paymentId: $paymentId,
+                    checkoutId: null,
+                    customerUserId: (int) $payment->customer_id,
+                    amount: (float) $payment->amount,
+                    providerReference: $resolvedRef,
+                    postedBy: $customer?->user_id ? (int) $customer->user_id : null,
+                    reservationId: (int) $reservationAllocation->reservation_id,
+                );
+            }
+
+            if ($reservationAllocation) {
+                $this->applyReservationPaymentConfirmation(
+                    reservationId: (int) $reservationAllocation->reservation_id,
+                    paymentId: $paymentId,
+                    paymentAmount: (float) $payment->amount,
+                    wasVoided: $wasVoided,
+                    actorUserId: $customer?->user_id ? (int) $customer->user_id : (int) $payment->customer_id,
+                    request: $request,
                 );
             }
 
@@ -714,6 +921,138 @@ class PaymentService
                 relatedEntityId: (int) $order->order_id,
             );
         }
+    }
+
+    private function applyReservationPaymentConfirmation(
+        int $reservationId,
+        int $paymentId,
+        float $paymentAmount,
+        bool $wasVoided,
+        int $actorUserId,
+        ?Request $request = null,
+    ): void {
+        $reservation = DB::table('reservations')
+            ->where('reservation_id', $reservationId)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $reservation) {
+            return;
+        }
+
+        $manilaNow = now('Asia/Manila');
+        $nowStr = $manilaNow->format('Y-m-d H:i:s');
+        $currentStatus = (string) $reservation->reservation_status;
+        $ref = $reservation->reservation_reference ?: ('#' . $reservationId);
+
+        if ($currentStatus === ReservationStatus::AWAITING_PAYMENT && ! $wasVoided) {
+            DB::table('reservations')
+                ->where('reservation_id', $reservationId)
+                ->update([
+                    'deposit_status' => 'paid',
+                    'reservation_status' => ReservationStatus::CONFIRMED,
+                    'confirmed_at' => $nowStr,
+                    'updated_at' => $nowStr,
+                ]);
+
+            $this->reservationHistoryRecorder->record(
+                reservationId: $reservationId,
+                fromStatus: $currentStatus,
+                toStatus: ReservationStatus::CONFIRMED,
+                changedByUserId: $actorUserId,
+                changedByRole: 'system',
+                note: "Online deposit payment (#{$paymentId}) confirmed.",
+                createdAt: $manilaNow,
+            );
+
+            $this->auditLogService->record(
+                actorUserId: $actorUserId,
+                action: 'reservation_deposit_confirmed',
+                entityType: 'reservations',
+                entityId: $reservationId,
+                oldValues: [
+                    'reservation_status' => $currentStatus,
+                    'deposit_status' => $reservation->deposit_status,
+                ],
+                newValues: [
+                    'reservation_status' => ReservationStatus::CONFIRMED,
+                    'deposit_status' => 'paid',
+                    'payment_id' => $paymentId,
+                ],
+                request: $request,
+            );
+
+            $this->notificationService->notifyUser(
+                userId: (int) $reservation->customer_id,
+                workspace: 'customer',
+                type: 'reservation_confirmed',
+                title: "Reservation Confirmed ({$ref})",
+                body: 'Your deposit of PHP '.number_format($paymentAmount, 2).' has been confirmed and your table reservation is now confirmed.',
+                relatedEntityType: 'reservation',
+                relatedEntityId: $reservationId,
+            );
+
+            $staffIds = $this->notificationService->resolveRestaurantReservationHandlerUserIds((int) $reservation->restaurant_id);
+            if ($staffIds !== []) {
+                $this->notificationService->notifyUsers(
+                    userIds: $staffIds,
+                    workspace: 'restaurant',
+                    type: 'reservation_deposit_paid',
+                    title: "Deposit Paid ({$ref})",
+                    body: 'Customer paid the PHP '.number_format($paymentAmount, 2).' deposit online. Reservation is now confirmed.',
+                    relatedEntityType: 'reservation',
+                    relatedEntityId: $reservationId,
+                );
+            }
+
+            return;
+        }
+
+        // Late payment settled after reservation was rejected, cancelled, expired, or voided:
+        // NEVER confirm the reservation. Mark deposit paid, flag for admin review, and request full refund if restaurant rejected/cancelled.
+        DB::table('reservations')
+            ->where('reservation_id', $reservationId)
+            ->update([
+                'deposit_status' => 'paid',
+                'updated_at' => $nowStr,
+            ]);
+
+        $reason = "Late payment (#{$paymentId}) settled after reservation was {$currentStatus}.";
+
+        $this->auditLogService->record(
+            actorUserId: $actorUserId,
+            action: 'reservation_late_payment_review',
+            entityType: 'reservations',
+            entityId: $reservationId,
+            oldValues: ['reservation_status' => $currentStatus, 'deposit_status' => $reservation->deposit_status],
+            newValues: ['reservation_status' => $currentStatus, 'deposit_status' => 'paid', 'payment_id' => $paymentId, 'flagged_for_review' => true],
+            reason: $reason,
+            request: $request,
+        );
+
+        $isRestaurantRejectedOrCancelled = $currentStatus === ReservationStatus::REJECTED
+            || ($currentStatus === ReservationStatus::CANCELLED && (string) ($reservation->cancelled_by ?? '') === 'restaurant');
+
+        if ($isRestaurantRejectedOrCancelled) {
+            app(RefundService::class)->refundReservationDepositIfPaid(
+                reservationId: $reservationId,
+                actorUserId: $actorUserId,
+                reason: $reason,
+                request: $request,
+            );
+        }
+
+        $this->notificationService->notifyUser(
+            userId: (int) $reservation->customer_id,
+            workspace: 'customer',
+            type: 'reservation_payment_review',
+            title: "Deposit Under Review ({$ref})",
+            body: $isRestaurantRejectedOrCancelled
+                ? "Your late payment for {$ref} was received after the reservation was {$currentStatus}. A full refund has been requested."
+                : "Your late payment for {$ref} was received after the reservation was {$currentStatus} and has been flagged for admin review.",
+            relatedEntityType: 'reservation',
+            relatedEntityId: $reservationId,
+        );
     }
 
     /**
