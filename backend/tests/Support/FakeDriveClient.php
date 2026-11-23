@@ -94,6 +94,20 @@ class FakeDriveClient implements DriveClientInterface
         return true;
     }
 
+    public function updateFolderIdentity(string $folderId, string $newName, array $appProperties): bool
+    {
+        if (! isset($this->nodes[$folderId]) || $this->nodes[$folderId]['trashed']) {
+            return false;
+        }
+        $this->nodes[$folderId]['name'] = $newName;
+        foreach ($appProperties as $k => $v) {
+            $this->nodes[$folderId]['appProperties'][(string) $k] = (string) $v;
+        }
+        $this->renameCalls[] = ['id' => $folderId, 'name' => $newName];
+
+        return true;
+    }
+
     public function putFile(string $localPath, string $mime, string $opaqueName, string $folderId, array $appProperties = []): string
     {
         if ($this->failNextPutWith !== null) {

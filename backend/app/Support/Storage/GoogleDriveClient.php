@@ -177,14 +177,35 @@ class GoogleDriveClient implements DriveClientInterface
         }
 
         $cleanProps = $this->sanitizeAppProperties($appProperties);
-        $body = $cleanProps !== [] ? ['appProperties' => $cleanProps] : [];
+        $url = self::FILES_URL.'/'.rawurlencode($fileId).'?'.http_build_query($query);
 
-        $response = $this->sendAllowingNotFound(function (string $token) use ($fileId, $query, $body): Response {
+        $response = $this->sendAllowingNotFound(function (string $token) use ($url, $cleanProps): Response {
+            $pending = Http::withToken($token)
+                ->connectTimeout(5)
+                ->timeout($this->timeoutSeconds());
+
+            return $cleanProps !== []
+                ? $pending->patch($url, ['appProperties' => $cleanProps])
+                : $pending->send('PATCH', $url);
+        }, 'move');
+
+        return $response !== null && $response->successful();
+    }
+
+    public function updateFolderIdentity(string $folderId, string $newName, array $appProperties): bool
+    {
+        $cleanProps = $this->sanitizeAppProperties($appProperties);
+        $body = array_filter([
+            'name' => $newName,
+            'appProperties' => $cleanProps !== [] ? $cleanProps : null,
+        ], static fn ($v) => $v !== null);
+
+        $response = $this->sendAllowingNotFound(function (string $token) use ($folderId, $body): Response {
             return Http::withToken($token)
                 ->connectTimeout(5)
                 ->timeout($this->timeoutSeconds())
-                ->patch(self::FILES_URL.'/'.rawurlencode($fileId).'?'.http_build_query($query), $body);
-        }, 'move');
+                ->patch(self::FILES_URL.'/'.rawurlencode($folderId).'?fields=id,name,appProperties', $body);
+        }, 'update_folder_identity');
 
         return $response !== null && $response->successful();
     }

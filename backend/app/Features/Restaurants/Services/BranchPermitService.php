@@ -697,10 +697,14 @@ class BranchPermitService
         $ownerName = $app ? trim(((string) ($app->first_name ?? '')).' '.((string) ($app->last_name ?? ''))) : 'Owner';
         $restaurantName = $app ? (string) $app->restaurant_name : 'Restaurant';
 
+        $appBranchId = $restaurantId !== null
+            ? DB::table('branch_permits')->where('restaurant_id', $restaurantId)->value('application_branch_id')
+            : null;
+
         return [
             'application_id' => $app ? (int) $app->restaurant_application_id : $brandId,
             'restaurant_id' => $restaurantId,
-            'application_branch_id' => $restaurantId ?? $brandId,
+            'application_branch_id' => $appBranchId !== null ? (int) $appBranchId : null,
             'owner_name' => $ownerName !== '' ? $ownerName : 'Owner',
             'restaurant_name' => $restaurantName !== '' ? $restaurantName : 'Restaurant',
             'branch_name' => $branchName !== '' ? $branchName : 'Branch',

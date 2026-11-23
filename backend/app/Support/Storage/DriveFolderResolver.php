@@ -219,6 +219,35 @@ class DriveFolderResolver
         $appBranchId = isset($context['application_branch_id']) ? (int) $context['application_branch_id'] : null;
 
         if ($branchId !== null && $branchId > 0) {
+            $existingByBranch = $this->driveClient->findFolderByAppProperties($permitsParentId, [
+                'salo_type' => 'branch_permit',
+                'salo_id' => "R-{$branchId}",
+            ]);
+            if ($existingByBranch !== null) {
+                Cache::put($this->folderCacheKey($permitsParentId, 'branch_permit', "R-{$branchId}"), $existingByBranch, self::CACHE_TTL_SECONDS);
+
+                return $existingByBranch;
+            }
+
+            if ($appBranchId !== null && $appBranchId > 0) {
+                $preApprovalFolder = $this->driveClient->findFolderByAppProperties($permitsParentId, [
+                    'salo_type' => 'branch_permit',
+                    'salo_id' => "AB-{$appBranchId}",
+                ]);
+                if ($preApprovalFolder !== null) {
+                    $upgradedName = DriveFolderName::branch((string) ($context['branch_name'] ?? 'Branch'), $branchId);
+                    $this->driveClient->updateFolderIdentity($preApprovalFolder, $upgradedName, [
+                        'salo_type' => 'branch_permit',
+                        'salo_id' => "R-{$branchId}",
+                        'visibility' => StoragePurpose::VISIBILITY_PRIVATE,
+                    ]);
+                    $this->forgetFolderCache($permitsParentId, 'branch_permit', "AB-{$appBranchId}");
+                    Cache::put($this->folderCacheKey($permitsParentId, 'branch_permit', "R-{$branchId}"), $preApprovalFolder, self::CACHE_TTL_SECONDS);
+
+                    return $preApprovalFolder;
+                }
+            }
+
             return $this->resolveOrCreateFolder(
                 parentId: $permitsParentId,
                 name: DriveFolderName::branch((string) ($context['branch_name'] ?? 'Branch'), $branchId),

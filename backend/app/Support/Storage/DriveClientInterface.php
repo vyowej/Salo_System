@@ -24,6 +24,13 @@ interface DriveClientInterface
     public function renameFile(string $fileId, string $newName): bool;
 
     /**
+     * Rename a Drive folder and update its appProperties in place. Returns false if 404.
+     *
+     * @param  array<string, string>  $appProperties
+     */
+    public function updateFolderIdentity(string $folderId, string $newName, array $appProperties): bool;
+
+    /**
      * Upload a local file into $folderId with an opaque filename and appProperties. Returns `gdrive:{fileId}`.
      *
      * @param  array<string, string>  $appProperties

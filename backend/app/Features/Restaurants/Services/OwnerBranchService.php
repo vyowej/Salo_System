@@ -189,21 +189,11 @@ class OwnerBranchService
 
         $permitFile = $request->file('mayors_permit');
         $permitInput = $this->branchPermitService->validateInitialPermitInput($permitFile, $validated);
-        $storedPermit = null;
         $newlyStoredPath = null;
+        $applicationId = (int) (DB::table('restaurant_applications')->where('restaurant_id', $brandId)->value('restaurant_application_id') ?? $brandId);
+        $ownerName = trim(((string) ($owner->first_name ?? '')).' '.((string) ($owner->last_name ?? ''))) ?: 'Owner';
 
         try {
-            if ($permitInput['mode'] === 'file' && $permitFile !== null) {
-                $storedPermit = $this->branchPermitService->storePermitFile($permitFile, $brandId, 'mayors_permit', [
-                    'application_id' => (int) (DB::table('restaurant_applications')->where('restaurant_id', $brandId)->value('restaurant_application_id') ?? $brandId),
-                    'owner_name' => trim(((string) ($owner->first_name ?? '')).' '.((string) ($owner->last_name ?? ''))) ?: 'Owner',
-                    'restaurant_name' => (string) $root->restaurant_name,
-                    'branch_name' => $branchName,
-                    'application_branch_id' => $brandId,
-                ]);
-                $newlyStoredPath = $storedPermit['path'] ?? null;
-            }
-
             $newBranchId = (int) DB::transaction(function () use (
                 $owner,
                 $root,
@@ -221,7 +211,10 @@ class OwnerBranchService
                 $copyMenu,
                 $copyFromId,
                 $permitInput,
-                $storedPermit,
+                $permitFile,
+                $applicationId,
+                $ownerName,
+                &$newlyStoredPath,
                 $request,
             ): int {
             $now = now();
@@ -316,6 +309,19 @@ class OwnerBranchService
             }
 
             if ($permitInput['mode'] !== 'none') {
+                $storedPermit = null;
+                if ($permitInput['mode'] === 'file' && $permitFile !== null) {
+                    $storedPermit = $this->branchPermitService->storePermitFile($permitFile, $brandId, 'mayors_permit', [
+                        'application_id' => $applicationId,
+                        'restaurant_id' => $childId,
+                        'application_branch_id' => null,
+                        'owner_name' => $ownerName,
+                        'restaurant_name' => (string) $root->restaurant_name,
+                        'branch_name' => $branchName,
+                    ]);
+                    $newlyStoredPath = $storedPermit['path'] ?? null;
+                }
+
                 $permitId = (int) DB::table('branch_permits')
                     ->where('restaurant_id', $childId)
                     ->value('permit_id');

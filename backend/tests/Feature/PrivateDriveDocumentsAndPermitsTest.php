@@ -302,4 +302,112 @@ class PrivateDriveDocumentsAndPermitsTest extends TestCase
             $this->assertSame(0, DB::table('application_documents')->where('rider_application_id', $riderAppId)->count());
         }
     }
+
+    public function test_branch_permit_reuses_and_upgrades_pre_approval_folder_without_duplicates(): void
+    {
+        $owner = $this->createUser('customer', 'Elena', 'Cruz');
+        $admin = $this->createUser('admin', 'Admin', 'Reviewer');
+        $addressId = $this->createAddressId();
+
+        $rootId = (int) DB::table('restaurants')->insertGetId([
+            'restaurant_name' => 'Elena Bistro',
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'sole_proprietorship',
+            'contact_phone' => '09171234567',
+            'business_email' => 'elena_'.uniqid().'@example.com',
+            'address_id' => $addressId,
+            'restaurant_status' => 'active',
+        ]);
+        DB::table('restaurants')->where('restaurant_id', $rootId)->update(['brand_restaurant_id' => $rootId]);
+        DB::table('restaurant_owners')->insert(['restaurant_id' => $rootId, 'user_id' => $owner->user_id, 'joined_at' => now()]);
+
+        $appId = (int) DB::table('restaurant_applications')->insertGetId([
+            'reference_number' => 'RA-'.uniqid(),
+            'applicant_user_id' => $owner->user_id,
+            'restaurant_id' => $rootId,
+            'application_status' => 'pending_review',
+            'applicant_position' => 'business_owner',
+            'legal_first_name' => 'Elena',
+            'legal_last_name' => 'Cruz',
+            'date_of_birth' => '1990-01-01',
+            'contact_phone' => '09171234567',
+            'contact_email' => $owner->email,
+            'contact_email_verified_at' => now(),
+            'declarations_accepted_at' => now(),
+            'terms_version' => 'v1',
+            'decided_at' => now(),
+        ]);
+
+        $appBranchId = (int) DB::table('restaurant_application_branches')->insertGetId([
+            'restaurant_application_id' => $appId,
+            'branch_name' => 'Ortigas',
+            'address_id' => $addressId,
+            'sort_order' => 1,
+        ]);
+        $permitId = (int) DB::table('branch_permits')->insertGetId([
+            'application_branch_id' => $appBranchId,
+            'is_required_locally' => 1,
+            'permit_status' => 'pending_submission',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // 1. Pre-approval upload creates [AB-{appBranchId}]
+        app(BranchPermitService::class)->submitOrUpdateForApplicationBranch(
+            applicant: $owner,
+            applicationId: $appId,
+            applicationBranchId: $appBranchId,
+            file: UploadedFile::fake()->createWithContent('p1.pdf', "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n"),
+            validated: ['is_required_locally' => true],
+            request: Request::create('/api/test', 'POST'),
+        );
+        $firstStored = (string) DB::table('branch_permits')->where('permit_id', $permitId)->value('file_path');
+        $firstFolderId = $this->fakeDrive->nodes[substr($firstStored, strlen('gdrive:'))]['parents'][0];
+        $this->assertSame("AB-{$appBranchId}", $this->fakeDrive->nodes[$firstFolderId]['appProperties']['salo_id']);
+
+        // 2. Materialize child branch and reject permit so owner re-uploads post-approval
+        $branchId = (int) DB::table('restaurants')->insertGetId([
+            'parent_restaurant_id' => $rootId,
+            'brand_restaurant_id' => $rootId,
+            'restaurant_name' => 'Elena Bistro',
+            'branch_name' => 'Ortigas',
+            'business_type' => 'restaurant',
+            'ownership_structure' => 'sole_proprietorship',
+            'contact_phone' => '09171234567',
+            'business_email' => 'ortigas_'.uniqid().'@example.com',
+            'address_id' => $addressId,
+            'restaurant_status' => 'active',
+        ]);
+        DB::table('restaurant_owners')->insert(['restaurant_id' => $branchId, 'user_id' => $owner->user_id, 'joined_at' => now()]);
+        DB::table('branch_permits')->where('permit_id', $permitId)->update([
+            'restaurant_id' => $branchId,
+            'permit_status' => 'rejected',
+            'review_note' => 'Blurry scan, please reupload.',
+            'reviewed_by' => $admin->user_id,
+            'reviewed_at' => now(),
+        ]);
+
+        DB::table('restaurant_applications')->where('restaurant_application_id', $appId)->update([
+            'application_status' => 'approved',
+            'decided_at' => now(),
+        ]);
+
+        // 3. Post-approval re-upload must reuse & upgrade the EXACT SAME folder to [R-{branchId}]
+        app(BranchPermitService::class)->submitOrUpdateForBranch(
+            owner: $owner,
+            restaurantId: $branchId,
+            file: UploadedFile::fake()->createWithContent('p2.pdf', "%PDF-1.4\n2 0 obj\n<<>>\nendobj\n"),
+            validated: ['is_required_locally' => true],
+            request: Request::create('/api/test', 'POST'),
+        );
+        $secondStored = (string) DB::table('branch_permits')->where('permit_id', $permitId)->value('file_path');
+        $secondFolderId = $this->fakeDrive->nodes[substr($secondStored, strlen('gdrive:'))]['parents'][0];
+
+        $this->assertSame($firstFolderId, $secondFolderId);
+        $this->assertSame("Ortigas [R-{$branchId}]", $this->fakeDrive->nodes[$secondFolderId]['name']);
+        $this->assertSame("R-{$branchId}", $this->fakeDrive->nodes[$secondFolderId]['appProperties']['salo_id']);
+
+        $permitsParentId = $this->fakeDrive->nodes[$secondFolderId]['parents'][0];
+        $this->assertCount(1, $this->fakeDrive->listChildren($permitsParentId));
+    }
 }
