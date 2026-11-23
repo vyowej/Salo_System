@@ -2,16 +2,18 @@
 
 ## 1. Overview
 
-SALO separates **public** storefront assets from **private** application/compliance documents:
+SALO separates **public** storefront assets from **private** compliance/delivery files and **local-only** assets:
 
-- **Private files** (application permits, IDs, rider documents, future proof of delivery) always use **local application storage only** (`local` disk) behind backend authorization.
-- **Public images** (restaurant logo, cover photo, menu item photos) use the `PublicImageStore` abstraction configured via `PUBLIC_IMAGE_STORAGE` (`local` by default, or `google_drive` when enabled).
+- **Public images** (restaurant logo, cover photo, menu item photos) use `PUBLIC_IMAGE_STORAGE` (`local` or `google_drive`, served via `/api/media/images/{fileId}` when on Drive).
+- **Private Drive-scoped files** (restaurant/rider application documents, branch permits, rider delivery confirmation photos, and future support attachments) use `PRIVATE_FILE_STORAGE` (`local` or `google_drive`), streamed only via authenticated, role-authorized backend routes with `appProperties.visibility=private` enforcement.
+- **Always local:** restaurant gallery, platform assets, admin banners, default placeholder images, and `profile_change_requests` supporting documents (routed through `StoragePurpose::PROFILE_CHANGE_DOCUMENT` on the `local` driver).
 
 | Classification | Driver / Disk | Location | DB Value Stored | Access Method |
 | --- | --- | --- | --- | --- |
 | **Public (Local driver, default)** | `local` (`public` disk) | `backend/storage/app/public/` | Relative path only (e.g. `restaurants/{id}/{uuid}.png`) | Resolved to `{APP_URL}/storage/{path}` |
-| **Public (Drive driver)** | `google_drive` | Dedicated app-created Drive folder | `gdrive:{fileId}` | Resolved to `{APP_URL}/api/media/images/{fileId}` (backend proxy + `drive-cache`) |
-| **Private** (restaurant & rider application documents) | `local` | `backend/storage/app/private/` | Relative path only (e.g. `applications/restaurant/{id}/{uuid}.pdf`) | Protected backend stream route `/api/applications/documents/{documentId}/file` |
+| **Public (Drive driver)** | `google_drive` | `SALO/Restaurants/{Name} [R-{id}]/...` | `gdrive:{fileId}` | Resolved to `{APP_URL}/api/media/images/{fileId}` (backend proxy + `drive-cache`, fails closed unless `visibility=public`) |
+| **Private (Local driver, default)** | `local` | `backend/storage/app/private/` | Relative path only (e.g. `applications/restaurant/{id}/{uuid}.pdf`) | Authenticated backend stream routes |
+| **Private (Drive driver)** | `google_drive` | `SALO/Applications/...`, `SALO/Riders/...`, `SALO/Support/...` | `gdrive:{fileId}` | Authenticated backend stream routes (never shared in Drive; fails closed unless `visibility=private`) |
 
 ---
 
@@ -32,9 +34,14 @@ SALO separates **public** storefront assets from **private** application/complia
 - `GET /api/applications/documents/{documentId}/file` (`auth` middleware)
   - Streams private files with `Cache-Control: private, no-store, max-age=0` and `X-Content-Type-Options: nosniff`.
   - **Authorization:** Permitted only for `admin`, the uploader (`uploaded_by`), the application's `applicant_user_id`, or an owner in `restaurant_owners`. All others receive `403 Forbidden`.
+  - **Audit logging:** Both successful views and denied attempts are logged to `audit_logs` using `document_id` (deduped per user + document within 10 minutes).
+- `POST /api/rider/deliveries/{orderId}/delivered` (`auth` + `role:rider`)
+  - Accepts optional `proof_photo` (`jpg`, `jpeg`, `png`, `webp` only — no PDF; resized & EXIF-stripped server-side). Required only when `SALO_DELIVERY_PROOF_REQUIRED=true`.
+- `GET /api/rider/deliveries/{orderId}/proof` (`role:rider`), `GET /api/customer/orders/{id}/delivery-proof` (`auth`), `GET /api/admin/orders/{id}/delivery-proof` (`role:admin`)
+  - Streams `deliveries.proof_photo` to the assigned rider, the order's customer, or admin with 10-minute deduped `audit_logs` tracking. *(Open policy item: restaurant owner/staff viewing of `proof_photo` is currently excluded.)*
 - `GET /api/media/images/{fileId}` (public, `throttle:600,1`)
-  - Streams public Drive-stored images (`gdrive:{fileId}`) only if referenced by `restaurants.logo_image`, `restaurants.cover_image`, or `menu_items.photo_image` (otherwise `404`).
-  - Uses a read-through cache in `backend/storage/app/private/drive-cache/` when `GOOGLE_DRIVE_PROXY_CACHE=true`, with `Cache-Control: public, max-age=31536000, immutable`, `ETag`, `X-Content-Type-Options: nosniff`, and `Content-Security-Policy: default-src 'none'`.
+  - Streams public Drive-stored images (`gdrive:{fileId}`) only if referenced by `restaurants.logo_image`, `restaurants.cover_image`, or `menu_items.photo_image`/`published_photo_image` AND `appProperties.visibility === 'public'` (fails closed with `404` otherwise).
+  - Uses a read-through cache in `backend/storage/app/private/drive-cache/` when `GOOGLE_DRIVE_PROXY_CACHE=true`, with `Cache-Control: public, max-age=31536000, immutable`, `ETag`, `X-Content-Type-Options: nosniff`, and `Content-Security-Policy: default-src 'none'`. Public image requests are not audit-logged.
 
 ---
 
@@ -80,17 +87,27 @@ php artisan storage:link
 See [DRIVE_SETUP.md](./DRIVE_SETUP.md) for the step-by-step Google Cloud setup. Keys in `backend/.env` (never commit values or expose them in `VITE_*` variables):
 
 - `PUBLIC_IMAGE_STORAGE` (`local` default, or `google_drive`)
+- `PRIVATE_FILE_STORAGE` (`local` default, or `google_drive`)
+- `SALO_DELIVERY_PROOF_REQUIRED` (`false` default)
 - `GOOGLE_DRIVE_CLIENT_ID`
 - `GOOGLE_DRIVE_CLIENT_SECRET`
 - `GOOGLE_DRIVE_REFRESH_TOKEN`
-- `GOOGLE_DRIVE_PUBLIC_FOLDER_ID`
+- `GOOGLE_DRIVE_PUBLIC_FOLDER_ID` (reused as the `SALO` root folder ID)
 - `GOOGLE_DRIVE_TIMEOUT_SECONDS` (default `20`)
 - `GOOGLE_DRIVE_PROXY_CACHE` (`true` default)
 
 Artisan commands:
-- `php artisan salo:drive:init-folder` — creates the dedicated Drive folder and prints its ID.
+- `php artisan salo:drive:init-folder` — creates the dedicated Drive root folder and prints its ID.
 - `php artisan salo:images:migrate-to-drive --dry-run` — previews migrating local public images to Drive (never deletes local files).
-- `php artisan salo:drive:orphans` — read-only report of Drive files in the folder not referenced by any DB row.
+- `php artisan salo:drive:reorganize-public --dry-run` — previews moving flat-folder public Drive images into `SALO/Restaurants/...` and tagging `visibility=public` (no DB changes).
+- `php artisan salo:private-files:migrate-to-drive --dry-run` — previews migrating local private files (`application_documents`, `branch_permits`, `deliveries.proof_photo`) to Drive (never deletes local files).
+- `php artisan salo:drive:check-permissions` — verifies owner-only permissions across `Applications/`, `Riders/`, and `Support/`.
+- `php artisan salo:drive:purge-rejected --dry-run` — lists rejected-application files past the 90-day retention period.
+- `php artisan salo:drive:orphans` — read-only walk of the whole `SALO` Drive tree listing unreferenced files.
+
+### Retention & Open Policy Items
+- **Rejected/withdrawn applications:** 90-day retention, manually purged via `salo:drive:purge-rejected` (`--dry-run` first).
+- **Open items:** Retention rules for approved applicants, deactivated riders, RA 10173 data-deletion requests, and whether restaurant owners/staff may view `deliveries.proof_photo`.
 
 ---
 

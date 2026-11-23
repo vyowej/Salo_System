@@ -6,11 +6,13 @@ use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Features\Restaurants\Services\BranchPermitService;
 use App\Models\User;
+use App\Support\AuditLogService;
 use App\Support\FileStorageService;
 use App\Support\RestaurantBranchService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class AdminBranchPermitService
 {
@@ -18,6 +20,7 @@ class AdminBranchPermitService
         private readonly BranchPermitService $branchPermitService,
         private readonly FileStorageService $fileStorageService,
         private readonly NotificationService $notificationService,
+        private readonly AuditLogService $auditLogService,
     ) {}
 
     /**
@@ -196,7 +199,7 @@ class AdminBranchPermitService
         return $detail;
     }
 
-    public function streamPermitFile(int $permitId): StreamedResponse
+    public function streamPermitFile(int $permitId): Response
     {
         $permit = DB::table('branch_permits')
             ->where('permit_id', $permitId)
@@ -204,7 +207,9 @@ class AdminBranchPermitService
 
         abort_unless($permit !== null && $permit->file_path !== null && trim((string) $permit->file_path) !== '', 404, 'Branch permit file not found.');
 
-        return $this->fileStorageService->streamPrivateFile(
+        $this->auditLogService->recordPrivateFileAccess(Auth::id(), 'branch_permits', $permitId, true, request());
+
+        return $this->fileStorageService->streamPrivateStoredFile(
             path: (string) $permit->file_path,
             downloadName: (string) ($permit->original_filename ?: 'branch-permit.pdf'),
             mimeType: (string) ($permit->mime_type ?: 'application/pdf'),

@@ -224,10 +224,10 @@ export default function RiderActiveDeliveryPage() {
                   />
                 </label>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 'var(--font-size-xs)' }}>
-                  <span>POD photo (optional, JPG/PNG)</span>
+                  <span>POD photo (optional, JPG/PNG/WebP)</span>
                   <input
                     type="file"
-                    accept="image/jpeg,image/png"
+                    accept="image/jpeg,image/png,image/webp"
                     disabled={submitting}
                     onChange={(e) => setProofPhoto(e.target.files?.[0] || null)}
                   />

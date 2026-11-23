@@ -311,7 +311,19 @@ class RestaurantBranchService
             ->orderBy('menu_category_id')
             ->get();
 
+        $targetRestaurant = DB::table('restaurants')
+            ->where('restaurant_id', $targetRestaurantId)
+            ->first(['restaurant_id', 'parent_restaurant_id', 'brand_restaurant_id', 'restaurant_name', 'branch_name']);
+
+        $targetBrandId = $targetRestaurant
+            ? (int) ($targetRestaurant->brand_restaurant_id ?: ($targetRestaurant->parent_restaurant_id ?: $targetRestaurantId))
+            : $targetRestaurantId;
+        $targetIsMain = ($targetRestaurant->parent_restaurant_id ?? null) === null;
+        $targetName = (string) ($targetRestaurant->restaurant_name ?? 'Restaurant');
+        $targetBranchName = $targetRestaurant->branch_name ?? null;
+
         $categoryMap = [];
+        $categoryNameByNewId = [];
         foreach ($categories as $cat) {
             $newCatId = (int) DB::table('menu_categories')->insertGetId([
                 'restaurant_id' => $targetRestaurantId,
@@ -329,6 +341,7 @@ class RestaurantBranchService
                 'updated_at' => $timestamp,
             ]);
             $categoryMap[(int) $cat->menu_category_id] = $newCatId;
+            $categoryNameByNewId[$newCatId] = (string) $cat->category_name;
         }
 
         $items = DB::table('menu_items')
@@ -337,6 +350,7 @@ class RestaurantBranchService
             ->orderBy('menu_item_id')
             ->get();
 
+        $fileStorage = app(FileStorageService::class);
         $itemMap = [];
         foreach ($items as $item) {
             $newCatId = $categoryMap[(int) $item->menu_category_id] ?? null;
@@ -344,12 +358,24 @@ class RestaurantBranchService
                 continue;
             }
 
+            $clonedPhoto = $item->photo_image
+                ? $fileStorage->copyPublicImageToCategory((string) $item->photo_image, [
+                    'brand_restaurant_id' => $targetBrandId,
+                    'restaurant_id' => $targetRestaurantId,
+                    'restaurant_name' => $targetName,
+                    'branch_name' => $targetBranchName,
+                    'is_main_branch' => $targetIsMain,
+                    'menu_category_id' => $newCatId,
+                    'category_name' => $categoryNameByNewId[$newCatId] ?? 'Category',
+                ])
+                : null;
+
             $newItemId = (int) DB::table('menu_items')->insertGetId([
                 'restaurant_id' => $targetRestaurantId,
                 'menu_category_id' => $newCatId,
                 'item_name' => $item->item_name,
                 'description' => $item->description,
-                'photo_image' => $item->photo_image,
+                'photo_image' => $clonedPhoto,
                 'base_price' => $item->base_price,
                 'availability_status' => $item->availability_status,
                 'approval_status' => 'approved',

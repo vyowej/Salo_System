@@ -1,9 +1,23 @@
-# SALO — Proposal: Public Image Storage on Google Drive
+# SALO — Google Drive File Storage Architecture & Plan
 
-> **Status: PROPOSAL — NOT APPROVED.**
-> This conflicts with `documentation/SALO_DEVELOPMENT_RULES.md` §2 ("Image and file storage — Local storage only"), §2.1 item 11 and §16 items 1–3. Nothing in this document can be implemented until the project owner approves it explicitly. Phase 1 (this document) made **no** code, `.env`, package, database or file changes.
+> **Status: APPROVED & IMPLEMENTED (Structured Drive Tree for Scoped Public & Private Files).**
+> `documentation/SALO_DEVELOPMENT_RULES.md` (§2, §2.1 item 11, §16) was amended in commit `dd08f5e` to allow Google Drive for: public restaurant/menu images, delivery confirmation photos, application documents, branch permits, and support attachments. Everything else (restaurant gallery, platform assets, admin banners, default placeholders, and `profile_change_requests` supporting documents) stays local.
 
-Audit date: 2026-11-21 · Branch `main` @ `cd70998` · Working tree clean before this file was added.
+## 0. Structured Drive Layout & Safeguards (Implemented)
+
+- **Root:** `GOOGLE_DRIVE_PUBLIC_FOLDER_ID` serves as the `SALO` root folder.
+- **Hierarchy:**
+  - `Restaurants/{Restaurant name} [R-{brandId}]/Logo/`, `Cover Photo/`, `Menu/{Category}/`, `Branches/{Branch name} [R-{branchId}]/Menu/{Category}/` (`visibility=public`)
+  - `Riders/{Rider name} [U-{userId}]/Delivery Confirmations/{YYYY-MM}/` (`visibility=private`)
+  - `Applications/Restaurant Applications/{Owner} - {Restaurant} [A-{appId}]/` + `Branch Permits/{Branch name} [R-{branchId}|AB-{appBranchId}]/` (`visibility=private`)
+  - `Applications/Rider Applications/{Rider name} [A-{appId}]/` (`visibility=private`)
+  - `Support/{Ticket or report ref}/` (`visibility=private`, reserved for future support feature)
+- **Safeguards:**
+  - Folders are resolved by Drive `appProperties` (`salo_type`, `salo_id`, `visibility`), cached in Laravel cache with 404 recovery, and created with `Cache::lock` concurrency guards.
+  - Opaque UUID filenames (`uuid.ext`); public/delivery images are resized & EXIF-stripped via PHP GD (`ImageProcessor`).
+  - Both public proxy (`/api/media/images/{fileId}`) and private streaming (`FileStorageService::streamPrivateStoredFile`) fail closed unless `appProperties.visibility` matches (`public` vs `private`).
+  - Private-file views and `403` denials are logged in `audit_logs` by document row ID (deduped 10 minutes per user + document).
+  - **Retention & Open Items:** 90-day retention for rejected applications (`salo:drive:purge-rejected --dry-run`); open items: retention for approved applicants, deactivated riders, RA 10173 data-deletion requests, and restaurant viewing of `deliveries.proof_photo`.
 
 ---
 

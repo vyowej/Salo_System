@@ -9,13 +9,14 @@ use App\Support\AuditLogService;
 use App\Support\FileStorageService;
 use App\Support\Money;
 use App\Support\RestaurantBranchService;
+use App\Support\Storage\StoragePurpose;
 use App\Support\WorkspaceAccessResolver;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -510,11 +511,26 @@ class RiderDeliveryService
 
         $storedProofPath = null;
         $proofPhoto = $pod['proof_photo'] ?? null;
+        if (! ($proofPhoto instanceof UploadedFile) && (bool) config('salo.uploads.delivery_proof_required', false)) {
+            throw ValidationException::withMessages([
+                'proof_photo' => ['Delivery confirmation photo is required.'],
+            ]);
+        }
+
         if ($proofPhoto instanceof UploadedFile) {
-            $stored = $this->fileStorageService->storePrivateDocument(
+            $riderName = trim(((string) ($user->first_name ?? '')).' '.((string) ($user->last_name ?? '')));
+            $stored = $this->fileStorageService->storePrivateFileForPurpose(
                 file: $proofPhoto,
-                directory: "deliveries/{$orderId}/proof",
+                purpose: StoragePurpose::DELIVERY_CONFIRMATION,
+                ownerContext: [
+                    'rider_user_id' => (int) $user->user_id,
+                    'rider_name' => $riderName !== '' ? $riderName : 'Rider',
+                    'month' => now()->format('Y-m'),
+                    'order_id' => $orderId,
+                ],
+                localDirectory: "deliveries/{$orderId}/proof",
                 fieldName: 'proof_photo',
+                imagesOnly: true,
             );
             $storedProofPath = $stored['path'];
         }
@@ -781,27 +797,59 @@ class RiderDeliveryService
         return $this->formatAssignedDelivery($row);
     }
 
-    public function streamProofPhoto(User $user, int $orderId): StreamedResponse
+    public function streamProofPhoto(User $user, int $orderId): Response
     {
-        $rider = $this->requireActiveRider($user);
-        $delivery = DB::table('deliveries')
-            ->where('order_id', $orderId)
-            ->where('rider_id', (int) $rider->rider_id)
-            ->first(['proof_photo']);
+        return $this->streamAuthorizedProof($user, $orderId, 'rider');
+    }
 
-        if (! $delivery || empty($delivery->proof_photo)) {
+    public function streamProofPhotoForCustomer(User $user, int $orderId): Response
+    {
+        return $this->streamAuthorizedProof($user, $orderId, 'customer');
+    }
+
+    public function streamProofPhotoForAdmin(User $user, int $orderId): Response
+    {
+        return $this->streamAuthorizedProof($user, $orderId, 'admin');
+    }
+
+    private function streamAuthorizedProof(User $user, int $orderId, string $roleScope): Response
+    {
+        $row = DB::table('deliveries as d')
+            ->join('orders as o', 'o.order_id', '=', 'd.order_id')
+            ->where('d.order_id', $orderId)
+            ->first(['d.delivery_id', 'd.rider_id', 'd.proof_photo', 'o.customer_id']);
+
+        if (! $row || empty($row->proof_photo)) {
             throw new NotFoundHttpException('Proof of delivery photo not found.');
         }
 
-        $path = (string) $delivery->proof_photo;
+        $authorized = false;
+        if ($roleScope === 'admin') {
+            $authorized = $user->user_role === 'admin';
+        } elseif ($roleScope === 'customer') {
+            $authorized = (int) $row->customer_id === (int) $user->user_id;
+        } elseif ($roleScope === 'rider') {
+            $rider = $this->requireActiveRider($user);
+            $authorized = (int) $row->rider_id === (int) $rider->rider_id;
+        }
+
+        if (! $authorized) {
+            $this->auditLogService->recordPrivateFileAccess((int) $user->user_id, 'deliveries', (int) $row->delivery_id, false, request());
+            abort(403, 'Forbidden: you do not have access to this delivery confirmation photo.');
+        }
+
+        $this->auditLogService->recordPrivateFileAccess((int) $user->user_id, 'deliveries', (int) $row->delivery_id, true, request());
+
+        $path = (string) $row->proof_photo;
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         $mime = match ($ext) {
             'png' => 'image/png',
             'webp' => 'image/webp',
-            default => 'image/jpeg',
+            'jpg', 'jpeg' => 'image/jpeg',
+            default => '',
         };
 
-        return $this->fileStorageService->streamPrivateFile($path, basename($path), $mime);
+        return $this->fileStorageService->streamPrivateStoredFile($path, basename($path), $mime);
     }
 
     private function notifyDeliveryAssigned(object $order, User $riderUser): void

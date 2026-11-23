@@ -4,18 +4,20 @@ namespace App\Features\Applications\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\AuditLogService;
 use App\Support\FileStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class ApplicationDocumentController extends Controller
 {
     public function __construct(
         private readonly FileStorageService $fileStorageService,
+        private readonly AuditLogService $auditLogService,
     ) {}
 
-    public function show(Request $request, int $documentId): StreamedResponse
+    public function show(Request $request, int $documentId): Response
     {
         /** @var User $user */
         $user = $request->user();
@@ -46,9 +48,14 @@ class ApplicationDocumentController extends Controller
             }
         }
 
-        abort_unless($authorized, 403, 'Forbidden: you do not have access to this document.');
+        if (! $authorized) {
+            $this->auditLogService->recordPrivateFileAccess((int) $user->user_id, 'application_documents', $documentId, false, $request);
+            abort(403, 'Forbidden: you do not have access to this document.');
+        }
 
-        return $this->fileStorageService->streamPrivateFile(
+        $this->auditLogService->recordPrivateFileAccess((int) $user->user_id, 'application_documents', $documentId, true, $request);
+
+        return $this->fileStorageService->streamPrivateStoredFile(
             path: $doc->file_path,
             downloadName: $doc->original_filename,
             mimeType: $doc->mime_type,

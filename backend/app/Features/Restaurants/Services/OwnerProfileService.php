@@ -5,6 +5,7 @@ namespace App\Features\Restaurants\Services;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use App\Support\Storage\StoragePurpose;
 use App\Support\WorkspaceAccessResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -153,9 +154,15 @@ class OwnerProfileService
         $oldCover = $restaurant->cover_image;
         $newlyStoredPublic = [];
 
+        $brandId = (int) ($restaurant->brand_restaurant_id ?: ($restaurant->parent_restaurant_id ?: $targetId));
+        $brandContext = [
+            'brand_restaurant_id' => $brandId,
+            'restaurant_name' => (string) $restaurant->restaurant_name,
+        ];
+
         try {
-            $newLogo = $this->resolveUpdatedImagePath($logoFile, $removeLogo, $oldLogo, $targetId, 'logo_image', $newlyStoredPublic);
-            $newCover = $this->resolveUpdatedImagePath($coverFile, $removeCover, $oldCover, $targetId, 'cover_image', $newlyStoredPublic);
+            $newLogo = $this->resolveUpdatedImagePath($logoFile, $removeLogo, $oldLogo, $targetId, 'logo_image', $brandContext, $newlyStoredPublic);
+            $newCover = $this->resolveUpdatedImagePath($coverFile, $removeCover, $oldCover, $targetId, 'cover_image', $brandContext, $newlyStoredPublic);
             $this->persistBrandingUpdate($targetId, $oldLogo, $oldCover, $newLogo, $newCover, $user, $request);
         } catch (\Throwable $e) {
             $this->fileStorageService->cleanupStoredPaths($newlyStoredPublic, []);
@@ -169,6 +176,7 @@ class OwnerProfileService
     }
 
     /**
+     * @param  array<string, mixed>  $brandContext
      * @param  array<int, string>  $newlyStoredPublic
      */
     private function resolveUpdatedImagePath(
@@ -177,12 +185,19 @@ class OwnerProfileService
         ?string $existingPath,
         int $restaurantId,
         string $fieldName,
+        array $brandContext,
         array &$newlyStoredPublic,
     ): ?string {
         if ($file !== null) {
-            $path = $this->fileStorageService->storePublicImage(
+            $purpose = $fieldName === 'logo_image'
+                ? StoragePurpose::RESTAURANT_LOGO
+                : StoragePurpose::RESTAURANT_COVER;
+
+            $path = $this->fileStorageService->storePublicImageForPurpose(
                 file: $file,
-                directory: "restaurants/{$restaurantId}",
+                purpose: $purpose,
+                ownerContext: $brandContext,
+                localDirectory: "restaurants/{$restaurantId}",
                 fieldName: $fieldName,
             )['path'];
             $newlyStoredPublic[] = $path;
@@ -638,12 +653,7 @@ class OwnerProfileService
 
     private function isPublicImageReferenced(string $relativePath): bool
     {
-        $prefixed = '/storage/'.ltrim($relativePath, '/');
-
-        return DB::table('restaurants')
-            ->whereIn('logo_image', [$relativePath, $prefixed])
-            ->orWhereIn('cover_image', [$relativePath, $prefixed])
-            ->exists();
+        return $this->fileStorageService->isPublicAssetReferenced($relativePath);
     }
 
     /**

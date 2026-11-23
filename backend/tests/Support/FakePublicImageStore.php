@@ -94,6 +94,7 @@ class FakePublicImageStore implements PublicImageStore
             'stream' => $stream,
             'mime' => $entry['mime'],
             'size' => strlen($entry['content']),
+            'appProperties' => array_merge(['visibility' => 'public'], $entry['meta']),
         ];
     }
 }

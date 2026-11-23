@@ -2,21 +2,21 @@
 
 namespace App\Console\Commands;
 
+use App\Support\Storage\DriveClientInterface;
 use App\Support\Storage\GoogleDrivePublicImageStore;
-use App\Support\Storage\GoogleDriveTokenProvider;
 use App\Support\Storage\ImageStorageUnavailableException;
 use Illuminate\Console\Command;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 
 class DriveOrphansCommand extends Command
 {
     protected $signature = 'salo:drive:orphans';
 
-    protected $description = 'List files in the configured Google Drive folder that are not referenced by any database row (read-only).';
+    protected $description = 'Walk the entire SALO Google Drive folder tree and list files not referenced by any database row (read-only).';
 
-    public function handle(GoogleDriveTokenProvider $tokenProvider): int
+    private const FOLDER_MIME = 'application/vnd.google-apps.folder';
+
+    public function handle(DriveClientInterface $driveClient): int
     {
         $folderId = trim((string) config('salo.uploads.google_drive.public_folder_id', ''));
         if ($folderId === '') {
@@ -26,17 +26,12 @@ class DriveOrphansCommand extends Command
         }
 
         $dbName = (string) (DB::selectOne('SELECT DATABASE() as db')->db ?? 'unknown');
-        $this->line("Checking Drive folder against database [{$dbName}]...");
+        $this->line("Walking SALO Drive tree against database [{$dbName}]...");
 
         try {
-            $token = $tokenProvider->getAccessToken();
-            $driveFiles = $this->listDriveFolderFiles($token, $folderId);
+            $driveFiles = $this->walkDriveFiles($driveClient, $folderId);
         } catch (ImageStorageUnavailableException $e) {
             $this->error($e->getMessage());
-
-            return self::FAILURE;
-        } catch (ConnectionException $e) {
-            $this->error('Could not reach Google Drive: '.$e->getMessage());
 
             return self::FAILURE;
         }
@@ -57,7 +52,7 @@ class DriveOrphansCommand extends Command
             }
         }
 
-        $this->info(sprintf('Drive files in folder: %d | Referenced in DB: %d | Orphans: %d', count($driveFiles), count($referencedIds), count($orphans)));
+        $this->info(sprintf('Drive files in tree: %d | Referenced in DB: %d | Orphans: %d', count($driveFiles), count($referencedIds), count($orphans)));
 
         if ($orphans !== []) {
             $this->table(['File ID', 'Name', 'MIME Type', 'Size (bytes)', 'Created'], $orphans);
@@ -69,42 +64,29 @@ class DriveOrphansCommand extends Command
     /**
      * @return list<array<string, mixed>>
      */
-    private function listDriveFolderFiles(string $token, string $folderId): array
+    private function walkDriveFiles(DriveClientInterface $driveClient, string $rootFolderId): array
     {
-        $timeout = max(5, (int) config('salo.uploads.google_drive.timeout_seconds', 20));
-        $escapedFolder = str_replace("'", "\\'", $folderId);
         $files = [];
-        $pageToken = null;
+        $queue = [$rootFolderId];
+        $visited = [];
 
-        do {
-            $query = array_filter([
-                'q' => "'{$escapedFolder}' in parents and trashed = false",
-                'fields' => 'nextPageToken,files(id,name,mimeType,size,createdTime)',
-                'pageSize' => 1000,
-                'pageToken' => $pageToken,
-            ], static fn ($v) => $v !== null);
-
-            $response = Http::withToken($token)
-                ->connectTimeout(5)
-                ->timeout($timeout)
-                ->get('https://www.googleapis.com/drive/v3/files', $query);
-
-            if (! $response->successful()) {
-                $reason = (string) ($response->json('error.message') ?? 'HTTP '.$response->status());
-                throw new ImageStorageUnavailableException('Failed to list Google Drive files: '.$reason);
+        while ($queue !== []) {
+            $currentId = array_shift($queue);
+            if (isset($visited[$currentId])) {
+                continue;
             }
+            $visited[$currentId] = true;
 
-            $batch = $response->json('files');
-            if (is_array($batch)) {
-                foreach ($batch as $item) {
-                    if (is_array($item)) {
-                        $files[] = $item;
+            foreach ($driveClient->listChildren($currentId) as $child) {
+                if (($child['mimeType'] ?? '') === self::FOLDER_MIME) {
+                    if (! empty($child['id'])) {
+                        $queue[] = (string) $child['id'];
                     }
+                    continue;
                 }
+                $files[] = $child;
             }
-
-            $pageToken = $response->json('nextPageToken');
-        } while (is_string($pageToken) && $pageToken !== '');
+        }
 
         return $files;
     }
@@ -115,35 +97,45 @@ class DriveOrphansCommand extends Command
     private function collectReferencedDriveIds(): array
     {
         $ids = [];
+        $prefix = GoogleDrivePublicImageStore::PREFIX.'%';
+
+        $add = static function (?string $val) use (&$ids): void {
+            $id = GoogleDrivePublicImageStore::extractFileId($val);
+            if ($id !== null) {
+                $ids[$id] = true;
+            }
+        };
 
         $restaurants = DB::table('restaurants')
             ->select(['logo_image', 'cover_image'])
-            ->where('logo_image', 'like', GoogleDrivePublicImageStore::PREFIX.'%')
-            ->orWhere('cover_image', 'like', GoogleDrivePublicImageStore::PREFIX.'%')
+            ->where('logo_image', 'like', $prefix)
+            ->orWhere('cover_image', 'like', $prefix)
             ->get();
-
         foreach ($restaurants as $row) {
-            foreach ([$row->logo_image, $row->cover_image] as $val) {
-                $id = GoogleDrivePublicImageStore::extractFileId(is_string($val) ? $val : null);
-                if ($id !== null) {
-                    $ids[$id] = true;
-                }
-            }
+            $add(is_string($row->logo_image) ? $row->logo_image : null);
+            $add(is_string($row->cover_image) ? $row->cover_image : null);
         }
 
         $menuItems = DB::table('menu_items')
             ->select(['photo_image', 'published_photo_image'])
-            ->where('photo_image', 'like', GoogleDrivePublicImageStore::PREFIX.'%')
-            ->orWhere('published_photo_image', 'like', GoogleDrivePublicImageStore::PREFIX.'%')
+            ->where('photo_image', 'like', $prefix)
+            ->orWhere('published_photo_image', 'like', $prefix)
             ->get();
-
         foreach ($menuItems as $row) {
-            foreach (['photo_image', 'published_photo_image'] as $col) {
-                $id = GoogleDrivePublicImageStore::extractFileId(is_string($row->{$col}) ? $row->{$col} : null);
-                if ($id !== null) {
-                    $ids[$id] = true;
-                }
-            }
+            $add(is_string($row->photo_image) ? $row->photo_image : null);
+            $add(is_string($row->published_photo_image) ? $row->published_photo_image : null);
+        }
+
+        foreach (DB::table('application_documents')->where('file_path', 'like', $prefix)->pluck('file_path') as $val) {
+            $add(is_string($val) ? $val : null);
+        }
+
+        foreach (DB::table('branch_permits')->where('file_path', 'like', $prefix)->pluck('file_path') as $val) {
+            $add(is_string($val) ? $val : null);
+        }
+
+        foreach (DB::table('deliveries')->where('proof_photo', 'like', $prefix)->pluck('proof_photo') as $val) {
+            $add(is_string($val) ? $val : null);
         }
 
         return $ids;

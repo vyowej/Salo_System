@@ -1,10 +1,11 @@
-# SALO — Google Drive Public Image Storage Setup Guide
+# SALO — Google Drive Storage Setup Guide
 
-This guide walks you through setting up Google Drive for **public images only** (restaurant logo, cover photo, menu item photos) using your own Gmail account.
+This guide walks you through setting up Google Drive for SALO's approved Drive-scoped uploads (**public restaurant/menu images** and **private application documents, branch permits, delivery confirmation photos, and future support attachments**) using your own Gmail account.
 
 > **Important:**
-> - Private documents (permits, IDs, rider documents, proof of delivery) **always stay on local storage** and are never uploaded to Google Drive.
-> - Keep `PUBLIC_IMAGE_STORAGE=local` in `backend/.env` until you finish Step 6.
+> - **Stays local (never on Drive):** restaurant gallery, platform assets, admin banners, default placeholder images, and `profile_change_requests` supporting documents.
+> - Private Drive files are **never shared** in Drive and are only streamed through authenticated, role-authorized backend routes.
+> - Keep `PUBLIC_IMAGE_STORAGE=local` and `PRIVATE_FILE_STORAGE=local` in `backend/.env` until you finish Step 6.
 > - **Never** commit `backend/.env` or paste your Client Secret or Refresh Token into git, logs, or frontend `VITE_*` variables.
 
 ---
@@ -76,6 +77,8 @@ Open `backend/.env` and set these keys (keep `PUBLIC_IMAGE_STORAGE=local` for on
 
 ```env
 PUBLIC_IMAGE_STORAGE=local
+PRIVATE_FILE_STORAGE=local
+SALO_DELIVERY_PROOF_REQUIRED=false
 GOOGLE_DRIVE_CLIENT_ID=your-client-id-here
 GOOGLE_DRIVE_CLIENT_SECRET=your-client-secret-here
 GOOGLE_DRIVE_REFRESH_TOKEN=your-refresh-token-here
@@ -115,7 +118,7 @@ Copy the printed `GOOGLE_DRIVE_PUBLIC_FOLDER_ID=...` line into `backend/.env`.
 
 ## Step 8: Migrate Existing Local Images (Dry Run First!)
 
-1. **Back up `salo_db` first** (for example with `mysqldump`):
+1. **Back up `salo_db` first** (for example with `mysqldump`, kept outside git):
    ```powershell
    mysqldump -u root salo_db restaurants menu_items > salo_db_images_backup.sql
    ```
@@ -130,6 +133,35 @@ Copy the printed `GOOGLE_DRIVE_PUBLIC_FOLDER_ID=...` line into `backend/.env`.
    php artisan salo:images:migrate-to-drive
    ```
    Confirm the printed database name (`salo_db`) when prompted. Local files in `backend/storage/app/public/` are **never deleted** by this command; keep them until you have verified all migrated images in the app.
+
+---
+
+## Step 9: Reorganize Flat-Folder Public Images & Migrate Local Private Files
+
+1. **Reorganize existing flat-folder public images** into `SALO/Restaurants/...` and tag `visibility=public` (no DB changes):
+   ```powershell
+   cd backend
+   php artisan salo:drive:reorganize-public --dry-run
+   php artisan salo:drive:reorganize-public
+   ```
+2. **Migrate local private files** (`application_documents`, `branch_permits`, `deliveries.proof_photo`) after backing up `salo_db`:
+   ```powershell
+   php artisan salo:private-files:migrate-to-drive --dry-run
+   php artisan salo:private-files:migrate-to-drive
+   ```
+   Local files are **never deleted** by this command; keep them until you confirm every document opens from Drive.
+3. **Verify private-tree permissions** (asserts owner-only permissions on `Applications/`, `Riders/`, `Support/`):
+   ```powershell
+   php artisan salo:drive:check-permissions
+   ```
+4. **Check for Drive orphans** across the whole `SALO` tree:
+   ```powershell
+   php artisan salo:drive:orphans
+   ```
+5. **90-day rejected application purge** (manual only, `--dry-run` first):
+   ```powershell
+   php artisan salo:drive:purge-rejected --dry-run
+   ```
 
 ---
 

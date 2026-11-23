@@ -2,18 +2,28 @@
 
 namespace App\Support;
 
+use App\Support\Storage\DriveClientInterface;
+use App\Support\Storage\DriveFolderResolver;
 use App\Support\Storage\GoogleDrivePublicImageStore;
+use App\Support\Storage\ImageProcessor;
+use App\Support\Storage\ImageStorageUnavailableException;
 use App\Support\Storage\PublicImageStore;
+use App\Support\Storage\StoragePurpose;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FileStorageService
 {
     public function __construct(
         private readonly PublicImageStore $publicImageStore,
+        private readonly ?DriveClientInterface $driveClient = null,
+        private readonly ?DriveFolderResolver $folderResolver = null,
     ) {}
     private const IMAGE_MIME_MAP = [
         'image/jpeg' => 'jpg',
@@ -54,17 +64,172 @@ class FileStorageService
             fieldName: $fieldName,
         );
 
-        $storedValue = $this->publicImageStore->put(
-            localPath: $validated['real_path'],
-            mime: $validated['mime_type'],
-            name: $validated['filename'],
-            directory: trim($directory, '/'),
-            meta: ['field' => $fieldName],
-        );
+        $optimizedPath = ImageProcessor::sanitizeAndOptimize($validated['real_path'], $validated['mime_type']);
+        $sourcePath = $optimizedPath ?? $validated['real_path'];
+
+        try {
+            $storedValue = $this->publicImageStore->put(
+                localPath: $sourcePath,
+                mime: $validated['mime_type'],
+                name: $validated['filename'],
+                directory: trim($directory, '/'),
+                meta: ['field' => $fieldName, 'visibility' => StoragePurpose::VISIBILITY_PUBLIC],
+            );
+        } finally {
+            if ($optimizedPath !== null && is_file($optimizedPath)) {
+                @unlink($optimizedPath);
+            }
+        }
 
         return [
             'path' => $storedValue,
             'url' => $this->publicUrl($storedValue),
+            'original_filename' => $validated['original_filename'],
+            'mime_type' => $validated['mime_type'],
+            'size_bytes' => $validated['size_bytes'],
+        ];
+    }
+
+    /**
+     * Store a public image using a named purpose and owner context (structured Drive folders when Drive is active).
+     *
+     * @param  array<string, mixed>  $ownerContext
+     * @return array<string, mixed>
+     */
+    public function storePublicImageForPurpose(
+        UploadedFile $file,
+        string $purpose,
+        array $ownerContext,
+        string $localDirectory,
+        string $fieldName = 'image',
+    ): array {
+        if (! $this->useStructuredDriveForPublic()) {
+            return $this->storePublicImage($file, $localDirectory, $fieldName);
+        }
+
+        $validated = $this->validateUploadedFile(
+            file: $file,
+            mimeMap: self::IMAGE_MIME_MAP,
+            allowedExtensions: (array) config('salo.uploads.allowed_image_types', ['jpg', 'jpeg', 'png', 'webp']),
+            fieldName: $fieldName,
+        );
+
+        $maxDim = $purpose === StoragePurpose::RESTAURANT_LOGO ? 1024 : 1920;
+        $optimizedPath = ImageProcessor::sanitizeAndOptimize($validated['real_path'], $validated['mime_type'], $maxDim);
+        $sourcePath = $optimizedPath ?? $validated['real_path'];
+
+        try {
+            $appProperties = $this->buildAppProperties($purpose, $ownerContext);
+            $storedValue = $this->putIntoDriveFolderWithRetry(
+                localPath: $sourcePath,
+                mime: $validated['mime_type'],
+                opaqueName: $validated['filename'],
+                purpose: $purpose,
+                ownerContext: $ownerContext,
+                appProperties: $appProperties,
+            );
+        } finally {
+            if ($optimizedPath !== null && is_file($optimizedPath)) {
+                @unlink($optimizedPath);
+            }
+        }
+
+        return [
+            'path' => $storedValue,
+            'url' => $this->publicUrl($storedValue),
+            'original_filename' => $validated['original_filename'],
+            'mime_type' => $validated['mime_type'],
+            'size_bytes' => $validated['size_bytes'],
+        ];
+    }
+
+    /**
+     * Store a private file using a named purpose and owner context.
+     * Profile change request supporting documents stay local even when PRIVATE_FILE_STORAGE=google_drive.
+     *
+     * @param  array<string, mixed>  $ownerContext
+     * @return array<string, mixed>
+     */
+    public function storePrivateFileForPurpose(
+        UploadedFile $file,
+        string $purpose,
+        array $ownerContext,
+        string $localDirectory,
+        string $fieldName = 'document',
+        bool $imagesOnly = false,
+    ): array {
+        $mimeMap = $imagesOnly ? self::IMAGE_MIME_MAP : self::DOCUMENT_MIME_MAP;
+        $allowedExt = $imagesOnly
+            ? (array) config('salo.uploads.allowed_image_types', ['jpg', 'jpeg', 'png', 'webp'])
+            : (array) config('salo.uploads.allowed_document_types', ['pdf', 'jpg', 'jpeg', 'png']);
+
+        $validated = $this->validateUploadedFile(
+            file: $file,
+            mimeMap: $mimeMap,
+            allowedExtensions: $allowedExt,
+            fieldName: $fieldName,
+        );
+
+        $useDrive = $purpose !== StoragePurpose::PROFILE_CHANGE_DOCUMENT
+            && $this->useStructuredDriveForPrivate();
+
+        if (! $useDrive) {
+            $optimizedPath = $imagesOnly
+                ? ImageProcessor::sanitizeAndOptimize($validated['real_path'], $validated['mime_type'], 1920)
+                : null;
+            try {
+                if ($optimizedPath !== null) {
+                    $relative = trim($localDirectory, '/').'/'.$validated['filename'];
+                    $bytes = @file_get_contents($optimizedPath);
+                    if ($bytes === false || ! Storage::disk('local')->put($relative, $bytes)) {
+                        throw ValidationException::withMessages([$fieldName => ['Failed to store uploaded file.']]);
+                    }
+                    $storedPath = $relative;
+                } else {
+                    $storedPath = $file->storeAs(trim($localDirectory, '/'), $validated['filename'], 'local');
+                    if ($storedPath === false) {
+                        throw ValidationException::withMessages([$fieldName => ['Failed to store uploaded file.']]);
+                    }
+                }
+            } finally {
+                if ($optimizedPath !== null && is_file($optimizedPath)) {
+                    @unlink($optimizedPath);
+                }
+            }
+
+            return [
+                'path' => $storedPath,
+                'url' => null,
+                'original_filename' => $validated['original_filename'],
+                'mime_type' => $validated['mime_type'],
+                'size_bytes' => $validated['size_bytes'],
+            ];
+        }
+
+        $optimizedPath = str_starts_with($validated['mime_type'], 'image/')
+            ? ImageProcessor::sanitizeAndOptimize($validated['real_path'], $validated['mime_type'], 1920)
+            : null;
+        $sourcePath = $optimizedPath ?? $validated['real_path'];
+
+        try {
+            $appProperties = $this->buildAppProperties($purpose, $ownerContext);
+            $storedValue = $this->putIntoDriveFolderWithRetry(
+                localPath: $sourcePath,
+                mime: $validated['mime_type'],
+                opaqueName: $validated['filename'],
+                purpose: $purpose,
+                ownerContext: $ownerContext,
+                appProperties: $appProperties,
+            );
+        } finally {
+            if ($optimizedPath !== null && is_file($optimizedPath)) {
+                @unlink($optimizedPath);
+            }
+        }
+
+        return [
+            'path' => $storedValue,
+            'url' => null,
             'original_filename' => $validated['original_filename'],
             'mime_type' => $validated['mime_type'],
             'size_bytes' => $validated['size_bytes'],
@@ -143,6 +308,10 @@ class FileStorageService
                     return false;
                 }
 
+                if ($this->useStructuredDriveForPublic()) {
+                    return $this->drive()->trashFile($trimmed);
+                }
+
                 return $this->publicImageStore->delete($trimmed);
             }
 
@@ -189,7 +358,11 @@ class FileStorageService
             }
 
             if (str_starts_with($trimmed, 'gdrive:')) {
-                $this->publicImageStore->delete($trimmed);
+                if ($this->useStructuredDriveForPublic()) {
+                    $this->drive()->trashFile($trimmed);
+                } else {
+                    $this->publicImageStore->delete($trimmed);
+                }
 
                 continue;
             }
@@ -205,6 +378,13 @@ class FileStorageService
         }
 
         foreach ($privatePaths as $path) {
+            $trimmed = trim((string) $path);
+            if ($trimmed !== '' && str_starts_with($trimmed, 'gdrive:')) {
+                $this->drive()->trashFile($trimmed);
+
+                continue;
+            }
+
             $normalized = $this->normalizeRelativePath($path);
             if ($normalized !== null && Storage::disk('local')->exists($normalized)) {
                 Storage::disk('local')->delete($normalized);
@@ -279,13 +459,220 @@ class FileStorageService
     public function streamPrivateFile(string $path, string $downloadName, string $mimeType): StreamedResponse
     {
         $normalized = $this->normalizeRelativePath($path) ?? $path;
-        abort_unless(Storage::disk('local')->exists($normalized), 404, 'Document file not found.');
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $localDisk */
+        $localDisk = Storage::disk('local');
+        abort_unless($localDisk->exists($normalized), 404, 'Document file not found.');
 
-        return Storage::disk('local')->response($normalized, $downloadName, [
+        return $localDisk->response($normalized, $downloadName, [
             'Content-Type' => $mimeType,
             'Cache-Control' => 'private, no-store, max-age=0',
             'X-Content-Type-Options' => 'nosniff',
         ]);
+    }
+
+    /**
+     * Stream a private file from either Google Drive (enforcing visibility=private) or local storage.
+     */
+    public function streamPrivateStoredFile(string $path, ?string $downloadName, string $mimeType): Response
+    {
+        $trimmed = trim($path);
+        if (! str_starts_with($trimmed, GoogleDrivePublicImageStore::PREFIX)) {
+            return $this->streamPrivateFile($trimmed, $downloadName ?: basename($trimmed), $mimeType);
+        }
+
+        $result = $this->drive()->readStream($trimmed);
+        $stream = $result['stream'];
+        $appProps = is_array($result['appProperties'] ?? null) ? $result['appProperties'] : [];
+        $visibility = (string) ($appProps['visibility'] ?? '');
+
+        if ($visibility !== StoragePurpose::VISIBILITY_PRIVATE) {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+            abort(404, 'Document file not found.');
+        }
+
+        $bytes = stream_get_contents($stream);
+        if (is_resource($stream)) {
+            fclose($stream);
+        }
+
+        if ($bytes === false) {
+            abort(503, 'Document storage is temporarily unavailable.');
+        }
+
+        $safeName = str_replace(['"', "\r", "\n"], '', $downloadName ?: 'document');
+        $resolvedMime = $mimeType !== '' ? $mimeType : (string) ($result['mime'] ?? 'application/octet-stream');
+
+        return response($bytes, 200, [
+            'Content-Type' => $resolvedMime,
+            'Content-Length' => (string) strlen($bytes),
+            'Content-Disposition' => 'inline; filename="'.$safeName.'"',
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    /**
+     * Check ALL public image columns across restaurants and menu_items before trashing any image.
+     */
+    public function isPublicAssetReferenced(string $storedValue): bool
+    {
+        $trimmed = trim($storedValue);
+        if ($trimmed === '') {
+            return false;
+        }
+
+        $candidates = [$trimmed];
+        if (! str_starts_with($trimmed, GoogleDrivePublicImageStore::PREFIX)) {
+            $normalized = $this->normalizeRelativePath($trimmed);
+            if ($normalized !== null) {
+                $candidates = array_values(array_unique([$normalized, '/storage/'.ltrim($normalized, '/')]));
+            }
+        }
+
+        return DB::table('restaurants')
+            ->whereIn('logo_image', $candidates)
+            ->orWhereIn('cover_image', $candidates)
+            ->exists()
+            || DB::table('menu_items')
+                ->whereIn('photo_image', $candidates)
+                ->orWhereIn('published_photo_image', $candidates)
+                ->exists();
+    }
+
+    /**
+     * Server-side copy of a menu item photo into a target branch's category folder (never share one fileId).
+     *
+     * @param  array<string, mixed>  $targetOwnerContext
+     */
+    public function copyPublicImageToCategory(?string $sourceStoredValue, array $targetOwnerContext): ?string
+    {
+        if ($sourceStoredValue === null || trim($sourceStoredValue) === '') {
+            return null;
+        }
+
+        $trimmed = trim($sourceStoredValue);
+
+        if (str_starts_with($trimmed, GoogleDrivePublicImageStore::PREFIX)) {
+            if (! $this->useStructuredDriveForPublic()) {
+                return $trimmed;
+            }
+
+            $meta = $this->drive()->getFileMetadata($trimmed);
+            $mime = (string) ($meta['mimeType'] ?? 'image/jpeg');
+            $ext = self::IMAGE_MIME_MAP[$mime] ?? 'jpg';
+            $opaqueName = Str::uuid()->toString().'.'.$ext;
+            $folderId = $this->folders()->resolveFolderForPurpose(StoragePurpose::MENU_ITEM_PHOTO, $targetOwnerContext);
+            $appProperties = $this->buildAppProperties(StoragePurpose::MENU_ITEM_PHOTO, $targetOwnerContext);
+
+            return $this->drive()->copyFile($trimmed, $folderId, $opaqueName, $appProperties);
+        }
+
+        $relative = $this->normalizeRelativePath($trimmed);
+        if ($relative === null || ! Storage::disk('public')->exists($relative)) {
+            return $trimmed;
+        }
+
+        $ext = strtolower(pathinfo($relative, PATHINFO_EXTENSION)) ?: 'jpg';
+        $targetRestaurantId = (int) ($targetOwnerContext['restaurant_id'] ?? 0);
+        $newRelative = "restaurants/{$targetRestaurantId}/menu/".Str::uuid()->toString().'.'.$ext;
+        Storage::disk('public')->copy($relative, $newRelative);
+
+        return $newRelative;
+    }
+
+    /**
+     * Move an existing Drive menu item photo to a new category folder (preserving fileId).
+     *
+     * @param  array<string, mixed>  $targetOwnerContext
+     */
+    public function moveMenuPhotoToCategory(?string $storedValue, array $targetOwnerContext): void
+    {
+        if ($storedValue === null || ! str_starts_with(trim($storedValue), GoogleDrivePublicImageStore::PREFIX)) {
+            return;
+        }
+
+        if (! $this->useStructuredDriveForPublic()) {
+            return;
+        }
+
+        try {
+            $targetFolderId = $this->folders()->resolveFolderForPurpose(StoragePurpose::MENU_ITEM_PHOTO, $targetOwnerContext);
+            $this->drive()->moveFile(trim($storedValue), $targetFolderId);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to move Drive menu photo between category folders.', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function folders(): DriveFolderResolver
+    {
+        return $this->folderResolver ?? app(DriveFolderResolver::class);
+    }
+
+    public function drive(): DriveClientInterface
+    {
+        return $this->driveClient ?? app(DriveClientInterface::class);
+    }
+
+    private function useStructuredDriveForPublic(): bool
+    {
+        return strtolower(trim((string) config('salo.uploads.public_image_driver', 'local'))) === 'google_drive';
+    }
+
+    private function useStructuredDriveForPrivate(): bool
+    {
+        return strtolower(trim((string) config('salo.uploads.private_file_driver', 'local'))) === 'google_drive';
+    }
+
+    /**
+     * @param  array<string, mixed>  $ownerContext
+     * @return array<string, string>
+     */
+    private function buildAppProperties(string $purpose, array $ownerContext): array
+    {
+        $props = [
+            'visibility' => StoragePurpose::visibility($purpose),
+            'salo_purpose' => $purpose,
+        ];
+
+        foreach (['brand_restaurant_id', 'restaurant_id', 'menu_category_id', 'application_id', 'application_branch_id', 'rider_user_id', 'order_id'] as $key) {
+            if (isset($ownerContext[$key]) && $ownerContext[$key] !== null) {
+                $props[$key] = (string) $ownerContext[$key];
+            }
+        }
+
+        return $props;
+    }
+
+    /**
+     * @param  array<string, mixed>  $ownerContext
+     * @param  array<string, string>  $appProperties
+     */
+    private function putIntoDriveFolderWithRetry(
+        string $localPath,
+        string $mime,
+        string $opaqueName,
+        string $purpose,
+        array $ownerContext,
+        array $appProperties,
+    ): string {
+        $folderId = $this->folders()->resolveFolderForPurpose($purpose, $ownerContext);
+
+        try {
+            return $this->drive()->putFile($localPath, $mime, $opaqueName, $folderId, $appProperties);
+        } catch (ImageStorageUnavailableException $e) {
+            if ($e->statusCode() !== 404) {
+                throw $e;
+            }
+            // Cached folder ID returned 404: drop folder cache keys for this purpose and re-resolve by appProperties once.
+            $this->folders()->forgetPurposeCache($purpose, $ownerContext);
+            $freshFolderId = $this->folders()->resolveFolderForPurpose($purpose, $ownerContext);
+
+            return $this->drive()->putFile($localPath, $mime, $opaqueName, $freshFolderId, $appProperties);
+        }
     }
 
     /**

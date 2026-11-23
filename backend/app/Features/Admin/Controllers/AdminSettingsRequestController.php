@@ -7,7 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class AdminSettingsRequestController extends Controller
 {
@@ -44,7 +44,7 @@ class AdminSettingsRequestController extends Controller
         );
     }
 
-    public function changeRequestDocument(Request $request, int $id, int $index): StreamedResponse
+    public function changeRequestDocument(Request $request, int $id, int $index): Response
     {
         return $this->profileChangeRequestService->streamDocument($request->user(), $id, $index);
     }

@@ -10,7 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class RestaurantApplicationController extends Controller
 {
@@ -100,7 +100,7 @@ class RestaurantApplicationController extends Controller
         );
     }
 
-    public function branchPermitFile(Request $request, int $id, int $branchId): StreamedResponse
+    public function branchPermitFile(Request $request, int $id, int $branchId): Response
     {
         return $this->branchPermitService->streamApplicationBranchPermitFile(
             user: $request->user(),

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Support\Storage\DriveClientInterface;
 use App\Support\Storage\PublicImageStore;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
@@ -9,6 +10,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\FakeDriveClient;
 use Tests\Support\FakePublicImageStore;
 use Tests\TestCase;
 
@@ -93,6 +95,40 @@ class DriveCommandsTest extends TestCase
         $this->artisan('salo:drive:orphans')
             ->expectsOutputToContain('Orphans: 1')
             ->expectsOutputToContain('orphan_id_999')
+            ->assertExitCode(0);
+    }
+
+    public function test_orphans_command_walks_nested_salo_tree_and_ignores_folder_nodes(): void
+    {
+        $fakeDrive = new FakeDriveClient('folder_123');
+        $subFolder = $fakeDrive->createFolder('folder_123', 'Restaurants', ['salo_type' => 'root_restaurants', 'salo_id' => 'root', 'visibility' => 'public']);
+        $fakeDrive->nodes['nested_ref_1'] = [
+            'id' => 'nested_ref_1',
+            'name' => 'logo.png',
+            'mimeType' => 'image/png',
+            'parents' => [$subFolder],
+            'appProperties' => ['visibility' => 'public'],
+            'trashed' => false,
+            'content' => 'x',
+            'permissions' => [],
+        ];
+        $fakeDrive->nodes['nested_orphan_1'] = [
+            'id' => 'nested_orphan_1',
+            'name' => 'orphan.png',
+            'mimeType' => 'image/png',
+            'parents' => [$subFolder],
+            'appProperties' => ['visibility' => 'public'],
+            'trashed' => false,
+            'content' => 'y',
+            'permissions' => [],
+        ];
+        $this->app->instance(DriveClientInterface::class, $fakeDrive);
+
+        $this->createRestaurant('gdrive:nested_ref_1', null);
+
+        $this->artisan('salo:drive:orphans')
+            ->expectsOutputToContain('Orphans: 1')
+            ->expectsOutputToContain('nested_orphan_1')
             ->assertExitCode(0);
     }
 

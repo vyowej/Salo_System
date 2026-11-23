@@ -173,6 +173,7 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
     Route::patch('/addresses/{id}/default', [CustomerAddressController::class, 'setDefault'])->whereNumber('id');
     Route::delete('/addresses/{id}', [CustomerAddressController::class, 'destroy'])->whereNumber('id');
     Route::get('/orders/{id}/tracking', [TrackingController::class, 'customerOrderTracking'])->whereNumber('id');
+    Route::get('/orders/{id}/delivery-proof', [RiderDeliveryController::class, 'customerProof'])->whereNumber('id');
 
     Route::post('/checkout', [CustomerOrderController::class, 'checkout']);
     Route::post('/promos/validate', [AdminPromoController::class, 'validateForCustomer']);
@@ -336,6 +337,7 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::get('/locations/overview', [AdminServiceAreaController::class, 'locationsOverview']);
     Route::get('/orders', [AdminOrderController::class, 'index']);
     Route::get('/orders/{id}/tracking', [TrackingController::class, 'adminOrderTracking'])->whereNumber('id');
+    Route::get('/orders/{id}/delivery-proof', [RiderDeliveryController::class, 'adminProof'])->whereNumber('id');
 
     Route::get('/disputes', [AdminDisputesController::class, 'index']);
     Route::post('/disputes/{orderId}/resolve', [AdminDisputesController::class, 'resolve'])->whereNumber('orderId');

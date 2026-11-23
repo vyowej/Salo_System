@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\AddressService;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use App\Support\Storage\StoragePurpose;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -233,10 +234,19 @@ class RiderApplicationService
         mixed $now,
         array &$storedPrivatePaths,
     ): void {
+        $riderName = trim(((string) ($user->first_name ?? '')).' '.((string) ($user->last_name ?? '')));
+        $riderContext = [
+            'application_type' => 'rider',
+            'application_id' => $applicationId,
+            'rider_name' => $riderName !== '' ? $riderName : 'Rider',
+        ];
+
         foreach ($documentFiles as $code => $file) {
-            $stored = $this->fileStorageService->storePrivateDocument(
+            $stored = $this->fileStorageService->storePrivateFileForPurpose(
                 file: $file,
-                directory: "applications/rider/{$applicationId}",
+                purpose: StoragePurpose::APPLICATION_DOCUMENT,
+                ownerContext: $riderContext,
+                localDirectory: "applications/rider/{$applicationId}",
                 fieldName: "documents.{$code}",
             );
             $storedPrivatePaths[] = $stored['path'];
@@ -349,9 +359,16 @@ class RiderApplicationService
             throw ValidationException::withMessages(['document_code' => ['Invalid rider document code.']]);
         }
 
-        $stored = $this->fileStorageService->storePrivateDocument(
+        $riderName = trim(((string) ($user->first_name ?? '')).' '.((string) ($user->last_name ?? '')));
+        $stored = $this->fileStorageService->storePrivateFileForPurpose(
             file: $file,
-            directory: "applications/rider/{$applicationId}",
+            purpose: StoragePurpose::APPLICATION_DOCUMENT,
+            ownerContext: [
+                'application_type' => 'rider',
+                'application_id' => $applicationId,
+                'rider_name' => $riderName !== '' ? $riderName : 'Rider',
+            ],
+            localDirectory: "applications/rider/{$applicationId}",
             fieldName: 'file',
         );
 

@@ -6,13 +6,14 @@ use App\Features\Notifications\Services\NotificationService;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use App\Support\Storage\StoragePurpose;
 use App\Support\WorkspaceAccessResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -435,6 +436,20 @@ class ProfileChangeRequestService
             );
         });
 
+        if ($decision === 'approve' && $row->entity_type === 'restaurant' && ! empty($payload['restaurant_name']) && strtolower(trim((string) config('salo.uploads.public_image_driver', 'local'))) === 'google_drive') {
+            try {
+                $targetRestaurant = DB::table('restaurants')
+                    ->where('restaurant_id', $row->entity_id)
+                    ->first(['restaurant_id', 'parent_restaurant_id', 'brand_restaurant_id']);
+                $brandId = $targetRestaurant
+                    ? (int) ($targetRestaurant->brand_restaurant_id ?: ($targetRestaurant->parent_restaurant_id ?: $targetRestaurant->restaurant_id))
+                    : (int) $row->entity_id;
+                $this->fileStorageService->folders()->renameRestaurantBrandFolder($brandId, (string) $payload['restaurant_name']);
+            } catch (\Throwable) {
+                // Best-effort Drive folder rename; DB name update already committed.
+            }
+        }
+
         return $this->getChangeRequestById($requestId);
     }
 
@@ -563,7 +578,7 @@ class ProfileChangeRequestService
         ];
     }
 
-    public function streamDocument(User $user, int $requestId, int $docIndex): StreamedResponse
+    public function streamDocument(User $user, int $requestId, int $docIndex): Response
     {
         $row = DB::table('profile_change_requests')
             ->where('request_id', $requestId)
@@ -575,13 +590,18 @@ class ProfileChangeRequestService
 
         $isAdmin = $user->user_role === 'admin';
         if (! $isAdmin) {
-            if ($row->entity_type === 'restaurant') {
-                $this->workspaceAccessResolver->requireActiveOwnedRestaurant($user, (int) $row->entity_id);
-            } else {
-                $rider = $this->workspaceAccessResolver->requireActiveRider($user);
-                if ((int) $rider->rider_id !== (int) $row->entity_id) {
-                    throw new AccessDeniedHttpException('Not authorized to view this document.');
+            try {
+                if ($row->entity_type === 'restaurant') {
+                    $this->workspaceAccessResolver->requireActiveOwnedRestaurant($user, (int) $row->entity_id);
+                } else {
+                    $rider = $this->workspaceAccessResolver->requireActiveRider($user);
+                    if ((int) $rider->rider_id !== (int) $row->entity_id) {
+                        throw new AccessDeniedHttpException('Not authorized to view this document.');
+                    }
                 }
+            } catch (\Throwable $e) {
+                $this->auditLogService->recordPrivateFileAccess((int) $user->user_id, 'profile_change_requests', $requestId, false, request());
+                throw $e;
             }
         }
 
@@ -590,9 +610,12 @@ class ProfileChangeRequestService
             throw new NotFoundHttpException('Document not found.');
         }
 
-        return $this->fileStorageService->streamPrivateDocument(
+        $this->auditLogService->recordPrivateFileAccess((int) $user->user_id, 'profile_change_requests', $requestId, true, request());
+
+        return $this->fileStorageService->streamPrivateStoredFile(
             $docs[$docIndex]['path'],
             $docs[$docIndex]['original_name'] ?? null,
+            (string) ($docs[$docIndex]['mime_type'] ?? 'application/octet-stream'),
         );
     }
 
@@ -635,9 +658,11 @@ class ProfileChangeRequestService
                 if (! $file instanceof UploadedFile) {
                     continue;
                 }
-                $stored[] = $this->fileStorageService->storePrivateDocument(
+                $stored[] = $this->fileStorageService->storePrivateFileForPurpose(
                     file: $file,
-                    directory: $directory,
+                    purpose: StoragePurpose::PROFILE_CHANGE_DOCUMENT,
+                    ownerContext: ['request_directory' => $directory],
+                    localDirectory: $directory,
                     fieldName: "documents.{$idx}",
                 );
             }

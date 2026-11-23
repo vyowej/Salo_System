@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class AuditLogService
@@ -32,5 +33,34 @@ class AuditLogService
             'ip_address' => $request?->ip(),
             'created_at' => now(),
         ]);
+    }
+
+    /**
+     * Record a private-file view or denied attempt, deduped per user + document + outcome within 10 minutes.
+     * Uses the document row ID (never the Drive fileId).
+     */
+    public function recordPrivateFileAccess(
+        ?int $actorUserId,
+        string $entityType,
+        string|int $entityId,
+        bool $allowed,
+        ?Request $request = null,
+    ): void {
+        $action = $allowed ? 'private_file_viewed' : 'private_file_access_denied';
+        $actorKey = $actorUserId ?? 'guest';
+        $dedupeKey = "salo:audit:private_file:{$action}:{$actorKey}:{$entityType}:{$entityId}";
+
+        if (! Cache::add($dedupeKey, 1, now()->addMinutes(10))) {
+            return;
+        }
+
+        $this->record(
+            actorUserId: $actorUserId,
+            action: $action,
+            entityType: $entityType,
+            entityId: $entityId,
+            newValues: ['outcome' => $allowed ? 'allowed' : 'denied'],
+            request: $request,
+        );
     }
 }

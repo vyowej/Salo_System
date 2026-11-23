@@ -7,13 +7,14 @@ use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use App\Support\Storage\StoragePurpose;
 use App\Support\WorkspaceAccessResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -230,13 +231,20 @@ class BranchPermitService
     /**
      * Store a private permit file for a branch (validates real MIME + size up to 10 MB).
      *
+     * @param  array<string, mixed>  $driveContext
      * @return array<string, mixed>
      */
-    public function storePermitFile(UploadedFile $file, int $brandId, string $fieldName = 'mayors_permit'): array
+    public function storePermitFile(UploadedFile $file, int $brandId, string $fieldName = 'mayors_permit', array $driveContext = []): array
     {
-        return $this->fileStorageService->storePrivateDocument(
+        if ($driveContext === []) {
+            $driveContext = $this->resolveBranchPermitDriveContextByBrand($brandId, $fieldName);
+        }
+
+        return $this->fileStorageService->storePrivateFileForPurpose(
             file: $file,
-            directory: "branch-permits/{$brandId}",
+            purpose: StoragePurpose::BRANCH_PERMIT,
+            ownerContext: $driveContext,
+            localDirectory: "branch-permits/{$brandId}",
             fieldName: $fieldName,
         );
     }
@@ -305,6 +313,7 @@ class BranchPermitService
                 ->first(),
             auditContext: ['restaurant_id' => $restaurantId],
             request: $request,
+            driveContext: $this->resolveBranchPermitDriveContextByBrand($brandId, (string) ($restaurant->branch_name ?? 'Branch'), $restaurantId),
         );
     }
 
@@ -384,6 +393,8 @@ class BranchPermitService
 
         $branchLabel = "{$app->restaurant_name} — {$appBranch->branch_name}";
 
+        $ownerName = trim(((string) ($applicant->first_name ?? '')).' '.((string) ($applicant->last_name ?? '')));
+
         return $this->persistPermitSubmission(
             actor: $applicant,
             storageDirectory: "branch-permits/app-{$applicationId}",
@@ -400,23 +411,26 @@ class BranchPermitService
                 'application_branch_id' => $applicationBranchId,
             ],
             request: $request,
+            driveContext: [
+                'application_id' => $applicationId,
+                'application_branch_id' => $applicationBranchId,
+                'owner_name' => $ownerName !== '' ? $ownerName : 'Owner',
+                'restaurant_name' => (string) $app->restaurant_name,
+                'branch_name' => (string) $appBranch->branch_name,
+            ],
         );
     }
 
     /**
      * Stream an application branch's private permit file for the applicant only (404 when no file; 403 otherwise).
      */
-    public function streamApplicationBranchPermitFile(User $user, int $applicationId, int $applicationBranchId): StreamedResponse
+    public function streamApplicationBranchPermitFile(User $user, int $applicationId, int $applicationBranchId): Response
     {
         $app = DB::table('restaurant_applications')
             ->where('restaurant_application_id', $applicationId)
             ->first(['restaurant_application_id', 'applicant_user_id']);
 
         abort_unless($app !== null, 404, 'Restaurant application not found.');
-
-        if ((int) $app->applicant_user_id !== (int) $user->user_id) {
-            abort(403, 'Forbidden: only the applicant may access this branch permit file.');
-        }
 
         $appBranch = DB::table('restaurant_application_branches')
             ->where('application_branch_id', $applicationBranchId)
@@ -427,13 +441,22 @@ class BranchPermitService
 
         $permit = DB::table('branch_permits')
             ->where('application_branch_id', $applicationBranchId)
-            ->first(['file_path', 'original_filename', 'mime_type']);
+            ->first(['permit_id', 'file_path', 'original_filename', 'mime_type']);
+
+        if ((int) $app->applicant_user_id !== (int) $user->user_id) {
+            if ($permit) {
+                $this->auditLogService->recordPrivateFileAccess((int) $user->user_id, 'branch_permits', (int) $permit->permit_id, false, request());
+            }
+            abort(403, 'Forbidden: only the applicant may access this branch permit file.');
+        }
 
         if (! $permit || ! $permit->file_path) {
             abort(404, 'Branch permit file not found.');
         }
 
-        return $this->fileStorageService->streamPrivateFile(
+        $this->auditLogService->recordPrivateFileAccess((int) $user->user_id, 'branch_permits', (int) $permit->permit_id, true, request());
+
+        return $this->fileStorageService->streamPrivateStoredFile(
             path: (string) $permit->file_path,
             downloadName: (string) ($permit->original_filename ?: 'branch-permit.pdf'),
             mimeType: (string) ($permit->mime_type ?: 'application/pdf'),
@@ -446,6 +469,7 @@ class BranchPermitService
      *
      * @param  callable(): ?object  $lockPermitQuery
      * @param  array<string, mixed>  $auditContext
+     * @param  array<string, mixed>  $driveContext
      * @return array<string, mixed>
      */
     private function persistPermitSubmission(
@@ -458,14 +482,17 @@ class BranchPermitService
         callable $lockPermitQuery,
         array $auditContext,
         Request $request,
+        array $driveContext = [],
     ): array {
         $newlyStoredPath = null;
 
         try {
             $stored = $file !== null
-                ? $this->fileStorageService->storePrivateDocument(
+                ? $this->fileStorageService->storePrivateFileForPurpose(
                     file: $file,
-                    directory: $storageDirectory,
+                    purpose: StoragePurpose::BRANCH_PERMIT,
+                    ownerContext: $driveContext,
+                    localDirectory: $storageDirectory,
                     fieldName: 'mayors_permit',
                 )
                 : null;
@@ -576,7 +603,7 @@ class BranchPermitService
             });
         } catch (\Throwable $e) {
             if ($newlyStoredPath !== null && $newlyStoredPath !== '') {
-                Storage::disk('local')->delete($newlyStoredPath);
+                $this->fileStorageService->cleanupStoredPaths([], [$newlyStoredPath]);
             }
             throw $e;
         }
@@ -616,7 +643,7 @@ class BranchPermitService
     /**
      * Stream a branch's private permit file (owners of the business and admins only; staff/outsiders 403).
      */
-    public function streamPermitFile(User $user, int $restaurantId): StreamedResponse
+    public function streamPermitFile(User $user, int $restaurantId): Response
     {
         $restaurant = DB::table('restaurants')
             ->where('restaurant_id', $restaurantId)
@@ -632,23 +659,52 @@ class BranchPermitService
             ->where('user_id', $user->user_id)
             ->exists();
 
-        if (! $isAdmin && ! $isOwner) {
-            abort(403, 'Forbidden: only restaurant owners and administrators may access branch permit files.');
-        }
-
         $permit = DB::table('branch_permits')
             ->where('restaurant_id', $restaurantId)
-            ->first(['file_path', 'original_filename', 'mime_type']);
+            ->first(['permit_id', 'file_path', 'original_filename', 'mime_type']);
+
+        if (! $isAdmin && ! $isOwner) {
+            if ($permit) {
+                $this->auditLogService->recordPrivateFileAccess((int) $user->user_id, 'branch_permits', (int) $permit->permit_id, false, request());
+            }
+            abort(403, 'Forbidden: only restaurant owners and administrators may access branch permit files.');
+        }
 
         if (! $permit || ! $permit->file_path) {
             abort(404, 'Branch permit file not found.');
         }
 
-        return $this->fileStorageService->streamPrivateFile(
+        $this->auditLogService->recordPrivateFileAccess((int) $user->user_id, 'branch_permits', (int) $permit->permit_id, true, request());
+
+        return $this->fileStorageService->streamPrivateStoredFile(
             path: (string) $permit->file_path,
             downloadName: (string) ($permit->original_filename ?: 'branch-permit.pdf'),
             mimeType: (string) ($permit->mime_type ?: 'application/pdf'),
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveBranchPermitDriveContextByBrand(int $brandId, string $branchName = 'Branch', ?int $restaurantId = null): array
+    {
+        $app = DB::table('restaurant_applications as ra')
+            ->join('restaurants as r', 'r.restaurant_id', '=', 'ra.restaurant_id')
+            ->join('users as u', 'u.user_id', '=', 'ra.applicant_user_id')
+            ->where('ra.restaurant_id', $brandId)
+            ->first(['ra.restaurant_application_id', 'r.restaurant_name', 'u.first_name', 'u.last_name']);
+
+        $ownerName = $app ? trim(((string) ($app->first_name ?? '')).' '.((string) ($app->last_name ?? ''))) : 'Owner';
+        $restaurantName = $app ? (string) $app->restaurant_name : 'Restaurant';
+
+        return [
+            'application_id' => $app ? (int) $app->restaurant_application_id : $brandId,
+            'restaurant_id' => $restaurantId,
+            'application_branch_id' => $restaurantId ?? $brandId,
+            'owner_name' => $ownerName !== '' ? $ownerName : 'Owner',
+            'restaurant_name' => $restaurantName !== '' ? $restaurantName : 'Restaurant',
+            'branch_name' => $branchName !== '' ? $branchName : 'Branch',
+        ];
     }
 
     /**

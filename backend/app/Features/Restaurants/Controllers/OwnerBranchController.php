@@ -9,7 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class OwnerBranchController extends Controller
 {
@@ -63,7 +63,7 @@ class OwnerBranchController extends Controller
         );
     }
 
-    public function permitFile(Request $request, int $id): StreamedResponse
+    public function permitFile(Request $request, int $id): Response
     {
         return $this->branchPermitService->streamPermitFile($request->user(), $id);
     }

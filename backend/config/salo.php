@@ -133,6 +133,8 @@ return [
 
     'uploads' => [
         'public_image_driver' => env('PUBLIC_IMAGE_STORAGE', 'local'),
+        'private_file_driver' => env('PRIVATE_FILE_STORAGE', 'local'),
+        'delivery_proof_required' => filter_var(env('SALO_DELIVERY_PROOF_REQUIRED', false), FILTER_VALIDATE_BOOLEAN),
         'max_size_kb' => (int) env('MAX_UPLOAD_SIZE_KB', 5120),
         'allowed_image_types' => array_values(array_filter(array_map(
             static fn (string $ext): string => strtolower(trim($ext)),

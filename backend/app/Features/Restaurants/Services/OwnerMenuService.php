@@ -5,10 +5,12 @@ namespace App\Features\Restaurants\Services;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use App\Support\Storage\StoragePurpose;
 use App\Support\WorkspaceAccessResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
@@ -106,6 +108,8 @@ class OwnerMenuService
             return $id;
         });
 
+        $this->bestEffortEnsureCategoryFolder($restaurant, $categoryId, $name);
+
         return collect($this->listCategories($user, $targetId))->firstWhere('id', $categoryId);
     }
 
@@ -156,6 +160,10 @@ class OwnerMenuService
                 request: $request,
             );
         });
+
+        if ($newName !== $category->category_name) {
+            $this->bestEffortRenameCategoryFolder($restaurant, $categoryId, $newName);
+        }
 
         return collect($this->listCategories($user, $targetId))->firstWhere('id', $categoryId);
     }
@@ -292,6 +300,10 @@ class OwnerMenuService
                 request: $request,
             );
         });
+
+        if ((int) $category->is_published !== 1) {
+            $this->bestEffortTrashCategoryFolder($restaurant, $categoryId, (string) $category->category_name);
+        }
     }
 
     /**
@@ -529,7 +541,7 @@ class OwnerMenuService
 
         $this->assertCategoryOwnedByRestaurant($categoryId, $targetId);
 
-        $storedPhotoPath = $this->storeMenuPhotoIfPresent($photoFile, $targetId);
+        $storedPhotoPath = $this->storeMenuPhotoIfPresent($photoFile, $restaurant, $categoryId);
         try {
             $itemId = $this->persistNewItem($targetId, $categoryId, $validated, $storedPhotoPath, $user, $request);
         } catch (\Throwable $e) {
@@ -619,7 +631,7 @@ class OwnerMenuService
         $oldPhoto = $existing->photo_image;
         $newlyStoredPath = null;
         try {
-            $newlyStoredPath = $this->storeMenuPhotoIfPresent($photoFile, $targetId);
+            $newlyStoredPath = $this->storeMenuPhotoIfPresent($photoFile, $restaurant, $categoryId);
             $newPhoto = $newlyStoredPath ?? ($removePhoto ? null : $oldPhoto);
             $updates = $this->buildItemUpdates($validated, $existing, $categoryId, $newPhoto);
             $this->persistItemUpdate($itemId, $existing, $updates, $user, $request);
@@ -632,18 +644,26 @@ class OwnerMenuService
 
         $this->deleteOldMenuPhotoIfReplaced($oldPhoto, $newPhoto);
 
+        if ($categoryId !== (int) $existing->menu_category_id && $newlyStoredPath === null && ! $removePhoto && $newPhoto !== null) {
+            $this->fileStorageService->moveMenuPhotoToCategory($newPhoto, $this->buildCategoryFolderContext($restaurant, $categoryId));
+        }
+
         return $this->getFormattedItem($itemId, $targetId);
     }
 
-    private function storeMenuPhotoIfPresent(?UploadedFile $photoFile, int $restaurantId): ?string
+    private function storeMenuPhotoIfPresent(?UploadedFile $photoFile, object $restaurant, int $categoryId): ?string
     {
         if ($photoFile === null) {
             return null;
         }
 
-        return $this->fileStorageService->storePublicImage(
+        $restaurantId = (int) $restaurant->restaurant_id;
+
+        return $this->fileStorageService->storePublicImageForPurpose(
             file: $photoFile,
-            directory: "restaurants/{$restaurantId}/menu",
+            purpose: StoragePurpose::MENU_ITEM_PHOTO,
+            ownerContext: $this->buildCategoryFolderContext($restaurant, $categoryId),
+            localDirectory: "restaurants/{$restaurantId}/menu",
             fieldName: 'photo',
         )['path'];
     }
@@ -857,12 +877,74 @@ class OwnerMenuService
 
     private function isMenuPhotoReferenced(string $relativePath): bool
     {
-        $prefixed = '/storage/'.ltrim($relativePath, '/');
+        return $this->fileStorageService->isPublicAssetReferenced($relativePath);
+    }
 
-        return DB::table('menu_items')
-            ->whereIn('photo_image', [$relativePath, $prefixed])
-            ->orWhereIn('published_photo_image', [$relativePath, $prefixed])
-            ->exists();
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildCategoryFolderContext(object $restaurant, int $categoryId, ?string $categoryName = null): array
+    {
+        $restaurantId = (int) $restaurant->restaurant_id;
+        $brandId = (int) ($restaurant->brand_restaurant_id ?: ($restaurant->parent_restaurant_id ?: $restaurantId));
+        $isMainBranch = ($restaurant->parent_restaurant_id ?? null) === null;
+        $resolvedCatName = $categoryName ?? (string) (DB::table('menu_categories')->where('menu_category_id', $categoryId)->value('category_name') ?? 'Category');
+
+        return [
+            'brand_restaurant_id' => $brandId,
+            'restaurant_id' => $restaurantId,
+            'restaurant_name' => (string) $restaurant->restaurant_name,
+            'branch_name' => $restaurant->branch_name ?? null,
+            'is_main_branch' => $isMainBranch,
+            'menu_category_id' => $categoryId,
+            'category_name' => $resolvedCatName,
+        ];
+    }
+
+    private function bestEffortEnsureCategoryFolder(object $restaurant, int $categoryId, string $categoryName): void
+    {
+        if (strtolower(trim((string) config('salo.uploads.public_image_driver', 'local'))) !== 'google_drive') {
+            return;
+        }
+
+        try {
+            $this->fileStorageService->folders()->resolveMenuCategoryFolder(
+                $this->buildCategoryFolderContext($restaurant, $categoryId, $categoryName)
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Best-effort Drive category folder creation failed.', ['category_id' => $categoryId, 'error' => $e->getMessage()]);
+        }
+    }
+
+    private function bestEffortRenameCategoryFolder(object $restaurant, int $categoryId, string $newName): void
+    {
+        if (strtolower(trim((string) config('salo.uploads.public_image_driver', 'local'))) !== 'google_drive') {
+            return;
+        }
+
+        try {
+            $this->fileStorageService->folders()->renameMenuCategoryFolder(
+                $this->buildCategoryFolderContext($restaurant, $categoryId, $newName),
+                $newName,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Best-effort Drive category folder rename failed.', ['category_id' => $categoryId, 'error' => $e->getMessage()]);
+        }
+    }
+
+    private function bestEffortTrashCategoryFolder(object $restaurant, int $categoryId, string $categoryName): void
+    {
+        if (strtolower(trim((string) config('salo.uploads.public_image_driver', 'local'))) !== 'google_drive') {
+            return;
+        }
+
+        try {
+            $this->fileStorageService->folders()->trashMenuCategoryFolder(
+                $this->buildCategoryFolderContext($restaurant, $categoryId, $categoryName)
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Best-effort Drive category folder trash failed.', ['category_id' => $categoryId, 'error' => $e->getMessage()]);
+        }
     }
 
     /**

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 class RiderDeliveryController extends Controller
 {
@@ -96,8 +97,18 @@ class RiderDeliveryController extends Controller
         );
     }
 
-    public function proof(Request $request, int $orderId)
+    public function proof(Request $request, int $orderId): Response
     {
         return $this->riderDeliveryService->streamProofPhoto($request->user(), $orderId);
+    }
+
+    public function customerProof(Request $request, int $id): Response
+    {
+        return $this->riderDeliveryService->streamProofPhotoForCustomer($request->user(), $id);
+    }
+
+    public function adminProof(Request $request, int $id): Response
+    {
+        return $this->riderDeliveryService->streamProofPhotoForAdmin($request->user(), $id);
     }
 }

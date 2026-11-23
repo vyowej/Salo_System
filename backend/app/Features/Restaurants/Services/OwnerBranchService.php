@@ -194,7 +194,13 @@ class OwnerBranchService
 
         try {
             if ($permitInput['mode'] === 'file' && $permitFile !== null) {
-                $storedPermit = $this->branchPermitService->storePermitFile($permitFile, $brandId, 'mayors_permit');
+                $storedPermit = $this->branchPermitService->storePermitFile($permitFile, $brandId, 'mayors_permit', [
+                    'application_id' => (int) (DB::table('restaurant_applications')->where('restaurant_id', $brandId)->value('restaurant_application_id') ?? $brandId),
+                    'owner_name' => trim(((string) ($owner->first_name ?? '')).' '.((string) ($owner->last_name ?? ''))) ?: 'Owner',
+                    'restaurant_name' => (string) $root->restaurant_name,
+                    'branch_name' => $branchName,
+                    'application_branch_id' => $brandId,
+                ]);
                 $newlyStoredPath = $storedPermit['path'] ?? null;
             }
 

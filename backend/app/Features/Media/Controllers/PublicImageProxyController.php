@@ -3,9 +3,11 @@
 namespace App\Features\Media\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Support\Storage\DriveClientInterface;
 use App\Support\Storage\GoogleDrivePublicImageStore;
 use App\Support\Storage\LocalPublicImageStore;
 use App\Support\Storage\PublicImageStore;
+use App\Support\Storage\StoragePurpose;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\DB;
@@ -59,20 +61,25 @@ class PublicImageProxyController extends Controller
         if ($useCache && Storage::disk('local')->exists($cacheBinPath) && Storage::disk('local')->exists($cacheMetaPath)) {
             $meta = json_decode((string) Storage::disk('local')->get($cacheMetaPath), true);
             $cachedMime = is_array($meta) ? (string) ($meta['mime'] ?? '') : '';
+            $cachedVisibility = is_array($meta) ? (string) ($meta['visibility'] ?? '') : '';
 
-            if (in_array($cachedMime, self::ALLOWED_MIME_TYPES, true)) {
-                return Storage::disk('local')->response($cacheBinPath, null, array_merge($headers, [
+            if ($cachedVisibility === StoragePurpose::VISIBILITY_PUBLIC && in_array($cachedMime, self::ALLOWED_MIME_TYPES, true)) {
+                /** @var \Illuminate\Filesystem\FilesystemAdapter $localDisk */
+                $localDisk = Storage::disk('local');
+
+                return $localDisk->response($cacheBinPath, null, array_merge($headers, [
                     'Content-Type' => $cachedMime,
                 ]));
             }
         }
 
-        $store = $this->resolveDriveCapableStore();
-        $result = $store->readStream($storedValue);
+        $result = $this->readFromDrive($storedValue);
         $stream = $result['stream'];
         $mime = strtolower(trim((string) $result['mime']));
+        $appProps = is_array($result['appProperties'] ?? null) ? $result['appProperties'] : [];
+        $visibility = (string) ($appProps['visibility'] ?? '');
 
-        if (! in_array($mime, self::ALLOWED_MIME_TYPES, true)) {
+        if ($visibility !== StoragePurpose::VISIBILITY_PUBLIC || ! in_array($mime, self::ALLOWED_MIME_TYPES, true)) {
             if (is_resource($stream)) {
                 fclose($stream);
             }
@@ -93,6 +100,7 @@ class PublicImageProxyController extends Controller
             Storage::disk('local')->put($cacheMetaPath, json_encode([
                 'mime' => $mime,
                 'size' => strlen($bytes),
+                'visibility' => StoragePurpose::VISIBILITY_PUBLIC,
             ], JSON_THROW_ON_ERROR));
         }
 
@@ -100,6 +108,23 @@ class PublicImageProxyController extends Controller
             'Content-Type' => $mime,
             'Content-Length' => (string) strlen($bytes),
         ]));
+    }
+
+    /**
+     * @return array{stream: resource, mime: string, size: int, appProperties?: array<string, string>}
+     */
+    private function readFromDrive(string $storedValue): array
+    {
+        $boundStore = app(PublicImageStore::class);
+        if (! $boundStore instanceof LocalPublicImageStore && ! $boundStore instanceof GoogleDrivePublicImageStore) {
+            return $boundStore->readStream($storedValue);
+        }
+
+        if (app()->bound(DriveClientInterface::class)) {
+            return app(DriveClientInterface::class)->readStream($storedValue);
+        }
+
+        return $this->resolveDriveCapableStore()->readStream($storedValue);
     }
 
     private function resolveDriveCapableStore(): PublicImageStore

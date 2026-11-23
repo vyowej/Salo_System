@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\AddressService;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use App\Support\Storage\StoragePurpose;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -325,10 +326,18 @@ class RestaurantApplicationService
         $logoPath = null;
         $coverPath = null;
 
+        $restaurantName = (string) (DB::table('restaurants')->where('restaurant_id', $restaurantId)->value('restaurant_name') ?? 'Restaurant');
+        $brandContext = [
+            'brand_restaurant_id' => $restaurantId,
+            'restaurant_name' => $restaurantName,
+        ];
+
         if ($logoFile !== null) {
-            $storedLogo = $this->fileStorageService->storePublicImage(
+            $storedLogo = $this->fileStorageService->storePublicImageForPurpose(
                 file: $logoFile,
-                directory: "restaurants/{$restaurantId}",
+                purpose: StoragePurpose::RESTAURANT_LOGO,
+                ownerContext: $brandContext,
+                localDirectory: "restaurants/{$restaurantId}",
                 fieldName: 'logo_image',
             );
             $logoPath = $storedLogo['path'];
@@ -336,9 +345,11 @@ class RestaurantApplicationService
         }
 
         if ($coverFile !== null) {
-            $storedCover = $this->fileStorageService->storePublicImage(
+            $storedCover = $this->fileStorageService->storePublicImageForPurpose(
                 file: $coverFile,
-                directory: "restaurants/{$restaurantId}",
+                purpose: StoragePurpose::RESTAURANT_COVER,
+                ownerContext: $brandContext,
+                localDirectory: "restaurants/{$restaurantId}",
                 fieldName: 'cover_image',
             );
             $coverPath = $storedCover['path'];
@@ -422,6 +433,7 @@ class RestaurantApplicationService
             return;
         }
 
+        $restaurantName = (string) (DB::table('restaurants')->where('restaurant_id', $restaurantId)->value('restaurant_name') ?? 'Restaurant');
         $categoryCache = [];
         $categorySortOrder = 0;
 
@@ -453,9 +465,18 @@ class RestaurantApplicationService
             $photoPath = null;
             $photoFile = $menuItemPhotos[$idx] ?? null;
             if ($photoFile instanceof UploadedFile) {
-                $storedPhoto = $this->fileStorageService->storePublicImage(
+                $storedPhoto = $this->fileStorageService->storePublicImageForPurpose(
                     file: $photoFile,
-                    directory: "restaurants/{$restaurantId}/menu",
+                    purpose: StoragePurpose::MENU_ITEM_PHOTO,
+                    ownerContext: [
+                        'brand_restaurant_id' => $restaurantId,
+                        'restaurant_id' => $restaurantId,
+                        'restaurant_name' => $restaurantName,
+                        'is_main_branch' => true,
+                        'menu_category_id' => $categoryCache[$categoryKey],
+                        'category_name' => $categoryName,
+                    ],
+                    localDirectory: "restaurants/{$restaurantId}/menu",
                     fieldName: "menu_item_photos.{$idx}",
                 );
                 $photoPath = $storedPhoto['path'];
@@ -592,10 +613,14 @@ class RestaurantApplicationService
         mixed $now,
         array &$storedPrivatePaths,
     ): void {
+        $appContext = $this->buildApplicationDriveContext($applicationId, $user);
+
         foreach ($documentFiles as $code => $file) {
-            $stored = $this->fileStorageService->storePrivateDocument(
+            $stored = $this->fileStorageService->storePrivateFileForPurpose(
                 file: $file,
-                directory: "applications/restaurant/{$applicationId}",
+                purpose: StoragePurpose::APPLICATION_DOCUMENT,
+                ownerContext: $appContext,
+                localDirectory: "applications/restaurant/{$applicationId}",
                 fieldName: "documents.{$code}",
             );
             $storedPrivatePaths[] = $stored['path'];
@@ -669,7 +694,30 @@ class RestaurantApplicationService
     }
 
     /**
-     * @return array<string, mixed>|null
+     * @return array<string, mixed>
+     */
+    private function buildApplicationDriveContext(int $applicationId, User $user, ?string $restaurantName = null): array
+    {
+        $resolvedRestName = $restaurantName;
+        if ($resolvedRestName === null) {
+            $resolvedRestName = (string) (DB::table('restaurant_applications as ra')
+                ->join('restaurants as r', 'r.restaurant_id', '=', 'ra.restaurant_id')
+                ->where('ra.restaurant_application_id', $applicationId)
+                ->value('r.restaurant_name') ?? 'Restaurant');
+        }
+
+        $ownerName = trim(((string) ($user->first_name ?? '')).' '.((string) ($user->last_name ?? '')));
+
+        return [
+            'application_type' => 'restaurant',
+            'application_id' => $applicationId,
+            'owner_name' => $ownerName !== '' ? $ownerName : 'Owner',
+            'restaurant_name' => $resolvedRestName !== '' ? $resolvedRestName : 'Restaurant',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
      */
     public function getCurrentForUser(User $user): ?array
     {
@@ -693,9 +741,11 @@ class RestaurantApplicationService
     {
         $app = $this->assertCanUploadDocument($user, $applicationId, $documentCode);
 
-        $stored = $this->fileStorageService->storePrivateDocument(
+        $stored = $this->fileStorageService->storePrivateFileForPurpose(
             file: $file,
-            directory: "applications/restaurant/{$applicationId}",
+            purpose: StoragePurpose::APPLICATION_DOCUMENT,
+            ownerContext: $this->buildApplicationDriveContext($applicationId, $user, (string) ($app->restaurant_name ?? 'Restaurant')),
+            localDirectory: "applications/restaurant/{$applicationId}",
             fieldName: 'file',
         );
 
