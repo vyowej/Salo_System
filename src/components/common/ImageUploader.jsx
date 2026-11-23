@@ -190,9 +190,35 @@ function ImageUploader({
     startProgressSimulation();
 
     try {
+      const relativePath = meta?.targetPath || buildRestaurantStoragePath(restaurantId, storageCategory, fileToUpload.name);
+
+      if (deferCleanup) {
+        const previewUrl = stagedPreviewUrl || temporaryUrlRef.current || URL.createObjectURL(fileToUpload);
+        temporaryUrlRef.current = previewUrl;
+        finishProgressSimulation();
+
+        setStagedFile(null);
+        setStagedMeta(null);
+        setStagedPreviewUrl('');
+        onStagedPreviewChange?.(null);
+
+        const selected = {
+          file: fileToUpload,
+          src: previewUrl,
+          name: fileToUpload.name,
+          size: fileToUpload.size,
+          width: meta?.width,
+          height: meta?.height,
+          alt: alt || label,
+          path: relativePath,
+        };
+        setSavedPreviewUrl(previewUrl);
+        onChange?.(selected);
+        return;
+      }
+
       const image = await restaurantService.uploadImage(fileToUpload);
       const src = await restaurantService.getImageUrl(image);
-      const relativePath = meta?.targetPath || buildRestaurantStoragePath(restaurantId, storageCategory, fileToUpload.name);
       finishProgressSimulation();
 
       if (temporaryUrlRef.current) {
@@ -269,6 +295,18 @@ function ImageUploader({
         setStagedMeta(meta);
         setStagedPreviewUrl(tempUrl);
         onStagedPreviewChange?.({ src: tempUrl, alt: alt || label, path: targetPath });
+        if (deferCleanup) {
+          onChange?.({
+            file,
+            src: tempUrl,
+            name: file.name,
+            size: file.size,
+            width: dimensions.width,
+            height: dimensions.height,
+            alt: alt || label,
+            path: targetPath,
+          });
+        }
       } else {
         setStagedPreviewUrl(tempUrl);
         await executeUpload(file, meta);
