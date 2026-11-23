@@ -25,7 +25,7 @@ class ApplicationServicesCharacterizationTest extends TestCase
     {
         $suffix = random_int(10000, 99999);
 
-        return User::create([
+        return User::forceCreate([
             'username' => $role . '_appchar_' . $suffix,
             'first_name' => ucfirst($role),
             'last_name' => 'AppChar',

@@ -17,7 +17,7 @@ class OwnerInventoryConfigTest extends TestCase
 
     private function createUser(string $role = 'customer', string $prefix = 'inv'): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => "{$prefix}_".random_int(10000, 99999),
             'first_name' => ucfirst($prefix),
             'last_name' => 'Tester',

@@ -62,7 +62,7 @@ class AdminManagementService
     public function createUser(array $data, User $admin, Request $request): array
     {
         $user = DB::transaction(function () use ($data, $admin, $request): User {
-            $created = User::create([
+            $created = User::forceCreate([
                 'username' => trim((string) $data['username']),
                 'first_name' => trim((string) $data['first_name']),
                 'middle_initial' => ! empty($data['middle_initial']) ? strtoupper(trim((string) $data['middle_initial'])) : null,
@@ -117,6 +117,20 @@ class AdminManagementService
         foreach (['first_name', 'last_name', 'phone_number', 'user_role', 'account_status'] as $field) {
             if (array_key_exists($field, $data)) {
                 $updates[$field] = $data[$field];
+            }
+        }
+
+        if ((int) $user->user_id === (int) $admin->user_id) {
+            if (array_key_exists('user_role', $updates) && $updates['user_role'] !== $user->user_role) {
+                throw ValidationException::withMessages([
+                    'user_role' => ['Administrators cannot change or demote their own role.'],
+                ]);
+            }
+
+            if (array_key_exists('account_status', $updates) && $updates['account_status'] !== 'active') {
+                throw ValidationException::withMessages([
+                    'account_status' => ['Administrators cannot suspend or deactivate their own account.'],
+                ]);
             }
         }
 

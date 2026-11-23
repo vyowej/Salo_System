@@ -15,12 +15,12 @@ class MenuPublishWorkflowTest extends TestCase
 
     private function createUser(string $role = 'customer', string $prefix = 'pub'): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => "{$prefix}_".random_int(10000, 99999),
             'first_name' => ucfirst($prefix),
             'last_name' => 'Tester',
             'email' => "{$prefix}_".random_int(10000, 99999).'@example.com',
-            'phone' => '0917'.random_int(1000000, 9999999),
+            'phone_number' => '0917'.random_int(1000000, 9999999),
             'password_hash' => Hash::make('SecretPass123!'),
             'user_role' => $role,
             'account_status' => 'active',

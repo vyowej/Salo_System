@@ -468,7 +468,7 @@ class ReservationEndToEndVerificationTest extends TestCase
 
     private function createUser(string $email, string $role = 'customer'): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => explode('@', $email)[0].'_'.random_int(100, 999),
             'first_name' => 'E2E',
             'last_name' => 'User',

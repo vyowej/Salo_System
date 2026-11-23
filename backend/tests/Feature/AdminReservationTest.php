@@ -368,7 +368,7 @@ class AdminReservationTest extends TestCase
     {
         $suffix = random_int(10000, 99999);
 
-        return User::create([
+        return User::forceCreate([
             'username' => "{$role}_admres_{$suffix}",
             'first_name' => ucfirst($role),
             'last_name' => 'Tester',

@@ -16,7 +16,7 @@ class AdminOrdersTest extends TestCase
     {
         $this->getJson('/api/admin/orders')->assertStatus(401);
 
-        $customer = User::create([
+        $customer = User::forceCreate([
             'username' => 'cust_ord_'.random_int(100, 999),
             'first_name' => 'Plain',
             'last_name' => 'Customer',
@@ -152,7 +152,7 @@ class AdminOrdersTest extends TestCase
 
     public function test_invalid_query_parameters_return_422(): void
     {
-        $admin = User::create([
+        $admin = User::forceCreate([
             'username' => 'admin_ord_val_'.random_int(100, 999),
             'first_name' => 'Val',
             'last_name' => 'Admin',
@@ -326,7 +326,7 @@ class AdminOrdersTest extends TestCase
      */
     private function seedOrderFixtures(): array
     {
-        $admin = User::create([
+        $admin = User::forceCreate([
             'username' => 'admin_ord_'.random_int(100, 999),
             'first_name' => 'Orders',
             'last_name' => 'Admin',
@@ -336,7 +336,7 @@ class AdminOrdersTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $cust1 = User::create([
+        $cust1 = User::forceCreate([
             'username' => 'cust_one_'.random_int(100, 999),
             'first_name' => 'Juan',
             'last_name' => 'Dela Cruz',
@@ -346,7 +346,7 @@ class AdminOrdersTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $cust2 = User::create([
+        $cust2 = User::forceCreate([
             'username' => 'cust_two_'.random_int(100, 999),
             'first_name' => 'Elena',
             'last_name' => 'Reyes',

@@ -25,7 +25,7 @@ class AuthAvailabilityCharacterizationTest extends TestCase
     {
         $suffix = random_int(10000, 99999);
 
-        return User::create([
+        return User::forceCreate([
             'username' => 'authav_' . $suffix,
             'first_name' => 'Auth',
             'last_name' => 'Avail',

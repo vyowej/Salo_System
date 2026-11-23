@@ -46,7 +46,7 @@ class QaCustomerSeeder extends Seeder
             );
         }
 
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => $username,
             'first_name' => 'QA',
             'middle_initial' => null,

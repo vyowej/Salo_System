@@ -18,7 +18,7 @@ class CustomerContactNumbersTest extends TestCase
     {
         $suffix = random_int(100000, 999999);
 
-        return User::create([
+        return User::forceCreate([
             'username' => "{$role}_{$suffix}",
             'first_name' => ucfirst($role),
             'last_name' => 'Tester',

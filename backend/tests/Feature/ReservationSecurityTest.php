@@ -396,7 +396,7 @@ class ReservationSecurityTest extends TestCase
 
     private function createUser(string $email, string $role = 'customer', string $status = 'active'): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => explode('@', $email)[0].'_'.random_int(100, 999),
             'first_name' => 'Sec',
             'last_name' => 'Tester',

@@ -258,7 +258,7 @@ class LocationSystemTest extends TestCase
 
     private function makeUser(string $role): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => $role . '_' . random_int(10000, 99999),
             'first_name' => ucfirst($role),
             'last_name' => 'Tester',

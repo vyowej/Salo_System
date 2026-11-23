@@ -23,7 +23,7 @@ class MultiBranchAuthorizationMatrixTest extends TestCase
 
     private function createUser(string $prefix = 'mbauth', string $role = 'customer'): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => $prefix.'_'.random_int(10000, 99999),
             'first_name' => ucfirst($prefix),
             'last_name' => 'Tester',

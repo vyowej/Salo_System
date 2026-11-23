@@ -284,9 +284,10 @@ export function CustomerAddressForm({
           Address Label <span className="required-indicator">*</span>
         </span>
         <div className="salo-address-label-group" role="radiogroup" aria-labelledby={`${formId}-label-group`}>
-          {LABEL_OPTIONS.map((opt) => (
+          {LABEL_OPTIONS.map((opt, idx) => (
             <button
               key={opt}
+              ref={idx === 0 ? firstInputRef : undefined}
               type="button"
               role="radio"
               aria-checked={formData.label === opt}

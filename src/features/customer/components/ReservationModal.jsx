@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Modal from '../../../components/common/Modal';
 import Button from '../../../components/common/Button';
@@ -95,6 +95,11 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
 
   const restaurantId = restaurant?.id;
   const currentMonthKey = useMemo(() => monthKeyFromDate(calendarDate), [calendarDate]);
+  const selectedSlotRef = useRef({ time: '', selectedStartIso: '' });
+
+  useEffect(() => {
+    selectedSlotRef.current = { time, selectedStartIso };
+  }, [time, selectedStartIso]);
 
   // 1. Load restaurant reservation policy info when modal opens
   useEffect(() => {
@@ -105,8 +110,9 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
       .then((info) => {
         if (!active || !info) return;
         setReservationInfo(info);
-        if (info.effectiveMaxPartySize && guests > info.effectiveMaxPartySize) {
-          setGuests(Math.max(1, info.effectiveMaxPartySize));
+        if (info.effectiveMaxPartySize) {
+          const maxParty = Math.max(1, info.effectiveMaxPartySize);
+          setGuests((prev) => (prev > maxParty ? maxParty : prev));
         }
       })
       .catch(() => {
@@ -165,9 +171,10 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
       setDayAvailability(avail);
 
       // Clear selected time if it is no longer available in the refreshed slot list
-      if (time && avail?.slots) {
+      const { time: currentTime, selectedStartIso: currentStartIso } = selectedSlotRef.current;
+      if (currentTime && avail?.slots) {
         const matching = avail.slots.find(
-          (s) => (s.start === selectedStartIso || s.time === time) && s.available,
+          (s) => (s.start === currentStartIso || s.time === currentTime) && s.available,
         );
         if (!matching) {
           setTime('');
@@ -209,9 +216,10 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
         if (!active) return;
         const tables = Array.isArray(res?.availableTables) ? res.availableTables : [];
         setSlotTables(tables);
-        if (selectedTableId && !tables.some((t) => String(t.tableId) === String(selectedTableId))) {
-          setSelectedTableId('');
-        }
+        setSelectedTableId((prevTableId) => {
+          if (!prevTableId) return prevTableId;
+          return tables.some((t) => String(t.tableId) === String(prevTableId)) ? prevTableId : '';
+        });
       })
       .catch(() => {
         if (active) setSlotTables([]);

@@ -39,7 +39,7 @@ class ReviewsAndFeaturedSystemTest extends TestCase
     {
         $suffix = str_replace('.', '', uniqid('rf_', true));
 
-        return User::create([
+        return User::forceCreate([
             'username' => substr($suffix, 0, 45),
             'first_name' => 'Test',
             'last_name' => 'User',

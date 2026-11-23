@@ -15,7 +15,7 @@ class RestaurantValidationCharacterizationTest extends TestCase
 
     private function createOwnerWithActiveRestaurant(): array
     {
-        $owner = User::create([
+        $owner = User::forceCreate([
             'username' => 'valown_' . random_int(10000, 99999),
             'first_name' => 'Val',
             'last_name' => 'Owner',

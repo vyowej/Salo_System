@@ -22,7 +22,7 @@ class BranchPermitsOwnerFlowTest extends TestCase
 
     private function createUser(string $role = 'customer', string $prefix = 'bp2a'): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => "{$prefix}_" . random_int(10000, 99999),
             'first_name' => ucfirst($prefix),
             'last_name' => 'Tester',

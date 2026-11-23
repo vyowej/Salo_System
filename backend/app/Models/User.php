@@ -17,9 +17,6 @@ use Illuminate\Support\Facades\DB;
     'password_hash',
     'phone_number',
     'date_of_birth',
-    'user_role',
-    'account_status',
-    'email_verified_at',
 ])]
 #[Hidden(['password_hash'])]
 class User extends Authenticatable

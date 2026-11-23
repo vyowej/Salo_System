@@ -53,7 +53,7 @@ class AuthTest extends TestCase
 
     public function test_register_invalid_and_duplicate_rejected(): void
     {
-        User::create([
+        User::forceCreate([
             'username' => 'existing_user',
             'first_name' => 'Maria',
             'last_name' => 'Santos',
@@ -188,7 +188,7 @@ class AuthTest extends TestCase
 
     public function test_login_success_regenerates_session_and_failure_returns_generic_401(): void
     {
-        User::create([
+        User::forceCreate([
             'username' => 'login_user',
             'first_name' => 'Ana',
             'last_name' => 'Reyes',
@@ -245,7 +245,7 @@ class AuthTest extends TestCase
 
     public function test_logout_invalidates_session(): void
     {
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'logout_user',
             'first_name' => 'Carlo',
             'last_name' => 'Diaz',
@@ -268,7 +268,7 @@ class AuthTest extends TestCase
 
     public function test_me_returns_user_and_all_derived_roles(): void
     {
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'multi_role_user',
             'first_name' => 'Elena',
             'last_name' => 'Cruz',
@@ -348,7 +348,7 @@ class AuthTest extends TestCase
 
         $token = $csrfResponse->json('data.csrf_token');
 
-        User::create([
+        User::forceCreate([
             'username' => 'csrf_user',
             'first_name' => 'Csrf',
             'last_name' => 'Tester',
@@ -386,7 +386,7 @@ class AuthTest extends TestCase
     public function test_suspended_or_inactive_account_blocked_on_login_and_authenticated_requests(): void
     {
         foreach (['suspended', 'inactive', 'pending'] as $blockedStatus) {
-            User::create([
+            User::forceCreate([
                 'username' => "user_{$blockedStatus}",
                 'first_name' => 'Blocked',
                 'last_name' => ucfirst($blockedStatus),
@@ -404,7 +404,7 @@ class AuthTest extends TestCase
         }
 
         // Already-authenticated user suspended mid-session is immediately rejected
-        $activeUser = User::create([
+        $activeUser = User::forceCreate([
             'username' => 'mid_session_user',
             'first_name' => 'Active',
             'last_name' => 'User',
@@ -430,7 +430,7 @@ class AuthTest extends TestCase
 
     public function test_role_middleware_permits_and_denies_each_role(): void
     {
-        $customer = User::create([
+        $customer = User::forceCreate([
             'username' => 'only_customer',
             'first_name' => 'Cust',
             'last_name' => 'Omer',
@@ -440,7 +440,7 @@ class AuthTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $admin = User::create([
+        $admin = User::forceCreate([
             'username' => 'only_admin',
             'first_name' => 'Ad',
             'last_name' => 'Min',
@@ -450,7 +450,7 @@ class AuthTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $owner = User::create([
+        $owner = User::forceCreate([
             'username' => 'only_owner',
             'first_name' => 'Own',
             'last_name' => 'Er',
@@ -460,7 +460,7 @@ class AuthTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $staff = User::create([
+        $staff = User::forceCreate([
             'username' => 'only_staff',
             'first_name' => 'Sta',
             'last_name' => 'Ff',
@@ -470,7 +470,7 @@ class AuthTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $rider = User::create([
+        $rider = User::forceCreate([
             'username' => 'only_rider',
             'first_name' => 'Ri',
             'last_name' => 'Der',
@@ -554,7 +554,7 @@ class AuthTest extends TestCase
 
     public function test_role_changes_and_suspension_take_effect_on_next_request_without_leaking(): void
     {
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'dynamic_role_user',
             'first_name' => 'Dyn',
             'last_name' => 'Amic',
@@ -647,7 +647,7 @@ class AuthTest extends TestCase
 
     public function test_auth_me_and_role_guarded_endpoint_query_count_regression(): void
     {
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'query_count_user',
             'first_name' => 'Query',
             'last_name' => 'Counter',
@@ -705,7 +705,7 @@ class AuthTest extends TestCase
 
     public function test_many_sequential_requests_with_role_oscillations_and_gc_never_return_stale_role(): void
     {
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'sequential_oscillation_user',
             'first_name' => 'Seq',
             'last_name' => 'Test',
@@ -785,7 +785,7 @@ class AuthTest extends TestCase
     {
         Mail::fake();
 
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'reset_user',
             'first_name' => 'Rosa',
             'last_name' => 'Lim',
@@ -901,6 +901,48 @@ class AuthTest extends TestCase
         $this->artisan('salo:bootstrap-admin')
             ->expectsOutputToContain('Bootstrap aborted: an administrator account already exists.')
             ->assertExitCode(1);
+    }
+
+    public function test_user_model_fillable_blocks_privilege_and_status_mass_assignment(): void
+    {
+        $user = User::create([
+            'username' => 'mass_assign_' . random_int(100, 999),
+            'first_name' => 'Mass',
+            'last_name' => 'Assign',
+            'email' => 'massassign_' . random_int(100, 999) . '@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'admin',
+            'account_status' => 'suspended',
+            'email_verified_at' => now(),
+        ]);
+
+        $user->refresh();
+        $this->assertSame('customer', $user->user_role);
+        $this->assertSame('active', $user->account_status);
+        $this->assertNull($user->email_verified_at);
+    }
+
+    public function test_register_is_rate_limited(): void
+    {
+        for ($i = 0; $i < 10; $i++) {
+            $this->postJson('/api/auth/register', [
+                'username' => 'ab',
+                'first_name' => '',
+                'last_name' => '',
+                'email' => 'not-an-email',
+                'password' => 'short',
+                'password_confirmation' => 'mismatch',
+            ])->assertStatus(422);
+        }
+
+        $this->postJson('/api/auth/register', [
+            'username' => 'ab',
+            'first_name' => '',
+            'last_name' => '',
+            'email' => 'not-an-email',
+            'password' => 'short',
+            'password_confirmation' => 'mismatch',
+        ])->assertStatus(429);
     }
 
     /**

@@ -16,7 +16,7 @@ class CheckoutOrderTest extends TestCase
 
     private function createUser(string $prefix = 'cust'): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => "{$prefix}_".random_int(10000, 99999),
             'first_name' => ucfirst($prefix),
             'last_name' => 'Buyer',
@@ -552,7 +552,7 @@ class CheckoutOrderTest extends TestCase
 
     public function test_delivery_checkout_requires_valid_contact_phone_while_pickup_does_not(): void
     {
-        $buyerWithoutPhone = User::create([
+        $buyerWithoutPhone = User::forceCreate([
             'username' => 'nophone_'.random_int(10000, 99999),
             'first_name' => 'No',
             'last_name' => 'Phone',
@@ -877,7 +877,7 @@ class CheckoutOrderTest extends TestCase
 
     public function test_checkout_places_delivery_order_using_account_holder_name_and_phone_without_address_recipient_fields(): void
     {
-        $buyer = User::create([
+        $buyer = User::forceCreate([
             'username' => 'elena_'.random_int(10000, 99999),
             'first_name' => 'Elena',
             'last_name' => 'Reyes',

@@ -57,7 +57,7 @@ class BootstrapAdminCommand extends Command
                 throw new \RuntimeException('An administrator account already exists.');
             }
 
-            $user = User::create([
+            $user = User::forceCreate([
                 'username' => $username,
                 'first_name' => $firstName,
                 'middle_initial' => null,

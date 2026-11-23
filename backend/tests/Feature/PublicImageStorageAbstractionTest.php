@@ -63,7 +63,7 @@ class PublicImageStorageAbstractionTest extends TestCase
         $this->app->instance(PublicImageStore::class, $fake);
         $this->app->forgetInstance(FileStorageService::class);
 
-        $owner = User::create([
+        $owner = User::forceCreate([
             'username' => 'drv_owner_'.random_int(10000, 99999),
             'first_name' => 'Drive',
             'last_name' => 'Owner',

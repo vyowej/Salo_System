@@ -106,7 +106,7 @@ export default function AdminUsersPage() {
     return digits.length > 4 ? `***-***-${digits.slice(-4)}` : '***';
   }
   const columns = [
-    { key: 'name', label: 'Account', render: (account) => <button className="admin-text-link" type="button" onClick={() => { setSelected(account); setTab('Overview'); }}><strong>{account.name}</strong><span>@{account.username || '—'}</span></button> },
+    { key: 'name', label: 'Account', render: (account) => <button className="admin-text-link" type="button" onClick={() => { setSelected(account); setTab('Profile'); }}><strong>{account.name}</strong><span>@{account.username || '—'}</span></button> },
     { key: 'contact', label: 'Contact', render: (account) => <>{maskEmail(account.email)}<br />{maskPhone(account.phone)}</> },
     { key: 'capabilities', label: 'Capabilities', render: (account) => account.capabilities.join(', ') },
     { key: 'joined', label: 'Registered', render: (account) => formatDate(account.joined) },

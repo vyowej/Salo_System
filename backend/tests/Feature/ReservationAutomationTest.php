@@ -396,7 +396,7 @@ class ReservationAutomationTest extends TestCase
 
     private function createUser(string $email, string $role = 'customer'): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => explode('@', $email)[0].'_'.random_int(100, 999),
             'first_name' => 'Auto',
             'last_name' => 'Tester',

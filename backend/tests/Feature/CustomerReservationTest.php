@@ -452,7 +452,7 @@ class CustomerReservationTest extends TestCase
         string $lastName = 'User',
         string $phone = '+63 917 123 4567',
     ): User {
-        return User::create([
+        return User::forceCreate([
             'username' => 'user_' . substr(md5($email . uniqid()), 0, 14),
             'email' => $email,
             'password_hash' => Hash::make('Password123!'),

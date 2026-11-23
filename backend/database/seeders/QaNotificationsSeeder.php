@@ -133,7 +133,7 @@ class QaNotificationsSeeder extends Seeder
             return $existing;
         }
 
-        return User::create([
+        return User::forceCreate([
             'username' => $username,
             'first_name' => $firstName,
             'middle_initial' => null,

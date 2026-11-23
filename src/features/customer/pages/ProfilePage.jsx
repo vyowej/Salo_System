@@ -7,7 +7,7 @@ import accountService from '../../../services/accountService';
 import { Input } from '../../../components/forms';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import Modal from '../../../components/common/Modal';
+import { AccountLifecycleModals } from '../../../components/settings/AccountLifecycleModals';
 import AddressFormModal from '../components/AddressFormModal';
 import ContactNumbersManager from '../components/ContactNumbersManager';
 import './ProfilePage.css';
@@ -781,28 +781,12 @@ export default function ProfilePage() {
   ═════════════════════════════════════════════════════════ */
   return (
     <CustomerLayout>
-      {/* Deactivate confirmation modal */}
-      <Modal
-        open={deactivateOpen}
-        onClose={() => setDeactivateOpen(false)}
-        title="Deactivate account"
-        size="sm"
-        footer={
-          <div className="profile-modal-footer">
-            <Button variant="ghost" size="sm" onClick={() => setDeactivateOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="danger" size="sm" onClick={() => setDeactivateOpen(false)}>
-              Confirm Deactivation
-            </Button>
-          </div>
-        }
-      >
-        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
-          Deactivating your account will disable access to your saved addresses, favorites,
-          and order history. This action is not yet available in the current frontend build.
-        </p>
-      </Modal>
+      <AccountLifecycleModals
+        deactivateOpen={deactivateOpen}
+        onCloseDeactivate={() => setDeactivateOpen(false)}
+        deleteOpen={false}
+        onCloseDelete={() => {}}
+      />
 
       <div className="profile-page">
         {/* ── Left sidebar ── */}

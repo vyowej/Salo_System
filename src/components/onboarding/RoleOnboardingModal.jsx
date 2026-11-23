@@ -58,7 +58,6 @@ export function RoleOnboardingModal({
   const [phoneError, setPhoneError] = useState('');
   const [addressError, setAddressError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [savedPhoneValue, setSavedPhoneValue] = useState('');
   const [phoneSaved, setPhoneSaved] = useState(false);
   const [addressSaved, setAddressSaved] = useState(false);
 
@@ -113,7 +112,6 @@ export function RoleOnboardingModal({
     setPhoneError('');
     setAddressError('');
     setSaving(false);
-    setSavedPhoneValue(initialPhone);
     setPhoneSaved(false);
     setAddressSaved(false);
   }, [open, normalizedRole, user?.user_id, user?.id, user?.phone_number, user?.phone]);
@@ -280,7 +278,6 @@ export function RoleOnboardingModal({
         phone_number: normalized,
       });
       updateUser?.(updatedUser || { phone_number: normalized, phone: normalized });
-      setSavedPhoneValue(normalized);
       setPhoneSaved(true);
       setStepIndex((idx) => Math.min(steps.length - 1, idx + 1));
     } catch (err) {

@@ -649,7 +649,7 @@ class ReservationAvailabilityTest extends TestCase
 
     private function createUser(string $email): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => 'user_' . substr(md5($email . uniqid()), 0, 14),
             'email' => $email,
             'password_hash' => Hash::make('Password123!'),

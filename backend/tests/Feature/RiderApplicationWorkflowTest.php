@@ -28,7 +28,7 @@ class RiderApplicationWorkflowTest extends TestCase
     {
         Mail::fake();
 
-        $applicant = User::create([
+        $applicant = User::forceCreate([
             'username' => 'rider_app_'.random_int(100, 999),
             'first_name' => 'Carlos',
             'last_name' => 'Reyes',
@@ -38,7 +38,7 @@ class RiderApplicationWorkflowTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $otherUser = User::create([
+        $otherUser = User::forceCreate([
             'username' => 'other_user_'.random_int(100, 999),
             'first_name' => 'Other',
             'last_name' => 'User',
@@ -48,7 +48,7 @@ class RiderApplicationWorkflowTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $admin = User::create([
+        $admin = User::forceCreate([
             'username' => 'admin_user_'.random_int(100, 999),
             'first_name' => 'Admin',
             'last_name' => 'One',

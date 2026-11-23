@@ -41,7 +41,7 @@ class SettingsSystemTest extends TestCase
     {
         $suffix = uniqid();
 
-        return User::create([
+        return User::forceCreate([
             'username' => 'user_'.$suffix,
             'first_name' => 'Test',
             'last_name' => 'User',

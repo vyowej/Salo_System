@@ -30,7 +30,7 @@ class FileUploadPipelineTest extends TestCase
     {
         Mail::fake();
 
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'u_'.random_int(10000, 99999),
             'first_name' => 'Test',
             'last_name' => 'User',
@@ -269,7 +269,7 @@ class FileUploadPipelineTest extends TestCase
     public function test_unauthenticated_and_unauthorized_private_file_and_reupload_access(): void
     {
         $owner = $this->createVerifiedUser('priv_owner@example.com', 'restaurant_application');
-        $otherUser = User::create([
+        $otherUser = User::forceCreate([
             'username' => 'other_'.random_int(10000, 99999),
             'first_name' => 'Other',
             'last_name' => 'User',

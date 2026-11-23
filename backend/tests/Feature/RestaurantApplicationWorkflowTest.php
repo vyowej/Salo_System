@@ -29,7 +29,7 @@ class RestaurantApplicationWorkflowTest extends TestCase
     {
         Mail::fake();
 
-        $owner = User::create([
+        $owner = User::forceCreate([
             'username' => 'rest_owner_'.random_int(100, 999),
             'first_name' => 'Elena',
             'last_name' => 'Cruz',
@@ -39,7 +39,7 @@ class RestaurantApplicationWorkflowTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $admin = User::create([
+        $admin = User::forceCreate([
             'username' => 'admin_rest_'.random_int(100, 999),
             'first_name' => 'Admin',
             'last_name' => 'Two',
@@ -172,7 +172,7 @@ class RestaurantApplicationWorkflowTest extends TestCase
     {
         Mail::fake();
 
-        $owner = User::create([
+        $owner = User::forceCreate([
             'username' => 'mb_app_owner_'.random_int(1000, 9999),
             'first_name' => 'Marco',
             'last_name' => 'Reyes',
@@ -182,7 +182,7 @@ class RestaurantApplicationWorkflowTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $otherUser = User::create([
+        $otherUser = User::forceCreate([
             'username' => 'mb_other_'.random_int(1000, 9999),
             'first_name' => 'Other',
             'last_name' => 'User',

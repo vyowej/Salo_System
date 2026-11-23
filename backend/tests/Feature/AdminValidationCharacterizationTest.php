@@ -13,7 +13,7 @@ class AdminValidationCharacterizationTest extends TestCase
 
     private function createAdmin(): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => 'admval_' . random_int(10000, 99999),
             'first_name' => 'Admin',
             'last_name' => 'Validator',

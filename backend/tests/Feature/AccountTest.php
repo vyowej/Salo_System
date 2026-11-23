@@ -32,7 +32,7 @@ class AccountTest extends TestCase
 
     public function test_update_profile_updates_allowed_fields_and_returns_me_shape(): void
     {
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'profile_user',
             'first_name' => 'Ana',
             'middle_initial' => 'B',
@@ -82,7 +82,7 @@ class AccountTest extends TestCase
     {
         $originalHash = Hash::make('SecretPass123!');
 
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'restricted_user',
             'first_name' => 'Carlo',
             'last_name' => 'Mendoza',
@@ -116,7 +116,7 @@ class AccountTest extends TestCase
 
     public function test_update_profile_rejects_duplicate_username_and_allows_own_username(): void
     {
-        User::create([
+        User::forceCreate([
             'username' => 'taken_name',
             'first_name' => 'First',
             'last_name' => 'User',
@@ -126,7 +126,7 @@ class AccountTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'my_name',
             'first_name' => 'Second',
             'last_name' => 'User',
@@ -154,7 +154,7 @@ class AccountTest extends TestCase
 
     public function test_update_password_validates_current_password_and_rate_limits(): void
     {
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'pw_user',
             'first_name' => 'Liza',
             'last_name' => 'Tan',
@@ -196,7 +196,7 @@ class AccountTest extends TestCase
 
     public function test_update_password_succeeds_regenerates_session_and_writes_audit_log(): void
     {
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'pw_success_user',
             'first_name' => 'Mark',
             'last_name' => 'Lim',
@@ -249,7 +249,7 @@ class AccountTest extends TestCase
 
     public function test_applications_returns_nulls_when_none_exist(): void
     {
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'no_apps_user',
             'first_name' => 'Nora',
             'last_name' => 'Gomez',
@@ -270,7 +270,7 @@ class AccountTest extends TestCase
 
     public function test_applications_returns_only_users_own_latest_applications_without_internal_fields(): void
     {
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => 'applicant_user',
             'first_name' => 'Paolo',
             'last_name' => 'Villanueva',
@@ -280,7 +280,7 @@ class AccountTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $otherUser = User::create([
+        $otherUser = User::forceCreate([
             'username' => 'other_applicant',
             'first_name' => 'Other',
             'last_name' => 'Person',
@@ -290,7 +290,7 @@ class AccountTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $reviewer = User::create([
+        $reviewer = User::forceCreate([
             'username' => 'admin_reviewer',
             'first_name' => 'Admin',
             'last_name' => 'Reviewer',

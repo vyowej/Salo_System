@@ -14,7 +14,7 @@ class AdminManagementTest extends TestCase
 
     public function test_admin_can_manage_users_and_non_admin_is_forbidden(): void
     {
-        $customer = User::create([
+        $customer = User::forceCreate([
             'username' => 'cust_mgmt_'.random_int(100, 999),
             'first_name' => 'Plain',
             'last_name' => 'Customer',
@@ -24,7 +24,7 @@ class AdminManagementTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $admin = User::create([
+        $admin = User::forceCreate([
             'username' => 'admin_mgmt_'.random_int(100, 999),
             'first_name' => 'Super',
             'last_name' => 'Admin',
@@ -61,7 +61,7 @@ class AdminManagementTest extends TestCase
 
     public function test_admin_can_list_filter_and_update_restaurants_and_riders(): void
     {
-        $admin = User::create([
+        $admin = User::forceCreate([
             'username' => 'admin_dir_'.random_int(100, 999),
             'first_name' => 'Dir',
             'last_name' => 'Admin',
@@ -71,7 +71,7 @@ class AdminManagementTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $owner = User::create([
+        $owner = User::forceCreate([
             'username' => 'owner_dir_'.random_int(100, 999),
             'first_name' => 'Marco',
             'last_name' => 'Reyes',
@@ -81,7 +81,7 @@ class AdminManagementTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $riderUser = User::create([
+        $riderUser = User::forceCreate([
             'username' => 'rider_dir_'.random_int(100, 999),
             'first_name' => 'Carlo',
             'last_name' => 'Santos',
@@ -183,7 +183,7 @@ class AdminManagementTest extends TestCase
 
     public function test_admin_restaurants_primary_owner_tie_breaking_filter_totals_and_query_count(): void
     {
-        $admin = User::create([
+        $admin = User::forceCreate([
             'username' => 'admin_tie_'.random_int(1000, 9999),
             'first_name' => 'Tie',
             'last_name' => 'Admin',
@@ -193,7 +193,7 @@ class AdminManagementTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $laterOwner = User::create([
+        $laterOwner = User::forceCreate([
             'username' => 'owner_later_'.random_int(1000, 9999),
             'first_name' => 'Later',
             'last_name' => 'Owner',
@@ -203,7 +203,7 @@ class AdminManagementTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $primaryOwner = User::create([
+        $primaryOwner = User::forceCreate([
             'username' => 'owner_primary_'.random_int(1000, 9999),
             'first_name' => 'Earliest',
             'last_name' => 'Founder',
@@ -270,7 +270,7 @@ class AdminManagementTest extends TestCase
     {
         $tag = 'MgmtList' . random_int(1000, 9999);
 
-        $admin = User::create([
+        $admin = User::forceCreate([
             'username' => "adm_{$tag}",
             'first_name' => 'Admin',
             'last_name' => $tag,
@@ -280,7 +280,7 @@ class AdminManagementTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $cust = User::create([
+        $cust = User::forceCreate([
             'username' => "cust_{$tag}",
             'first_name' => 'Customer',
             'last_name' => $tag,
@@ -336,5 +336,34 @@ class AdminManagementTest extends TestCase
             ->assertJsonPath('data.meta.total', 1)
             ->assertJsonPath('data.items.0.action', 'admin_user_updated')
             ->assertJsonPath('data.items.0.actor_email', $admin->email);
+    }
+
+    public function test_admin_cannot_demote_or_lock_out_self(): void
+    {
+        $admin = User::forceCreate([
+            'username' => 'self_guard_admin_' . random_int(100, 999),
+            'first_name' => 'Self',
+            'last_name' => 'Admin',
+            'email' => 'selfadmin_' . random_int(100, 999) . '@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'admin',
+            'account_status' => 'active',
+        ]);
+
+        $this->actingAs($admin)->patchJson("/api/admin/users/{$admin->user_id}", [
+            'user_role' => 'customer',
+            'reason' => 'Self demotion attempt',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['user_role']);
+
+        $this->actingAs($admin)->patchJson("/api/admin/users/{$admin->user_id}", [
+            'account_status' => 'suspended',
+            'reason' => 'Self lockout attempt',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['account_status']);
+
+        $admin->refresh();
+        $this->assertSame('admin', $admin->user_role);
+        $this->assertSame('active', $admin->account_status);
     }
 }

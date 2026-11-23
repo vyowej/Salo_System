@@ -24,7 +24,7 @@ class AuthService
      */
     public function register(array $validated, Request $request): array
     {
-        $user = User::create([
+        $user = User::forceCreate([
             'username' => trim((string) $validated['username']),
             'first_name' => trim((string) $validated['first_name']),
             'middle_initial' => isset($validated['middle_initial']) && $validated['middle_initial'] !== ''

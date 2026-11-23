@@ -27,7 +27,7 @@ class MultiBranchSchemaBackfillTest extends TestCase
 
     private function createUser(string $prefix = 'mb'): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => "{$prefix}_" . random_int(10000, 99999),
             'first_name' => 'Multi',
             'last_name' => 'Branch',

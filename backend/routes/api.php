@@ -78,7 +78,7 @@ Route::get('/health', function () {
 
 Route::prefix('auth')->group(function (): void {
     Route::get('/csrf', [AuthController::class, 'csrf']);
-    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);
     Route::post('/password/reset', [AuthController::class, 'resetPassword']);

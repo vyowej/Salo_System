@@ -23,7 +23,7 @@ class OtpVerificationTest extends TestCase
 
     private function createCustomer(string $email = 'otpuser@example.com'): User
     {
-        return User::create([
+        return User::forceCreate([
             'username' => 'otp_user_'.random_int(100, 999),
             'first_name' => 'Otp',
             'last_name' => 'Tester',
