@@ -18,9 +18,6 @@ import { ADMIN_ACCOUNT_CAPABILITIES, ADMIN_ACCOUNT_STATUSES } from '../constants
 import { formatDate, formatDateTime, formatPeso } from '../utils/format';
 import './AdminPages.css';
 
-const ORDERS = [];
-const RESERVATIONS = [];
-
 function mapBackendUser(user) {
   const fullName = [user.first_name, user.middle_initial ? `${user.middle_initial}.` : '', user.last_name]
     .filter(Boolean)
@@ -38,10 +35,12 @@ function mapBackendUser(user) {
     username: user.username,
     email: user.email,
     phone: user.phone_number || '',
-    capabilities: [user.user_role === 'admin' ? 'Admin' : 'Customer'],
+    capabilities: Array.isArray(user.capabilities) && user.capabilities.length > 0
+      ? user.capabilities
+      : [user.user_role === 'admin' ? 'Admin' : 'Customer'],
     joined: user.created_at,
-    ordersCount: 0,
-    reservationsCount: 0,
+    ordersCount: Number(user.orders_count ?? 0),
+    reservationsCount: Number(user.reservations_count ?? 0),
     verificationStatus: user.email_verified_at ? 'Verified' : 'Pending',
     status: statusMap[user.account_status] || user.account_status,
     accountActivity: [],
@@ -56,6 +55,8 @@ export default function AdminUsersPage() {
   const [statusFilter, setStatusFilter] = useState('All statuses');
   const [capabilityFilter, setCapabilityFilter] = useState('All capabilities');
   const [selected, setSelected] = useState(null);
+  const [selectedActivity, setSelectedActivity] = useState({ orders: [], reservations: [] });
+  const [activityLoading, setActivityLoading] = useState(false);
   const [tab, setTab] = useState('Profile');
   const [confirm, setConfirm] = useState(null);
   const [notice, setNotice] = useState('');
@@ -89,12 +90,35 @@ export default function AdminUsersPage() {
     });
   }, [accounts, globalQuery, search, statusFilter, capabilityFilter]);
 
-  const accountOrders = selected
-    ? ORDERS.filter((order) => order.customerEmail === selected.email)
-    : [];
-  const accountReservations = selected
-    ? RESERVATIONS.filter((reservation) => reservation.customerEmail === selected.email)
-    : [];
+  useEffect(() => {
+    if (!selected?.id) {
+      setSelectedActivity({ orders: [], reservations: [] });
+      return undefined;
+    }
+    let active = true;
+    setActivityLoading(true);
+    adminApiService.getUserActivity(selected.id)
+      .then((res) => {
+        if (active) {
+          setSelectedActivity({
+            orders: Array.isArray(res?.orders) ? res.orders : [],
+            reservations: Array.isArray(res?.reservations) ? res.reservations : [],
+          });
+        }
+      })
+      .catch(() => {
+        if (active) setSelectedActivity({ orders: [], reservations: [] });
+      })
+      .finally(() => {
+        if (active) setActivityLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selected?.id]);
+
+  const accountOrders = selectedActivity.orders;
+  const accountReservations = selectedActivity.reservations;
   function maskEmail(email) {
     if (!email || canEdit) return email || '—';
     const [local, domain] = String(email).split('@');
@@ -172,8 +196,8 @@ export default function AdminUsersPage() {
 
   const _historyItems = selected
     ? [
-      ...accountOrders.map((order) => ({ id: order.id, title: `Order ${order.id}`, description: `${order.status} · ${order.restaurants.join(', ')}`, time: order.createdAt })),
-      ...accountReservations.map((reservation) => ({ id: reservation.id, title: `Reservation ${reservation.id}`, description: `${reservation.status} · ${reservation.restaurantName} · ${reservation.guests} guests`, time: reservation.reservedAt })),
+      ...accountOrders.map((order) => ({ id: order.order_id, title: `Order ${order.order_reference}`, description: `${order.order_status} · ${order.restaurant_name}`, time: order.placed_at })),
+      ...accountReservations.map((reservation) => ({ id: reservation.reservation_id, title: `Reservation ${reservation.reservation_reference}`, description: `${reservation.reservation_status} · ${reservation.restaurant_name} · ${reservation.party_size} guests`, time: reservation.reservation_start })),
     ]
     : [];
   const accountActivity = selected
@@ -229,8 +253,9 @@ export default function AdminUsersPage() {
             )}
             {tab === 'Activity' && (
               <DataTable
+                loading={activityLoading}
                 columns={[
-                  { key: 'id', label: 'ID', render: (row) => <Link to={row.to}>{row.id}</Link> },
+                  { key: 'id', label: 'Reference', render: (row) => <Link to={row.to}>{row.reference}</Link> },
                   { key: 'kind', label: 'Type' },
                   { key: 'date', label: 'Date', sortValue: (row) => new Date(row.date).getTime(), render: (row) => formatDateTime(row.date) },
                   { key: 'restaurant', label: 'Restaurant' },
@@ -238,8 +263,8 @@ export default function AdminUsersPage() {
                   { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
                 ]}
                 rows={[
-                  ...accountOrders.map((order) => ({ id: order.id, kind: 'Order', date: order.createdAt, restaurant: order.restaurants.join(', '), amount: order.feeBreakdown?.orderTotal ?? 0, status: order.status, to: `/admin/orders/${order.id}` })),
-                  ...accountReservations.map((res) => ({ id: res.id, kind: 'Reservation', date: res.reservedAt, restaurant: res.restaurantName, amount: res.feeBreakdown?.reservationFee ?? 0, status: res.status, to: `/admin/reservations/${res.id}` })),
+                  ...accountOrders.map((order) => ({ id: `ord-${order.order_id}`, reference: order.order_reference, kind: 'Order', date: order.placed_at, restaurant: order.restaurant_name, amount: order.total_amount ?? 0, status: order.order_status, to: `/admin/orders` })),
+                  ...accountReservations.map((res) => ({ id: `res-${res.reservation_id}`, reference: res.reservation_reference, kind: 'Reservation', date: res.reservation_start, restaurant: res.restaurant_name, amount: res.deposit_amount ?? 0, status: res.reservation_status, to: `/admin/reservations` })),
                 ]}
                 defaultOrder={[[2, 'desc']]}
                 emptyTitle="No account activity"

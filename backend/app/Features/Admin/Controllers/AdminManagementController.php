@@ -18,11 +18,27 @@ class AdminManagementController extends Controller
         private readonly AdminManagementService $adminManagementService,
     ) {}
 
+    public function dashboard(): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->adminManagementService->getDashboardMetrics(),
+            message: 'Admin dashboard metrics retrieved.',
+        );
+    }
+
     public function users(Request $request): JsonResponse
     {
         return ApiResponse::success(
             data: $this->adminManagementService->listUsers($request->query()),
             message: 'Users retrieved.',
+        );
+    }
+
+    public function userActivity(int $id): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->adminManagementService->getUserActivity($id),
+            message: 'User activity retrieved.',
         );
     }
 

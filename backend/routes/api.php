@@ -296,7 +296,10 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::post('/applications/{type}/{id}/document-requests', [AdminApplicationController::class, 'requestDocument'])->whereNumber('id');
     Route::post('/applications/{type}/{id}/decision', [AdminApplicationController::class, 'decide'])->whereNumber('id');
 
+    Route::get('/dashboard', [AdminManagementController::class, 'dashboard']);
+
     Route::get('/users', [AdminManagementController::class, 'users']);
+    Route::get('/users/{id}/activity', [AdminManagementController::class, 'userActivity'])->whereNumber('id');
     Route::post('/users', [AdminManagementController::class, 'createUser']);
     Route::patch('/users/{id}', [AdminManagementController::class, 'updateUser'])->whereNumber('id');
 

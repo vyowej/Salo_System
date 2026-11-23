@@ -366,4 +366,50 @@ class AdminManagementTest extends TestCase
         $this->assertSame('admin', $admin->user_role);
         $this->assertSame('active', $admin->account_status);
     }
+
+    public function test_admin_dashboard_and_user_activity_endpoints(): void
+    {
+        $admin = User::forceCreate([
+            'username' => 'dash_admin_' . random_int(100, 999),
+            'first_name' => 'Dash',
+            'last_name' => 'Admin',
+            'email' => 'dashadmin_' . random_int(100, 999) . '@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'admin',
+            'account_status' => 'active',
+        ]);
+
+        $customer = User::forceCreate([
+            'username' => 'dash_cust_' . random_int(100, 999),
+            'first_name' => 'Dash',
+            'last_name' => 'Customer',
+            'email' => 'dashcust_' . random_int(100, 999) . '@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'active',
+        ]);
+
+        $this->actingAs($customer)->getJson('/api/admin/dashboard')->assertStatus(403);
+
+        $this->actingAs($admin)->getJson('/api/admin/dashboard')
+            ->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    'users' => ['total', 'active'],
+                    'restaurants' => ['total', 'active'],
+                    'riders' => ['total', 'active', 'online'],
+                    'orders' => ['total', 'today', 'active', 'completed', 'failed', 'gmv_total'],
+                    'reservations' => ['total', 'active', 'completed'],
+                    'pending_queues' => ['restaurant_applications', 'rider_applications', 'branch_permits', 'failed_deliveries', 'cod_submitted'],
+                ],
+            ]);
+
+        $this->actingAs($admin)->getJson("/api/admin/users/{$customer->user_id}/activity")
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['orders', 'reservations']]);
+
+        $this->actingAs($admin)->getJson('/api/admin/riders')
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['items', 'meta', 'operations_summary' => ['unassigned_ready_orders']]]);
+    }
 }

@@ -16,8 +16,6 @@ import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import { formatDate, formatPeso } from '../utils/format';
 import './AdminPages.css';
 
-const ORDERS = [];
-
 const STATUS_LABELS = {
   active: 'Active',
   approved: 'Approved',
@@ -53,6 +51,9 @@ function mapRider(row) {
     emergencyContactPhone: row.emergency_contact_phone || '—',
     status: statusLabel,
     rawStatus,
+    isOnline: Boolean(row.is_online),
+    onDelivery: Boolean(row.on_delivery),
+    codPendingAmount: Number(row.cod_pending_amount ?? 0),
     approvedAt: row.approved_at || null,
     joinedDate: row.created_at,
   };
@@ -63,6 +64,7 @@ export default function AdminRidersPage() {
   const { query: globalQuery } = useAdminPageSearch({ scopeLabel: 'Riders', placeholder: 'Search riders by name, phone, zone, status', searchableFields: ['name', 'username', 'email', 'phone', 'vehicle', 'plateNumber', 'zone', 'status'] });
   const [riders, setRiders] = useState([]);
   const [meta, setMeta] = useState({ current_page: 1, last_page: 1, per_page: 15, total: 0 });
+  const [unassignedOrdersCount, setUnassignedOrdersCount] = useState(0);
   const [pendingApplicationsCount, setPendingApplicationsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -98,6 +100,7 @@ export default function AdminRidersPage() {
       const mapped = (ridersData?.items || []).map(mapRider);
       setRiders(mapped);
       setMeta(ridersData?.meta || { current_page: 1, last_page: 1, per_page: 15, total: mapped.length });
+      setUnassignedOrdersCount(Number(ridersData?.operations_summary?.unassigned_ready_orders ?? 0));
 
       const pendingCount = (appsData?.items || []).filter((item) =>
         ['pending', 'under_review', 'needs_revision'].includes(String(item.application_status || '').toLowerCase())
@@ -113,8 +116,6 @@ export default function AdminRidersPage() {
   useEffect(() => {
     loadRiders();
   }, [loadRiders]);
-
-  const unassignedOrders = ORDERS.filter((order) => !order.riderId && !['Completed', 'Cancelled'].includes(order.status));
 
   function askAction(rider, action) {
     setSelected(rider);
@@ -254,21 +255,21 @@ export default function AdminRidersPage() {
             )}
             {view === 'Operations' && <>
               <div className="admin-roster-summary">
-                <div><strong>0</strong><span>Online</span></div>
+                <div><strong>{riders.filter((r) => r.isOnline).length}</strong><span>Online</span></div>
                 <div><strong>{activeRiders.length}</strong><span>Active riders</span></div>
-                <div><strong>0</strong><span>On delivery</span></div>
-                <div><strong>{unassignedOrders.length}</strong><span>Unassigned orders</span></div>
+                <div><strong>{riders.filter((r) => r.onDelivery).length}</strong><span>On delivery</span></div>
+                <div><strong>{unassignedOrdersCount}</strong><span>Unassigned orders</span></div>
               </div>
               <section className="admin-map-panel" aria-label="Rider location map panel">
                 <div><h2>Authorized live locations</h2><p>Location visibility is limited to riders sharing location during an active shift.</p></div>
-                <div className="admin-map-grid">{activeRiders.map((rider) => <article key={rider.id}><span aria-hidden="true">●</span><strong>{rider.name}</strong><small>{rider.zone} · Offline</small></article>)}</div>
+                <div className="admin-map-grid">{activeRiders.map((rider) => <article key={rider.id}><span aria-hidden="true">●</span><strong>{rider.name}</strong><small>{rider.zone} · {rider.onDelivery ? 'On delivery' : rider.isOnline ? 'Online' : 'Offline'}</small></article>)}</div>
               </section>
               <DataTable defaultOrder={[[0, 'asc']]} columns={[
                 { key: 'name', label: 'Rider', render: (rider) => <strong>{rider.name}</strong> },
                 { key: 'status', label: 'Account status', render: (rider) => <StatusBadge status={rider.status} /> },
                 { key: 'shifts', label: 'Preferred shifts', render: (rider) => rider.shifts.length > 0 ? rider.shifts.join(', ') : '—' },
                 { key: 'zone', label: 'Base city', render: (rider) => rider.zone },
-                { key: 'cod', label: 'COD', render: () => formatPeso(0) },
+                { key: 'cod', label: 'COD Pending', render: (rider) => formatPeso(rider.codPendingAmount || 0) },
               ]} rows={riders} emptyTitle="No rider operations" emptyDescription="No rider records match this filter." />
             </>}
             {meta.total > 0 && (

@@ -328,6 +328,16 @@ export const adminApiService = {
     return response?.data?.permit ?? null;
   },
 
+  async getDashboard() {
+    const response = await apiClient.get('/admin/dashboard');
+    return response?.data ?? null;
+  },
+
+  async getUserActivity(userId) {
+    const response = await apiClient.get(`/admin/users/${encodeURIComponent(userId)}/activity`);
+    return response?.data ?? { orders: [], reservations: [] };
+  },
+
   async getDisputes(params = {}) {
     const response = await apiClient.get(`/admin/disputes${toQueryString(params)}`);
     return response?.data ?? { items: [], meta: {} };

@@ -3,6 +3,7 @@
 namespace App\Features\Admin\Services;
 
 use App\Features\Notifications\Services\NotificationService;
+use App\Features\Riders\Services\RiderService;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
@@ -19,6 +20,7 @@ class AdminManagementService
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
         private readonly FileStorageService $fileStorageService,
+        private readonly RiderService $riderService,
     ) {}
 
     /**
@@ -51,8 +53,197 @@ class AdminManagementService
         }
 
         $paginator = $query->orderBy('created_at', $sortDir)->paginate($perPage);
+        $items = $paginator->items();
+        $userIds = array_map(static fn (object $row): int => (int) $row->user_id, $items);
 
-        return $this->formatPaginatedResult($paginator);
+        $orderCounts = $userIds === []
+            ? collect()
+            : DB::table('orders')->whereIn('customer_id', $userIds)->selectRaw('customer_id, COUNT(*) as cnt')->groupBy('customer_id')->pluck('cnt', 'customer_id');
+        $resCounts = $userIds === []
+            ? collect()
+            : DB::table('reservations')->whereIn('customer_id', $userIds)->selectRaw('customer_id, COUNT(*) as cnt')->groupBy('customer_id')->pluck('cnt', 'customer_id');
+        $ownerIds = $userIds === []
+            ? collect()
+            : DB::table('restaurant_owners')->whereIn('user_id', $userIds)->distinct()->pluck('user_id')->flip();
+        $staffIds = $userIds === []
+            ? collect()
+            : DB::table('restaurant_staff')->whereIn('user_id', $userIds)->where('staff_status', 'active')->distinct()->pluck('user_id')->flip();
+        $riderIds = $userIds === []
+            ? collect()
+            : DB::table('riders')->whereIn('user_id', $userIds)->whereIn('rider_status', ['active', 'approved'])->distinct()->pluck('user_id')->flip();
+
+        foreach ($items as $item) {
+            $uid = (int) $item->user_id;
+            $item->orders_count = (int) ($orderCounts->get($uid) ?? 0);
+            $item->reservations_count = (int) ($resCounts->get($uid) ?? 0);
+            $caps = [$item->user_role === 'admin' ? 'Admin' : 'Customer'];
+            if ($ownerIds->has($uid)) {
+                $caps[] = 'Restaurant Owner';
+            }
+            if ($staffIds->has($uid)) {
+                $caps[] = 'Restaurant Staff';
+            }
+            if ($riderIds->has($uid)) {
+                $caps[] = 'Rider';
+            }
+            $item->capabilities = $caps;
+        }
+
+        return $this->formatPaginatedResult($paginator, $items);
+    }
+
+    /**
+     * Return live platform-wide KPIs and pending operational queues for AdminDashboard.
+     *
+     * @return array<string, mixed>
+     */
+    public function getDashboardMetrics(): array
+    {
+        $today = now()->toDateString();
+
+        $userStats = DB::table('users')
+            ->selectRaw("COUNT(*) as total, SUM(CASE WHEN account_status = 'active' THEN 1 ELSE 0 END) as active")
+            ->first();
+
+        $restaurantStats = DB::table('restaurants')
+            ->selectRaw("COUNT(*) as total, SUM(CASE WHEN restaurant_status = 'active' THEN 1 ELSE 0 END) as active")
+            ->first();
+
+        $riderStats = DB::table('riders')
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN rider_status = 'active' THEN 1 ELSE 0 END) as active
+            ")
+            ->first();
+
+        $activeRiderIds = DB::table('riders')->where('rider_status', 'active')->pluck('rider_id');
+        $onlineRidersCount = 0;
+        foreach ($activeRiderIds as $rid) {
+            if ($this->riderService->isOnline((int) $rid)) {
+                $onlineRidersCount++;
+            }
+        }
+
+        $orderStats = DB::table('orders')
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN DATE(placed_at) = ? THEN 1 ELSE 0 END) as today,
+                SUM(CASE WHEN order_status IN ('pending','accepted','preparing','ready','out_for_delivery') THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN order_status IN ('delivered','completed') THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN order_status = 'failed' THEN 1 ELSE 0 END) as failed,
+                COALESCE(SUM(CASE WHEN order_status NOT IN ('cancelled','rejected','failed') THEN total_amount ELSE 0 END), 0) as gmv_total
+            ", [$today])
+            ->first();
+
+        $resStats = DB::table('reservations')
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN reservation_status IN ('pending','confirmed','arrived','seated') THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN reservation_status = 'completed' THEN 1 ELSE 0 END) as completed
+            ")
+            ->first();
+
+        $pendingAppsRestaurant = (int) DB::table('restaurant_applications')
+            ->whereIn('application_status', ['submitted', 'pending_review', 'under_review', 'resubmitted'])
+            ->count();
+        $pendingAppsRider = (int) DB::table('rider_applications')
+            ->whereIn('application_status', ['submitted', 'pending_review', 'under_review', 'resubmitted'])
+            ->count();
+        $pendingPermits = (int) DB::table('branch_permits')
+            ->whereIn('permit_status', ['submitted', 'under_review'])
+            ->count();
+        $codSubmitted = (int) DB::table('deliveries')
+            ->where('delivery_status', 'delivered')
+            ->where('cod_remittance_status', 'submitted')
+            ->count();
+
+        return [
+            'users' => [
+                'total' => (int) ($userStats->total ?? 0),
+                'active' => (int) ($userStats->active ?? 0),
+            ],
+            'restaurants' => [
+                'total' => (int) ($restaurantStats->total ?? 0),
+                'active' => (int) ($restaurantStats->active ?? 0),
+            ],
+            'riders' => [
+                'total' => (int) ($riderStats->total ?? 0),
+                'active' => (int) ($riderStats->active ?? 0),
+                'online' => $onlineRidersCount,
+            ],
+            'orders' => [
+                'total' => (int) ($orderStats->total ?? 0),
+                'today' => (int) ($orderStats->today ?? 0),
+                'active' => (int) ($orderStats->active ?? 0),
+                'completed' => (int) ($orderStats->completed ?? 0),
+                'failed' => (int) ($orderStats->failed ?? 0),
+                'gmv_total' => round((float) ($orderStats->gmv_total ?? 0), 2),
+            ],
+            'reservations' => [
+                'total' => (int) ($resStats->total ?? 0),
+                'active' => (int) ($resStats->active ?? 0),
+                'completed' => (int) ($resStats->completed ?? 0),
+            ],
+            'pending_queues' => [
+                'restaurant_applications' => $pendingAppsRestaurant,
+                'rider_applications' => $pendingAppsRider,
+                'branch_permits' => $pendingPermits,
+                'failed_deliveries' => (int) ($orderStats->failed ?? 0),
+                'cod_submitted' => $codSubmitted,
+            ],
+        ];
+    }
+
+    /**
+     * Return recent orders and reservations for a specific user account.
+     *
+     * @return array<string, mixed>
+     */
+    public function getUserActivity(int $userId): array
+    {
+        User::query()->findOrFail($userId);
+
+        $orders = DB::table('orders')
+            ->where('customer_id', $userId)
+            ->select(['order_id', 'order_reference', 'restaurant_name', 'total_amount', 'order_status', 'placed_at'])
+            ->orderByDesc('placed_at')
+            ->limit(25)
+            ->get()
+            ->map(static fn (object $o): array => [
+                'order_id' => (int) $o->order_id,
+                'order_reference' => $o->order_reference,
+                'restaurant_name' => $o->restaurant_name,
+                'total_amount' => (float) $o->total_amount,
+                'order_status' => $o->order_status,
+                'placed_at' => $o->placed_at,
+            ])
+            ->all();
+
+        $reservations = DB::table('reservations as res')
+            ->join('restaurants as r', 'r.restaurant_id', '=', 'res.restaurant_id')
+            ->where('res.customer_id', $userId)
+            ->select([
+                'res.reservation_id', 'res.reservation_reference', 'r.restaurant_name',
+                'res.number_of_guests', 'res.reservation_start', 'res.deposit_amount', 'res.reservation_status',
+            ])
+            ->orderByDesc('res.reservation_start')
+            ->limit(25)
+            ->get()
+            ->map(static fn (object $row): array => [
+                'reservation_id' => (int) $row->reservation_id,
+                'reservation_reference' => $row->reservation_reference,
+                'restaurant_name' => $row->restaurant_name,
+                'party_size' => (int) $row->number_of_guests,
+                'reservation_start' => $row->reservation_start,
+                'deposit_amount' => (float) $row->deposit_amount,
+                'reservation_status' => $row->reservation_status,
+            ])
+            ->all();
+
+        return [
+            'orders' => $orders,
+            'reservations' => $reservations,
+        ];
     }
 
     /**
@@ -360,8 +551,52 @@ class AdminManagementService
         }
 
         $paginator = $query->orderBy('r.created_at', $sortDir)->paginate($perPage);
+        $items = $paginator->items();
+        $riderIds = array_map(static fn (object $row): int => (int) $row->rider_id, $items);
 
-        return $this->formatPaginatedResult($paginator);
+        $activeDeliveries = $riderIds === []
+            ? collect()
+            : DB::table('deliveries')
+                ->whereIn('rider_id', $riderIds)
+                ->whereIn('delivery_status', ['accepted', 'picked_up'])
+                ->distinct()
+                ->pluck('rider_id')
+                ->flip();
+
+        $codPending = $riderIds === []
+            ? collect()
+            : DB::table('deliveries')
+                ->whereIn('rider_id', $riderIds)
+                ->where('delivery_status', 'delivered')
+                ->whereIn('cod_remittance_status', ['pending', 'discrepancy'])
+                ->selectRaw('rider_id, COALESCE(SUM(cod_amount_collected), 0) as total_cod')
+                ->groupBy('rider_id')
+                ->pluck('total_cod', 'rider_id');
+
+        foreach ($items as $item) {
+            $rid = (int) $item->rider_id;
+            $item->is_online = $this->riderService->isOnline($rid);
+            $item->on_delivery = $activeDeliveries->has($rid);
+            $item->cod_pending_amount = round((float) ($codPending->get($rid) ?? 0), 2);
+        }
+
+        $result = $this->formatPaginatedResult($paginator, $items);
+        $result['operations_summary'] = [
+            'unassigned_ready_orders' => (int) DB::table('orders as o')
+                ->leftJoin('deliveries as d', 'd.order_id', '=', 'o.order_id')
+                ->where('o.order_type', 'delivery')
+                ->where('o.order_status', 'ready')
+                ->where(function ($sub): void {
+                    $sub->whereNull('d.delivery_id')
+                        ->orWhere(function ($u): void {
+                            $u->whereNull('d.rider_id')
+                                ->whereIn('d.delivery_status', ['pending_assignment', 'offered']);
+                        });
+                })
+                ->count(),
+        ];
+
+        return $result;
     }
 
     /**
