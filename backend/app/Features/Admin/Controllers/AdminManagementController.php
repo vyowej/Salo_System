@@ -67,6 +67,23 @@ class AdminManagementController extends Controller
         );
     }
 
+    public function revokeSessions(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        return ApiResponse::success(
+            data: $this->adminManagementService->revokeUserSessions(
+                userId: $id,
+                reason: $validated['reason'] ?? null,
+                admin: $request->user(),
+                request: $request,
+            ),
+            message: 'Active sessions revoked.',
+        );
+    }
+
     public function restaurants(Request $request): JsonResponse
     {
         return ApiResponse::success(

@@ -176,22 +176,28 @@ export default function AdminUsersPage() {
     setConfirm({ account, status: 'Revoke active sessions' });
   }
 
-  function confirmSessionRevocation({ reason }) {
+  async function confirmSessionRevocation({ reason }) {
     const account = confirm.account;
-    const updated = {
-      ...account,
-      sessionsRevoked: true,
-      sessionRevocationReason: reason,
-      accountActivity: [
-        ...(account.accountActivity || []),
-        { id: `account-session-${Date.now()}`, title: 'Active sessions revoked', description: reason, time: new Date().toISOString() },
-      ],
-    };
-    setAccounts((previous) => previous.map((item) => item.id === account.id ? updated : item));
-    setSelected((previous) => previous?.id === account.id ? updated : previous);
-    setNotice(`Sessions for ${account.name} have been marked revoked.`);
-    showAdminToast(`Sessions revoked for ${account.name}.`);
-    setConfirm(null);
+    try {
+      await adminApiService.revokeUserSessions(account.id, reason);
+      const updated = {
+        ...account,
+        sessionsRevoked: true,
+        sessionRevocationReason: reason,
+        accountActivity: [
+          ...(account.accountActivity || []),
+          { id: `account-session-${Date.now()}`, title: 'Active sessions revoked', description: reason, time: new Date().toISOString() },
+        ],
+      };
+      setAccounts((previous) => previous.map((item) => item.id === account.id ? updated : item));
+      setSelected((previous) => previous?.id === account.id ? updated : previous);
+      setNotice(`Active sessions for ${account.name} have been revoked.`);
+      showAdminToast(`Sessions revoked for ${account.name}.`, 'success');
+    } catch (err) {
+      showAdminToast(err?.message || 'Unable to revoke active sessions.', 'danger');
+    } finally {
+      setConfirm(null);
+    }
   }
 
   const _historyItems = selected

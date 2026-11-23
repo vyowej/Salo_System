@@ -11,6 +11,7 @@ use App\Features\Admin\Controllers\AdminDisputesController;
 use App\Features\Admin\Controllers\AdminFinanceController;
 use App\Features\Admin\Controllers\AdminManagementController;
 use App\Features\Admin\Controllers\AdminOrderController;
+use App\Features\Admin\Controllers\AdminPromoController;
 use App\Features\Admin\Controllers\AdminReservationController;
 use App\Features\Admin\Controllers\AdminSettingsRequestController;
 use App\Features\Applications\Controllers\ApplicationDocumentController;
@@ -174,6 +175,7 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
     Route::get('/orders/{id}/tracking', [TrackingController::class, 'customerOrderTracking'])->whereNumber('id');
 
     Route::post('/checkout', [CustomerOrderController::class, 'checkout']);
+    Route::post('/promos/validate', [AdminPromoController::class, 'validateForCustomer']);
     Route::get('/orders', [CustomerOrderController::class, 'index']);
     Route::get('/orders/{id}', [CustomerOrderController::class, 'show'])->whereNumber('id');
     Route::post('/orders/{id}/cancel', [CustomerOrderController::class, 'cancel'])->whereNumber('id');
@@ -307,6 +309,7 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::get('/users/{id}/activity', [AdminManagementController::class, 'userActivity'])->whereNumber('id');
     Route::post('/users', [AdminManagementController::class, 'createUser']);
     Route::patch('/users/{id}', [AdminManagementController::class, 'updateUser'])->whereNumber('id');
+    Route::post('/users/{id}/revoke-sessions', [AdminManagementController::class, 'revokeSessions'])->whereNumber('id');
 
     Route::get('/restaurants', [AdminManagementController::class, 'restaurants']);
     Route::patch('/restaurants/{id}/status', [AdminManagementController::class, 'updateRestaurantStatus'])->whereNumber('id');
@@ -339,6 +342,10 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
 
     Route::get('/finance/cod-remittances', [AdminFinanceController::class, 'codRemittances']);
     Route::post('/finance/cod-remittances/{deliveryId}/verify', [AdminFinanceController::class, 'verifyCodRemittance'])->whereNumber('deliveryId');
+
+    Route::get('/promos', [AdminPromoController::class, 'index']);
+    Route::post('/promos', [AdminPromoController::class, 'store']);
+    Route::patch('/promos/{id}', [AdminPromoController::class, 'update'])->whereNumber('id');
 
     Route::get('/reservations', [AdminReservationController::class, 'index']);
     Route::get('/reservations/stats', [AdminReservationController::class, 'stats']);

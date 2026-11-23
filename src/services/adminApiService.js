@@ -338,6 +338,13 @@ export const adminApiService = {
     return response?.data ?? { orders: [], reservations: [] };
   },
 
+  async revokeUserSessions(userId, reason = '') {
+    const response = await apiClient.post(`/admin/users/${encodeURIComponent(userId)}/revoke-sessions`, {
+      reason: reason || undefined,
+    });
+    return response?.data ?? null;
+  },
+
   async getDisputes(params = {}) {
     const response = await apiClient.get(`/admin/disputes${toQueryString(params)}`);
     return response?.data ?? { items: [], meta: {} };
@@ -362,6 +369,21 @@ export const adminApiService = {
       notes: notes || undefined,
     });
     return response?.data?.remittance ?? null;
+  },
+
+  async getPromos(params = {}) {
+    const response = await apiClient.get(`/admin/promos${toQueryString(params)}`);
+    return response?.data ?? { items: [], meta: {} };
+  },
+
+  async createPromo(payload) {
+    const response = await apiClient.post('/admin/promos', payload);
+    return response?.data?.promo ?? null;
+  },
+
+  async updatePromo(promoId, payload) {
+    const response = await apiClient.patch(`/admin/promos/${encodeURIComponent(promoId)}`, payload);
+    return response?.data?.promo ?? null;
   },
 };
 

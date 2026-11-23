@@ -41,6 +41,7 @@ class AuthService
 
         if ($request->hasSession()) {
             $request->session()->regenerate();
+            $request->session()->put('auth_issued_at', time());
         }
 
         return $this->formatUserPayload($user);
@@ -78,6 +79,7 @@ class AuthService
 
         if ($request->hasSession()) {
             $request->session()->regenerate();
+            $request->session()->put('auth_issued_at', time());
         }
 
         return $this->formatUserPayload($user);

@@ -268,15 +268,15 @@ class ApplicationServicesCharacterizationTest extends TestCase
         $this->assertSame(['lunch', 'dinner'], $created['preferred_shifts']);
         $this->assertCount(2, $created['documents']);
 
-        // 3. Duplicate active application rejected
+        // 3. Duplicate active application rejected with 409 ACTIVE_APPLICATION_EXISTS
         try {
             $service->submit($applicant, [
                 'contact_email' => $applicant->email,
                 'vehicle_type' => 'walking',
             ], [], $req);
-            $this->fail('Expected ValidationException for duplicate active rider application.');
-        } catch (ValidationException $e) {
-            $this->assertArrayHasKey('application', $e->errors());
+            $this->fail('Expected HttpResponseException for duplicate active rider application.');
+        } catch (\Illuminate\Http\Exceptions\HttpResponseException $e) {
+            $this->assertSame(409, $e->getResponse()->getStatusCode());
         }
 
         // 4. Other user uploadDocument -> 404

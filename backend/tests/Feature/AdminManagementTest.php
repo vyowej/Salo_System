@@ -412,4 +412,40 @@ class AdminManagementTest extends TestCase
             ->assertOk()
             ->assertJsonStructure(['data' => ['items', 'meta', 'operations_summary' => ['unassigned_ready_orders']]]);
     }
+
+    public function test_admin_can_revoke_user_sessions_and_invalidate_active_session(): void
+    {
+        $admin = User::forceCreate([
+            'username' => 'rev_admin_' . random_int(100, 999),
+            'first_name' => 'Rev',
+            'last_name' => 'Admin',
+            'email' => 'revadmin_' . random_int(100, 999) . '@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'admin',
+            'account_status' => 'active',
+        ]);
+
+        $customer = User::forceCreate([
+            'username' => 'rev_cust_' . random_int(100, 999),
+            'first_name' => 'Rev',
+            'last_name' => 'Customer',
+            'email' => 'revcust_' . random_int(100, 999) . '@example.com',
+            'password_hash' => Hash::make('SecretPass123!'),
+            'user_role' => 'customer',
+            'account_status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson("/api/admin/users/{$customer->user_id}/revoke-sessions", [
+                'reason' => 'Suspected token compromise',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.user_id', $customer->user_id);
+
+        // Customer session issued before revocation is rejected with 401
+        $this->actingAs($customer)
+            ->withSession(['auth_issued_at' => time() - 10])
+            ->getJson('/api/auth/me')
+            ->assertStatus(401);
+    }
 }

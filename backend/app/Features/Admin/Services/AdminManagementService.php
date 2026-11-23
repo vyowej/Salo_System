@@ -10,6 +10,7 @@ use App\Support\FileStorageService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -354,6 +355,51 @@ class AdminManagementService
             'account_status',
             'updated_at',
         ]);
+    }
+
+    /**
+     * Revoke all active sessions for a user account and record an audit log entry.
+     *
+     * @return array<string, mixed>
+     */
+    public function revokeUserSessions(int $userId, ?string $reason, User $admin, Request $request): array
+    {
+        $user = User::query()->findOrFail($userId);
+
+        if ((int) $user->user_id === (int) $admin->user_id) {
+            throw ValidationException::withMessages([
+                'user_id' => ['Administrators cannot revoke their own active session here.'],
+            ]);
+        }
+
+        $trimmedReason = $reason !== null ? trim($reason) : null;
+        if ($trimmedReason === '') {
+            $trimmedReason = null;
+        }
+
+        $revokedAt = time();
+        Cache::forever("auth:revoked_after:{$userId}", $revokedAt);
+
+        if (config('session.driver') === 'database') {
+            DB::table((string) config('session.table', 'sessions'))
+                ->where('user_id', $userId)
+                ->delete();
+        }
+
+        $this->auditLogService->record(
+            actorUserId: (int) $admin->user_id,
+            action: 'admin_user_sessions_revoked',
+            entityType: 'users',
+            entityId: $userId,
+            newValues: ['revoked_after' => $revokedAt],
+            reason: $trimmedReason,
+            request: $request,
+        );
+
+        return [
+            'user_id' => $userId,
+            'revoked_after' => $revokedAt,
+        ];
     }
 
     /**
