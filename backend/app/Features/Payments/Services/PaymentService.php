@@ -5,6 +5,8 @@ namespace App\Features\Payments\Services;
 use App\Features\Admin\Services\LedgerService;
 use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderTimestampFormatter;
+use App\Features\Payments\Providers\PaymentProviderInterface;
+use App\Features\Payments\Providers\PaymentProviderResolver;
 use App\Models\User;
 use App\Support\AuditLogService;
 use Illuminate\Http\Request;
@@ -20,7 +22,33 @@ class PaymentService
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
         private readonly LedgerService $ledgerService,
+        private readonly PaymentProviderResolver $providerResolver,
     ) {}
+
+    public function activeProvider(): PaymentProviderInterface
+    {
+        return $this->providerResolver->resolve();
+    }
+
+    /**
+     * Prepare provider-specific initiation metadata for an online checkout payment.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array{
+     *     provider_name: string,
+     *     provider_payment_id: ?string,
+     *     provider_transaction_id: ?string,
+     *     provider_reference: ?string,
+     *     payment_status: string,
+     *     checkout_url: ?string,
+     *     expires_at: ?string,
+     *     meta: array<string, mixed>
+     * }
+     */
+    public function prepareOnlinePaymentPayload(array $payload): array
+    {
+        return $this->activeProvider()->initiateOnlinePayment($payload);
+    }
 
     public static function mapChannelToDbMethod(string $channel): string
     {

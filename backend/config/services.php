@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    'xendit' => [
+        'secret_key' => env('XENDIT_SECRET_KEY'),
+        'public_key' => env('XENDIT_PUBLIC_KEY'),
+        'webhook_token' => env('XENDIT_WEBHOOK_TOKEN'),
+        'mode' => strtolower(trim((string) env('XENDIT_MODE', 'test'))),
+        'base_url' => rtrim((string) env('XENDIT_BASE_URL', 'https://api.xendit.co'), '/'),
+        'timeout_seconds' => max(3, (int) env('XENDIT_TIMEOUT_SECONDS', 15)),
+        'success_redirect_url' => env('XENDIT_SUCCESS_REDIRECT_URL'),
+        'failure_redirect_url' => env('XENDIT_FAILURE_REDIRECT_URL'),
+    ],
+
 ];

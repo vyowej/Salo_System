@@ -643,15 +643,24 @@ class CheckoutService
 
             if ($paymentChannel !== 'cod' && $checkoutTotalCents > 0) {
                 $paymentRef = $this->generateUniqueReference('payments', 'payment_reference', 'SALO-PAY');
+                $preparedOnlinePayment = $this->paymentService->prepareOnlinePaymentPayload([
+                    'payment_reference' => $paymentRef,
+                    'checkout_id' => $checkoutId,
+                    'customer_id' => (int) $user->user_id,
+                    'channel' => $paymentChannel,
+                    'amount' => Money::fromCents($checkoutTotalCents),
+                    'currency' => 'PHP',
+                ]);
+
                 $onlinePaymentId = (int) DB::table('payments')->insertGetId([
                     'payment_reference' => $paymentRef,
                     'checkout_id' => $checkoutId,
                     'customer_id' => $user->user_id,
                     'payment_method' => PaymentService::mapChannelToDbMethod($paymentChannel),
                     'payment_type' => 'payment',
-                    'payment_status' => 'requires_customer_action',
+                    'payment_status' => $preparedOnlinePayment['payment_status'],
                     'amount' => Money::fromCents($checkoutTotalCents),
-                    'provider_response' => json_encode(['channel' => $paymentChannel], JSON_UNESCAPED_SLASHES),
+                    'provider_response' => json_encode($preparedOnlinePayment['meta'], JSON_UNESCAPED_SLASHES),
                     'created_at' => $now,
                     'updated_at' => $now,
                 ]);
@@ -672,7 +681,11 @@ class CheckoutService
                     'provider_name' => $paymentChannel,
                     'event_key' => "init_{$onlinePaymentId}",
                     'payment_id' => $onlinePaymentId,
-                    'payload' => json_encode(['status' => 'requires_customer_action', 'channel' => $paymentChannel]),
+                    'payload' => json_encode([
+                        'status' => $preparedOnlinePayment['payment_status'],
+                        'channel' => $paymentChannel,
+                        'provider' => $preparedOnlinePayment['provider_name'],
+                    ]),
                     'processing_status' => 'processed',
                     'processed_at' => $now,
                     'created_at' => $now,

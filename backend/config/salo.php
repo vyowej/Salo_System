@@ -166,6 +166,8 @@ return [
         'driver' => strtolower(trim((string) env('SALO_PAYMENT_DRIVER', 'sandbox'))),
         'sandbox_enabled' => filter_var(env('SALO_SANDBOX_PAYMENTS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
         'sandbox_allowed_environments' => ['local', 'testing'],
+        'supported_drivers' => ['sandbox', 'xendit'],
+        'expiry_seconds' => max(300, (int) env('SALO_PAYMENT_EXPIRY_SECONDS', 3600)),
     ],
 
     'reservations' => [
