@@ -358,6 +358,10 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::get('/finance/cod-remittances', [AdminFinanceController::class, 'codRemittances']);
     Route::post('/finance/cod-remittances/{deliveryId}/verify', [AdminFinanceController::class, 'verifyCodRemittance'])->whereNumber('deliveryId');
     Route::get('/finance/ledger', [AdminFinanceController::class, 'ledger']);
+    Route::get('/finance/refunds', [AdminFinanceController::class, 'refunds']);
+    Route::get('/finance/refunds/{refundId}', [AdminFinanceController::class, 'showRefund'])->whereNumber('refundId');
+    Route::post('/finance/refunds/{refundId}/submit', [AdminFinanceController::class, 'submitRefund'])->whereNumber('refundId');
+    Route::get('/finance/events', [AdminFinanceController::class, 'paymentEvents']);
 
     Route::get('/promos', [AdminPromoController::class, 'index']);
     Route::post('/promos', [AdminPromoController::class, 'store']);

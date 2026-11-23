@@ -363,9 +363,29 @@ export const adminApiService = {
     return response?.data ?? { summary: {}, items: [], meta: {} };
   },
 
-  async getFinanceLedger() {
-    const response = await apiClient.get('/admin/finance/ledger');
-    return response?.data ?? { summary: {}, recent_journals: [] };
+  async getFinanceLedger(params = {}) {
+    const response = await apiClient.get(`/admin/finance/ledger${toQueryString(params)}`);
+    return response?.data ?? { summary: {}, reconciliation: {}, recent_journals: [], pagination: {} };
+  },
+
+  async getFinanceRefunds(params = {}) {
+    const response = await apiClient.get(`/admin/finance/refunds${toQueryString(params)}`);
+    return response?.data ?? { items: [], pagination: {} };
+  },
+
+  async getFinanceRefundDetail(refundId) {
+    const response = await apiClient.get(`/admin/finance/refunds/${encodeURIComponent(refundId)}`);
+    return response?.data?.refund ?? null;
+  },
+
+  async submitFinanceRefund(refundId) {
+    const response = await apiClient.post(`/admin/finance/refunds/${encodeURIComponent(refundId)}/submit`, {});
+    return response?.data?.refund ?? null;
+  },
+
+  async getFinanceEvents(params = {}) {
+    const response = await apiClient.get(`/admin/finance/events${toQueryString(params)}`);
+    return response?.data ?? { items: [], pagination: {} };
   },
 
   async verifyCodRemittance(deliveryId, { action, notes = null }) {

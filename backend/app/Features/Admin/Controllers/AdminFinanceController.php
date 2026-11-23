@@ -22,11 +22,45 @@ class AdminFinanceController extends Controller
         );
     }
 
-    public function ledger(): JsonResponse
+    public function ledger(Request $request): JsonResponse
     {
         return ApiResponse::success(
-            data: $this->adminFinanceService->ledgerOverview(),
+            data: $this->adminFinanceService->ledgerOverview($request->query()),
             message: 'Ledger overview retrieved.',
+        );
+    }
+
+    public function refunds(Request $request): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->adminFinanceService->listRefunds($request->query()),
+            message: 'Refunds retrieved.',
+        );
+    }
+
+    public function showRefund(int $refundId): JsonResponse
+    {
+        return ApiResponse::success(
+            data: ['refund' => $this->adminFinanceService->getRefundDetail($refundId)],
+            message: 'Refund details retrieved.',
+        );
+    }
+
+    public function submitRefund(Request $request, int $refundId): JsonResponse
+    {
+        return ApiResponse::success(
+            data: [
+                'refund' => $this->adminFinanceService->submitRefund($refundId, $request->user(), $request),
+            ],
+            message: 'Refund submission processed.',
+        );
+    }
+
+    public function paymentEvents(Request $request): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->adminFinanceService->listPaymentEvents($request->query()),
+            message: 'Payment events retrieved.',
         );
     }
 
