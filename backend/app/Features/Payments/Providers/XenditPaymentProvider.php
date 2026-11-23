@@ -211,4 +211,96 @@ class XenditPaymentProvider implements PaymentProviderInterface
     {
         return PaymentStatusMapper::mapXenditStatus($providerStatus);
     }
+
+    public function refundPayment(array $payload): array
+    {
+        $this->assertTestModeReady();
+
+        $refundReference = trim((string) ($payload['refund_reference'] ?? ''));
+        $providerPaymentId = trim((string) ($payload['provider_payment_id'] ?? ''));
+        $idempotencyKey = trim((string) ($payload['idempotency_key'] ?? ''));
+        $currency = strtoupper(trim((string) ($payload['currency'] ?? 'PHP')));
+        $amount = round((float) ($payload['amount'] ?? 0), 2);
+
+        if ($refundReference === '' || $providerPaymentId === '' || $idempotencyKey === '') {
+            throw new InvalidArgumentException('Refund reference, provider payment ID, and idempotency key are required.');
+        }
+
+        if ($currency !== 'PHP') {
+            throw new InvalidArgumentException('Only PHP currency is supported for refunds.');
+        }
+
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('Refund amount must be greater than zero.');
+        }
+
+        $reason = $this->mapRefundReason((string) ($payload['reason'] ?? ''));
+        $secretKey = trim((string) config('services.xendit.secret_key', ''));
+        $timeout = max(3, (int) config('services.xendit.timeout_seconds', 15));
+
+        try {
+            $response = Http::withBasicAuth($secretKey, '')
+                ->timeout($timeout)
+                ->acceptJson()
+                ->withHeaders([
+                    'idempotency-key' => $idempotencyKey,
+                ])
+                ->post(self::APPROVED_TEST_BASE_URL.'/refunds', [
+                    'reference_id' => $refundReference,
+                    'invoice_id' => $providerPaymentId,
+                    'amount' => $amount,
+                    'currency' => 'PHP',
+                    'reason' => $reason,
+                ]);
+        } catch (ConnectionException $e) {
+            throw new XenditTimeoutException('Xendit Test Mode refund request timed out or connection was interrupted.', 0, $e);
+        } catch (\Throwable $e) {
+            throw new RuntimeException('Unable to reach Xendit Test Mode refund API.', 0, $e);
+        }
+
+        if (! $response->successful()) {
+            throw new RuntimeException("Xendit refund request failed (HTTP {$response->status()}).");
+        }
+
+        $data = $response->json();
+        if (! is_array($data)) {
+            throw new RuntimeException('Xendit returned an invalid JSON refund response.');
+        }
+
+        $providerRefundId = trim((string) ($data['id'] ?? ''));
+        $rawStatus = strtoupper(trim((string) ($data['status'] ?? '')));
+        if ($providerRefundId === '' || $rawStatus === '') {
+            throw new RuntimeException('Xendit refund response is missing required identifiers or status.');
+        }
+
+        $mappedStatus = PaymentStatusMapper::mapXenditRefundStatus($rawStatus);
+        if ($mappedStatus === null) {
+            // Fail closed: unknown provider status must never be treated as successful.
+            $mappedStatus = 'submitted';
+        }
+
+        return [
+            'provider_name' => $this->name(),
+            'provider_refund_id' => $providerRefundId,
+            'refund_status' => $mappedStatus,
+            'meta' => [
+                'provider' => $this->name(),
+                'provider_refund_id' => $providerRefundId,
+                'xendit_refund_status' => $rawStatus,
+                'reference_id' => $refundReference,
+            ],
+        ];
+    }
+
+    private function mapRefundReason(string $reason): string
+    {
+        $upper = strtoupper(trim($reason));
+
+        return match (true) {
+            str_contains($upper, 'DUPLICATE') => 'DUPLICATE',
+            str_contains($upper, 'FRAUD') => 'FRAUDULENT',
+            str_contains($upper, 'CANCEL') || str_contains($upper, 'REJECT') => 'CANCELED',
+            default => 'REQUESTED_BY_CUSTOMER',
+        };
+    }
 }

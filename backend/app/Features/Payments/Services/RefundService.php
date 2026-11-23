@@ -4,13 +4,21 @@ namespace App\Features\Payments\Services;
 
 use App\Features\Admin\Services\LedgerService;
 use App\Features\Notifications\Services\NotificationService;
+use App\Features\Payments\Exceptions\XenditTimeoutException;
+use App\Features\Payments\Providers\PaymentProviderResolver;
+use App\Features\Payments\Support\PaymentStatusMapper;
 use App\Support\AuditLogService;
 use App\Support\Money;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class RefundService
@@ -28,6 +36,7 @@ class RefundService
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
         private readonly LedgerService $ledgerService,
+        private readonly PaymentProviderResolver $providerResolver,
     ) {}
 
     /**
@@ -170,6 +179,7 @@ class RefundService
             'original_payment_reference' => $originalPayment->payment_reference,
             'order_reference' => $order->order_reference,
             'provider' => $originalPayment->provider_name ?? ($originalMeta['provider'] ?? null),
+            'refund_idempotency_key' => 'salo-rfd-'.$refundRef,
         ];
 
         $insertData = [
@@ -476,5 +486,392 @@ class RefundService
                 'amount' => (float) $refund->amount,
             ];
         });
+    }
+
+    /**
+     * Submit an existing requested refund to the active payment provider (outside DB locks).
+     *
+     * @return array<string, mixed>
+     */
+    public function submitRefundToProvider(
+        int $refundPaymentId,
+        ?int $actorUserId = null,
+        ?Request $request = null,
+    ): array {
+        $lock = Cache::lock("refund_submit_{$refundPaymentId}", 30);
+        if (! $lock->get()) {
+            throw new ConflictHttpException('Refund submission is already in progress. Please wait and try again.');
+        }
+
+        try {
+            $precheck = DB::transaction(function () use ($refundPaymentId): array {
+                $refund = DB::table('payments')
+                    ->where('payment_id', $refundPaymentId)
+                    ->where('payment_type', 'refund')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $refund) {
+                    throw new NotFoundHttpException('Refund record not found.');
+                }
+
+                if ($refund->refund_status === 'successful') {
+                    return [
+                        'done' => true,
+                        'result' => [
+                            'refund_payment_id' => (int) $refund->payment_id,
+                            'payment_reference' => $refund->payment_reference,
+                            'refund_status' => 'successful',
+                            'amount' => (float) $refund->amount,
+                        ],
+                    ];
+                }
+
+                if ($refund->refund_status === 'failed') {
+                    throw new ConflictHttpException('Failed refunds cannot be resubmitted.');
+                }
+
+                $refundMeta = json_decode((string) ($refund->provider_response ?? ''), true);
+                $refundMeta = is_array($refundMeta) ? $refundMeta : [];
+                $existingProviderRefundId = $refund->provider_payment_id ?? ($refundMeta['provider_refund_id'] ?? null);
+
+                if (in_array($refund->refund_status, ['submitted', 'processing'], true) && ! empty($existingProviderRefundId)) {
+                    return [
+                        'done' => true,
+                        'result' => [
+                            'refund_payment_id' => (int) $refund->payment_id,
+                            'payment_reference' => $refund->payment_reference,
+                            'refund_status' => $refund->refund_status,
+                            'provider_refund_id' => $existingProviderRefundId,
+                            'amount' => (float) $refund->amount,
+                        ],
+                    ];
+                }
+
+                if (($refundMeta['refund_submission_state'] ?? null) === 'uncertain' && ! empty($refundMeta['refund_attempted_at'])) {
+                    $attemptedAt = Carbon::parse((string) $refundMeta['refund_attempted_at']);
+                    if ($attemptedAt->diffInSeconds(now()) < 60) {
+                        throw new ConflictHttpException(
+                            'Previous refund submission timed out and its outcome is uncertain. Please wait or reconcile before retrying.'
+                        );
+                    }
+                }
+
+                $originalPayment = DB::table('payments')
+                    ->where('payment_id', $refund->related_payment_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $originalPayment || $originalPayment->payment_method === 'cash') {
+                    throw new ConflictHttpException('Original payment is not eligible for online provider refund.');
+                }
+
+                $origMeta = json_decode((string) ($originalPayment->provider_response ?? ''), true);
+                $origMeta = is_array($origMeta) ? $origMeta : [];
+                $providerPaymentId = (string) ($originalPayment->provider_payment_id ?? $origMeta['provider_payment_id'] ?? $origMeta['provider_reference'] ?? '');
+
+                $idempotencyKey = (string) ($refundMeta['refund_idempotency_key'] ?? ('salo-rfd-'.$refund->payment_reference));
+                $refundMeta['refund_idempotency_key'] = $idempotencyKey;
+                DB::table('payments')->where('payment_id', $refundPaymentId)->update([
+                    'provider_response' => json_encode($refundMeta, JSON_UNESCAPED_SLASHES),
+                    'updated_at' => now(),
+                ]);
+
+                return [
+                    'done' => false,
+                    'refund' => $refund,
+                    'refund_meta' => $refundMeta,
+                    'provider_payment_id' => $providerPaymentId,
+                    'idempotency_key' => $idempotencyKey,
+                ];
+            });
+
+            if ($precheck['done']) {
+                return $precheck['result'];
+            }
+
+            $refund = $precheck['refund'];
+            $refundMeta = $precheck['refund_meta'];
+            $provider = $this->providerResolver->resolve();
+
+            try {
+                $providerResult = $provider->refundPayment([
+                    'refund_payment_id' => $refundPaymentId,
+                    'refund_reference' => $refund->payment_reference,
+                    'provider_payment_id' => $precheck['provider_payment_id'],
+                    'amount' => (float) $refund->amount,
+                    'currency' => 'PHP',
+                    'reason' => (string) ($refundMeta['reason'] ?? 'REQUESTED_BY_CUSTOMER'),
+                    'idempotency_key' => $precheck['idempotency_key'],
+                ]);
+            } catch (XenditTimeoutException $e) {
+                $this->recordRefundSubmissionOutcome($refundPaymentId, 'uncertain');
+                throw new HttpException(504, 'Refund submission timed out; outcome is uncertain. Reservation retained.', $e);
+            } catch (\Throwable $e) {
+                $this->markRefundFailed($refundPaymentId, $e->getMessage(), $actorUserId, $request);
+                throw $e;
+            }
+
+            $mappedStatus = $providerResult['refund_status'];
+            $providerRefundId = $providerResult['provider_refund_id'] ?? null;
+
+            if ($mappedStatus === 'successful') {
+                return $this->confirmRefundSucceeded($refundPaymentId, $providerRefundId, $actorUserId, $request);
+            }
+
+            if ($mappedStatus === 'failed') {
+                return $this->markRefundFailed($refundPaymentId, 'Provider rejected refund.', $actorUserId, $request);
+            }
+
+            // Asynchronous non-successful state ('submitted' or 'processing'): persist provider_refund_id, retain reservation, NO ledger journal.
+            return DB::transaction(function () use ($refundPaymentId, $providerResult, $mappedStatus, $providerRefundId): array {
+                $locked = DB::table('payments')->where('payment_id', $refundPaymentId)->lockForUpdate()->first();
+                if (! $locked) {
+                    throw new NotFoundHttpException('Refund record not found.');
+                }
+
+                if ($locked->refund_status === 'successful') {
+                    return [
+                        'refund_payment_id' => $refundPaymentId,
+                        'payment_reference' => $locked->payment_reference,
+                        'refund_status' => 'successful',
+                        'amount' => (float) $locked->amount,
+                    ];
+                }
+
+                $now = now();
+                $meta = json_decode((string) ($locked->provider_response ?? ''), true);
+                $meta = is_array($meta) ? $meta : [];
+                $merged = array_merge($meta, $providerResult['meta'], ['refund_submission_state' => $mappedStatus]);
+
+                $updates = [
+                    'refund_status' => $mappedStatus,
+                    'provider_response' => json_encode($merged, JSON_UNESCAPED_SLASHES),
+                    'updated_at' => $now,
+                ];
+                if (Schema::hasColumn('payments', 'provider_name')) {
+                    $updates['provider_name'] = $providerResult['provider_name'];
+                }
+                if ($providerRefundId !== null && Schema::hasColumn('payments', 'provider_payment_id')) {
+                    $updates['provider_payment_id'] = $providerRefundId;
+                }
+
+                DB::table('payments')->where('payment_id', $refundPaymentId)->update($updates);
+
+                return [
+                    'refund_payment_id' => $refundPaymentId,
+                    'payment_reference' => $locked->payment_reference,
+                    'refund_status' => $mappedStatus,
+                    'provider_refund_id' => $providerRefundId,
+                    'amount' => (float) $locked->amount,
+                ];
+            });
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function recordRefundSubmissionOutcome(int $refundPaymentId, string $state): void
+    {
+        DB::transaction(function () use ($refundPaymentId, $state): void {
+            $locked = DB::table('payments')->where('payment_id', $refundPaymentId)->lockForUpdate()->first();
+            if (! $locked || $locked->refund_status === 'successful' || $locked->refund_status === 'failed') {
+                return;
+            }
+
+            $meta = json_decode((string) ($locked->provider_response ?? ''), true);
+            $meta = is_array($meta) ? $meta : [];
+            $meta['refund_submission_state'] = $state;
+            $meta['refund_attempted_at'] = now()->toIso8601String();
+
+            DB::table('payments')->where('payment_id', $refundPaymentId)->update([
+                'provider_response' => json_encode($meta, JSON_UNESCAPED_SLASHES),
+                'updated_at' => now(),
+            ]);
+        });
+    }
+
+    /**
+     * Handle verified Xendit refund webhooks (refund.succeeded, refund.failed, refund.pending).
+     *
+     * @return array<string, mixed>
+     */
+    public function handleXenditRefundWebhook(Request $request): array
+    {
+        if (
+            strtolower(trim((string) config('salo.payments.driver', ''))) !== 'xendit'
+            || app()->environment('production')
+            || strtolower(trim((string) config('services.xendit.mode', ''))) !== 'test'
+        ) {
+            throw new AccessDeniedHttpException('Xendit Test Mode refund webhook is disabled in this environment.');
+        }
+
+        $expectedToken = trim((string) config('services.xendit.webhook_token', ''));
+        $providedToken = trim((string) $request->header('x-callback-token', ''));
+        if ($expectedToken === '' || $providedToken === '' || ! hash_equals($expectedToken, $providedToken)) {
+            throw new AccessDeniedHttpException('Invalid Xendit callback verification token.');
+        }
+
+        $validated = $request->validate([
+            'event' => ['required', 'string', 'in:refund.succeeded,refund.failed,refund.pending'],
+            'data' => ['required', 'array'],
+            'data.refund_id' => ['nullable', 'string', 'max:120'],
+            'data.id' => ['nullable', 'string', 'max:120'],
+            'data.reference_id' => ['required', 'string', 'max:100'],
+            'data.status' => ['required', 'string', 'max:50'],
+            'data.amount' => ['required', 'numeric', 'gt:0'],
+            'data.currency' => ['required', 'string', 'size:3'],
+        ]);
+
+        $data = $validated['data'];
+        $providerRefundId = trim((string) ($data['refund_id'] ?? $data['id'] ?? ''));
+        if ($providerRefundId === '') {
+            throw ValidationException::withMessages([
+                'data.refund_id' => ['Provider refund ID is required.'],
+            ]);
+        }
+
+        $rawStatus = strtoupper(trim((string) $data['status']));
+        $mappedStatus = PaymentStatusMapper::mapXenditRefundStatus($rawStatus);
+        if ($mappedStatus === null) {
+            throw ValidationException::withMessages([
+                'data.status' => ['Unsupported Xendit refund status.'],
+            ]);
+        }
+
+        $currency = strtoupper(trim((string) $data['currency']));
+        if ($currency !== 'PHP') {
+            throw ValidationException::withMessages([
+                'data.currency' => ['Unsupported refund currency.'],
+            ]);
+        }
+
+        $referenceId = trim((string) $data['reference_id']);
+        $callbackAmountCents = Money::parseStrictCents(number_format((float) $data['amount'], 2, '.', ''));
+        $eventKey = "xendit_rfd_{$providerRefundId}_{$rawStatus}";
+
+        $outcome = DB::transaction(function () use ($referenceId, $providerRefundId, $callbackAmountCents, $mappedStatus, $rawStatus, $eventKey, $validated): array {
+            $refund = DB::table('payments')
+                ->where('payment_reference', $referenceId)
+                ->where('payment_type', 'refund')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $refund) {
+                throw new NotFoundHttpException('Refund record not found for reference_id.');
+            }
+
+            if ($refund->payment_method === 'cash') {
+                throw new ConflictHttpException('COD payments cannot be processed via Xendit refund webhook.');
+            }
+
+            $meta = json_decode((string) ($refund->provider_response ?? ''), true);
+            $meta = is_array($meta) ? $meta : [];
+            $storedProvider = $refund->provider_name ?? ($meta['provider'] ?? null);
+            if ($storedProvider !== null && $storedProvider !== '' && $storedProvider !== 'xendit') {
+                throw new ConflictHttpException('Refund does not belong to Xendit provider.');
+            }
+
+            $expectedCents = Money::parseStrictCents((string) $refund->amount);
+            if ($callbackAmountCents !== $expectedCents) {
+                throw ValidationException::withMessages([
+                    'data.amount' => ['Callback refund amount does not match stored refund amount.'],
+                ]);
+            }
+
+            $storedRefundId = $refund->provider_payment_id ?? ($meta['provider_refund_id'] ?? null);
+            if ($storedRefundId !== null && $storedRefundId !== '' && $storedRefundId !== $providerRefundId) {
+                throw ValidationException::withMessages([
+                    'data.refund_id' => ['Callback refund ID does not match stored provider refund ID.'],
+                ]);
+            }
+
+            $now = now();
+            $safePayload = json_encode([
+                'event' => $validated['event'],
+                'status' => $rawStatus,
+                'mapped_status' => $mappedStatus,
+                'provider_refund_id' => $providerRefundId,
+                'reference_id' => $referenceId,
+            ], JSON_UNESCAPED_SLASHES);
+
+            // Terminal protection: never overwrite successful refund with failed/pending.
+            if ($refund->refund_status === 'successful' || $refund->refund_status === $mappedStatus) {
+                DB::table('payment_events')->insertOrIgnore([
+                    'provider_name' => 'xendit',
+                    'event_key' => $eventKey,
+                    'payment_id' => (int) $refund->payment_id,
+                    'payload' => $safePayload,
+                    'processing_status' => 'ignored',
+                    'processed_at' => $now,
+                    'created_at' => $now,
+                ]);
+
+                return [
+                    'action' => 'none',
+                    'result' => [
+                        'refund_payment_id' => (int) $refund->payment_id,
+                        'payment_reference' => $refund->payment_reference,
+                        'refund_status' => $refund->refund_status,
+                        'amount' => (float) $refund->amount,
+                    ],
+                ];
+            }
+
+            DB::table('payment_events')->insertOrIgnore([
+                'provider_name' => 'xendit',
+                'event_key' => $eventKey,
+                'payment_id' => (int) $refund->payment_id,
+                'payload' => $safePayload,
+                'processing_status' => 'processed',
+                'processed_at' => $now,
+                'created_at' => $now,
+            ]);
+
+            if ($mappedStatus === 'successful') {
+                return ['action' => 'confirm', 'refund_payment_id' => (int) $refund->payment_id];
+            }
+
+            if ($mappedStatus === 'failed') {
+                return ['action' => 'fail', 'refund_payment_id' => (int) $refund->payment_id];
+            }
+
+            if ($refund->refund_status === 'requested') {
+                $meta['provider'] = 'xendit';
+                $meta['provider_refund_id'] = $providerRefundId;
+                $updates = [
+                    'refund_status' => $mappedStatus,
+                    'provider_response' => json_encode($meta, JSON_UNESCAPED_SLASHES),
+                    'updated_at' => $now,
+                ];
+                if (Schema::hasColumn('payments', 'provider_name')) {
+                    $updates['provider_name'] = 'xendit';
+                }
+                if (Schema::hasColumn('payments', 'provider_payment_id')) {
+                    $updates['provider_payment_id'] = $providerRefundId;
+                }
+                DB::table('payments')->where('payment_id', $refund->payment_id)->update($updates);
+            }
+
+            return [
+                'action' => 'none',
+                'result' => [
+                    'refund_payment_id' => (int) $refund->payment_id,
+                    'payment_reference' => $refund->payment_reference,
+                    'refund_status' => $refund->refund_status === 'requested' ? $mappedStatus : $refund->refund_status,
+                    'amount' => (float) $refund->amount,
+                ],
+            ];
+        });
+
+        if ($outcome['action'] === 'confirm') {
+            return $this->confirmRefundSucceeded($outcome['refund_payment_id'], $providerRefundId, null, $request);
+        }
+
+        if ($outcome['action'] === 'fail') {
+            return $this->markRefundFailed($outcome['refund_payment_id'], 'Xendit refund failed webhook.', null, $request);
+        }
+
+        return $outcome['result'];
     }
 }

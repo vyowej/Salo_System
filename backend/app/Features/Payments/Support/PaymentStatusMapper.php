@@ -57,4 +57,19 @@ final class PaymentStatusMapper
             default => null,
         };
     }
+
+    /**
+     * Map Xendit Refund API statuses into SALO payments.refund_status enum values.
+     * Unknown statuses return null (fail-closed; never mapped to 'successful').
+     */
+    public static function mapXenditRefundStatus(string $providerStatus): ?string
+    {
+        return match (strtoupper(trim($providerStatus))) {
+            'SUCCEEDED' => 'successful',
+            'PENDING' => 'submitted',
+            'PROCESSING' => 'processing',
+            'FAILED' => 'failed',
+            default => null,
+        };
+    }
 }

@@ -3,6 +3,7 @@
 namespace App\Features\Payments\Providers;
 
 use App\Features\Payments\Support\PaymentStatusMapper;
+use Illuminate\Support\Str;
 
 class SandboxPaymentProvider implements PaymentProviderInterface
 {
@@ -33,5 +34,18 @@ class SandboxPaymentProvider implements PaymentProviderInterface
     public function mapStatus(string $providerStatus): ?string
     {
         return PaymentStatusMapper::mapSandboxStatus($providerStatus);
+    }
+
+    public function refundPayment(array $payload): array
+    {
+        return [
+            'provider_name' => $this->name(),
+            'provider_refund_id' => 'SBX-RFD-'.strtoupper(Str::random(8)),
+            'refund_status' => 'successful',
+            'meta' => [
+                'provider' => $this->name(),
+                'reference_id' => (string) ($payload['refund_reference'] ?? ''),
+            ],
+        ];
     }
 }

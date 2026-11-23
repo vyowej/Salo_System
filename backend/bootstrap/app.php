@@ -39,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->preventRequestForgery(except: [
             'api/payments/xendit/webhook',
+            'api/payments/xendit/refund-webhook',
         ]);
 
         $middleware->alias([

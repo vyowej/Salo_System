@@ -28,4 +28,17 @@ interface PaymentProviderInterface
      * Returns null when the provider status is unknown (fail-closed).
      */
     public function mapStatus(string $providerStatus): ?string;
+
+    /**
+     * Submit a refund request for a previously settled online payment.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array{
+     *     provider_name: string,
+     *     provider_refund_id: ?string,
+     *     refund_status: string,
+     *     meta: array<string, mixed>
+     * }
+     */
+    public function refundPayment(array $payload): array;
 }

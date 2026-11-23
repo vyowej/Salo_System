@@ -388,6 +388,7 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
 
 Route::post('/payments/webhook', [PaymentController::class, 'webhook'])->middleware('throttle:60,1');
 Route::post('/payments/xendit/webhook', [PaymentController::class, 'xenditWebhook'])->middleware('throttle:60,1');
+Route::post('/payments/xendit/refund-webhook', [PaymentController::class, 'xenditRefundWebhook'])->middleware('throttle:60,1');
 
 Route::prefix('locations')->middleware('throttle:120,1')->group(function (): void {
     Route::get('/provinces', [LocationLookupController::class, 'provinces']);

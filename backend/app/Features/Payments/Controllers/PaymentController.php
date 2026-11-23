@@ -3,6 +3,7 @@
 namespace App\Features\Payments\Controllers;
 
 use App\Features\Payments\Services\PaymentService;
+use App\Features\Payments\Services\RefundService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -12,6 +13,7 @@ class PaymentController extends Controller
 {
     public function __construct(
         private readonly PaymentService $paymentService,
+        private readonly RefundService $refundService,
     ) {}
 
     public function show(Request $request, int $paymentId): JsonResponse
@@ -119,6 +121,16 @@ class PaymentController extends Controller
         return ApiResponse::success(
             data: ['payment' => $payment],
             message: 'Xendit webhook processed.',
+        );
+    }
+
+    public function xenditRefundWebhook(Request $request): JsonResponse
+    {
+        $refund = $this->refundService->handleXenditRefundWebhook($request);
+
+        return ApiResponse::success(
+            data: ['refund' => $refund],
+            message: 'Xendit refund webhook processed.',
         );
     }
 }
