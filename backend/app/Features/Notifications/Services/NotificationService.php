@@ -242,8 +242,11 @@ class NotificationService
             ->orderByDesc('notification_id')
             ->paginate($safePerPage);
 
-        $items = collect($paginator->items())
-            ->map(fn (object $row): array => $this->formatNotification($row))
+        $rawItems = $paginator->items();
+        $branchPermitContextMap = $this->loadBranchPermitContextMap($rawItems);
+
+        $items = collect($rawItems)
+            ->map(fn (object $row): array => $this->formatNotification($row, $branchPermitContextMap))
             ->values()
             ->all();
 
@@ -321,7 +324,9 @@ class NotificationService
                 ->first();
         }
 
-        return $this->formatNotification($row);
+        $branchPermitContextMap = $this->loadBranchPermitContextMap([$row]);
+
+        return $this->formatNotification($row, $branchPermitContextMap);
     }
 
     public function markAllRead(User $user, ?string $workspace = null): int
@@ -344,11 +349,56 @@ class NotificationService
     }
 
     /**
+     * @param  array<int, object>  $rows
+     * @return array<int, array{restaurant_id: ?int, application_id: ?int, application_branch_id: ?int}>
+     */
+    private function loadBranchPermitContextMap(array $rows): array
+    {
+        $permitIds = [];
+        foreach ($rows as $row) {
+            if (
+                str_starts_with((string) $row->type, 'branch_permit_')
+                && (string) $row->related_entity_type === 'branch_permits'
+                && $row->related_entity_id !== null
+            ) {
+                $permitIds[] = (int) $row->related_entity_id;
+            }
+        }
+
+        $permitIds = array_values(array_unique($permitIds));
+        if ($permitIds === []) {
+            return [];
+        }
+
+        $permitRows = DB::table('branch_permits as bp')
+            ->leftJoin('restaurant_application_branches as rab', 'rab.application_branch_id', '=', 'bp.application_branch_id')
+            ->whereIn('bp.permit_id', $permitIds)
+            ->get([
+                'bp.permit_id',
+                'bp.restaurant_id',
+                'bp.application_branch_id',
+                'rab.restaurant_application_id as application_id',
+            ]);
+
+        $map = [];
+        foreach ($permitRows as $permit) {
+            $map[(int) $permit->permit_id] = [
+                'restaurant_id' => $permit->restaurant_id !== null ? (int) $permit->restaurant_id : null,
+                'application_id' => $permit->application_id !== null ? (int) $permit->application_id : null,
+                'application_branch_id' => $permit->application_branch_id !== null ? (int) $permit->application_branch_id : null,
+            ];
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param  array<int, array{restaurant_id: ?int, application_id: ?int, application_branch_id: ?int}>  $branchPermitContextMap
      * @return array<string, mixed>
      */
-    private function formatNotification(object $row): array
+    private function formatNotification(object $row, array $branchPermitContextMap = []): array
     {
-        return [
+        $payload = [
             'notification_id' => (int) $row->notification_id,
             'workspace' => $row->workspace,
             'type' => $row->type,
@@ -360,6 +410,20 @@ class NotificationService
             'read_at' => OrderTimestampFormatter::toManilaIso($row->read_at),
             'created_at' => OrderTimestampFormatter::toManilaIso($row->created_at),
         ];
+
+        if (str_starts_with((string) $row->type, 'branch_permit_') && (string) $row->related_entity_type === 'branch_permits') {
+            $ctx = $row->related_entity_id !== null
+                ? ($branchPermitContextMap[(int) $row->related_entity_id] ?? null)
+                : null;
+
+            if (($ctx['restaurant_id'] ?? null) !== null) {
+                $payload['restaurant_id'] = $ctx['restaurant_id'];
+            }
+            $payload['application_id'] = $ctx['application_id'] ?? null;
+            $payload['application_branch_id'] = $ctx['application_branch_id'] ?? null;
+        }
+
+        return $payload;
     }
 
     private function assertValidWorkspace(string $workspace): void

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\AddressService;
 use App\Support\AuditLogService;
 use App\Support\FileStorageService;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
@@ -17,6 +18,13 @@ use Illuminate\Validation\ValidationException;
 
 class RestaurantApplicationService
 {
+    /**
+     * Application statuses considered terminal (user may submit a new application afterward).
+     *
+     * @var array<int, string>
+     */
+    private const TERMINAL_APPLICATION_STATUSES = ['approved', 'rejected'];
+
     public function __construct(
         private readonly OtpService $otpService,
         private readonly AddressService $addressService,
@@ -42,6 +50,8 @@ class RestaurantApplicationService
         array $menuItemPhotos = [],
         ?Request $request = null,
     ): array {
+        $this->assertNoActiveApplicationForUser((int) $user->user_id);
+
         [$offersDelivery, $offersPickup, $offersDineIn, $contactEmail, $verifiedAt] = $this->validateSubmissionPreconditions(
             $user,
             $validated,
@@ -68,6 +78,9 @@ class RestaurantApplicationService
                 &$storedPublicPaths,
                 &$storedPrivatePaths,
             ): array {
+                DB::table('users')->where('user_id', $user->user_id)->lockForUpdate()->first();
+                $this->assertNoActiveApplicationForUser((int) $user->user_id);
+
                 $now = now();
                 $addressId = $this->createRestaurantAddress($validated);
                 $restaurantId = $this->createRestaurantRecord(
@@ -120,6 +133,30 @@ class RestaurantApplicationService
         $this->otpService->forgetVerified($contactEmail, 'restaurant_application', (int) $user->user_id);
 
         return $result;
+    }
+
+    private function assertNoActiveApplicationForUser(int $userId): void
+    {
+        $existing = DB::table('restaurant_applications')
+            ->where('applicant_user_id', $userId)
+            ->whereNotIn('application_status', self::TERMINAL_APPLICATION_STATUSES)
+            ->orderByDesc('restaurant_application_id')
+            ->first(['restaurant_application_id', 'application_status']);
+
+        if (! $existing) {
+            return;
+        }
+
+        throw new HttpResponseException(response()->json([
+            'success' => false,
+            'code' => 'ACTIVE_APPLICATION_EXISTS',
+            'message' => 'You already have an active restaurant partner application.',
+            'data' => [
+                'restaurant_application_id' => (int) $existing->restaurant_application_id,
+                'application_id' => (int) $existing->restaurant_application_id,
+                'application_status' => (string) $existing->application_status,
+            ],
+        ], 409));
     }
 
     /**

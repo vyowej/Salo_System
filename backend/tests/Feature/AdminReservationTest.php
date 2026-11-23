@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Features\Reservations\Support\ReservationAttention;
 use App\Features\Reservations\Support\ReservationStatus;
 use App\Models\User;
 use Carbon\Carbon;
@@ -10,6 +9,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AdminReservationTest extends TestCase
@@ -23,32 +23,54 @@ class AdminReservationTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_unauthenticated_and_non_admin_users_are_rejected(): void
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function adminEndpointProvider(): array
     {
-        $this->getJson('/api/admin/reservations')->assertStatus(401);
-        $this->getJson('/api/admin/reservations/stats')->assertStatus(401);
-        $this->getJson('/api/admin/reservations/1')->assertStatus(401);
+        return [
+            'list' => ['/api/admin/reservations'],
+            'stats' => ['/api/admin/reservations/stats'],
+            'detail' => ['/api/admin/reservations/1'],
+        ];
+    }
 
+    /**
+     * @return array<string, array{0: string, 1: string, 2: int}>
+     */
+    public static function readOnlyMutationProvider(): array
+    {
+        return [
+            'post collection' => ['postJson', '/api/admin/reservations', 405],
+            'patch detail' => ['patchJson', '/api/admin/reservations/1', 405],
+            'delete detail' => ['deleteJson', '/api/admin/reservations/1', 405],
+            'post cancel' => ['postJson', '/api/admin/reservations/1/cancel', 404],
+        ];
+    }
+
+    #[DataProvider('adminEndpointProvider')]
+    public function test_unauthenticated_requests_are_rejected(string $uri): void
+    {
+        $this->getJson($uri)->assertStatus(401);
+    }
+
+    #[DataProvider('adminEndpointProvider')]
+    public function test_non_admin_users_are_rejected(string $uri): void
+    {
         $customer = $this->createUser('customer');
         $owner = $this->createUser('customer');
         $staff = $this->createUser('customer');
 
         foreach ([$customer, $owner, $staff] as $user) {
-            $this->actingAs($user)->getJson('/api/admin/reservations')->assertStatus(403);
-            $this->actingAs($user)->getJson('/api/admin/reservations/stats')->assertStatus(403);
-            $this->actingAs($user)->getJson('/api/admin/reservations/1')->assertStatus(403);
+            $this->actingAs($user)->getJson($uri)->assertStatus(403);
         }
     }
 
-    public function test_list_supports_filters_groups_search_sort_pagination_summary_and_366_day_cap(): void
+    public function test_list_returns_default_window_summary_and_disables_admin_cancel(): void
     {
-        $fixedNow = CarbonImmutable::create(2026, 11, 22, 14, 0, 0, 'Asia/Manila');
-        Carbon::setTestNow($fixedNow);
-        CarbonImmutable::setTestNow($fixedNow);
-
+        $fixedNow = $this->freezeNow();
         [$admin, $fixtures] = $this->seedFixtures($fixedNow);
 
-        // Default window (-30d to +30d) returns all seeded reservations
         $defaultRes = $this->actingAs($admin)
             ->getJson('/api/admin/reservations?restaurant_id='.$fixtures['rest1Id'])
             ->assertOk()
@@ -60,14 +82,23 @@ class AdminReservationTest extends TestCase
         foreach ($defaultRes->json('data.items') as $item) {
             $this->assertFalse($item['can_admin_cancel']);
         }
+    }
 
-        // 366-day cap rejected with 422
+    public function test_list_rejects_date_ranges_exceeding_366_days(): void
+    {
+        $admin = $this->createUser('admin');
+
         $this->actingAs($admin)
             ->getJson('/api/admin/reservations?date_from=2025-01-01&date_to=2026-01-05')
             ->assertStatus(422)
             ->assertJsonValidationErrors(['date_to']);
+    }
 
-        // Search by reference, contact_name, contact_phone, customer_email, restaurant_name
+    public function test_list_supports_search_across_reference_guest_phone_email_and_restaurant(): void
+    {
+        $fixedNow = $this->freezeNow();
+        [$admin, $fixtures] = $this->seedFixtures($fixedNow);
+
         $this->actingAs($admin)
             ->getJson('/api/admin/reservations?search='.urlencode($fixtures['ref1']))
             ->assertOk()
@@ -96,8 +127,13 @@ class AdminReservationTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.items.0.reservation_id', $fixtures['res3Id']);
+    }
 
-        // Status single & comma-separated list
+    public function test_list_filters_by_status_and_deposit_status(): void
+    {
+        $fixedNow = $this->freezeNow();
+        [$admin, $fixtures] = $this->seedFixtures($fixedNow);
+
         $this->actingAs($admin)
             ->getJson('/api/admin/reservations?status=completed&restaurant_id='.$fixtures['rest1Id'])
             ->assertOk()
@@ -108,14 +144,18 @@ class AdminReservationTest extends TestCase
             ->assertOk()
             ->assertJsonCount(2, 'data.items');
 
-        // Deposit status filter
         $this->actingAs($admin)
             ->getJson('/api/admin/reservations?deposit_status=paid&restaurant_id='.$fixtures['rest1Id'])
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.items.0.reservation_id', $fixtures['res1Id']);
+    }
 
-        // Groups: pending, active, history, attention
+    public function test_list_filters_by_group_including_attention_rules(): void
+    {
+        $fixedNow = $this->freezeNow();
+        [$admin, $fixtures] = $this->seedFixtures($fixedNow);
+
         $this->actingAs($admin)
             ->getJson('/api/admin/reservations?group=pending&restaurant_id='.$fixtures['rest1Id'])
             ->assertOk()
@@ -138,18 +178,23 @@ class AdminReservationTest extends TestCase
             ->getJson('/api/admin/reservations?group=attention&search='.urlencode($fixtures['customerEmail']))
             ->assertOk()
             ->assertJsonCount(3, 'data.items');
+
         $attIds = collect($attRes->json('data.items'))->pluck('reservation_id')->sort()->values()->all();
         $expectedAttIds = [$fixtures['res2Id'], $fixtures['res3Id'], $fixtures['res4Id']];
         sort($expectedAttIds);
         $this->assertSame($expectedAttIds, $attIds);
+    }
 
-        // Sort by party_size asc & desc
+    public function test_list_supports_sorting_and_pagination_with_independent_summary(): void
+    {
+        $fixedNow = $this->freezeNow();
+        [$admin, $fixtures] = $this->seedFixtures($fixedNow);
+
         $sortedAsc = $this->actingAs($admin)
             ->getJson('/api/admin/reservations?restaurant_id='.$fixtures['rest1Id'].'&sort=party_size&direction=asc')
             ->assertOk();
         $this->assertSame(2, $sortedAsc->json('data.items.0.party_size'));
 
-        // Summary stays independent of pagination
         $paged = $this->actingAs($admin)
             ->getJson('/api/admin/reservations?restaurant_id='.$fixtures['rest1Id'].'&per_page=1&page=2')
             ->assertOk()
@@ -159,15 +204,13 @@ class AdminReservationTest extends TestCase
             ->assertJsonPath('data.summary.total', 4)
             ->assertJsonPath('data.summary.completed_count', 1)
             ->assertJsonPath('data.summary.pending_count', 1);
+
         $this->assertSame(15, $paged->json('data.summary.total_guests'));
     }
 
     public function test_list_query_count_is_bounded_for_20_rows(): void
     {
-        $fixedNow = CarbonImmutable::create(2026, 11, 22, 14, 0, 0, 'Asia/Manila');
-        Carbon::setTestNow($fixedNow);
-        CarbonImmutable::setTestNow($fixedNow);
-
+        $fixedNow = $this->freezeNow();
         [$admin, $fixtures] = $this->seedFixtures($fixedNow);
         $this->insertBulkReservations($fixtures['rest1Id'], $fixtures['customerId'], $fixedNow, 20);
 
@@ -185,10 +228,7 @@ class AdminReservationTest extends TestCase
 
     public function test_detail_returns_ordered_history_with_actor_name_customer_history_and_settings(): void
     {
-        $fixedNow = CarbonImmutable::create(2026, 11, 22, 14, 0, 0, 'Asia/Manila');
-        Carbon::setTestNow($fixedNow);
-        CarbonImmutable::setTestNow($fixedNow);
-
+        $fixedNow = $this->freezeNow();
         [$admin, $fixtures] = $this->seedFixtures($fixedNow);
 
         $detail = $this->actingAs($admin)
@@ -204,18 +244,20 @@ class AdminReservationTest extends TestCase
             ->assertJsonPath('data.reservation.restaurant_settings.duration_minutes', 90);
 
         $this->assertNotNull($detail->json('data.reservation.completed_at'));
+    }
+
+    public function test_detail_returns_404_for_missing_reservation(): void
+    {
+        $admin = $this->createUser('admin');
 
         $this->actingAs($admin)
             ->getJson('/api/admin/reservations/999999999')
             ->assertStatus(404);
     }
 
-    public function test_stats_computes_exact_rates_zero_filled_days_by_hour_top_restaurants_deposits_and_fixed_queries(): void
+    public function test_stats_computes_exact_rates_zero_filled_days_by_hour_top_restaurants_and_deposits(): void
     {
-        $fixedNow = CarbonImmutable::create(2026, 11, 22, 14, 0, 0, 'Asia/Manila');
-        Carbon::setTestNow($fixedNow);
-        CarbonImmutable::setTestNow($fixedNow);
-
+        $fixedNow = $this->freezeNow();
         [$admin, $fixtures] = $this->seedFixtures($fixedNow);
 
         $dateFrom = $fixedNow->subDays(3)->format('Y-m-d');
@@ -251,8 +293,13 @@ class AdminReservationTest extends TestCase
         $this->assertArrayHasKey('expired', $stats->json('data.totals.by_status'));
         $this->assertArrayHasKey('no_show_rate', $stats->json('data.rates.definitions'));
         $this->assertSame('Malate Heritage Kitchen', $stats->json('data.top_restaurants.0.name'));
+    }
 
-        // Zero-data range returns zeros with no division errors and by_day still lists every day
+    public function test_stats_handles_zero_data_range_without_division_errors(): void
+    {
+        $fixedNow = $this->freezeNow();
+        [$admin, $fixtures] = $this->seedFixtures($fixedNow);
+
         $this->actingAs($admin)
             ->getJson('/api/admin/reservations/stats?date_from=2024-01-01&date_to=2024-01-03&restaurant_id='.$fixtures['rest1Id'])
             ->assertOk()
@@ -262,10 +309,18 @@ class AdminReservationTest extends TestCase
             ->assertJsonPath('data.rates.completion_rate', 0)
             ->assertJsonPath('data.rates.confirmation_rate', 0)
             ->assertJsonCount(3, 'data.by_day')
-            // attention_count ignores date range!
+            // attention_count ignores date range
             ->assertJsonPath('data.attention_count', 2);
+    }
 
-        // Fixed query count with 5 vs 50 reservations
+    public function test_stats_uses_fixed_query_count_regardless_of_reservation_volume(): void
+    {
+        $fixedNow = $this->freezeNow();
+        [$admin, $fixtures] = $this->seedFixtures($fixedNow);
+
+        $dateFrom = $fixedNow->subDays(3)->format('Y-m-d');
+        $dateTo = $fixedNow->addDays(1)->format('Y-m-d');
+
         DB::flushQueryLog();
         DB::enableQueryLog();
         $this->actingAs($admin)
@@ -288,14 +343,25 @@ class AdminReservationTest extends TestCase
         $this->assertSame($queriesBefore, $queriesAfter);
     }
 
-    public function test_admin_reservation_routes_are_strictly_read_only(): void
+    #[DataProvider('readOnlyMutationProvider')]
+    public function test_admin_reservation_routes_are_strictly_read_only(string $method, string $uri, int $expectedStatus): void
     {
         $admin = $this->createUser('admin');
 
-        $this->actingAs($admin)->postJson('/api/admin/reservations', [])->assertStatus(405);
-        $this->actingAs($admin)->patchJson('/api/admin/reservations/1', [])->assertStatus(405);
-        $this->actingAs($admin)->deleteJson('/api/admin/reservations/1')->assertStatus(405);
-        $this->actingAs($admin)->postJson('/api/admin/reservations/1/cancel', [])->assertStatus(404);
+        $response = $method === 'deleteJson'
+            ? $this->actingAs($admin)->deleteJson($uri)
+            : $this->actingAs($admin)->{$method}($uri, []);
+
+        $response->assertStatus($expectedStatus);
+    }
+
+    private function freezeNow(): CarbonImmutable
+    {
+        $fixedNow = CarbonImmutable::create(2026, 11, 22, 14, 0, 0, 'Asia/Manila');
+        Carbon::setTestNow($fixedNow);
+        CarbonImmutable::setTestNow($fixedNow);
+
+        return $fixedNow;
     }
 
     private function createUser(string $role): User

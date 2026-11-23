@@ -1,6 +1,6 @@
 # Phase 9 — Security, Concurrency & Hardening Audit
 
-## 1. Route & Middleware Inventory (34 Routes)
+## 1. Route & Middleware Inventory (32 Routes)
 
 | Method | URI | Controller@Method | Middleware | Role / Permission | Throttle |
 |---|---|---|---|---|---|
@@ -15,11 +15,11 @@
 | GET | `/api/restaurant/settings` | `OwnerProfileController@settings` | `api, auth, role:owner` | Owner only | Default API |
 | PATCH | `/api/restaurant/settings` | `OwnerProfileController@updateSettings` | `api, auth, role:owner, throttle:30,1` | Owner only | `30,1` |
 | GET | `/api/restaurant/tables` | `OwnerTableController@index` | `api, auth, role:owner,staff` | `tables.view` | Default API |
-| POST | `/api/restaurant/tables` | `OwnerTableController@store` | `api, auth, role:owner,staff, throttle:60,1` | `tables.create` | `60,1` |
+| POST | `/api/restaurant/tables` | `OwnerTableController@store` | `api, auth, role:owner,staff, throttle:60,1` | `tables.add` | `60,1` |
 | GET | `/api/restaurant/tables/{id}` | `OwnerTableController@show` | `api, auth, role:owner,staff` | `tables.view` (`whereNumber('id')`) | Default API |
 | PATCH | `/api/restaurant/tables/{id}` | `OwnerTableController@update` | `api, auth, role:owner,staff, throttle:60,1` | `tables.edit` (`whereNumber('id')`) | `60,1` |
-| POST | `/api/restaurant/tables/{id}/archive` | `OwnerTableController@archive` | `api, auth, role:owner,staff, throttle:60,1` | `tables.delete` (`whereNumber('id')`) | `60,1` |
-| POST | `/api/restaurant/tables/{id}/reactivate` | `OwnerTableController@reactivate` | `api, auth, role:owner,staff, throttle:60,1` | `tables.edit` (`whereNumber('id')`) | `60,1` |
+| POST | `/api/restaurant/tables/{id}/archive` | `OwnerTableController@archive` | `api, auth, role:owner,staff, throttle:60,1` | `tables.manageAvailability` (`whereNumber('id')`) | `60,1` |
+| POST | `/api/restaurant/tables/{id}/reactivate` | `OwnerTableController@reactivate` | `api, auth, role:owner,staff, throttle:60,1` | `tables.manageAvailability` (`whereNumber('id')`) | `60,1` |
 | GET | `/api/restaurant/reservations` | `OwnerReservationController@index` | `api, auth, role:owner,staff` | `reservations.view` | Default API |
 | GET | `/api/restaurant/reservations/calendar` | `OwnerReservationController@calendar` | `api, auth, role:owner,staff` | `reservations.view` | Default API |
 | GET | `/api/restaurant/reservations/{id}` | `OwnerReservationController@show` | `api, auth, role:owner,staff` | `reservations.view` (`whereNumber('id')`) | Default API |
@@ -28,7 +28,7 @@
 | POST | `/api/restaurant/reservations/{id}/confirm-deposit` | `OwnerReservationController@confirmDeposit` | `api, auth, role:owner,staff, throttle:60,1` | `reservations.updateStatus` (`whereNumber('id')`) | `60,1` |
 | POST | `/api/restaurant/reservations/{id}/deposit` | `OwnerReservationController@deposit` | `api, auth, role:owner,staff, throttle:60,1` | `reservations.updateStatus` (`whereNumber('id')`) | `60,1` |
 | POST | `/api/restaurant/reservations/{id}/arrived` | `OwnerReservationController@arrived` | `api, auth, role:owner,staff, throttle:60,1` | `reservations.manageArrival` (`whereNumber('id')`) | `60,1` |
-| POST | `/api/restaurant/reservations/{id}/seat` | `OwnerReservationController@seat` | `api, auth, role:owner,staff, throttle:60,1` | `reservations.manageArrival` (`whereNumber('id')`) | `60,1` |
+| POST | `/api/restaurant/reservations/{id}/seat` | `OwnerReservationController@seat` | `api, auth, role:owner,staff, throttle:60,1` | `reservations.updateStatus` (`whereNumber('id')`) | `60,1` |
 | POST | `/api/restaurant/reservations/{id}/complete` | `OwnerReservationController@complete` | `api, auth, role:owner,staff, throttle:60,1` | `reservations.updateStatus` (`whereNumber('id')`) | `60,1` |
 | POST | `/api/restaurant/reservations/{id}/no-show` | `OwnerReservationController@noShow` | `api, auth, role:owner,staff, throttle:60,1` | `reservations.manageArrival` (`whereNumber('id')`) | `60,1` |
 | POST | `/api/restaurant/reservations/{id}/cancel` | `OwnerReservationController@cancel` | `api, auth, role:owner,staff, throttle:30,1` | `reservations.updateStatus` (`whereNumber('id')`) | `30,1` |

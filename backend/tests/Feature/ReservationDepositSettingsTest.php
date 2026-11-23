@@ -9,6 +9,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ReservationDepositSettingsTest extends TestCase
@@ -22,19 +23,63 @@ class ReservationDepositSettingsTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_owner_settings_get_patch_validation_cross_field_rules_rbac_and_audit(): void
+    /**
+     * @return array<string, array{0: array<string, mixed>, 1: string}>
+     */
+    public static function invalidSettingsProvider(): array
     {
-        [$owner, $staff, $restaurantId] = $this->seedRestaurantWithStaff();
+        return [
+            'duration not multiple of 15' => [
+                ['reservation_duration_minutes' => 40],
+                'reservation_duration_minutes',
+            ],
+            'duration below 30' => [
+                ['reservation_duration_minutes' => 15],
+                'reservation_duration_minutes',
+            ],
+            'duration above 240' => [
+                ['reservation_duration_minutes' => 255],
+                'reservation_duration_minutes',
+            ],
+            'max advance days above 365' => [
+                ['reservation_max_advance_days' => 366],
+                'reservation_max_advance_days',
+            ],
+            'pending expiry below 15' => [
+                ['reservation_pending_expiry_minutes' => 14],
+                'reservation_pending_expiry_minutes',
+            ],
+            'deposit required without positive amount' => [
+                ['reservation_deposit_required' => true, 'reservation_deposit_amount' => 0],
+                'reservation_deposit_amount',
+            ],
+            'deposit required with auto confirm' => [
+                ['reservation_deposit_required' => true, 'reservation_deposit_amount' => 300, 'reservation_auto_confirm' => true],
+                'reservation_auto_confirm',
+            ],
+            'min notice exceeds max advance window' => [
+                ['reservation_max_advance_days' => 1, 'reservation_min_notice_hours' => 25],
+                'reservation_min_notice_hours',
+            ],
+        ];
+    }
 
-        // Unauthenticated -> 401, non-owner staff -> 403
+    public function test_owner_settings_rejects_unauthenticated_and_non_owner_staff(): void
+    {
+        [, $staff, $restaurantId] = $this->seedRestaurantWithStaff();
+
         $this->getJson('/api/restaurant/settings')->assertStatus(401);
         $this->actingAs($staff)->getJson('/api/restaurant/settings?restaurant_id='.$restaurantId)->assertStatus(403);
         $this->actingAs($staff)->patchJson('/api/restaurant/settings', [
             'restaurant_id' => $restaurantId,
             'reservation_duration_minutes' => 60,
         ])->assertStatus(403);
+    }
 
-        // GET returns all 8 new reservation_* fields
+    public function test_owner_settings_get_returns_default_reservation_fields(): void
+    {
+        [$owner, , $restaurantId] = $this->seedRestaurantWithStaff();
+
         $this->actingAs($owner)
             ->getJson('/api/restaurant/settings?restaurant_id='.$restaurantId)
             ->assertOk()
@@ -44,56 +89,26 @@ class ReservationDepositSettingsTest extends TestCase
             ->assertJsonPath('data.profile.reservation_pending_expiry_minutes', 120)
             ->assertJsonPath('data.profile.reservation_auto_confirm', false)
             ->assertJsonPath('data.profile.reservation_deposit_required', false);
+    }
 
-        // Boundary & step validations -> 422
-        $this->actingAs($owner)->patchJson('/api/restaurant/settings', [
-            'restaurant_id' => $restaurantId,
-            'reservation_duration_minutes' => 40, // not multiple of 15
-        ])->assertStatus(422)->assertJsonValidationErrors(['reservation_duration_minutes']);
+    /**
+     * @param array<string, mixed> $payload
+     */
+    #[DataProvider('invalidSettingsProvider')]
+    public function test_owner_settings_patch_rejects_invalid_values(array $payload, string $errorField): void
+    {
+        [$owner, , $restaurantId] = $this->seedRestaurantWithStaff();
 
-        $this->actingAs($owner)->patchJson('/api/restaurant/settings', [
-            'restaurant_id' => $restaurantId,
-            'reservation_duration_minutes' => 15, // below 30
-        ])->assertStatus(422)->assertJsonValidationErrors(['reservation_duration_minutes']);
+        $this->actingAs($owner)
+            ->patchJson('/api/restaurant/settings', array_merge(['restaurant_id' => $restaurantId], $payload))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors([$errorField]);
+    }
 
-        $this->actingAs($owner)->patchJson('/api/restaurant/settings', [
-            'restaurant_id' => $restaurantId,
-            'reservation_duration_minutes' => 255, // above 240
-        ])->assertStatus(422)->assertJsonValidationErrors(['reservation_duration_minutes']);
+    public function test_owner_settings_patch_updates_fields_and_writes_audit_log(): void
+    {
+        [$owner, , $restaurantId] = $this->seedRestaurantWithStaff();
 
-        $this->actingAs($owner)->patchJson('/api/restaurant/settings', [
-            'restaurant_id' => $restaurantId,
-            'reservation_max_advance_days' => 366,
-        ])->assertStatus(422)->assertJsonValidationErrors(['reservation_max_advance_days']);
-
-        $this->actingAs($owner)->patchJson('/api/restaurant/settings', [
-            'restaurant_id' => $restaurantId,
-            'reservation_pending_expiry_minutes' => 14,
-        ])->assertStatus(422)->assertJsonValidationErrors(['reservation_pending_expiry_minutes']);
-
-        // Cross-field: deposit_required without amount > 0
-        $this->actingAs($owner)->patchJson('/api/restaurant/settings', [
-            'restaurant_id' => $restaurantId,
-            'reservation_deposit_required' => true,
-            'reservation_deposit_amount' => 0,
-        ])->assertStatus(422)->assertJsonValidationErrors(['reservation_deposit_amount']);
-
-        // Cross-field: deposit_required + auto_confirm -> 422 on reservation_auto_confirm
-        $this->actingAs($owner)->patchJson('/api/restaurant/settings', [
-            'restaurant_id' => $restaurantId,
-            'reservation_deposit_required' => true,
-            'reservation_deposit_amount' => 300,
-            'reservation_auto_confirm' => true,
-        ])->assertStatus(422)->assertJsonValidationErrors(['reservation_auto_confirm']);
-
-        // Cross-field: min_notice_hours > max_advance_days * 24
-        $this->actingAs($owner)->patchJson('/api/restaurant/settings', [
-            'restaurant_id' => $restaurantId,
-            'reservation_max_advance_days' => 1,
-            'reservation_min_notice_hours' => 25,
-        ])->assertStatus(422)->assertJsonValidationErrors(['reservation_min_notice_hours']);
-
-        // Partial update happy path + audit row with old/new values
         $this->actingAs($owner)->patchJson('/api/restaurant/settings', [
             'restaurant_id' => $restaurantId,
             'reservation_duration_minutes' => 120,
@@ -122,7 +137,7 @@ class ReservationDepositSettingsTest extends TestCase
         $this->assertSame(120, $newVals['reservation_duration_minutes']);
     }
 
-    public function test_settings_snapshots_public_info_and_auto_confirm_with_deposit_fix(): void
+    public function test_deposit_required_restaurant_never_auto_confirms_and_preserves_existing_snapshots(): void
     {
         $now = CarbonImmutable::create(2026, 11, 23, 10, 0, 0, 'Asia/Manila');
         Carbon::setTestNow($now);
@@ -131,7 +146,6 @@ class ReservationDepositSettingsTest extends TestCase
         [$owner, , $restaurantId] = $this->seedRestaurantWithStaff();
         $customer = $this->createUser('cust_snap@salo.local');
 
-        // Enable auto_confirm + deposit_required in DB to verify booking edge case
         DB::table('restaurants')->where('restaurant_id', $restaurantId)->update([
             'reservation_auto_confirm' => 1,
             'reservation_deposit_required' => 1,
@@ -147,7 +161,6 @@ class ReservationDepositSettingsTest extends TestCase
             'idempotency_key' => 'snap-test-1-'.random_int(1000, 9999),
         ])->assertStatus(201);
 
-        // Deposit-required restaurant NEVER auto-confirms
         $firstBooking
             ->assertJsonPath('data.reservation.reservation_status', ReservationStatus::PENDING)
             ->assertJsonPath('data.reservation.deposit_amount', '250.00')
@@ -155,7 +168,6 @@ class ReservationDepositSettingsTest extends TestCase
             ->assertJsonPath('data.reservation.service_fee', '30.00');
         $firstId = (int) $firstBooking->json('data.reservation.reservation_id');
 
-        // Owner changes settings afterwards
         $this->actingAs($owner)->patchJson('/api/restaurant/settings', [
             'restaurant_id' => $restaurantId,
             'reservation_deposit_required' => false,
@@ -165,19 +177,16 @@ class ReservationDepositSettingsTest extends TestCase
             'reservation_auto_confirm' => true,
         ])->assertOk();
 
-        // Public reservation-info reflects new settings immediately
         $this->getJson("/api/restaurants/{$restaurantId}/reservation-info")
             ->assertOk()
             ->assertJsonPath('data.reservation_deposit_required', false)
             ->assertJsonPath('data.reservation_duration_minutes', 120)
             ->assertJsonPath('data.reservation_auto_confirm', true);
 
-        // Existing reservation keeps its original snapshots
         $existing = DB::table('reservations')->where('reservation_id', $firstId)->first();
         $this->assertSame('250.00', $existing->deposit_amount);
         $this->assertSame('30.00', $existing->service_fee);
 
-        // New booking with auto_confirm + no deposit starts confirmed and picks up new fee
         $secondBooking = $this->actingAs($customer)->postJson('/api/customer/reservations', [
             'restaurant_id' => $restaurantId,
             'start' => '2026-11-25T18:00',
@@ -191,29 +200,20 @@ class ReservationDepositSettingsTest extends TestCase
             ->assertJsonPath('data.reservation.service_fee', '75.00');
     }
 
-    public function test_deposit_endpoint_transitions_idempotency_permissions_notifications_and_presentation(): void
+    public function test_deposit_endpoint_rejects_cross_tenant_and_unpermitted_staff(): void
     {
-        $now = CarbonImmutable::create(2026, 11, 23, 10, 0, 0, 'Asia/Manila');
-        Carbon::setTestNow($now);
-        CarbonImmutable::setTestNow($now);
-
-        [$owner, $staff, $restaurantId] = $this->seedRestaurantWithStaff();
+        [$owner, , $restaurantId] = $this->seedRestaurantWithStaff();
         [, , $otherRestaurantId] = $this->seedRestaurantWithStaff();
-        $customer = $this->createUser('cust_dep@salo.local');
+        $customer = $this->createUser('cust_dep_rbac@salo.local');
 
-        $noDepositId = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::CONFIRMED, 'none', '0.00');
         $awaitingId = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::AWAITING_PAYMENT, 'pending', '500.00');
-        $confirmedPendingId = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::CONFIRMED, 'pending', '400.00');
-        $cancelledPendingId = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::CANCELLED, 'pending', '300.00');
-
-        // Cross-tenant -> 404
         $otherResId = $this->insertReservation($otherRestaurantId, $customer->user_id, ReservationStatus::CONFIRMED, 'pending', '200.00');
+
         $this->actingAs($owner)->postJson("/api/restaurant/reservations/{$otherResId}/deposit", [
             'restaurant_id' => $restaurantId,
             'deposit_status' => 'paid',
         ])->assertStatus(404);
 
-        // Staff without reservations.updateStatus -> 403
         $kitchenStaff = $this->createUser('staff_k@salo.local');
         DB::table('restaurant_staff')->insert([
             'restaurant_id' => $restaurantId,
@@ -221,18 +221,31 @@ class ReservationDepositSettingsTest extends TestCase
             'staff_position' => 'Inventory Manager',
             'staff_status' => 'active',
         ]);
+
         $this->actingAs($kitchenStaff)->postJson("/api/restaurant/reservations/{$awaitingId}/deposit", [
             'restaurant_id' => $restaurantId,
             'deposit_status' => 'paid',
         ])->assertStatus(403);
+    }
 
-        // Reservation with no deposit -> 409 NO_DEPOSIT
+    public function test_deposit_endpoint_rejects_reservation_without_deposit(): void
+    {
+        [$owner, , $restaurantId] = $this->seedRestaurantWithStaff();
+        $customer = $this->createUser('cust_nodep@salo.local');
+        $noDepositId = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::CONFIRMED, 'none', '0.00');
+
         $this->actingAs($owner)->postJson("/api/restaurant/reservations/{$noDepositId}/deposit", [
             'restaurant_id' => $restaurantId,
             'deposit_status' => 'paid',
         ])->assertStatus(409)->assertJsonPath('code', 'NO_DEPOSIT');
+    }
 
-        // awaiting_payment + pending -> paid moves to confirmed + emits 1 reservation_confirmed notification
+    public function test_deposit_endpoint_marks_awaiting_payment_paid_and_is_idempotent(): void
+    {
+        [$owner, $staff, $restaurantId] = $this->seedRestaurantWithStaff();
+        $customer = $this->createUser('cust_paid@salo.local');
+        $awaitingId = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::AWAITING_PAYMENT, 'pending', '500.00');
+
         $this->actingAs($staff)->postJson("/api/restaurant/reservations/{$awaitingId}/deposit", [
             'restaurant_id' => $restaurantId,
             'deposit_status' => 'paid',
@@ -249,21 +262,27 @@ class ReservationDepositSettingsTest extends TestCase
             'type' => 'reservation_confirmed',
         ]);
 
-        // Repeating paid is idempotent (200, no extra history/audit/notification)
         $histBefore = DB::table('reservation_status_history')->where('reservation_id', $awaitingId)->count();
         $this->actingAs($owner)->postJson("/api/restaurant/reservations/{$awaitingId}/deposit", [
             'restaurant_id' => $restaurantId,
             'deposit_status' => 'paid',
         ])->assertOk();
         $this->assertSame($histBefore, DB::table('reservation_status_history')->where('reservation_id', $awaitingId)->count());
+    }
 
-        // Invalid transition: paid -> waived -> 409 INVALID_DEPOSIT_TRANSITION
-        $this->actingAs($owner)->postJson("/api/restaurant/reservations/{$awaitingId}/deposit", [
+    public function test_deposit_endpoint_waives_pending_deposit_and_blocks_invalid_transitions(): void
+    {
+        [$owner, , $restaurantId] = $this->seedRestaurantWithStaff();
+        $customer = $this->createUser('cust_waive@salo.local');
+
+        $paidId = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::CONFIRMED, 'paid', '500.00');
+        $confirmedPendingId = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::CONFIRMED, 'pending', '400.00');
+
+        $this->actingAs($owner)->postJson("/api/restaurant/reservations/{$paidId}/deposit", [
             'restaurant_id' => $restaurantId,
             'deposit_status' => 'waived',
         ])->assertStatus(409)->assertJsonPath('code', 'INVALID_DEPOSIT_TRANSITION');
 
-        // Confirmed reservation with pending deposit -> waived (status stays confirmed, emits reservation_deposit_waived)
         $this->actingAs($owner)->postJson("/api/restaurant/reservations/{$confirmedPendingId}/deposit", [
             'restaurant_id' => $restaurantId,
             'deposit_status' => 'waived',
@@ -277,14 +296,19 @@ class ReservationDepositSettingsTest extends TestCase
             'type' => 'reservation_deposit_waived',
         ]);
 
-        // Waived -> paid or refunded -> 409 INVALID_DEPOSIT_TRANSITION
         $this->actingAs($owner)->postJson("/api/restaurant/reservations/{$confirmedPendingId}/deposit", [
             'restaurant_id' => $restaurantId,
             'deposit_status' => 'refunded',
         ])->assertStatus(409)->assertJsonPath('code', 'INVALID_DEPOSIT_TRANSITION');
+    }
 
-        // Paid -> refunded on awaitingId -> emits reservation_deposit_refunded with amount
-        $this->actingAs($owner)->postJson("/api/restaurant/reservations/{$awaitingId}/deposit", [
+    public function test_deposit_endpoint_refunds_paid_deposit_with_amount_notification(): void
+    {
+        [$owner, , $restaurantId] = $this->seedRestaurantWithStaff();
+        $customer = $this->createUser('cust_ref@salo.local');
+        $paidId = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::CONFIRMED, 'paid', '500.00');
+
+        $this->actingAs($owner)->postJson("/api/restaurant/reservations/{$paidId}/deposit", [
             'restaurant_id' => $restaurantId,
             'deposit_status' => 'refunded',
         ])->assertOk()
@@ -292,13 +316,20 @@ class ReservationDepositSettingsTest extends TestCase
             ->assertJsonPath('data.reservation.allowed_deposit_actions', []);
 
         $refundNotif = DB::table('notifications')
-            ->where('related_entity_id', $awaitingId)
+            ->where('related_entity_id', $paidId)
             ->where('type', 'reservation_deposit_refunded')
             ->first();
         $this->assertNotNull($refundNotif);
         $this->assertStringContainsString('500.00', (string) $refundNotif->body);
+    }
 
-        // Presentation: pending on cancelled -> deposit_display_status = 'not_collected' in owner, customer, and admin
+    public function test_cancelled_pending_deposit_presents_as_not_collected_for_all_roles(): void
+    {
+        [$owner, , $restaurantId] = $this->seedRestaurantWithStaff();
+        $customer = $this->createUser('cust_pres@salo.local');
+        $admin = $this->createUser('adm_dep@salo.local', 'admin');
+        $cancelledPendingId = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::CANCELLED, 'pending', '300.00');
+
         $this->actingAs($owner)->getJson("/api/restaurant/reservations/{$cancelledPendingId}?restaurant_id={$restaurantId}")
             ->assertOk()
             ->assertJsonPath('data.reservation.deposit_display_status', 'not_collected');
@@ -307,26 +338,23 @@ class ReservationDepositSettingsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.reservation.deposit_display_status', 'not_collected');
 
-        $admin = $this->createUser('adm_dep@salo.local', 'admin');
         $this->actingAs($admin)->getJson("/api/admin/reservations/{$cancelledPendingId}")
             ->assertOk()
             ->assertJsonPath('data.reservation.deposit_display_status', 'not_collected');
     }
 
-    public function test_cancel_with_refund_deposit_and_customer_cancel_paid_deposit_reminder(): void
+    public function test_restaurant_cancel_respects_refund_deposit_flag(): void
     {
         $now = CarbonImmutable::create(2026, 11, 23, 10, 0, 0, 'Asia/Manila');
         Carbon::setTestNow($now);
         CarbonImmutable::setTestNow($now);
 
         [$owner, , $restaurantId] = $this->seedRestaurantWithStaff();
-        $customer = $this->createUser('cust_can@salo.local');
+        $customer = $this->createUser('cust_oc@salo.local');
 
         $paidRes1 = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::CONFIRMED, 'paid', '500.00', $now->addDays(2));
         $paidRes2 = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::CONFIRMED, 'paid', '600.00', $now->addDays(3));
-        $paidRes3 = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::CONFIRMED, 'paid', '700.00', $now->addDays(4));
 
-        // Restaurant cancel with refund_deposit = false -> keeps paid, returns deposit_action_needed = true
         $this->actingAs($owner)->postJson("/api/restaurant/reservations/{$paidRes1}/cancel", [
             'restaurant_id' => $restaurantId,
             'reason' => 'Kitchen maintenance',
@@ -335,7 +363,6 @@ class ReservationDepositSettingsTest extends TestCase
             ->assertJsonPath('data.reservation.deposit_status', 'paid')
             ->assertJsonPath('data.reservation.deposit_action_needed', true);
 
-        // Restaurant cancel with refund_deposit = true -> sets refunded, deposit_action_needed = false
         $this->actingAs($owner)->postJson("/api/restaurant/reservations/{$paidRes2}/cancel", [
             'restaurant_id' => $restaurantId,
             'reason' => 'Private buyout',
@@ -343,15 +370,25 @@ class ReservationDepositSettingsTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('data.reservation.deposit_status', 'refunded')
             ->assertJsonPath('data.reservation.deposit_action_needed', false);
+    }
 
-        // Customer cancel on paid reservation -> leaves deposit_status = 'paid' and notifies handler with deposit reminder
-        $this->actingAs($customer)->postJson("/api/customer/reservations/{$paidRes3}/cancel", [
+    public function test_customer_cancel_on_paid_reservation_notifies_handler_with_deposit_reminder(): void
+    {
+        $now = CarbonImmutable::create(2026, 11, 23, 10, 0, 0, 'Asia/Manila');
+        Carbon::setTestNow($now);
+        CarbonImmutable::setTestNow($now);
+
+        [, , $restaurantId] = $this->seedRestaurantWithStaff();
+        $customer = $this->createUser('cust_cc@salo.local');
+        $paidRes = $this->insertReservation($restaurantId, $customer->user_id, ReservationStatus::CONFIRMED, 'paid', '700.00', $now->addDays(4));
+
+        $this->actingAs($customer)->postJson("/api/customer/reservations/{$paidRes}/cancel", [
             'reason' => 'Plans changed',
         ])->assertOk()
             ->assertJsonPath('data.reservation.deposit_status', 'paid');
 
         $handlerNotif = DB::table('notifications')
-            ->where('related_entity_id', $paidRes3)
+            ->where('related_entity_id', $paidRes)
             ->where('type', 'reservation_cancelled_by_customer')
             ->first();
         $this->assertNotNull($handlerNotif);

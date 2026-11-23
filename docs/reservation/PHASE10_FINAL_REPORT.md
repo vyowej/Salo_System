@@ -16,13 +16,13 @@ The SALO Table Reservation pillar has been brought from its Phase 0 schema-only 
 | Feature Area | Frontend UI | Backend Route/Ctrl | FormRequest Validation | RBAC & Scoping | MySQL Persistence | Automated Tests | Verification Status |
 |---|---|---|---|---|---|---|---|
 | Public Discovery & Availability | `RestaurantDetailPage`, `ReservationModal`, `publicRestaurantService` | `ReservationAvailabilityController` (4 routes) | Query rules + bounds & 96-slot cap | Public (`is_published=1`, `active`) | `restaurants`, `operating_hours`, `restaurant_closures`, `restaurant_tables`, `reservations` | `ReservationAvailabilityTest`, `reservationAvailability.test.js` | Complete |
-| Owner Table Management | `OwnerTablesPage`, `ownerService` | `OwnerTableController` (6 routes) | `StoreOwnerTableRequest`, `UpdateOwnerTableRequest` | `role:owner,staff` + `tables.view/create/edit/delete` | `restaurant_tables` | `OwnerTableTest`, `ownerTables.test.js` | Complete |
+| Owner Table Management | `OwnerTablesPage`, `ownerService` | `OwnerTableController` (6 routes) | `StoreOwnerTableRequest`, `UpdateOwnerTableRequest` | `role:owner,staff` + `tables.view/add/edit/manageAvailability` | `restaurant_tables` | `OwnerTableTest`, `ownerTables.test.js` | Complete |
 | Customer Booking & Cancellation | `ReservationModal`, `ReservationsPage`, `customerService` | `CustomerReservationController` (4 routes) | `StoreCustomerReservationRequest`, `ListCustomerReservationsRequest`, `CancelCustomerReservationRequest` | `auth` + customer ownership + self-booking block | `reservations`, `reservation_status_history`, `audit_logs`, `notifications` | `CustomerReservationTest`, `customerReservations.test.js` | Complete |
 | Owner Reservation Lifecycle | `OwnerReservationsPage`, `ownerService` | `OwnerReservationController` (13 routes) | `ListOwnerReservationsRequest`, `OwnerReservationCalendarRequest`, `RejectOwnerReservationRequest`, `CancelOwnerReservationRequest`, `SeatOwnerReservationRequest`, `AssignOwnerReservationTableRequest` | `role:owner,staff` + `reservations.view/approve/reject/updateStatus/manageArrival/assignTables` | `reservations`, `reservation_status_history`, `audit_logs`, `notifications` | `OwnerReservationTest`, `ownerReservations.test.js` | Complete |
 | Manual Deposit & Settings | `OwnerSettingsPage`, `OwnerReservationsPage`, `ReservationsPage` | `OwnerProfileController@settings/updateSettings`, `OwnerReservationController@deposit` | `UpdateOwnerReservationDepositRequest` + cross-field rules | `role:owner` (settings), `reservations.updateStatus` (deposit) | `restaurants`, `reservations`, `audit_logs`, `notifications` | `ReservationDepositSettingsTest`, `reservationDeposits.test.js` | Complete |
 | Admin Reservation Monitoring | `AdminReservationsPage`, `adminApiService` | `AdminReservationController` (3 routes) | `ListAdminReservationsRequest`, `AdminReservationStatsRequest` | `role:admin` + `AdminPermissionRoute` (`reservations`) | Read-only queries across `reservations`, `restaurants`, `users`, `reservation_status_history` | `AdminReservationTest`, `adminReservations.test.js` | Complete |
 | Scheduled Expiry & Reminders | Expiry badges/countdowns in `ReservationsPage` & `OwnerReservationsPage` | `ExpireStaleReservations`, `SendReservationReminders` (`routes/console.php`) | CLI options (`--dry-run`, `--restaurant`, `--limit`) | System actor (`actor_user_id = null`, `changed_by_role = 'system'`) | `reservations` (`expired_at`, `expiry_warning_sent_at`, `reminder_sent_at`), history, audit, notifications | `ReservationAutomationTest`, `reservationAutomation.test.js` | Complete |
-| Security & Concurrency Hardening | Sanitized `tel:`/`mailto:`, route guards, error propagation | 34 routes with `whereNumber('id')` & throttles | Control-char stripping, 366-day caps, phone regex | Tenant isolation (`403` spoof, `404` cross-tenant), `IDEMPOTENCY_KEY_REUSED` | `FOR UPDATE` lock order (`restaurant_tables` `table_id ASC` → `reservations`) + 3-try deadlock retry (`TRY_AGAIN`) | `ReservationSecurityTest`, `ReservationConcurrencyLockTest`, `reservationSecurity.test.js` | Complete |
+| Security & Concurrency Hardening | Sanitized `tel:`/`mailto:`, route guards, error propagation | 32 routes with `whereNumber('id')` & throttles | Control-char stripping, 366-day caps, phone regex | Tenant isolation (`403` spoof, `404` cross-tenant), `IDEMPOTENCY_KEY_REUSED` | `FOR UPDATE` lock order (`restaurant_tables` `table_id ASC` → `reservations`) + 3-try deadlock retry (`TRY_AGAIN`) | `ReservationSecurityTest`, `ReservationConcurrencyLockTest`, `reservationSecurity.test.js` | Complete |
 
 ---
 
@@ -58,9 +58,9 @@ All 8 code findings (`F-01` through `F-08`) identified in Phase 9 were fixed and
 ---
 
 ## F. Test & Build Results
-- **Backend (`cd backend; php artisan test`)**: **317 passed, 0 failed** (`4,933` assertions).
+- **Backend (`cd backend; php artisan test`)**: **366 passed, 0 failed** (`4,940` assertions).
 - **Frontend (`npm test`)**: **204 passed, 0 failed**.
-- **Production Build (`npm run build`)**: **Succeeded** (`484` modules transformed in ~1.3s, `0` errors).
+- **Production Build (`npm run build`)**: **Succeeded** (`484` modules transformed in `2.26s`, `0` errors).
 
 ---
 

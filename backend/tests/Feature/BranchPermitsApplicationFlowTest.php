@@ -475,4 +475,251 @@ class BranchPermitsApplicationFlowTest extends TestCase
         ], ['Accept' => 'application/json'])->assertStatus(200)
             ->assertJsonPath('data.permit.permit_status', 'pending_review');
     }
+
+    public function test_branch_permit_notification_payloads_include_branch_context_and_never_leak_paths(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $applicant = $this->createUser('customer', 'bp_notif_app');
+        $admin = $this->createUser('admin', 'bp_notif_adm');
+        $this->verifyApplicationOtp($applicant);
+
+        $submitRes = $this->actingAs($applicant)->post('/api/restaurant/applications', $this->baseApplicationPayload($applicant, [
+            'has_branches' => true,
+            'main_branch_name' => 'Main Hub',
+            'branches' => [
+                $this->branchData('Branch Info', ['permit_required_locally' => true]),
+                $this->branchData('Branch Reject', ['permit_required_locally' => true]),
+                $this->branchData('Branch Approve', ['permit_required_locally' => true]),
+                $this->branchData('Branch Waive', [
+                    'permit_required_locally' => false,
+                    'permit_exemption_reason' => 'Exempt micro-kiosk under barangay rule.',
+                ]),
+            ],
+        ]), ['Accept' => 'application/json'])->assertStatus(201);
+
+        $appId = (int) $submitRes->json('data.application.restaurant_application_id');
+        $branches = $submitRes->json('data.application.branches');
+
+        // Upload permits for first 3 branches -> notifies admin with branch_permit_submitted
+        foreach ([0, 1, 2] as $i) {
+            $this->actingAs($applicant)->post("/api/restaurant/applications/{$appId}/branches/{$branches[$i]['application_branch_id']}/permit", [
+                'mayors_permit' => $this->fakePdf("b{$i}.pdf", "PDF{$i}"),
+            ], ['Accept' => 'application/json'])->assertStatus(200);
+        }
+
+        // Pre-approval admin decisions -> notifies applicant (customer workspace)
+        $this->actingAs($admin)->postJson("/api/admin/branch-permits/{$branches[0]['permit_id']}/request-info", [
+            'review_note' => 'Please upload a clearer scan of page 1.',
+        ])->assertStatus(200);
+
+        $this->actingAs($admin)->postJson("/api/admin/branch-permits/{$branches[1]['permit_id']}/reject", [
+            'review_note' => 'Submitted permit is already expired.',
+        ])->assertStatus(200);
+
+        $this->actingAs($admin)->postJson("/api/admin/branch-permits/{$branches[2]['permit_id']}/approve")
+            ->assertStatus(200);
+
+        $this->actingAs($admin)->postJson("/api/admin/branch-permits/{$branches[3]['permit_id']}/waive", [
+            'review_note' => 'Local exemption verified.',
+        ])->assertStatus(200);
+
+        // Check admin notifications (submitted)
+        $adminItems = $this->actingAs($admin)
+            ->getJson('/api/notifications?workspace=admin&per_page=50')
+            ->assertStatus(200)
+            ->json('data.items');
+
+        $submittedItem = collect($adminItems)->first(
+            fn (array $item): bool => $item['type'] === 'branch_permit_submitted'
+                && $item['related_entity_id'] === $branches[0]['permit_id']
+        );
+        $this->assertNotNull($submittedItem);
+        $this->assertSame('branch_permits', $submittedItem['related_entity_type']);
+        $this->assertSame($appId, $submittedItem['application_id']);
+        $this->assertSame($branches[0]['application_branch_id'], $submittedItem['application_branch_id']);
+        $this->assertArrayNotHasKey('restaurant_id', $submittedItem);
+        $this->assertArrayNotHasKey('file_path', $submittedItem);
+        $this->assertStringNotContainsString('branch-permits/', json_encode($submittedItem));
+
+        // Check applicant notifications (info_requested, rejected, approved, waived)
+        $customerItems = $this->actingAs($applicant)
+            ->getJson('/api/notifications?workspace=customer&per_page=50')
+            ->assertStatus(200)
+            ->json('data.items');
+
+        $expectedCustomerTypes = [
+            0 => 'branch_permit_info_requested',
+            1 => 'branch_permit_rejected',
+            2 => 'branch_permit_approved',
+            3 => 'branch_permit_waived',
+        ];
+        foreach ($expectedCustomerTypes as $idx => $expectedType) {
+            $item = collect($customerItems)->first(
+                fn (array $n): bool => $n['type'] === $expectedType
+                    && $n['related_entity_id'] === $branches[$idx]['permit_id']
+            );
+            $this->assertNotNull($item, "Missing customer notification for {$expectedType}");
+            $this->assertSame('branch_permits', $item['related_entity_type']);
+            $this->assertSame($appId, $item['application_id']);
+            $this->assertSame($branches[$idx]['application_branch_id'], $item['application_branch_id']);
+            $this->assertArrayNotHasKey('restaurant_id', $item);
+            $this->assertArrayNotHasKey('file_path', $item);
+            $this->assertStringNotContainsString('branch-permits/', json_encode($item));
+        }
+
+        // Approve application -> materializes branches, then reopen Branch Approve -> notifies owner (restaurant workspace) with restaurant_id + application_id + application_branch_id
+        DB::table('application_documents')
+            ->where('restaurant_application_id', $appId)
+            ->update(['document_status' => 'verified', 'reviewed_by' => $admin->user_id, 'reviewed_at' => now()]);
+        DB::table('restaurant_applications')
+            ->where('restaurant_application_id', $appId)
+            ->update(['application_status' => 'under_review', 'reviewed_by' => $admin->user_id, 'reviewed_at' => now()]);
+
+        $this->actingAs($admin)->postJson("/api/admin/applications/restaurant/{$appId}/decision", [
+            'decision' => 'approve',
+        ])->assertStatus(200);
+
+        $materializedApproveBranchId = (int) DB::table('restaurant_application_branches')
+            ->where('application_branch_id', $branches[2]['application_branch_id'])
+            ->value('created_branch_restaurant_id');
+        $this->assertGreaterThan(0, $materializedApproveBranchId);
+
+        $this->actingAs($admin)->postJson("/api/admin/branch-permits/{$branches[2]['permit_id']}/reopen", [
+            'review_note' => 'Reopening permit for updated verification.',
+        ])->assertStatus(200);
+
+        $ownerItems = $this->actingAs($applicant)
+            ->getJson('/api/notifications?workspace=restaurant&per_page=50')
+            ->assertStatus(200)
+            ->json('data.items');
+
+        $reopenedItem = collect($ownerItems)->first(
+            fn (array $n): bool => $n['type'] === 'branch_permit_reopened'
+                && $n['related_entity_id'] === $branches[2]['permit_id']
+        );
+        $this->assertNotNull($reopenedItem);
+        $this->assertSame('branch_permits', $reopenedItem['related_entity_type']);
+        $this->assertSame($materializedApproveBranchId, $reopenedItem['restaurant_id']);
+        $this->assertSame($appId, $reopenedItem['application_id']);
+        $this->assertSame($branches[2]['application_branch_id'], $reopenedItem['application_branch_id']);
+        $this->assertArrayNotHasKey('file_path', $reopenedItem);
+        $this->assertStringNotContainsString('branch-permits/', json_encode($reopenedItem));
+
+        // markRead returns the exact same enriched context
+        $readItem = $this->actingAs($applicant)
+            ->postJson("/api/notifications/{$reopenedItem['notification_id']}/read")
+            ->assertStatus(200)
+            ->json('data');
+        $this->assertSame($materializedApproveBranchId, $readItem['restaurant_id']);
+        $this->assertSame($appId, $readItem['application_id']);
+        $this->assertSame($branches[2]['application_branch_id'], $readItem['application_branch_id']);
+
+        // Owner-added branch (Add Branch, no application_branch_id) -> restaurant_id present, application_id/application_branch_id null
+        $addBranchRes = $this->actingAs($applicant)->post('/api/restaurant/branches', [
+            'branch_name' => 'Added Later Branch',
+            'street' => '456 Ayala Ave',
+            'barangay' => 'San Lorenzo',
+            'city' => 'Makati',
+            'province' => 'Metro Manila',
+            'region' => 'NCR',
+            'postal_code' => '1223',
+            'contact_phone' => '09179998888',
+            'offers_delivery' => true,
+            'offers_pickup' => true,
+            'offers_dine_in' => false,
+            'mayors_permit' => $this->fakePdf('added.pdf', 'ADDED'),
+        ], ['Accept' => 'application/json'])->assertStatus(201);
+
+        $addedBranchId = (int) $addBranchRes->json('data.branch.restaurant_id');
+        $addedPermitId = (int) DB::table('branch_permits')->where('restaurant_id', $addedBranchId)->value('permit_id');
+
+        $adminItemsAfterAdd = $this->actingAs($admin)
+            ->getJson('/api/notifications?workspace=admin&per_page=50')
+            ->assertStatus(200)
+            ->json('data.items');
+
+        $addedSubmitted = collect($adminItemsAfterAdd)->first(
+            fn (array $n): bool => $n['type'] === 'branch_permit_submitted'
+                && $n['related_entity_id'] === $addedPermitId
+        );
+        $this->assertNotNull($addedSubmitted);
+        $this->assertSame($addedBranchId, $addedSubmitted['restaurant_id']);
+        $this->assertNull($addedSubmitted['application_id']);
+        $this->assertNull($addedSubmitted['application_branch_id']);
+    }
+
+    public function test_duplicate_active_application_submission_returns_409_without_creating_rows(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $applicant = $this->createUser('customer', 'bp_dup_app');
+        $admin = $this->createUser('admin', 'bp_dup_adm');
+        $this->verifyApplicationOtp($applicant);
+
+        $firstRes = $this->actingAs($applicant)->post('/api/restaurant/applications', $this->baseApplicationPayload($applicant, [
+            'has_branches' => true,
+            'main_branch_name' => 'Main One',
+            'branches' => [
+                $this->branchData('Branch One'),
+            ],
+        ]), ['Accept' => 'application/json'])->assertStatus(201);
+
+        $firstAppId = (int) $firstRes->json('data.application.restaurant_application_id');
+
+        $appCountBefore = DB::table('restaurant_applications')->count();
+        $restCountBefore = DB::table('restaurants')->count();
+        $branchCountBefore = DB::table('restaurant_application_branches')->count();
+        $permitCountBefore = DB::table('branch_permits')->count();
+
+        // Retry without re-verifying OTP -> stable 409 with error code and existing application id
+        $dupRes1 = $this->actingAs($applicant)->post('/api/restaurant/applications', $this->baseApplicationPayload($applicant, [
+            'has_branches' => true,
+            'main_branch_name' => 'Main Two',
+            'branches' => [
+                $this->branchData('Branch Two'),
+            ],
+        ]), ['Accept' => 'application/json'])->assertStatus(409);
+
+        $dupRes1->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'ACTIVE_APPLICATION_EXISTS')
+            ->assertJsonPath('data.restaurant_application_id', $firstAppId)
+            ->assertJsonPath('data.application_id', $firstAppId)
+            ->assertJsonPath('data.application_status', 'submitted');
+
+        // Even with a fresh verified OTP -> still 409 and no new rows
+        $this->verifyApplicationOtp($applicant);
+        $this->actingAs($applicant)->post('/api/restaurant/applications', $this->baseApplicationPayload($applicant, [
+            'has_branches' => true,
+            'main_branch_name' => 'Main Three',
+            'branches' => [
+                $this->branchData('Branch Three'),
+            ],
+        ]), ['Accept' => 'application/json'])->assertStatus(409)
+            ->assertJsonPath('code', 'ACTIVE_APPLICATION_EXISTS')
+            ->assertJsonPath('data.restaurant_application_id', $firstAppId);
+
+        $this->assertSame($appCountBefore, DB::table('restaurant_applications')->count());
+        $this->assertSame($restCountBefore, DB::table('restaurants')->count());
+        $this->assertSame($branchCountBefore, DB::table('restaurant_application_branches')->count());
+        $this->assertSame($permitCountBefore, DB::table('branch_permits')->count());
+
+        // Once the active application reaches a terminal status (rejected), a new submission succeeds
+        DB::table('restaurant_applications')
+            ->where('restaurant_application_id', $firstAppId)
+            ->update([
+                'application_status' => 'rejected',
+                'reviewer_note' => 'Rejected for reapplication test.',
+                'reviewed_by' => $admin->user_id,
+                'reviewed_at' => now(),
+                'decided_at' => now(),
+            ]);
+
+        $this->actingAs($applicant)->post('/api/restaurant/applications', $this->baseApplicationPayload($applicant, [
+            'has_branches' => false,
+            'main_branch_name' => 'Main Reapply',
+        ]), ['Accept' => 'application/json'])->assertStatus(201);
+    }
 }
