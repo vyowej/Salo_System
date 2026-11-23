@@ -410,6 +410,94 @@ export const adminApiService = {
     const response = await apiClient.patch(`/admin/promos/${encodeURIComponent(promoId)}`, payload);
     return response?.data?.promo ?? null;
   },
+
+  async getOrderDetail(orderId) {
+    const response = await apiClient.get(`/admin/orders/${encodeURIComponent(orderId)}`);
+    return response?.data?.order ?? null;
+  },
+
+  async cancelOrder(orderId, { reason, idempotencyKey }) {
+    const response = await apiClient.post(`/admin/orders/${encodeURIComponent(orderId)}/cancel`, {
+      reason,
+      idempotency_key: idempotencyKey || undefined,
+    });
+    return response?.data ?? null;
+  },
+
+  async resolveReservationReview(reservationId, note) {
+    const response = await apiClient.post(`/admin/reservations/${encodeURIComponent(reservationId)}/resolve-review`, {
+      note,
+    });
+    return response?.data ?? null;
+  },
+
+  async getFeesConfig() {
+    const response = await apiClient.get('/admin/config/fees');
+    return response?.data ?? null;
+  },
+
+  async updateFeesConfig({ flat_delivery_fee, reason }) {
+    const response = await apiClient.put('/admin/config/fees', {
+      flat_delivery_fee,
+      reason,
+    });
+    return response?.data ?? null;
+  },
+
+  async getPlatformConfig() {
+    const response = await apiClient.get('/admin/config/platform');
+    return response?.data ?? { configurable: false, items: [] };
+  },
+
+  async getReportsSummary(params = {}) {
+    const response = await apiClient.get(`/admin/reports/summary${toQueryString(params)}`);
+    return response?.data ?? null;
+  },
+
+  async exportReportCsv(params = {}) {
+    const query = toQueryString(params);
+    const res = await fetch(`${apiClient.getApiBaseUrl?.() || '/api'}/admin/reports/export${query}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'text/csv' },
+    });
+    if (!res.ok) {
+      let msg = 'Failed to export report.';
+      try {
+        const errJson = await res.json();
+        msg = errJson?.message || msg;
+      } catch {
+        // ignore parse failure
+      }
+      const err = new Error(msg);
+      err.status = res.status;
+      throw err;
+    }
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/i);
+    return {
+      filename: match ? match[1] : 'salo-report.csv',
+      blob: await res.blob(),
+    };
+  },
+
+  async getSupportOverview() {
+    const response = await apiClient.get('/admin/support/overview');
+    return response?.data ?? { counts: {}, disputes: [], reservation_reviews: [], change_requests: [], lifecycle_requests: [] };
+  },
+
+  async getSecuritySessions() {
+    const response = await apiClient.get('/admin/security/sessions');
+    return response?.data ?? { sessions: [], revoked_after: null };
+  },
+
+  async revokeOtherSecuritySessions({ password, reason }) {
+    const response = await apiClient.post('/admin/security/revoke-other-sessions', {
+      password,
+      reason: reason || undefined,
+    });
+    return response?.data ?? null;
+  },
 };
 
 export default adminApiService;

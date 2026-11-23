@@ -385,7 +385,7 @@ export default function OrderDetailPage() {
           restaurantId,
           restaurantName: subOrder.restaurantName,
           image: 'R',
-          deliveryFee: subOrder.deliveryFee || 49,
+          deliveryFee: subOrder.deliveryFee ?? undefined,
           selectedAddOns: Array.isArray(item.addOns)
             ? item.addOns.map((addOn) => (typeof addOn === 'string' ? { name: addOn, price: 0 } : addOn))
             : [],

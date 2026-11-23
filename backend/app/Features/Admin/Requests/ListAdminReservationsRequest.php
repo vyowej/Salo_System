@@ -44,6 +44,7 @@ class ListAdminReservationsRequest extends FormRequest
             'restaurant_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'attention' => ['sometimes', 'nullable', 'string', Rule::in(array_merge(['all', 'any'], ReservationAttention::ALL))],
             'deposit_status' => ['sometimes', 'nullable', 'string', Rule::in(['all', 'none', 'pending', 'paid', 'waived', 'refunded'])],
+            'needs_review' => ['sometimes', 'nullable', 'boolean'],
             'date_from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
             'date_to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
             'sort' => ['sometimes', 'nullable', 'string', Rule::in(['reservation_start', 'created_at', 'party_size'])],

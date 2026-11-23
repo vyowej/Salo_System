@@ -50,6 +50,7 @@ export default function AdminReservationsPage() {
   const [group, setGroup] = useState('all');
   const [attention, setAttention] = useState('all');
   const [depositStatus, setDepositStatus] = useState('all');
+  const [needsReview, setNeedsReview] = useState(false);
   const [restaurantId, setRestaurantId] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -61,6 +62,9 @@ export default function AdminReservationsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
   const [detailNotFound, setDetailNotFound] = useState(false);
+  const [reviewNote, setReviewNote] = useState('');
+  const [resolvingReview, setResolvingReview] = useState(false);
+  const [reviewError, setReviewError] = useState('');
 
   const listSeqRef = useRef(0);
   const statsSeqRef = useRef(0);
@@ -104,6 +108,9 @@ export default function AdminReservationsPage() {
         perPage,
         direction,
       });
+      if (needsReview) {
+        params.needs_review = 1;
+      }
 
       const data = await adminApiService.getReservations(params);
       if (seq !== listSeqRef.current) return;
@@ -127,7 +134,7 @@ export default function AdminReservationsPage() {
         setLoading(false);
       }
     }
-  }, [attention, dateFrom, dateRangeError, dateTo, depositStatus, direction, effectiveSearch, group, page, perPage, restaurantId, status]);
+  }, [attention, dateFrom, dateRangeError, dateTo, depositStatus, direction, effectiveSearch, group, needsReview, page, perPage, restaurantId, status]);
 
   const loadStats = useCallback(async () => {
     if (dateRangeError) return;
@@ -588,6 +595,18 @@ export default function AdminReservationsPage() {
             </select>
           </label>
 
+          <label className="admin-filter-control" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input
+              type="checkbox"
+              checked={needsReview}
+              onChange={(event) => {
+                setNeedsReview(event.target.checked);
+                setPage(1);
+              }}
+            />
+            <span>Needs review only</span>
+          </label>
+
           <label className="admin-filter-control">
             From date
             <input
@@ -756,12 +775,75 @@ export default function AdminReservationsPage() {
             <div className="admin-drawer-content">
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <StatusBadge status={selectedDetail.status_label || selectedDetail.status} />
+                {selectedDetail.needs_admin_review && (
+                  <span className="admin-attention-pill admin-attention-pill--warning">
+                    Needs Admin Review
+                  </span>
+                )}
                 {selectedDetail.attention && (
                   <span className={`admin-attention-pill admin-attention-pill--${getAttentionTone(selectedDetail.attention)}`}>
                     {formatAttentionLabel(selectedDetail.attention)}
                   </span>
                 )}
               </div>
+
+              {(selectedDetail.needs_admin_review || selectedDetail.admin_review_resolved) && (
+                <div className="admin-record-panel" style={{ borderLeft: '3px solid var(--color-warning, #d97706)', paddingLeft: 12 }}>
+                  <h3>{selectedDetail.needs_admin_review ? 'Deposit Review Required' : 'Admin Review Resolved'}</h3>
+                  {selectedDetail.admin_review_reason && (
+                    <p style={{ margin: '0 0 8px' }}>{selectedDetail.admin_review_reason}</p>
+                  )}
+                  {selectedDetail.admin_review_resolved ? (
+                    <p style={{ margin: 0, fontSize: '0.88rem', opacity: 0.85 }}>
+                      Resolved note: {selectedDetail.admin_review_resolved_note || '—'}
+                    </p>
+                  ) : (
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (reviewNote.trim().length < 5) {
+                          setReviewError('Please enter a resolution note (at least 5 characters).');
+                          return;
+                        }
+                        setResolvingReview(true);
+                        setReviewError('');
+                        try {
+                          const res = await adminApiService.resolveReservationReview(selectedDetail.reservation_id, reviewNote.trim());
+                          setSelectedDetail((prev) => prev ? {
+                            ...prev,
+                            needs_admin_review: false,
+                            admin_review_resolved: true,
+                            admin_review_resolved_note: res?.resolved_note || reviewNote.trim(),
+                          } : prev);
+                          setReviewNote('');
+                          loadReservations();
+                        } catch (err) {
+                          setReviewError(err?.message || 'Unable to resolve reservation review.');
+                        } finally {
+                          setResolvingReview(false);
+                        }
+                      }}
+                      style={{ display: 'grid', gap: 8 }}
+                    >
+                      {reviewError && <div className="admin-inline-error" role="alert">{reviewError}</div>}
+                      <input
+                        type="text"
+                        minLength={5}
+                        maxLength={500}
+                        placeholder="Record admin review note (note-only, does not move money)..."
+                        value={reviewNote}
+                        onChange={(e) => setReviewNote(e.target.value)}
+                        required
+                      />
+                      <div>
+                        <Button type="submit" variant="primary" size="sm" disabled={resolvingReview}>
+                          {resolvingReview ? 'Saving...' : 'Mark Review Resolved'}
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )}
 
               <ul className="admin-detail-list">
                 <li>

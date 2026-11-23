@@ -7,6 +7,7 @@ use App\Features\Locations\Services\ServiceAreaValidationService;
 use App\Features\Notifications\Services\NotificationService;
 use App\Features\Payments\Services\PaymentService;
 use App\Features\Restaurants\Services\AvailabilityService;
+use App\Features\Reviews\Services\PlatformSettingsService;
 use App\Models\User;
 use App\Support\AuditLogService;
 use App\Support\Money;
@@ -30,6 +31,7 @@ class CheckoutService
         private readonly NotificationService $notificationService,
         private readonly PublicRestaurantVisibility $visibility,
         private readonly PaymentService $paymentService,
+        private readonly PlatformSettingsService $platformSettingsService,
     ) {}
 
     /**
@@ -83,7 +85,7 @@ class CheckoutService
             $selectedContactPhone = $normalizedSelected;
         }
 
-        $deliveryFeeCents = Money::toCents((string) config('salo.orders.flat_delivery_fee', '49.00'));
+        $deliveryFeeCents = Money::toCents($this->platformSettingsService->getFlatDeliveryFee());
         $maxQty = max(1, (int) config('salo.orders.max_item_quantity', 50));
 
         foreach ($groupsInput as $gIdx => $group) {

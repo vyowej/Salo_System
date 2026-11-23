@@ -7,13 +7,16 @@ use App\Features\Account\Controllers\AccountSettingsController;
 use App\Features\Account\Controllers\AccountStaffInvitationController;
 use App\Features\Admin\Controllers\AdminApplicationController;
 use App\Features\Admin\Controllers\AdminBranchPermitController;
+use App\Features\Admin\Controllers\AdminConfigController;
 use App\Features\Admin\Controllers\AdminDisputesController;
 use App\Features\Admin\Controllers\AdminFinanceController;
 use App\Features\Admin\Controllers\AdminManagementController;
 use App\Features\Admin\Controllers\AdminOrderController;
 use App\Features\Admin\Controllers\AdminPromoController;
+use App\Features\Admin\Controllers\AdminReportController;
 use App\Features\Admin\Controllers\AdminReservationController;
 use App\Features\Admin\Controllers\AdminSettingsRequestController;
+use App\Features\Admin\Controllers\AdminSupportController;
 use App\Features\Applications\Controllers\ApplicationDocumentController;
 use App\Features\Auth\Controllers\AuthController;
 use App\Features\Auth\Controllers\OtpController;
@@ -120,6 +123,8 @@ Route::prefix('account')->middleware('auth')->group(function (): void {
     Route::post('/staff-invitations/{id}/accept', [AccountStaffInvitationController::class, 'accept'])->whereNumber('id');
     Route::post('/staff-invitations/{id}/decline', [AccountStaffInvitationController::class, 'decline'])->whereNumber('id');
 });
+
+Route::get('/platform/delivery-fee', [AdminConfigController::class, 'publicDeliveryFee']);
 
 Route::prefix('notifications')->middleware(['auth', 'throttle:120,1'])->group(function (): void {
     Route::get('/', [NotificationController::class, 'index']);
@@ -330,9 +335,21 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
 
     Route::get('/users', [AdminManagementController::class, 'users']);
     Route::get('/users/{id}/activity', [AdminManagementController::class, 'userActivity'])->whereNumber('id');
-    Route::post('/users', [AdminManagementController::class, 'createUser']);
-    Route::patch('/users/{id}', [AdminManagementController::class, 'updateUser'])->whereNumber('id');
-    Route::post('/users/{id}/revoke-sessions', [AdminManagementController::class, 'revokeSessions'])->whereNumber('id');
+    Route::post('/users', [AdminManagementController::class, 'createUser'])->middleware('throttle:10,1');
+    Route::patch('/users/{id}', [AdminManagementController::class, 'updateUser'])->whereNumber('id')->middleware('throttle:20,1');
+    Route::post('/users/{id}/revoke-sessions', [AdminManagementController::class, 'revokeSessions'])->whereNumber('id')->middleware('throttle:10,1');
+
+    Route::get('/security/sessions', [AdminManagementController::class, 'securitySessions']);
+    Route::post('/security/revoke-other-sessions', [AdminManagementController::class, 'revokeOtherSecuritySessions'])->middleware('throttle:10,1');
+
+    Route::get('/config/fees', [AdminConfigController::class, 'fees']);
+    Route::put('/config/fees', [AdminConfigController::class, 'updateFees'])->middleware('throttle:20,1');
+    Route::get('/config/platform', [AdminConfigController::class, 'platformConfig']);
+
+    Route::get('/reports/summary', [AdminReportController::class, 'summary']);
+    Route::get('/reports/export', [AdminReportController::class, 'export'])->middleware('throttle:10,1');
+
+    Route::get('/support/overview', [AdminSupportController::class, 'overview']);
 
     Route::get('/restaurants', [AdminManagementController::class, 'restaurants']);
     Route::patch('/restaurants/{id}/status', [AdminManagementController::class, 'updateRestaurantStatus'])->whereNumber('id');
@@ -358,6 +375,8 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::patch('/service-areas/{id}', [AdminServiceAreaController::class, 'update'])->whereNumber('id');
     Route::get('/locations/overview', [AdminServiceAreaController::class, 'locationsOverview']);
     Route::get('/orders', [AdminOrderController::class, 'index']);
+    Route::get('/orders/{id}', [AdminOrderController::class, 'show'])->whereNumber('id');
+    Route::post('/orders/{id}/cancel', [AdminOrderController::class, 'cancel'])->whereNumber('id')->middleware('throttle:20,1');
     Route::get('/orders/{id}/tracking', [TrackingController::class, 'adminOrderTracking'])->whereNumber('id');
     Route::get('/orders/{id}/delivery-proof', [RiderDeliveryController::class, 'adminProof'])->whereNumber('id');
 
@@ -379,6 +398,7 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::get('/reservations', [AdminReservationController::class, 'index']);
     Route::get('/reservations/stats', [AdminReservationController::class, 'stats']);
     Route::get('/reservations/{id}', [AdminReservationController::class, 'show'])->whereNumber('id');
+    Route::post('/reservations/{id}/resolve-review', [AdminReservationController::class, 'resolveReview'])->whereNumber('id')->middleware('throttle:20,1');
 
     Route::get('/change-requests', [AdminSettingsRequestController::class, 'changeRequests']);
     Route::post('/change-requests/{id}/decision', [AdminSettingsRequestController::class, 'decideChangeRequest'])->whereNumber('id');

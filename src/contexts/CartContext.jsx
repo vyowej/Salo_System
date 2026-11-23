@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect, useMemo, useCallback } from 'react';
+import apiClient from '../services/apiClient';
 import customerService from '../services/customerService';
 import addressService, { ADDRESSES_CHANGED_EVENT } from '../services/addressService';
 import { findAddressBySelectionId } from '../features/customer/utils/checkoutAddressValidation';
@@ -67,6 +68,38 @@ export function CartProvider({ children }) {
       return {};
     }
   });
+
+  // Platform flat delivery fee (single source of truth from backend)
+  const [platformDeliveryFee, setPlatformDeliveryFee] = useState(49);
+
+  useEffect(() => {
+    let active = true;
+    const loadFee = async () => {
+      try {
+        const res = await apiClient.get('/platform/delivery-fee');
+        const nextFee = Number(res?.data?.flat_delivery_fee);
+        if (active && Number.isFinite(nextFee) && nextFee >= 0) {
+          setPlatformDeliveryFee(nextFee);
+        }
+      } catch {
+        // Keep fallback 49 until backend is reachable
+      }
+    };
+    loadFee();
+    const handleFeeUpdated = (event) => {
+      const fee = Number(event?.detail?.flat_delivery_fee);
+      if (Number.isFinite(fee) && fee >= 0) {
+        setPlatformDeliveryFee(fee);
+      } else {
+        loadFee();
+      }
+    };
+    window.addEventListener('salo:deliveryFeeUpdated', handleFeeUpdated);
+    return () => {
+      active = false;
+      window.removeEventListener('salo:deliveryFeeUpdated', handleFeeUpdated);
+    };
+  }, []);
 
   // Sync items with localStorage
   useEffect(() => {
@@ -360,7 +393,7 @@ export function CartProvider({ children }) {
       const rId = item.restaurantId || 'unknown-restaurant';
       if (!groupsMap[rId]) {
         const mode = restaurantAddressModes[rId] || 'single';
-        const baseDeliveryFee = item.deliveryFee ?? 49;
+        const baseDeliveryFee = platformDeliveryFee;
         const groupAddress = rId in restaurantAddresses
           ? (restaurantAddresses[rId] ?? null)
           : (defaultAddress || null);
@@ -441,7 +474,7 @@ export function CartProvider({ children }) {
     });
 
     return Object.values(groupsMap);
-  }, [items, restaurantFulfillment, restaurantAddresses, restaurantAddressModes, itemAddresses, defaultAddress]);
+  }, [items, restaurantFulfillment, restaurantAddresses, restaurantAddressModes, itemAddresses, defaultAddress, platformDeliveryFee]);
 
   // Overall totals
   const totalItemCount = useMemo(() => {

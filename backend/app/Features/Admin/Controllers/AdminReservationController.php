@@ -8,6 +8,7 @@ use App\Features\Admin\Services\AdminReservationService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class AdminReservationController extends Controller
 {
@@ -47,6 +48,27 @@ class AdminReservationController extends Controller
                 'reservation' => $reservation,
             ],
             message: 'Reservation retrieved.',
+        );
+    }
+
+    public function resolveReview(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'note' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        $result = $this->adminReservationService->resolveReview(
+            reservationId: $id,
+            note: (string) $validated['note'],
+            admin: $request->user(),
+            request: $request,
+        );
+
+        return ApiResponse::success(
+            data: $result,
+            message: ($result['already_resolved'] ?? false)
+                ? 'Reservation review was already resolved.'
+                : 'Reservation review marked as resolved.',
         );
     }
 }

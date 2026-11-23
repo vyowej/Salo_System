@@ -1,11 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../../hooks/useAuth';
 import { useWorkspaceNotifications } from '../../../hooks/useWorkspaceNotifications';
+import adminApiService from '../../../services/adminApiService';
 import { getNotificationRoute } from '../../../utils/notificationUtils';
 import AdminNotificationsContext from './adminNotificationsStore';
-import {
-  getOpenSupportCount,
-  getPendingApplicationsCount,
-} from '../services/notificationsService';
 
 function getDateBucketManila(createdAt) {
   if (!createdAt) return 'Earlier';
@@ -47,8 +45,39 @@ export function AdminNotificationsProvider({ children }) {
     [items],
   );
 
-  const pendingApplicationsCount = useMemo(() => getPendingApplicationsCount(), []);
-  const openSupportCount = useMemo(() => getOpenSupportCount(), []);
+  const { isAuthenticated, role, roles, user } = useAuth();
+  const isAdmin = isAuthenticated && (role === 'admin' || (Array.isArray(roles) && roles.includes('admin'))) && !user?.must_change_password;
+  const [pendingApplicationsCount, setPendingApplicationsCount] = useState(0);
+  const [openSupportCount, setOpenSupportCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setPendingApplicationsCount(0);
+      setOpenSupportCount(0);
+      return;
+    }
+    let active = true;
+    (async () => {
+      try {
+        const dash = await adminApiService.getDashboard();
+        if (!active) return;
+        const pq = dash?.pending_queues ?? {};
+        setPendingApplicationsCount(
+          Number(pq.restaurant_applications ?? 0) +
+          Number(pq.rider_applications ?? 0) +
+          Number(pq.branch_permits ?? 0),
+        );
+        setOpenSupportCount(
+          Number(pq.failed_deliveries ?? 0) +
+          Number(pq.change_requests ?? 0) +
+          Number(pq.lifecycle_requests ?? 0),
+        );
+      } catch {
+        // leave 0 on error
+      }
+    })();
+    return () => { active = false; };
+  }, [isAdmin]);
 
   const value = useMemo(() => ({
     notifications,

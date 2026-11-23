@@ -91,6 +91,27 @@ class AccountService
         $user->password_hash = Hash::make($newPassword);
         $user->save();
 
+        \Illuminate\Support\Facades\Cache::forget("auth:must_change_password:{$user->user_id}");
+        if ($request->hasSession()) {
+            $request->session()->forget('must_change_password');
+        }
+
+        $settingsRow = DB::table('user_settings')->where('user_id', $user->user_id)->first(['security_preferences']);
+        if ($settingsRow) {
+            $secPrefs = is_string($settingsRow->security_preferences)
+                ? (json_decode($settingsRow->security_preferences, true) ?: [])
+                : [];
+            if (! empty($secPrefs['must_change_password'])) {
+                $secPrefs['must_change_password'] = false;
+                DB::table('user_settings')
+                    ->where('user_id', $user->user_id)
+                    ->update([
+                        'security_preferences' => json_encode($secPrefs),
+                        'updated_at' => now(),
+                    ]);
+            }
+        }
+
         if ($request->hasSession()) {
             $request->session()->regenerate();
         }

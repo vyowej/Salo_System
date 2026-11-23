@@ -218,7 +218,7 @@ export default function OrdersPage() {
         resolved.cartItems.forEach((cartItem) => {
           addItem({
             ...cartItem,
-            deliveryFee: subOrder.deliveryFee || 49,
+            deliveryFee: subOrder.deliveryFee ?? undefined,
           });
           totalAdded += 1;
         });

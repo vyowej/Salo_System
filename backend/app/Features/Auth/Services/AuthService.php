@@ -6,6 +6,8 @@ use App\Models\User;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -103,6 +105,23 @@ class AuthService
     public function formatUserPayload(User $user): array
     {
         $roleContext = $user->resolveRoleContext();
+        $mustChange = false;
+
+        if ($user->user_role === 'admin' || in_array('admin', $roleContext['roles'], true)) {
+            $cachedMustChange = Cache::get("auth:must_change_password:{$user->user_id}");
+            if ($cachedMustChange !== null) {
+                $mustChange = (bool) $cachedMustChange;
+            } else {
+                $settingsRow = DB::table('user_settings')
+                    ->where('user_id', $user->user_id)
+                    ->first(['security_preferences']);
+                $secPrefs = $settingsRow && is_string($settingsRow->security_preferences)
+                    ? (json_decode($settingsRow->security_preferences, true) ?: [])
+                    : [];
+                $mustChange = (bool) ($secPrefs['must_change_password'] ?? false);
+                Cache::forever("auth:must_change_password:{$user->user_id}", $mustChange);
+            }
+        }
 
         return [
             'user_id' => (int) $user->user_id,
@@ -116,6 +135,7 @@ class AuthService
             'user_role' => $user->user_role,
             'account_status' => $user->account_status,
             'email_verified_at' => $user->email_verified_at?->toIso8601String(),
+            'must_change_password' => $mustChange,
             'roles' => $roleContext['roles'],
             'capabilities' => $roleContext['capabilities'],
             'restaurant_ownerships' => $roleContext['restaurant_ownerships'],

@@ -7,6 +7,7 @@ use App\Support\ApiResponse;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
 
 class RequireRole
@@ -47,6 +48,18 @@ class RequireRole
 
         foreach ($roles as $role) {
             if ($freshUser->hasDerivedRole($role)) {
+                if ($role === 'admin') {
+                    $mustChange = Cache::get("auth:must_change_password:{$freshUser->user_id}") === true
+                        || ($request->hasSession() && $request->session()->get('must_change_password') === true);
+                    if ($mustChange) {
+                        return response()->json([
+                            'success' => false,
+                            'code' => 'PASSWORD_CHANGE_REQUIRED',
+                            'message' => 'You must change your temporary password before accessing admin endpoints.',
+                        ], 403);
+                    }
+                }
+
                 return $next($request);
             }
         }

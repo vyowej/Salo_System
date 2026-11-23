@@ -84,6 +84,32 @@ class AdminManagementController extends Controller
         );
     }
 
+    public function securitySessions(Request $request): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->adminManagementService->getAdminSessions($request->user(), $request),
+            message: 'Admin sessions retrieved.',
+        );
+    }
+
+    public function revokeOtherSecuritySessions(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'password' => ['required', 'string'],
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        return ApiResponse::success(
+            data: $this->adminManagementService->revokeOtherAdminSessions(
+                admin: $request->user(),
+                password: (string) $validated['password'],
+                reason: $validated['reason'] ?? null,
+                request: $request,
+            ),
+            message: 'Other active sessions revoked.',
+        );
+    }
+
     public function restaurants(Request $request): JsonResponse
     {
         return ApiResponse::success(

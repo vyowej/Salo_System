@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
 import useAdminSession from '../contexts/useAdminSession';
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
@@ -48,8 +49,9 @@ export default function AdminSettingsPage({ initialSection = 'account' }) {
 
         {activeSection !== 'account' && activeSection !== 'security' && (
           <SettingsCard
-            title="Platform settings are not available yet"
-            description="Platform-wide configuration (commission defaults, fees, maintenance mode) will be editable here once the admin config API is connected."
+            title="No platform settings are configurable yet"
+            description="Only enforced platform configuration is exposed. To adjust the flat delivery fee, go to Fees and commissions."
+            action={<Link to="/admin/fees" className="admin-link-action">Go to Fees and commissions</Link>}
           />
         )}
       </UnifiedSettingsShell>

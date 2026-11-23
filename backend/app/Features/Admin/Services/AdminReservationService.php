@@ -6,17 +6,30 @@ use App\Features\Reservations\Services\ReservationExpiryService;
 use App\Features\Reservations\Support\ReservationAttention;
 use App\Features\Reservations\Support\ReservationFormatter;
 use App\Features\Reservations\Support\ReservationStatus;
+use App\Models\User;
+use App\Support\AuditLogService;
 use App\Support\SqlLike;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class AdminReservationService
 {
     private const TIMEZONE = 'Asia/Manila';
 
+    private const REVIEW_TRIGGER_ACTIONS = [
+        'customer_paid_reservation_cancelled_review',
+        'reservation_late_payment_review',
+    ];
+
+    private const REVIEW_RESOLVED_ACTION = 'reservation_review_resolved';
+
     public function __construct(
         private readonly ReservationExpiryService $expiryService,
+        private readonly AuditLogService $auditLogService,
     ) {}
 
     /**
@@ -78,7 +91,29 @@ class AdminReservationService
         };
 
         $rows = $baseQuery
-            ->select($this->selectColumns())
+            ->select(array_merge($this->selectColumns(), [
+                DB::raw("CASE WHEN (
+                    (r.reservation_status = 'cancelled' AND r.cancelled_by = 'customer' AND r.deposit_status = 'paid' AND NOT EXISTS (
+                        SELECT 1 FROM audit_logs al_res
+                        WHERE al_res.entity_type = 'reservations'
+                          AND al_res.entity_id = CAST(r.reservation_id AS CHAR)
+                          AND al_res.action = 'reservation_review_resolved'
+                          AND (r.cancelled_at IS NULL OR al_res.created_at >= r.cancelled_at)
+                    ))
+                    OR EXISTS (
+                        SELECT 1 FROM audit_logs al_lp
+                        WHERE al_lp.entity_type = 'reservations'
+                          AND al_lp.entity_id = CAST(r.reservation_id AS CHAR)
+                          AND al_lp.action IN ('customer_paid_reservation_cancelled_review', 'reservation_late_payment_review')
+                          AND al_lp.log_id > COALESCE((
+                              SELECT MAX(al_res2.log_id) FROM audit_logs al_res2
+                              WHERE al_res2.entity_type = 'reservations'
+                                AND al_res2.entity_id = CAST(r.reservation_id AS CHAR)
+                                AND al_res2.action = 'reservation_review_resolved'
+                          ), 0)
+                    )
+                ) THEN 1 ELSE 0 END as needs_admin_review_flag"),
+            ]))
             ->orderBy($sortColumn, $direction)
             ->orderBy('r.reservation_id', $direction)
             ->forPage($page, $perPage)
@@ -94,9 +129,7 @@ class AdminReservationService
                     : null,
                 attention: $attention,
             );
-            $formatted['needs_admin_review'] = ((string) ($row->reservation_status ?? '')) === ReservationStatus::CANCELLED
-                && ((string) ($row->cancelled_by ?? '')) === 'customer'
-                && ((string) ($row->deposit_status ?? 'none')) === 'paid';
+            $formatted['needs_admin_review'] = ((int) ($row->needs_admin_review_flag ?? 0)) === 1;
 
             return $formatted;
         })->all();
@@ -478,20 +511,175 @@ class AdminReservationService
             restaurantSettings: $restaurantSettings,
         );
 
-        $reviewLog = DB::table('audit_logs')
-            ->where('entity_type', 'reservations')
-            ->where('entity_id', $reservationId)
-            ->whereIn('action', ['customer_paid_reservation_cancelled_review', 'reservation_late_payment_review'])
-            ->orderByDesc('log_id')
-            ->first(['action', 'reason']);
+        $reviewMap = $this->loadReviewLogsForReservations([$reservationId]);
+        $reviewState = $this->evaluateReviewState($row, $reviewMap[$reservationId] ?? []);
 
-        $formatted['needs_admin_review'] = $reviewLog !== null
-            || (((string) ($row->reservation_status ?? '')) === ReservationStatus::CANCELLED
-                && ((string) ($row->cancelled_by ?? '')) === 'customer'
-                && ((string) ($row->deposit_status ?? 'none')) === 'paid');
-        $formatted['admin_review_reason'] = $reviewLog?->reason ?? null;
+        $formatted['needs_admin_review'] = $reviewState['needs_admin_review'];
+        $formatted['admin_review_reason'] = $reviewState['admin_review_reason'];
+        $formatted['admin_review_resolved'] = $reviewState['admin_review_resolved'];
+        $formatted['admin_review_resolved_note'] = $reviewState['admin_review_resolved_note'];
+        $formatted['admin_review_resolved_at'] = $reviewState['admin_review_resolved_at'];
 
         return $formatted;
+    }
+
+    /**
+     * Mark a flagged reservation review as resolved (idempotent, note-only, never moves money).
+     *
+     * @return array<string, mixed>
+     */
+    public function resolveReview(int $reservationId, string $note, User $admin, Request $request): array
+    {
+        $row = DB::table('reservations')
+            ->where('reservation_id', $reservationId)
+            ->first(['reservation_id', 'reservation_status', 'cancelled_by', 'cancelled_at', 'deposit_status']);
+
+        if (! $row) {
+            throw new NotFoundHttpException('Reservation not found.');
+        }
+
+        $cleanNote = trim($note);
+        $reviewMap = $this->loadReviewLogsForReservations([$reservationId]);
+        $state = $this->evaluateReviewState($row, $reviewMap[$reservationId] ?? []);
+
+        if ($state['admin_review_resolved'] && ! $state['needs_admin_review']) {
+            return [
+                'reservation_id' => $reservationId,
+                'needs_admin_review' => false,
+                'already_resolved' => true,
+                'resolved_note' => $state['admin_review_resolved_note'],
+                'resolved_at' => $state['admin_review_resolved_at'],
+            ];
+        }
+
+        if (! $state['needs_admin_review']) {
+            throw new ConflictHttpException('This reservation does not currently require admin review.');
+        }
+
+        $this->auditLogService->record(
+            actorUserId: (int) $admin->user_id,
+            action: self::REVIEW_RESOLVED_ACTION,
+            entityType: 'reservations',
+            entityId: (string) $reservationId,
+            oldValues: [
+                'needs_admin_review' => true,
+                'review_reason' => $state['admin_review_reason'],
+            ],
+            newValues: [
+                'needs_admin_review' => false,
+                'resolved_note' => $cleanNote,
+            ],
+            reason: $cleanNote,
+            request: $request,
+        );
+
+        return [
+            'reservation_id' => $reservationId,
+            'needs_admin_review' => false,
+            'already_resolved' => false,
+            'resolved_note' => $cleanNote,
+            'resolved_at' => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @param  array<int, int>  $reservationIds
+     * @return array<int, array{trigger?: object, resolve?: object}>
+     */
+    private function loadReviewLogsForReservations(array $reservationIds): array
+    {
+        $ids = array_values(array_unique(array_filter($reservationIds, static fn (int $id): bool => $id > 0)));
+        if ($ids === []) {
+            return [];
+        }
+
+        $logs = DB::table('audit_logs')
+            ->where('entity_type', 'reservations')
+            ->whereIn('entity_id', array_map('strval', $ids))
+            ->whereIn('action', array_merge(self::REVIEW_TRIGGER_ACTIONS, [self::REVIEW_RESOLVED_ACTION]))
+            ->orderByDesc('log_id')
+            ->get(['log_id', 'entity_id', 'action', 'reason', 'created_at']);
+
+        $grouped = [];
+        foreach ($logs as $log) {
+            $resId = (int) $log->entity_id;
+            if ($log->action === self::REVIEW_RESOLVED_ACTION) {
+                if (! isset($grouped[$resId]['resolve'])) {
+                    $grouped[$resId]['resolve'] = $log;
+                }
+            } elseif (! isset($grouped[$resId]['trigger'])) {
+                $grouped[$resId]['trigger'] = $log;
+            }
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * @param  array{trigger?: object, resolve?: object}  $logs
+     * @return array{
+     *   needs_admin_review: bool,
+     *   admin_review_reason: ?string,
+     *   admin_review_resolved: bool,
+     *   admin_review_resolved_note: ?string,
+     *   admin_review_resolved_at: ?string,
+     * }
+     */
+    private function evaluateReviewState(object $row, array $logs): array
+    {
+        $trigger = $logs['trigger'] ?? null;
+        $resolve = $logs['resolve'] ?? null;
+
+        $isCancelledPaid = ((string) ($row->reservation_status ?? '')) === ReservationStatus::CANCELLED
+            && ((string) ($row->cancelled_by ?? '')) === 'customer'
+            && ((string) ($row->deposit_status ?? 'none')) === 'paid';
+
+        $hasTrigger = $isCancelledPaid || $trigger !== null;
+        if (! $hasTrigger) {
+            return [
+                'needs_admin_review' => false,
+                'admin_review_reason' => null,
+                'admin_review_resolved' => false,
+                'admin_review_resolved_note' => null,
+                'admin_review_resolved_at' => null,
+            ];
+        }
+
+        $reason = $trigger?->reason
+            ?? ($isCancelledPaid ? 'Customer cancelled a paid reservation; deposit held pending refund policy decision.' : null);
+
+        if ($resolve === null) {
+            return [
+                'needs_admin_review' => true,
+                'admin_review_reason' => $reason,
+                'admin_review_resolved' => false,
+                'admin_review_resolved_note' => null,
+                'admin_review_resolved_at' => null,
+            ];
+        }
+
+        $stillUnresolvedByLogOrder = $trigger !== null && (int) $resolve->log_id <= (int) $trigger->log_id;
+        $stillUnresolvedByCancelledAt = $isCancelledPaid
+            && ! empty($row->cancelled_at)
+            && strtotime((string) $resolve->created_at) < strtotime((string) $row->cancelled_at);
+
+        if ($stillUnresolvedByLogOrder || $stillUnresolvedByCancelledAt) {
+            return [
+                'needs_admin_review' => true,
+                'admin_review_reason' => $reason,
+                'admin_review_resolved' => false,
+                'admin_review_resolved_note' => null,
+                'admin_review_resolved_at' => null,
+            ];
+        }
+
+        return [
+            'needs_admin_review' => false,
+            'admin_review_reason' => $reason,
+            'admin_review_resolved' => true,
+            'admin_review_resolved_note' => $resolve->reason,
+            'admin_review_resolved_at' => $resolve->created_at ? (string) $resolve->created_at : null,
+        ];
     }
 
     /**
@@ -554,6 +742,34 @@ class AdminReservationService
         $depositStatus = trim((string) ($filters['deposit_status'] ?? ''));
         if ($depositStatus !== '' && $depositStatus !== 'all') {
             $query->where('r.deposit_status', $depositStatus);
+        }
+
+        if (filter_var($filters['needs_review'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $query->where(function (Builder $q): void {
+                $q->where(function (Builder $cq): void {
+                    $cq->where('r.reservation_status', ReservationStatus::CANCELLED)
+                        ->where('r.cancelled_by', 'customer')
+                        ->where('r.deposit_status', 'paid')
+                        ->whereNotExists(function (Builder $sub): void {
+                            $sub->selectRaw('1')
+                                ->from('audit_logs as al_res')
+                                ->where('al_res.entity_type', 'reservations')
+                                ->whereRaw('al_res.entity_id = CAST(r.reservation_id AS CHAR)')
+                                ->where('al_res.action', self::REVIEW_RESOLVED_ACTION)
+                                ->whereRaw('(r.cancelled_at IS NULL OR al_res.created_at >= r.cancelled_at)');
+                        });
+                })->orWhereExists(function (Builder $lq): void {
+                    $lq->selectRaw('1')
+                        ->from('audit_logs as al_lp')
+                        ->where('al_lp.entity_type', 'reservations')
+                        ->whereRaw('al_lp.entity_id = CAST(r.reservation_id AS CHAR)')
+                        ->whereIn('al_lp.action', self::REVIEW_TRIGGER_ACTIONS)
+                        ->whereRaw(
+                            'al_lp.log_id > COALESCE((SELECT MAX(al_res2.log_id) FROM audit_logs al_res2 WHERE al_res2.entity_type = ? AND al_res2.entity_id = CAST(r.reservation_id AS CHAR) AND al_res2.action = ?), 0)',
+                            ['reservations', self::REVIEW_RESOLVED_ACTION],
+                        );
+                });
+            });
         }
 
         $attention = trim((string) ($filters['attention'] ?? ''));

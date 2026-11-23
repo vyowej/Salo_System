@@ -4,6 +4,7 @@ namespace App\Features\Reviews\Services;
 
 use App\Models\User;
 use App\Support\AuditLogService;
+use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -220,5 +221,91 @@ class PlatformSettingsService
         }
 
         return $parsed;
+    }
+
+    public function getFlatDeliveryFee(): string
+    {
+        $row = DB::table('platform_settings')
+            ->where('setting_key', 'orders.flat_delivery_fee')
+            ->first(['setting_value']);
+
+        $raw = $row?->setting_value ?? (string) config('salo.orders.flat_delivery_fee', '49.00');
+
+        return Money::fromCents(Money::toCents((string) $raw));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getFeesConfig(): array
+    {
+        $row = DB::table('platform_settings')
+            ->where('setting_key', 'orders.flat_delivery_fee')
+            ->first(['setting_value', 'updated_at']);
+
+        $fee = $this->getFlatDeliveryFee();
+
+        return [
+            'flat_delivery_fee' => (float) $fee,
+            'flat_delivery_fee_formatted' => $fee,
+            'source' => $row ? 'platform_settings' : 'config_default',
+            'updated_at' => $row?->updated_at,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function updateFlatDeliveryFee(User $admin, mixed $rawFee, mixed $reason, ?Request $request = null): array
+    {
+        $errors = [];
+        $feeStr = is_scalar($rawFee) ? trim((string) $rawFee) : '';
+        if ($feeStr === '' || preg_match('/^\d+(?:\.\d{1,2})?$/', $feeStr) !== 1) {
+            $errors['flat_delivery_fee'] = ['Flat delivery fee must be a non-negative amount with up to 2 decimal places.'];
+        } else {
+            $cents = Money::toCents($feeStr);
+            if ($cents < 0 || $cents > 50000) {
+                $errors['flat_delivery_fee'] = ['Flat delivery fee must be between 0.00 and 500.00 PHP.'];
+            }
+        }
+
+        $cleanReason = is_scalar($reason) ? trim((string) $reason) : '';
+        if (mb_strlen($cleanReason) < 5 || mb_strlen($cleanReason) > 255) {
+            $errors['reason'] = ['A reason between 5 and 255 characters is required.'];
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        $newFee = Money::fromCents(Money::toCents($feeStr));
+        $oldFee = $this->getFlatDeliveryFee();
+
+        DB::transaction(function () use ($admin, $oldFee, $newFee, $cleanReason, $request): void {
+            DB::table('platform_settings')->updateOrInsert(
+                ['setting_key' => 'orders.flat_delivery_fee'],
+                [
+                    'setting_value' => $newFee,
+                    'value_type' => 'decimal',
+                    'setting_group' => 'fees',
+                    'description' => 'Flat delivery fee per delivery sub-order (PHP).',
+                    'updated_by' => $admin->user_id,
+                    'updated_at' => now(),
+                ],
+            );
+
+            $this->auditLogService->record(
+                actorUserId: (int) $admin->user_id,
+                action: 'platform_fees.updated',
+                entityType: 'platform_settings',
+                entityId: 'orders.flat_delivery_fee',
+                oldValues: ['flat_delivery_fee' => $oldFee],
+                newValues: ['flat_delivery_fee' => $newFee],
+                reason: $cleanReason,
+                request: $request,
+            );
+        });
+
+        return $this->getFeesConfig();
     }
 }

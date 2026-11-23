@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class AdminManagementService
 {
@@ -157,6 +158,12 @@ class AdminManagementService
             ->where('delivery_status', 'delivered')
             ->where('cod_remittance_status', 'submitted')
             ->count();
+        $pendingChangeRequests = (int) DB::table('profile_change_requests')
+            ->where('status', 'pending')
+            ->count();
+        $pendingLifecycleRequests = (int) DB::table('account_lifecycle_requests')
+            ->where('status', 'pending')
+            ->count();
 
         return [
             'users' => [
@@ -191,6 +198,8 @@ class AdminManagementService
                 'branch_permits' => $pendingPermits,
                 'failed_deliveries' => (int) ($orderStats->failed ?? 0),
                 'cod_submitted' => $codSubmitted,
+                'change_requests' => $pendingChangeRequests,
+                'lifecycle_requests' => $pendingLifecycleRequests,
             ],
         ];
     }
@@ -266,6 +275,18 @@ class AdminManagementService
                 'account_status' => $data['account_status'] ?? 'active',
             ]);
 
+            if ($created->user_role === 'admin') {
+                DB::table('user_settings')->updateOrInsert(
+                    ['user_id' => $created->user_id],
+                    [
+                        'security_preferences' => json_encode(['must_change_password' => true]),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ],
+                );
+                Cache::forever("auth:must_change_password:{$created->user_id}", true);
+            }
+
             $this->auditLogService->record(
                 actorUserId: (int) $admin->user_id,
                 action: 'admin_user_created',
@@ -275,6 +296,7 @@ class AdminManagementService
                     'email' => $created->email,
                     'user_role' => $created->user_role,
                     'account_status' => $created->account_status,
+                    'must_change_password' => $created->user_role === 'admin',
                 ],
                 request: $request,
             );
@@ -327,7 +349,26 @@ class AdminManagementService
         }
 
         if ($updates !== []) {
-            DB::transaction(function () use ($user, $updates, $oldValues, $data, $admin, $request): void {
+            $demotingOrDeactivatingAdmin = $user->user_role === 'admin'
+                && $user->account_status === 'active'
+                && (
+                    (array_key_exists('account_status', $updates) && $updates['account_status'] !== 'active')
+                    || (array_key_exists('user_role', $updates) && $updates['user_role'] !== 'admin')
+                );
+
+            DB::transaction(function () use ($user, $updates, $oldValues, $data, $admin, $request, $demotingOrDeactivatingAdmin): void {
+                if ($demotingOrDeactivatingAdmin) {
+                    $activeAdminCount = User::query()
+                        ->where('user_role', 'admin')
+                        ->where('account_status', 'active')
+                        ->lockForUpdate()
+                        ->count();
+
+                    if ($activeAdminCount <= 1) {
+                        throw new ConflictHttpException('Cannot suspend or demote the last active administrator.');
+                    }
+                }
+
                 $user->forceFill($updates)->save();
 
                 $this->auditLogService->record(
@@ -399,6 +440,72 @@ class AdminManagementService
         return [
             'user_id' => $userId,
             'revoked_after' => $revokedAt,
+        ];
+    }
+
+    /**
+     * List current admin session metadata.
+     *
+     * @return array<string, mixed>
+     */
+    public function getAdminSessions(User $admin, Request $request): array
+    {
+        $issuedAt = $request->hasSession() ? (int) $request->session()->get('auth_issued_at', 0) : 0;
+        $revokedAfter = Cache::get("auth:revoked_after:{$admin->user_id}");
+        $ua = trim((string) ($request->userAgent() ?: 'Admin Web Session'));
+
+        return [
+            'sessions' => [
+                [
+                    'id' => 'current',
+                    'device' => mb_substr($ua, 0, 120),
+                    'location' => (string) ($request->ip() ?? 'Current IP'),
+                    'last_seen' => $issuedAt > 0 ? date(DATE_ATOM, $issuedAt) : now()->toIso8601String(),
+                    'current' => true,
+                    'revoked' => false,
+                ],
+            ],
+            'revoked_after' => $revokedAfter ? (int) $revokedAfter : null,
+        ];
+    }
+
+    /**
+     * Revoke all other sessions for the authenticated admin while keeping the current session alive.
+     * Requires password re-entry.
+     *
+     * @return array<string, mixed>
+     */
+    public function revokeOtherAdminSessions(User $admin, string $password, ?string $reason, Request $request): array
+    {
+        if (! Hash::check($password, $admin->password_hash)) {
+            throw ValidationException::withMessages([
+                'password' => ['The provided password is incorrect.'],
+            ]);
+        }
+
+        $revokedAt = time();
+        Cache::forever("auth:revoked_after:{$admin->user_id}", $revokedAt);
+
+        if ($request->hasSession()) {
+            $request->session()->put('auth_issued_at', $revokedAt + 1);
+            $request->session()->regenerate();
+        }
+
+        $cleanReason = $reason !== null && trim($reason) !== '' ? mb_substr(trim($reason), 0, 255) : 'Admin revoked other active sessions.';
+
+        $this->auditLogService->record(
+            actorUserId: (int) $admin->user_id,
+            action: 'admin_other_sessions_revoked',
+            entityType: 'users',
+            entityId: (string) $admin->user_id,
+            newValues: ['revoked_after' => $revokedAt],
+            reason: $cleanReason,
+            request: $request,
+        );
+
+        return [
+            'revoked_after' => $revokedAt,
+            'current_session_preserved' => true,
         ];
     }
 
