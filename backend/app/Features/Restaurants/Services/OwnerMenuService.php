@@ -396,7 +396,125 @@ class OwnerMenuService
             return (int) $a->menu_item_id <=> (int) $b->menu_item_id;
         });
 
-        return array_values(array_map(fn (object $row): array => $this->formatItem($row), $items));
+        $itemIds = array_map(static fn (object $row): int => (int) $row->menu_item_id, $items);
+        $addOnsByItem = $this->loadAddOnGroupsByItemIds($itemIds);
+
+        return array_values(array_map(
+            fn (object $row): array => $this->formatItem($row, $addOnsByItem[(int) $row->menu_item_id] ?? []),
+            $items,
+        ));
+    }
+
+    /**
+     * Replace/sync add-on groups and options for a menu item.
+     *
+     * @param  array<int, array<string, mixed>>  $groups
+     * @return array<string, mixed>
+     */
+    public function syncAddOnGroups(
+        User $user,
+        int $itemId,
+        array $groups,
+        ?int $restaurantId,
+        Request $request,
+    ): array {
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuManage($user, $restaurantId);
+        $targetId = (int) $restaurant->restaurant_id;
+        $this->findOwnedMenuItem($itemId, $targetId);
+
+        $normalizedGroups = [];
+        foreach (array_values($groups) as $gIdx => $group) {
+            $groupName = trim((string) ($group['group_name'] ?? $group['name'] ?? ''));
+            if ($groupName === '' || mb_strlen($groupName) > 100) {
+                throw ValidationException::withMessages([
+                    "groups.{$gIdx}.group_name" => ['Add-on group name is required (max 100 characters).'],
+                ]);
+            }
+
+            $isRequired = (bool) ($group['is_required'] ?? $group['required'] ?? false);
+            $minSel = (int) ($group['minimum_selections'] ?? $group['min'] ?? ($isRequired ? 1 : 0));
+            $maxSel = (int) ($group['maximum_selections'] ?? $group['max'] ?? 1);
+            if ($minSel < 0 || $maxSel < 1 || $minSel > $maxSel) {
+                throw ValidationException::withMessages([
+                    "groups.{$gIdx}.minimum_selections" => ['Selection bounds must satisfy 0 <= minimum_selections <= maximum_selections (max >= 1).'],
+                ]);
+            }
+
+            $rawOptions = is_array($group['options'] ?? null) ? $group['options'] : [];
+            $normalizedOptions = [];
+            foreach (array_values($rawOptions) as $oIdx => $opt) {
+                $optName = trim((string) ($opt['option_name'] ?? $opt['name'] ?? ''));
+                if ($optName === '' || mb_strlen($optName) > 100) {
+                    throw ValidationException::withMessages([
+                        "groups.{$gIdx}.options.{$oIdx}.option_name" => ['Option name is required (max 100 characters).'],
+                    ]);
+                }
+
+                $price = (float) ($opt['additional_price'] ?? $opt['price'] ?? 0);
+                if ($price < 0) {
+                    throw ValidationException::withMessages([
+                        "groups.{$gIdx}.options.{$oIdx}.additional_price" => ['Additional price must be 0 or greater.'],
+                    ]);
+                }
+
+                $normalizedOptions[] = [
+                    'option_name' => $optName,
+                    'additional_price' => number_format($price, 2, '.', ''),
+                    'is_available' => (bool) ($opt['is_available'] ?? $opt['available'] ?? true) ? 1 : 0,
+                    'sort_order' => (int) ($opt['sort_order'] ?? $oIdx),
+                ];
+            }
+
+            $normalizedGroups[] = [
+                'group_name' => $groupName,
+                'is_required' => $isRequired ? 1 : 0,
+                'minimum_selections' => $minSel,
+                'maximum_selections' => $maxSel,
+                'sort_order' => (int) ($group['sort_order'] ?? $gIdx),
+                'options' => $normalizedOptions,
+            ];
+        }
+
+        DB::transaction(function () use ($itemId, $normalizedGroups, $user, $request): void {
+            DB::table('add_on_groups')->where('menu_item_id', $itemId)->delete();
+
+            $now = now();
+            foreach ($normalizedGroups as $group) {
+                $groupId = (int) DB::table('add_on_groups')->insertGetId([
+                    'menu_item_id' => $itemId,
+                    'group_name' => $group['group_name'],
+                    'is_required' => $group['is_required'],
+                    'minimum_selections' => $group['minimum_selections'],
+                    'maximum_selections' => $group['maximum_selections'],
+                    'sort_order' => $group['sort_order'],
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+                foreach ($group['options'] as $option) {
+                    DB::table('add_on_options')->insert([
+                        'add_on_group_id' => $groupId,
+                        'option_name' => $option['option_name'],
+                        'additional_price' => $option['additional_price'],
+                        'is_available' => $option['is_available'],
+                        'sort_order' => $option['sort_order'],
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                }
+            }
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: 'owner_menu_item_addons_updated',
+                entityType: 'menu_items',
+                entityId: $itemId,
+                newValues: ['groups_count' => count($normalizedGroups)],
+                request: $request,
+            );
+        });
+
+        return $this->getFormattedItem($itemId, $targetId);
     }
 
     /**
@@ -781,7 +899,63 @@ class OwnerMenuService
 
         abort_unless($row !== null, 404, 'Menu item not found.');
 
-        return $this->formatItem($row);
+        $addOns = $this->loadAddOnGroupsByItemIds([(int) $row->menu_item_id]);
+
+        return $this->formatItem($row, $addOns[(int) $row->menu_item_id] ?? []);
+    }
+
+    /**
+     * @param  array<int, int>  $itemIds
+     * @return array<int, array<int, array<string, mixed>>>
+     */
+    private function loadAddOnGroupsByItemIds(array $itemIds): array
+    {
+        if ($itemIds === []) {
+            return [];
+        }
+
+        $groups = DB::table('add_on_groups')
+            ->whereIn('menu_item_id', $itemIds)
+            ->orderBy('sort_order')
+            ->orderBy('add_on_group_id')
+            ->get();
+
+        if ($groups->isEmpty()) {
+            return [];
+        }
+
+        $groupIds = $groups->pluck('add_on_group_id')->map(static fn ($id): int => (int) $id)->all();
+        $optionsByGroup = DB::table('add_on_options')
+            ->whereIn('add_on_group_id', $groupIds)
+            ->orderBy('sort_order')
+            ->orderBy('add_on_option_id')
+            ->get()
+            ->groupBy('add_on_group_id');
+
+        $result = [];
+        foreach ($groups as $g) {
+            $gid = (int) $g->add_on_group_id;
+            $itemId = (int) $g->menu_item_id;
+            $opts = ($optionsByGroup->get($gid) ?? collect())->map(static fn (object $o): array => [
+                'id' => (int) $o->add_on_option_id,
+                'option_name' => $o->option_name,
+                'additional_price' => (float) $o->additional_price,
+                'is_available' => (bool) $o->is_available,
+                'sort_order' => (int) $o->sort_order,
+            ])->values()->all();
+
+            $result[$itemId][] = [
+                'id' => $gid,
+                'group_name' => $g->group_name,
+                'is_required' => (bool) $g->is_required,
+                'minimum_selections' => (int) $g->minimum_selections,
+                'maximum_selections' => (int) $g->maximum_selections,
+                'sort_order' => (int) $g->sort_order,
+                'options' => $opts,
+            ];
+        }
+
+        return $result;
     }
 
     /**
@@ -810,9 +984,10 @@ class OwnerMenuService
     }
 
     /**
+     * @param  array<int, array<string, mixed>>  $addOnGroups
      * @return array<string, mixed>
      */
-    private function formatItem(object $row): array
+    private function formatItem(object $row, array $addOnGroups = []): array
     {
         $isPublished = (bool) $row->is_published;
 
@@ -828,6 +1003,7 @@ class OwnerMenuService
             'availability' => $row->availability_status,
             'approval_status' => $row->approval_status,
             'sort_order' => (int) $row->sort_order,
+            'add_on_groups' => $addOnGroups,
             'is_published' => $isPublished,
             'publish_state' => $this->resolvePublishState((string) $row->draft_state, $isPublished),
             'published' => $isPublished ? [

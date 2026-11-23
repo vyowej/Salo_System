@@ -323,7 +323,136 @@ class OwnerProfileService
         return [
             'restaurant_id' => (int) $restaurant->restaurant_id,
             'operating_hours' => $rows,
+            'closures' => $this->listClosureRows((int) $restaurant->restaurant_id),
         ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listClosures(User $user, ?int $restaurantId = null): array
+    {
+        $restaurant = $this->requireActiveOwnedRestaurant($user, $restaurantId);
+
+        return $this->listClosureRows((int) $restaurant->restaurant_id);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function storeClosure(
+        User $user,
+        string $closureDate,
+        ?string $reason,
+        ?int $restaurantId,
+        Request $request,
+    ): array {
+        $restaurant = $this->requireActiveOwnedRestaurant($user, $restaurantId);
+        $targetId = (int) $restaurant->restaurant_id;
+
+        $trimmedDate = trim($closureDate);
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $trimmedDate)) {
+            throw ValidationException::withMessages([
+                'closure_date' => ['Closure date must be in YYYY-MM-DD format.'],
+            ]);
+        }
+
+        $trimmedReason = $reason !== null ? trim($reason) : null;
+        if ($trimmedReason === '') {
+            $trimmedReason = null;
+        }
+        if ($trimmedReason !== null && mb_strlen($trimmedReason) > 255) {
+            throw ValidationException::withMessages([
+                'reason' => ['Reason must not exceed 255 characters.'],
+            ]);
+        }
+
+        $exists = DB::table('restaurant_closures')
+            ->where('restaurant_id', $targetId)
+            ->where('closure_date', $trimmedDate)
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'closure_date' => ['A closure is already scheduled for this date.'],
+            ]);
+        }
+
+        $closureId = DB::transaction(function () use ($targetId, $trimmedDate, $trimmedReason, $user, $request): int {
+            $id = (int) DB::table('restaurant_closures')->insertGetId([
+                'restaurant_id' => $targetId,
+                'closure_date' => $trimmedDate,
+                'reason' => $trimmedReason,
+                'created_at' => now(),
+            ]);
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: 'owner_closure_created',
+                entityType: 'restaurant_closures',
+                entityId: $id,
+                newValues: ['restaurant_id' => $targetId, 'closure_date' => $trimmedDate, 'reason' => $trimmedReason],
+                request: $request,
+            );
+
+            return $id;
+        });
+
+        return [
+            'id' => $closureId,
+            'restaurant_id' => $targetId,
+            'closure_date' => $trimmedDate,
+            'reason' => $trimmedReason,
+        ];
+    }
+
+    public function deleteClosure(User $user, int $closureId, ?int $restaurantId, Request $request): void
+    {
+        $restaurant = $this->requireActiveOwnedRestaurant($user, $restaurantId);
+        $targetId = (int) $restaurant->restaurant_id;
+
+        $existing = DB::table('restaurant_closures')
+            ->where('closure_id', $closureId)
+            ->where('restaurant_id', $targetId)
+            ->first();
+
+        abort_unless($existing !== null, 404, 'Temporary closure not found.');
+
+        DB::transaction(function () use ($closureId, $targetId, $existing, $user, $request): void {
+            DB::table('restaurant_closures')
+                ->where('closure_id', $closureId)
+                ->where('restaurant_id', $targetId)
+                ->delete();
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: 'owner_closure_deleted',
+                entityType: 'restaurant_closures',
+                entityId: $closureId,
+                oldValues: ['closure_date' => $existing->closure_date, 'reason' => $existing->reason],
+                request: $request,
+            );
+        });
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function listClosureRows(int $restaurantId): array
+    {
+        return DB::table('restaurant_closures')
+            ->where('restaurant_id', $restaurantId)
+            ->orderBy('closure_date')
+            ->get(['closure_id', 'restaurant_id', 'closure_date', 'reason', 'created_at'])
+            ->map(static fn (object $row): array => [
+                'id' => (int) $row->closure_id,
+                'restaurant_id' => (int) $row->restaurant_id,
+                'closure_date' => (string) $row->closure_date,
+                'reason' => $row->reason,
+                'created_at' => $row->created_at,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

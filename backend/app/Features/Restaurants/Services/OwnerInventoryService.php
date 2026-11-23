@@ -88,6 +88,64 @@ class OwnerInventoryService
     }
 
     /**
+     * Update a menu item's stock/availability status from the Inventory workspace.
+     *
+     * @return array<string, mixed>
+     */
+    public function updateItemAvailability(
+        User $user,
+        int $itemId,
+        string $availabilityStatus,
+        ?int $restaurantId = null,
+        ?Request $request = null,
+    ): array {
+        $restaurant = $this->requireActiveAuthorizedRestaurant($user, $restaurantId);
+        $targetId = (int) $restaurant->restaurant_id;
+
+        $normalized = trim($availabilityStatus);
+        if (! in_array($normalized, ['available', 'temporarily_unavailable', 'sold_out'], true)) {
+            throw ValidationException::withMessages([
+                'availability_status' => ['Availability status must be available, temporarily_unavailable, or sold_out.'],
+            ]);
+        }
+
+        $item = DB::table('menu_items')
+            ->where('menu_item_id', $itemId)
+            ->where('restaurant_id', $targetId)
+            ->first();
+
+        abort_unless($item !== null, 404, 'Menu item not found.');
+
+        $previous = (string) $item->availability_status;
+
+        DB::transaction(function () use ($itemId, $targetId, $normalized, $previous, $user, $request): void {
+            DB::table('menu_items')
+                ->where('menu_item_id', $itemId)
+                ->where('restaurant_id', $targetId)
+                ->update([
+                    'availability_status' => $normalized,
+                    'updated_at' => now(),
+                ]);
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: 'inventory_item_availability_updated',
+                entityType: 'menu_items',
+                entityId: $itemId,
+                oldValues: ['availability_status' => $previous],
+                newValues: ['availability_status' => $normalized],
+                request: $request,
+            );
+        });
+
+        return [
+            'menu_item_id' => $itemId,
+            'restaurant_id' => $targetId,
+            'availability_status' => $normalized,
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function formatConfig(int $restaurantId, string $deductionMode): array

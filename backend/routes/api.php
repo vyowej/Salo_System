@@ -213,6 +213,9 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
 
         Route::get('/operating-hours', [OwnerProfileController::class, 'operatingHours']);
         Route::put('/operating-hours', [OwnerProfileController::class, 'updateOperatingHours']);
+        Route::get('/closures', [OwnerProfileController::class, 'closures']);
+        Route::post('/closures', [OwnerProfileController::class, 'storeClosure']);
+        Route::delete('/closures/{id}', [OwnerProfileController::class, 'deleteClosure'])->whereNumber('id');
 
         Route::get('/staff', [StaffInvitationController::class, 'index']);
         Route::post('/staff/invitations', [StaffInvitationController::class, 'storeInvitation'])->middleware('throttle:20,1');
@@ -239,6 +242,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::post('/menu/items/{itemId}', [OwnerMenuController::class, 'updateItem'])->whereNumber('itemId');
         Route::patch('/menu/items/{itemId}', [OwnerMenuController::class, 'updateItem'])->whereNumber('itemId');
         Route::patch('/menu/items/{itemId}/availability', [OwnerMenuController::class, 'updateItemAvailability'])->whereNumber('itemId');
+        Route::put('/menu/items/{itemId}/add-ons', [OwnerMenuController::class, 'syncItemAddOns'])->whereNumber('itemId');
         Route::delete('/menu/items/{itemId}', [OwnerMenuController::class, 'destroyItem'])->whereNumber('itemId');
         Route::post('/menu/items/{itemId}/restore', [OwnerMenuController::class, 'restoreItem'])->whereNumber('itemId');
 
@@ -254,6 +258,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
 
         Route::get('/inventory/config', [OwnerInventoryController::class, 'showConfig']);
         Route::patch('/inventory/config', [OwnerInventoryController::class, 'updateConfig']);
+        Route::patch('/inventory/items/{itemId}', [OwnerInventoryController::class, 'updateItem'])->whereNumber('itemId');
 
         Route::get('/orders', [RestaurantOrderController::class, 'index']);
         Route::get('/orders/{id}', [RestaurantOrderController::class, 'show'])->whereNumber('id');

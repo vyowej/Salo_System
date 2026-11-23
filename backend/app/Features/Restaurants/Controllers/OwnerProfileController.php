@@ -97,6 +97,50 @@ class OwnerProfileController extends Controller
         );
     }
 
+    public function closures(Request $request): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+
+        return ApiResponse::success(
+            data: ['closures' => $this->ownerProfileService->listClosures($request->user(), $restaurantId)],
+            message: 'Temporary closures retrieved.',
+        );
+    }
+
+    public function storeClosure(Request $request): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+        $validated = $request->validate([
+            'closure_date' => ['required', 'date_format:Y-m-d'],
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        return ApiResponse::success(
+            data: [
+                'closure' => $this->ownerProfileService->storeClosure(
+                    user: $request->user(),
+                    closureDate: (string) $validated['closure_date'],
+                    reason: $validated['reason'] ?? null,
+                    restaurantId: $restaurantId,
+                    request: $request,
+                ),
+            ],
+            message: 'Temporary closure created.',
+            status: 201,
+        );
+    }
+
+    public function deleteClosure(Request $request, int $id): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+        $this->ownerProfileService->deleteClosure($request->user(), $id, $restaurantId, $request);
+
+        return ApiResponse::success(
+            data: null,
+            message: 'Temporary closure removed.',
+        );
+    }
+
     public function settings(Request $request): JsonResponse
     {
         $restaurantId = $this->resolveRestaurantId($request);

@@ -1138,6 +1138,48 @@ export const ownerService = {
     }
     return res.blob();
   },
+
+  async syncMenuItemAddOns(restaurantId, itemId, groups = []) {
+    const response = await apiClient.put(
+      `/restaurant/menu/items/${encodeURIComponent(itemId)}/add-ons`,
+      { groups },
+      restaurantId ? { headers: { 'X-Restaurant-Id': String(restaurantId) } } : undefined,
+    );
+    return response?.data?.item ?? null;
+  },
+
+  async getClosures(restaurantId) {
+    const response = await apiClient.get(
+      '/restaurant/closures',
+      restaurantId ? { headers: { 'X-Restaurant-Id': String(restaurantId) } } : undefined,
+    );
+    return response?.data?.closures ?? [];
+  },
+
+  async createClosure(restaurantId, { closure_date, reason = null }) {
+    const response = await apiClient.post(
+      '/restaurant/closures',
+      { closure_date, reason },
+      restaurantId ? { headers: { 'X-Restaurant-Id': String(restaurantId) } } : undefined,
+    );
+    return response?.data?.closure ?? null;
+  },
+
+  async deleteClosure(restaurantId, closureId) {
+    await apiClient.delete(
+      `/restaurant/closures/${encodeURIComponent(closureId)}`,
+      restaurantId ? { headers: { 'X-Restaurant-Id': String(restaurantId) } } : undefined,
+    );
+  },
+
+  async updateInventoryItemAvailability(restaurantId, itemId, availabilityStatus) {
+    const response = await apiClient.patch(
+      `/restaurant/inventory/items/${encodeURIComponent(itemId)}`,
+      { availability_status: availabilityStatus },
+      restaurantId ? { headers: { 'X-Restaurant-Id': String(restaurantId) } } : undefined,
+    );
+    return response?.data?.item ?? null;
+  },
 };
 
 export default ownerService;

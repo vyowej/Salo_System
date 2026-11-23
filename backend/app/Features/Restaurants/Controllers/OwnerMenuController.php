@@ -168,6 +168,20 @@ class OwnerMenuController extends Controller
         );
     }
 
+    public function syncItemAddOns(Request $request, int $itemId): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+        $groups = $request->input('groups', []);
+        if (! is_array($groups)) {
+            $groups = [];
+        }
+
+        return ApiResponse::success(
+            data: ['item' => $this->ownerMenuService->syncAddOnGroups($request->user(), $itemId, $groups, $restaurantId, $request)],
+            message: 'Menu item add-ons updated.',
+        );
+    }
+
     private function resolveRestaurantId(Request $request): ?int
     {
         $val = $request->input('restaurant_id') ?? $request->query('restaurant_id');
