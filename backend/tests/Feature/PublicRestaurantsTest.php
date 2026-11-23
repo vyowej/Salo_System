@@ -378,6 +378,8 @@ class PublicRestaurantsTest extends TestCase
 
     public function test_no_private_fields_and_rating_omitted_without_reviews_then_shown_with_reviews(): void
     {
+        DB::table('restaurants')->where('restaurant_status', 'active')->update(['restaurant_status' => 'inactive']);
+
         [, , , $addressId] = $this->createLocationFixture();
         $restaurantId = $this->createRestaurant($addressId, 'Private Check Kitchen', 'active');
 

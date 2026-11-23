@@ -444,7 +444,7 @@ class CheckoutService
 
         $appliedPromo = null;
         if ($promoCode !== '') {
-            $appliedPromo = $this->applyPromoToPreparedGroups($promoCode, $preparedGroups);
+            $appliedPromo = $this->applyPromoToPreparedGroups($promoCode, $preparedGroups, (int) $user->user_id);
         }
 
         $totalMismatch = false;
@@ -504,6 +504,21 @@ class CheckoutService
                     throw ValidationException::withMessages([
                         'promo_code' => ['This promo code is no longer available or has reached its usage limit.'],
                     ]);
+                }
+
+                if ($lockedPromo->per_customer_limit !== null) {
+                    $customerUses = (int) DB::table('orders')
+                        ->where('promo_id', $lockedPromo->promo_id)
+                        ->where('customer_id', $customer->user_id)
+                        ->whereNotIn('order_status', ['cancelled', 'rejected'])
+                        ->distinct()
+                        ->count('checkout_id');
+
+                    if ($customerUses >= (int) $lockedPromo->per_customer_limit) {
+                        throw ValidationException::withMessages([
+                            'promo_code' => ['You have already reached the redemption limit for this promo code.'],
+                        ]);
+                    }
                 }
 
                 DB::table('promos')
@@ -799,7 +814,7 @@ class CheckoutService
      * @param  array<int, array<string, mixed>>  $preparedGroups
      * @return array<string, mixed>
      */
-    private function applyPromoToPreparedGroups(string $promoCode, array &$preparedGroups): array
+    private function applyPromoToPreparedGroups(string $promoCode, array &$preparedGroups, int $customerId): array
     {
         $promo = DB::table('promos')
             ->where('promo_code', $promoCode)
@@ -817,6 +832,19 @@ class CheckoutService
 
         if ($promo->usage_limit !== null && (int) $promo->used_count >= (int) $promo->usage_limit) {
             throw ValidationException::withMessages(['promo_code' => ['This promo code has reached its usage limit.']]);
+        }
+
+        if ($promo->per_customer_limit !== null) {
+            $customerUses = (int) DB::table('orders')
+                ->where('promo_id', $promo->promo_id)
+                ->where('customer_id', $customerId)
+                ->whereNotIn('order_status', ['cancelled', 'rejected'])
+                ->distinct()
+                ->count('checkout_id');
+
+            if ($customerUses >= (int) $promo->per_customer_limit) {
+                throw ValidationException::withMessages(['promo_code' => ['You have already reached the redemption limit for this promo code.']]);
+            }
         }
 
         $eligibleIndices = [];

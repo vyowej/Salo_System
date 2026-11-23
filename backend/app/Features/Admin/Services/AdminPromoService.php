@@ -143,6 +143,7 @@ class AdminPromoService
                 'starts_at' => date('Y-m-d H:i:s', strtotime($startsAt)),
                 'ends_at' => date('Y-m-d H:i:s', strtotime($endsAt)),
                 'usage_limit' => isset($data['usage_limit']) && $data['usage_limit'] !== '' ? (int) $data['usage_limit'] : null,
+                'per_customer_limit' => isset($data['per_customer_limit']) && $data['per_customer_limit'] !== '' ? (int) $data['per_customer_limit'] : null,
                 'is_active' => array_key_exists('is_active', $data) ? ((bool) $data['is_active'] ? 1 : 0) : 1,
                 'created_by' => (int) $admin->user_id,
                 'created_at' => $now,
@@ -224,7 +225,7 @@ class AdminPromoService
      *
      * @return array<string, mixed>
      */
-    public function validateCodeForCustomer(string $promoCode, float $subtotal, ?int $restaurantId = null): array
+    public function validateCodeForCustomer(string $promoCode, float $subtotal, ?int $restaurantId = null, ?int $customerId = null): array
     {
         $code = strtoupper(trim($promoCode));
         if ($code === '') {
@@ -247,6 +248,19 @@ class AdminPromoService
 
         if ($promo->usage_limit !== null && (int) $promo->used_count >= (int) $promo->usage_limit) {
             throw ValidationException::withMessages(['promo_code' => ['This promo code has reached its usage limit.']]);
+        }
+
+        if ($customerId !== null && $promo->per_customer_limit !== null) {
+            $customerUses = (int) DB::table('orders')
+                ->where('promo_id', $promo->promo_id)
+                ->where('customer_id', $customerId)
+                ->whereNotIn('order_status', ['cancelled', 'rejected'])
+                ->distinct()
+                ->count('checkout_id');
+
+            if ($customerUses >= (int) $promo->per_customer_limit) {
+                throw ValidationException::withMessages(['promo_code' => ['You have already reached the redemption limit for this promo code.']]);
+            }
         }
 
         if ($promo->restaurant_id !== null && $restaurantId !== null && (int) $promo->restaurant_id !== $restaurantId) {
@@ -301,6 +315,7 @@ class AdminPromoService
             'starts_at' => OrderTimestampFormatter::toManilaIso($row->starts_at),
             'ends_at' => OrderTimestampFormatter::toManilaIso($row->ends_at),
             'usage_limit' => $row->usage_limit !== null ? (int) $row->usage_limit : null,
+            'per_customer_limit' => $row->per_customer_limit !== null ? (int) $row->per_customer_limit : null,
             'used_count' => (int) $row->used_count,
             'is_active' => (bool) $row->is_active,
         ];

@@ -219,6 +219,7 @@ class CustomerOrderService
             ->all();
 
         $payment = OrderPaymentSnapshotLoader::loadByOrderIds([$orderId])->get($orderId);
+        $refund = OrderPaymentSnapshotLoader::loadRefundsByOrderIds([$orderId])->get($orderId);
 
         return [
             'order_id' => (int) $row->order_id,
@@ -246,9 +247,21 @@ class CustomerOrderService
                 'payment_id' => $payment ? (int) $payment->payment_id : null,
                 'payment_reference' => $payment?->payment_reference,
                 'method' => $payment?->payment_method === 'cash' ? 'cod' : ($payment?->payment_method ?? 'cod'),
+                'provider_name' => $payment?->provider_name,
+                'payment_channel' => $payment?->payment_channel,
                 'status' => $payment?->payment_status ?? 'pending',
                 'amount' => $payment ? (float) $payment->amount : (float) $row->total_amount,
+                'checkout_url' => $payment?->checkout_url,
+                'expires_at' => OrderTimestampFormatter::toManilaIso($payment?->expires_at),
                 'paid_at' => OrderTimestampFormatter::toManilaIso($payment?->paid_at),
+                'refund' => $refund ? [
+                    'payment_id' => (int) $refund->payment_id,
+                    'payment_reference' => $refund->payment_reference,
+                    'status' => $refund->refund_status ?? $refund->payment_status,
+                    'amount' => (float) $refund->amount,
+                    'paid_at' => OrderTimestampFormatter::toManilaIso($refund->paid_at),
+                    'created_at' => OrderTimestampFormatter::toManilaIso($refund->created_at),
+                ] : null,
             ],
             'items' => $items,
             'accepted_at' => OrderTimestampFormatter::toManilaIso($row->accepted_at),

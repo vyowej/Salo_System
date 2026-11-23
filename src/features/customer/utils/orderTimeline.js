@@ -28,12 +28,45 @@ export function formatOrderStatusText(status, fulfillment = 'delivery') {
   return status || 'Pending';
 }
 
+const PAYMENT_STATUS_LABELS = {
+  paid: 'Paid',
+  pending: 'Pending',
+  requires_customer_action: 'Awaiting Payment',
+  processing: 'Processing',
+  authorized: 'Authorized',
+  partially_captured: 'Partially Captured',
+  declined: 'Declined',
+  failed: 'Failed',
+  expired: 'Expired',
+  voided: 'Voided',
+  cancelled: 'Cancelled',
+  partially_refunded: 'Partially Refunded',
+  refunded: 'Refunded',
+  disputed: 'Disputed',
+  reversed: 'Reversed',
+};
+
+const REFUND_STATUS_LABELS = {
+  requested: 'Refund Requested',
+  approved: 'Refund Approved',
+  submitted: 'Refund Submitted',
+  processing: 'Refund Processing',
+  successful: 'Refunded',
+  failed: 'Refund Failed',
+  manual: 'Manual Refund',
+};
+
 export function formatPaymentStatusLabel(paymentStatus) {
   const key = String(paymentStatus || 'pending').trim().toLowerCase();
-  if (key === 'paid') return 'Paid';
-  if (key === 'cancelled') return 'Cancelled';
-  if (key === 'pending') return 'Pending';
-  return key ? key.charAt(0).toUpperCase() + key.slice(1) : 'Pending';
+  if (PAYMENT_STATUS_LABELS[key]) return PAYMENT_STATUS_LABELS[key];
+  return key ? key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ') : 'Pending';
+}
+
+export function formatRefundStatusLabel(refundStatus) {
+  const key = String(refundStatus || '').trim().toLowerCase();
+  if (!key) return '';
+  if (REFUND_STATUS_LABELS[key]) return REFUND_STATUS_LABELS[key];
+  return key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
 }
 
 export function canCustomerCancelOrder(order) {

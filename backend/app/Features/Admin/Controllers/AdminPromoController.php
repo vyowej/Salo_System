@@ -40,6 +40,7 @@ class AdminPromoController extends Controller
             'starts_at' => ['required', 'date'],
             'ends_at' => ['required', 'date'],
             'usage_limit' => ['nullable', 'integer', 'min:1'],
+            'per_customer_limit' => ['nullable', 'integer', 'min:1'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
@@ -78,6 +79,7 @@ class AdminPromoController extends Controller
                     promoCode: (string) $validated['promo_code'],
                     subtotal: (float) $validated['subtotal'],
                     restaurantId: isset($validated['restaurant_id']) ? (int) $validated['restaurant_id'] : null,
+                    customerId: (int) $request->user()->user_id,
                 ),
             ],
             message: 'Promo code is valid.',

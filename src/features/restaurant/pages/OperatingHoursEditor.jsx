@@ -28,7 +28,7 @@ function createId() {
 const DAY_KEY_TO_DOW = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
 const DOW_TO_DAY_KEY = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' };
 
-function fromBackendHours(rows = [], profile = null) {
+function fromBackendHours(rows = [], profile = null, closures = []) {
   const weeklySchedule = {};
   OPERATING_DAYS.forEach(({ key }) => {
     weeklySchedule[key] = { closed: true, periods: [] };
@@ -49,12 +49,38 @@ function fromBackendHours(rows = [], profile = null) {
     });
   });
 
+  const temporaryClosures = (closures || []).map((c) => ({
+    id: String(c.id),
+    backendId: Number(c.id),
+    type: 'Temporary closure',
+    startDate: c.closure_date,
+    endDate: c.closure_date,
+    reason: c.reason || 'Temporary closure',
+  }));
+
   return normalizeOperatingHours({
     weeklySchedule,
     acceptingOrders: profile ? Boolean(profile.accepting_orders) : true,
     acceptingReservations: profile ? Boolean(profile.accepting_reservations) : true,
-    temporaryClosures: [],
+    temporaryClosures,
   });
+}
+
+function expandClosureDates(startDate, endDate) {
+  const dates = [];
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    return [];
+  }
+  const cursor = new Date(start);
+  let guard = 0;
+  while (cursor <= end && guard < 31) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    guard += 1;
+  }
+  return dates;
 }
 
 function toBackendHoursPayload(hours) {
@@ -97,11 +123,12 @@ export default function OperatingHoursEditor({ restaurantId }) {
     setLoading(true);
     setError('');
     try {
-      const [rows, profile] = await Promise.all([
+      const [rows, profile, closures] = await Promise.all([
         ownerService.getOperatingHours(restaurantId),
         ownerService.getProfile(restaurantId),
+        ownerService.getClosures(restaurantId).catch(() => []),
       ]);
-      const current = fromBackendHours(rows, profile);
+      const current = fromBackendHours(rows, profile, closures);
       setHours(current);
       setInitial(current);
       setSaved(false);
@@ -163,32 +190,81 @@ export default function OperatingHoursEditor({ restaurantId }) {
     setEditingClosureId(closure.id);
   }
 
-  function saveClosureDraft(event) {
+  async function saveClosureDraft(event) {
     event.preventDefault();
-    const nextClosures = editingClosureId
-      ? hours.temporaryClosures.map((closure) => (
-        closure.id === editingClosureId ? { ...closureDraft, id: editingClosureId } : closure
-      ))
-      : [...hours.temporaryClosures, { ...closureDraft, id: createId() }];
-    const candidate = { ...hours, temporaryClosures: nextClosures };
+    const candidate = { ...hours, temporaryClosures: [...hours.temporaryClosures, { ...closureDraft, id: editingClosureId || createId() }] };
     const validation = validateOperatingHours(candidate);
     if (validation) {
       setError(validation);
       return;
     }
-    updateHours(candidate);
-    setClosureDraft(null);
-    setEditingClosureId(null);
-  }
 
-  function removeClosure(closureId) {
-    updateHours({
-      ...hours,
-      temporaryClosures: hours.temporaryClosures.filter((closure) => closure.id !== closureId),
-    });
-    if (editingClosureId === closureId) {
+    const dates = expandClosureDates(closureDraft.startDate, closureDraft.endDate);
+    if (dates.length === 0) {
+      setError('Select a valid start and end date for the closure.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      if (editingClosureId) {
+        const prevClosure = hours.temporaryClosures.find((c) => c.id === editingClosureId);
+        if (prevClosure?.backendId) {
+          await ownerService.deleteClosure(restaurantId, prevClosure.backendId);
+        }
+      }
+
+      const reasonText = closureDraft.reason?.trim()
+        ? `${closureDraft.type}: ${closureDraft.reason.trim()}`.slice(0, 255)
+        : closureDraft.type;
+
+      for (const d of dates) {
+        await ownerService.createClosure(restaurantId, {
+          closure_date: d,
+          reason: reasonText,
+        });
+      }
+
+      const freshClosures = await ownerService.getClosures(restaurantId);
+      const nextList = freshClosures.map((c) => ({
+        id: String(c.id),
+        backendId: Number(c.id),
+        type: 'Temporary closure',
+        startDate: c.closure_date,
+        endDate: c.closure_date,
+        reason: c.reason || 'Temporary closure',
+      }));
+      updateHours({ ...hours, temporaryClosures: nextList });
       setClosureDraft(null);
       setEditingClosureId(null);
+    } catch (closureErr) {
+      setError(closureErr?.message || 'Unable to save temporary closure.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeClosure(closureId) {
+    const target = hours.temporaryClosures.find((c) => c.id === closureId);
+    setSaving(true);
+    setError('');
+    try {
+      if (target?.backendId) {
+        await ownerService.deleteClosure(restaurantId, target.backendId);
+      }
+      updateHours({
+        ...hours,
+        temporaryClosures: hours.temporaryClosures.filter((closure) => closure.id !== closureId),
+      });
+      if (editingClosureId === closureId) {
+        setClosureDraft(null);
+        setEditingClosureId(null);
+      }
+    } catch (closureErr) {
+      setError(closureErr?.message || 'Unable to remove temporary closure.');
+    } finally {
+      setSaving(false);
     }
   }
 

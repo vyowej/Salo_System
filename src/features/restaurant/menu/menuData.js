@@ -25,17 +25,19 @@ export function normalizeMenuItem(item = {}) {
     published: item.published || null,
     preparationInfo: item.preparationInfo || '',
     dietaryInfo: Array.isArray(item.dietaryInfo) ? item.dietaryInfo : [],
-    addOns: Array.isArray(item.addOns) ? item.addOns.map((group) => ({
+    addOns: (Array.isArray(item.addOns) ? item.addOns : (Array.isArray(item.add_on_groups) ? item.add_on_groups : [])).map((group) => ({
       ...group,
-      minSelection: Number(group.minSelection ?? (group.required ? 1 : 0)),
-      maxSelection: Number(group.maxSelection ?? (group.required ? 1 : Math.max(group.options?.length || 1, 1))),
+      name: group.name ?? group.group_name ?? '',
+      minSelection: Number(group.minSelection ?? group.minimum_selections ?? (group.required || group.is_required ? 1 : 0)),
+      maxSelection: Number(group.maxSelection ?? group.maximum_selections ?? (group.required || group.is_required ? 1 : Math.max(group.options?.length || 1, 1))),
       isAvailable: group.isAvailable !== false,
       options: Array.isArray(group.options) ? group.options.map((option) => ({
         ...option,
-        price: Number(option.price || 0),
-        isAvailable: option.isAvailable !== false,
+        name: option.name ?? option.option_name ?? '',
+        price: Number(option.price ?? option.additional_price ?? 0),
+        isAvailable: option.isAvailable !== false && option.is_available !== false,
       })) : [],
-    })) : [],
+    })),
   };
 }
 

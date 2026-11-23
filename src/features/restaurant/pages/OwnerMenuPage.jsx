@@ -251,11 +251,35 @@ export default function OwnerMenuPage() {
         availability_status: nextItem.availability,
       };
 
+      let savedItem = null;
       if (editingItem) {
-        await ownerService.updateMenuItemApi(selectedRestaurantId, editingItem.id, apiPayload, photoFile, removePhoto);
+        savedItem = await ownerService.updateMenuItemApi(selectedRestaurantId, editingItem.id, apiPayload, photoFile, removePhoto);
       } else {
-        await ownerService.createMenuItem(selectedRestaurantId, apiPayload, photoFile);
+        savedItem = await ownerService.createMenuItem(selectedRestaurantId, apiPayload, photoFile);
       }
+
+      const targetItemId = editingItem?.id ?? savedItem?.id;
+      if (targetItemId && access.canAccess(['menu.addons.manage']) && (nextItem.addOns.length > 0 || (editingItem?.addOns?.length || 0) > 0)) {
+        const addOnGroupsPayload = nextItem.addOns.map((group, gIdx) => {
+          const minSel = Math.max(0, Number(group.minSelection ?? 0));
+          const maxSel = Math.max(1, minSel, Number(group.maxSelection ?? 1));
+          return {
+            group_name: String(group.name || '').trim(),
+            is_required: minSel > 0,
+            minimum_selections: minSel,
+            maximum_selections: maxSel,
+            sort_order: gIdx,
+            options: (group.options || []).map((opt, oIdx) => ({
+              option_name: String(opt.name || '').trim(),
+              additional_price: Math.max(0, Number(opt.price || 0)),
+              is_available: opt.isAvailable !== false,
+              sort_order: oIdx,
+            })),
+          };
+        });
+        await ownerService.syncMenuItemAddOns(selectedRestaurantId, targetItemId, addOnGroupsPayload);
+      }
+
       setModalOpen(false);
       await loadMenu();
     } catch (saveError) {

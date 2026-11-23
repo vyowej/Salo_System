@@ -13,6 +13,7 @@ import {
   canCustomerCancelOrder,
   formatOrderStatusText,
   formatPaymentStatusLabel,
+  formatRefundStatusLabel,
   normalizeOrderStatusKey,
 } from '../utils/orderTimeline';
 import './CustomerRecords.css';
@@ -42,6 +43,8 @@ export default function OrderDetailPage() {
   const [tracking, setTracking] = useState(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [trackingError, setTrackingError] = useState('');
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
 
   const mapBackendOrder = (raw) => ({
     id: String(raw.order_id),
@@ -60,9 +63,15 @@ export default function OrderDetailPage() {
     riderFirstName: raw.rider?.first_name ?? null,
     grandTotal: Number(raw.total_amount ?? 0),
     totalAmount: Number(raw.total_amount ?? 0),
+    paymentId: raw.payment?.payment_id ?? null,
     paymentMethod: raw.payment?.method || 'cod',
+    providerName: raw.payment?.provider_name ?? null,
+    paymentChannel: raw.payment?.payment_channel ?? null,
     paymentStatus: raw.payment?.status || 'pending',
+    checkoutUrl: raw.payment?.checkout_url ?? null,
+    paymentExpiresAt: raw.payment?.expires_at ?? null,
     paidAt: raw.payment?.paid_at ?? null,
+    refund: raw.payment?.refund ?? null,
     subOrders: [
       {
         restaurantId: String(raw.restaurant_id),
@@ -320,6 +329,43 @@ export default function OrderDetailPage() {
     }
   };
 
+  const handleRefreshPayment = async () => {
+    if (paymentBusy || !order) return;
+    setPaymentBusy(true);
+    setPaymentError('');
+    try {
+      const fresh = await customerService.getOrder(order.id);
+      if (fresh) {
+        setOrder(mapBackendOrder(fresh));
+      }
+    } catch (err) {
+      setPaymentError(err?.message || 'Unable to refresh payment status.');
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
+
+  const handleRetryPayment = async () => {
+    if (paymentBusy || !order?.paymentId) return;
+    setPaymentBusy(true);
+    setPaymentError('');
+    try {
+      const payment = await customerService.initiatePayment(order.paymentId);
+      const nextUrl = payment?.checkout_url;
+      if (nextUrl) {
+        window.open(nextUrl, '_blank', 'noopener,noreferrer');
+      }
+      const fresh = await customerService.getOrder(order.id);
+      if (fresh) {
+        setOrder(mapBackendOrder(fresh));
+      }
+    } catch (err) {
+      setPaymentError(err?.message || 'Unable to initiate payment.');
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
+
   const handleReorder = () => {
     (order.subOrders || []).forEach((subOrder) => {
       const restaurantId = subOrder.restaurantId;
@@ -428,7 +474,12 @@ export default function OrderDetailPage() {
               lineHeight: 1.5,
             }}
           >
-            Cancel pending Order <strong>{order.orderReference || `#${order.id}`}</strong>? Your pending Cash on Delivery payment will also be cancelled.
+            Cancel Order <strong>{order.orderReference || `#${order.id}`}</strong>?{' '}
+            {order.paymentMethod === 'cod'
+              ? 'Your pending Cash on Delivery payment will also be cancelled.'
+              : order.paymentStatus === 'paid'
+                ? 'Since this order was paid online, a refund request will be initiated automatically.'
+                : 'Your pending online payment will also be cancelled.'}
           </p>
 
           <label style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, display: 'block', marginBottom: 4 }}>
@@ -651,12 +702,71 @@ export default function OrderDetailPage() {
                     {order.paidAt ? ` (${formatDateTimeManila(order.paidAt)})` : ''}
                   </strong>
                 </div>
+                {(order.refund || ['refunded', 'partially_refunded'].includes(order.paymentStatus)) && (
+                  <div className="customer-track-bill-row">
+                    <span>Refund Status</span>
+                    <strong>
+                      {order.refund
+                        ? `${formatRefundStatusLabel(order.refund.status)} (${formatPeso(order.refund.amount)})`
+                        : formatPaymentStatusLabel(order.paymentStatus)}
+                    </strong>
+                  </div>
+                )}
                 <div className="customer-track-bill-row is-total">
-                  <span>Total Order ({order.paymentMethod || 'COD'})</span>
+                  <span>Total Order ({order.paymentMethod === 'cod' ? 'COD' : (order.paymentChannel || order.paymentMethod || 'Online')})</span>
                   <strong>{formatPeso(order.grandTotal ?? order.totalAmount)}</strong>
                 </div>
               </div>
             </div>
+
+            {order.paymentMethod !== 'cod'
+              && !['paid', 'refunded', 'partially_refunded', 'cancelled'].includes(order.paymentStatus)
+              && !['cancelled', 'rejected'].includes(statusKey) && (
+              <div
+                className="customer-track-status-banner"
+                style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}
+              >
+                <strong>Online Payment {formatPaymentStatusLabel(order.paymentStatus)}</strong>
+                <span>
+                  {order.checkoutUrl
+                    ? 'Complete your online payment to confirm this order.'
+                    : 'Initiate or refresh your online payment status below.'}
+                </span>
+                {paymentError && (
+                  <span role="alert" style={{ color: 'var(--status-error-text)' }}>{paymentError}</span>
+                )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {order.checkoutUrl ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={paymentBusy}
+                      onClick={() => window.open(order.checkoutUrl, '_blank', 'noopener,noreferrer')}
+                    >
+                      Complete Payment
+                    </Button>
+                  ) : order.paymentId ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      loading={paymentBusy}
+                      disabled={paymentBusy}
+                      onClick={handleRetryPayment}
+                    >
+                      Retry Payment
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={paymentBusy}
+                    onClick={handleRefreshPayment}
+                  >
+                    Refresh Status
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Customer Action Buttons */}
             <div className="customer-track-actions">

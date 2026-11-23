@@ -74,6 +74,10 @@ class XenditRefundIntegrationTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        DB::table('restaurants')->where('restaurant_id', $restaurantId)->update([
+            'brand_restaurant_id' => $restaurantId,
+        ]);
+
         DB::table('restaurant_owners')->insert([
             'restaurant_id' => $restaurantId,
             'user_id' => $owner->user_id,
