@@ -648,4 +648,128 @@ class RiderDeliveryTest extends TestCase
         $this->assertSame($rest2Id, $d2['restaurant_id']);
         $this->assertNotEmpty($d2['pickup_address_text']);
     }
+
+    public function test_decline_hides_offer_from_declining_rider_only_and_is_idempotent(): void
+    {
+        $owner = $this->createUser('customer', 'decown');
+        $buyer = $this->createUser('customer', 'decbuy');
+        $rider1 = $this->createUser('customer', 'decrid1', 'Marco');
+        $rider2 = $this->createUser('customer', 'decrid2', 'Paolo');
+
+        $this->createRiderRecord($rider1, 'active');
+        $this->createRiderRecord($rider2, 'active');
+        [, $orderId] = $this->createReadyDeliveryOrder($owner, $buyer);
+
+        $this->actingAs($rider1)->patchJson('/api/rider/availability', ['status' => 'online'])->assertOk();
+        $this->actingAs($rider2)->patchJson('/api/rider/availability', ['status' => 'online'])->assertOk();
+
+        // First decline succeeds and records 1 audit log
+        $this->actingAs($rider1)->postJson("/api/rider/deliveries/{$orderId}/decline")
+            ->assertOk()
+            ->assertJsonPath('data.declined', true)
+            ->assertJsonPath('data.already_declined', false);
+
+        $this->assertSame(
+            1,
+            DB::table('audit_logs')
+                ->where('actor_user_id', $rider1->user_id)
+                ->where('action', 'rider_delivery_offer_declined')
+                ->where('entity_id', $orderId)
+                ->count()
+        );
+
+        // Repeated decline is idempotent and does not double-log
+        $this->actingAs($rider1)->postJson("/api/rider/deliveries/{$orderId}/decline")
+            ->assertOk()
+            ->assertJsonPath('data.declined', true)
+            ->assertJsonPath('data.already_declined', true);
+
+        $this->assertSame(
+            1,
+            DB::table('audit_logs')
+                ->where('actor_user_id', $rider1->user_id)
+                ->where('action', 'rider_delivery_offer_declined')
+                ->where('entity_id', $orderId)
+                ->count()
+        );
+
+        // Declining rider does not see the order, and order status is untouched
+        $this->assertSame('ready', DB::table('orders')->where('order_id', $orderId)->value('order_status'));
+        $r1Ids = collect($this->actingAs($rider1)->getJson('/api/rider/deliveries/available')->assertOk()->json('data.deliveries'))
+            ->pluck('order_id')
+            ->all();
+        $this->assertNotContains($orderId, $r1Ids);
+
+        // Another online rider still sees and can accept the order
+        $r2Ids = collect($this->actingAs($rider2)->getJson('/api/rider/deliveries/available')->assertOk()->json('data.deliveries'))
+            ->pluck('order_id')
+            ->all();
+        $this->assertContains($orderId, $r2Ids);
+
+        $this->actingAs($rider2)->postJson("/api/rider/deliveries/{$orderId}/accept")->assertOk();
+    }
+
+    public function test_decline_rejects_invalid_assigned_and_non_rider_requests(): void
+    {
+        $owner = $this->createUser('customer', 'decinvown');
+        $buyer = $this->createUser('customer', 'decinvbuy');
+        $nonRider = $this->createUser('customer', 'decnonrid');
+        $rider1 = $this->createUser('customer', 'decinvr1');
+        $rider2 = $this->createUser('customer', 'decinvr2');
+
+        $this->createRiderRecord($rider1, 'active');
+        $this->createRiderRecord($rider2, 'active');
+
+        [, $readyOrderId] = $this->createReadyDeliveryOrder($owner, $buyer, 'delivery', 'ready');
+        [, $preparingOrderId] = $this->createReadyDeliveryOrder($owner, $buyer, 'delivery', 'preparing');
+
+        // Non-rider denied
+        $this->actingAs($nonRider)->postJson("/api/rider/deliveries/{$readyOrderId}/decline")
+            ->assertStatus(403);
+
+        $this->actingAs($rider1)->patchJson('/api/rider/availability', ['status' => 'online'])->assertOk();
+        $this->actingAs($rider2)->patchJson('/api/rider/availability', ['status' => 'online'])->assertOk();
+
+        // Nonexistent order -> 404
+        $this->actingAs($rider1)->postJson('/api/rider/deliveries/999999/decline')
+            ->assertStatus(404);
+
+        // Non-ready order -> 409
+        $this->actingAs($rider1)->postJson("/api/rider/deliveries/{$preparingOrderId}/decline")
+            ->assertStatus(409);
+
+        // Already-assigned order -> 409
+        $this->actingAs($rider2)->postJson("/api/rider/deliveries/{$readyOrderId}/accept")->assertOk();
+        $this->actingAs($rider1)->postJson("/api/rider/deliveries/{$readyOrderId}/decline")
+            ->assertStatus(409);
+    }
+
+    public function test_patch_rider_profile_updates_schedule_and_validates_input(): void
+    {
+        $rider = $this->createUser('customer', 'schedrid');
+        $this->createRiderRecord($rider, 'active');
+
+        $this->actingAs($rider)->patchJson('/api/rider/profile', [
+            'available_days' => ['mon', 'wed', 'fri', 'sat'],
+            'preferred_shifts' => ['breakfast', 'dinner'],
+            'preferred_hubs' => 'Diliman, Katipunan',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.profile.available_days', ['mon', 'wed', 'fri', 'sat'])
+            ->assertJsonPath('data.profile.preferred_shifts', ['breakfast', 'dinner'])
+            ->assertJsonPath('data.profile.preferred_hubs', 'Diliman, Katipunan');
+
+        $this->actingAs($rider)->getJson('/api/rider/profile')
+            ->assertOk()
+            ->assertJsonPath('data.profile.available_days', ['mon', 'wed', 'fri', 'sat'])
+            ->assertJsonPath('data.profile.preferred_shifts', ['breakfast', 'dinner']);
+
+        // Invalid day and shift rejected
+        $this->actingAs($rider)->patchJson('/api/rider/profile', [
+            'available_days' => ['funday'],
+            'preferred_shifts' => ['midnight_express'],
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['available_days.0', 'preferred_shifts.0']);
+    }
 }

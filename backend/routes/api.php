@@ -157,6 +157,7 @@ Route::prefix('rider')->middleware('auth')->group(function (): void {
         Route::get('/deliveries/current', [RiderDeliveryController::class, 'current']);
         Route::get('/deliveries/history', [RiderDeliveryController::class, 'history']);
         Route::post('/deliveries/{orderId}/accept', [RiderDeliveryController::class, 'accept'])->whereNumber('orderId');
+        Route::post('/deliveries/{orderId}/decline', [RiderDeliveryController::class, 'decline'])->whereNumber('orderId')->middleware('throttle:60,1');
         Route::post('/deliveries/{orderId}/picked-up', [RiderDeliveryController::class, 'pickedUp'])->whereNumber('orderId');
         Route::post('/deliveries/{orderId}/delivered', [RiderDeliveryController::class, 'delivered'])->whereNumber('orderId');
         Route::post('/deliveries/{orderId}/fail', [RiderDeliveryController::class, 'fail'])->whereNumber('orderId');

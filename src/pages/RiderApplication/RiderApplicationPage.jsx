@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import Button from '../../components/common/Button';
 import RiderApplicationHeader from './components/RiderApplicationHeader';
@@ -27,6 +27,10 @@ import {
   clearRiderDraft,
 } from './services/riderDraftStorage';
 import applicationService from '../../services/applicationService';
+import {
+  isActiveOrApprovedRiderApplication,
+  resolveRiderActiveApplicationConflictRedirect,
+} from './services/riderConflictHelper';
 import { resolveUploadableFile, mapAccountTypeToEnum } from '../../services/formDataHelper';
 import './RiderApplicationPage.css';
 
@@ -112,6 +116,24 @@ export default function RiderApplicationPage() {
   const [exitModalOpen, setExitModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submittedData, setSubmittedData] = useState(null);
+  const [existingActiveApp, setExistingActiveApp] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const current = await applicationService.getCurrentRiderApplication();
+        if (active && isActiveOrApprovedRiderApplication(current)) {
+          setExistingActiveApp(current);
+        }
+      } catch {
+        // Non-blocking check on mount
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Sync step from query param if changed externally
   useEffect(() => {
@@ -750,6 +772,20 @@ export default function RiderApplicationPage() {
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
+      const conflictRedirect = resolveRiderActiveApplicationConflictRedirect(error);
+      if (conflictRedirect) {
+        clearRiderDraft();
+        setIsDirty(false);
+        navigate(conflictRedirect.to, {
+          replace: true,
+          state: {
+            notice: conflictRedirect.notice,
+            existingApplicationId: conflictRedirect.existingApplicationId,
+          },
+        });
+        return;
+      }
+
       const fieldErrors = {};
       if (error?.errors && typeof error.errors === 'object') {
         Object.entries(error.errors).forEach(([key, msgs]) => {
@@ -858,6 +894,37 @@ export default function RiderApplicationPage() {
 
           {/* Main Form Body */}
           <main className="wizard-main-content">
+            {existingActiveApp && (
+              <div
+                role="status"
+                style={{
+                  marginBottom: '16px',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  color: '#1e3a8a',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <span>
+                  You already have an active or approved rider application (
+                  <strong>{existingActiveApp.reference_number || `#${existingActiveApp.rider_application_id}`}</strong>
+                  ).
+                </span>
+                <Link
+                  to="/rider-application/status"
+                  style={{ color: '#1d4ed8', fontWeight: 700, textDecoration: 'underline' }}
+                >
+                  View Application Status
+                </Link>
+              </div>
+            )}
             <div className="wizard-step-body animate-step-in" key={currentStep}>
               {currentStep === 1 && (
                 <EmailVerificationStep
