@@ -252,6 +252,16 @@ export const customerService = {
     return res?.data?.promo ?? null;
   },
 
+  async getPayment(paymentId) {
+    const res = await apiClient.get(`/customer/payments/${encodeURIComponent(paymentId)}`);
+    return res?.data?.payment ?? null;
+  },
+
+  async initiatePayment(paymentId) {
+    const res = await apiClient.post(`/customer/payments/${encodeURIComponent(paymentId)}/initiate`, {});
+    return res?.data?.payment ?? null;
+  },
+
   async confirmPayment(paymentId, providerReference = null) {
     const res = await apiClient.post(`/customer/payments/${encodeURIComponent(paymentId)}/confirm`, {
       ...(providerReference ? { provider_reference: providerReference } : {}),

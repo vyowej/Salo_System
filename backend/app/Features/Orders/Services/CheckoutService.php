@@ -16,6 +16,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
@@ -477,7 +478,7 @@ class CheckoutService
         $customerName = trim("{$user->first_name} {$user->last_name}") ?: $user->username;
 
         try {
-            $checkoutId = DB::transaction(function () use (
+            $txResult = DB::transaction(function () use (
                 $user,
                 $idempotencyKey,
                 $checkoutTotalCents,
@@ -486,7 +487,7 @@ class CheckoutService
                 $paymentChannel,
                 $appliedPromo,
                 $request
-            ): int {
+            ): array {
             $now = now();
 
             if ($appliedPromo !== null) {
@@ -641,16 +642,24 @@ class CheckoutService
                 }
             }
 
+            $onlinePaymentId = null;
             if ($paymentChannel !== 'cod' && $checkoutTotalCents > 0) {
                 $paymentRef = $this->generateUniqueReference('payments', 'payment_reference', 'SALO-PAY');
-                $preparedOnlinePayment = $this->paymentService->prepareOnlinePaymentPayload([
-                    'payment_reference' => $paymentRef,
-                    'checkout_id' => $checkoutId,
-                    'customer_id' => (int) $user->user_id,
-                    'channel' => $paymentChannel,
-                    'amount' => Money::fromCents($checkoutTotalCents),
-                    'currency' => 'PHP',
-                ]);
+                $driver = strtolower(trim((string) config('salo.payments.driver', 'sandbox')));
+                $preparedOnlinePayment = $driver === 'sandbox'
+                    ? $this->paymentService->prepareOnlinePaymentPayload([
+                        'payment_reference' => $paymentRef,
+                        'checkout_id' => $checkoutId,
+                        'customer_id' => (int) $user->user_id,
+                        'channel' => $paymentChannel,
+                        'amount' => Money::fromCents($checkoutTotalCents),
+                        'currency' => 'PHP',
+                    ])
+                    : [
+                        'provider_name' => $driver,
+                        'payment_status' => 'requires_customer_action',
+                        'meta' => ['channel' => $paymentChannel, 'provider' => $driver],
+                    ];
 
                 $onlinePaymentId = (int) DB::table('payments')->insertGetId([
                     'payment_reference' => $paymentRef,
@@ -705,7 +714,7 @@ class CheckoutService
                 request: $request,
             );
 
-            return $checkoutId;
+            return ['checkout_id' => $checkoutId, 'online_payment_id' => $onlinePaymentId];
         });
         } catch (QueryException $e) {
             $sqlState = $e->errorInfo[0] ?? null;
@@ -721,6 +730,24 @@ class CheckoutService
                 }
             }
             throw $e;
+        }
+
+        $checkoutId = (int) $txResult['checkout_id'];
+        $onlinePaymentId = $txResult['online_payment_id'] !== null ? (int) $txResult['online_payment_id'] : null;
+
+        if ($onlinePaymentId !== null && strtolower(trim((string) config('salo.payments.driver', 'sandbox'))) === 'xendit') {
+            try {
+                $this->paymentService->initiateProviderPayment(
+                    paymentId: $onlinePaymentId,
+                    context: ['payer_email' => $user->email ?? null],
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Xendit payment initiation failed after checkout commit.', [
+                    'checkout_id' => $checkoutId,
+                    'payment_id' => $onlinePaymentId,
+                    'exception' => $e->getMessage(),
+                ]);
+            }
         }
 
         $checkout = DB::table('checkouts')->where('checkout_id', $checkoutId)->first();

@@ -22,6 +22,20 @@ class PaymentController extends Controller
         );
     }
 
+    public function initiate(Request $request, int $paymentId): JsonResponse
+    {
+        return ApiResponse::success(
+            data: [
+                'payment' => $this->paymentService->initiateProviderPayment(
+                    paymentId: $paymentId,
+                    context: ['payer_email' => $request->user()?->email],
+                    customer: $request->user(),
+                ),
+            ],
+            message: 'Payment initiated.',
+        );
+    }
+
     public function confirm(Request $request, int $paymentId): JsonResponse
     {
         $this->paymentService->assertSandboxEndpointAllowed();
@@ -95,6 +109,16 @@ class PaymentController extends Controller
         return ApiResponse::success(
             data: ['payment' => $payment],
             message: 'Webhook processed.',
+        );
+    }
+
+    public function xenditWebhook(Request $request): JsonResponse
+    {
+        $payment = $this->paymentService->handleXenditWebhook($request);
+
+        return ApiResponse::success(
+            data: ['payment' => $payment],
+            message: 'Xendit webhook processed.',
         );
     }
 }

@@ -183,9 +183,45 @@ export default function CheckoutPage() {
     setPaymentActionError('');
     try {
       const updated = await customerService.confirmPayment(confirmedCheckout.payment.payment_id);
-      setConfirmedCheckout((prev) => (prev ? { ...prev, checkout_status: 'paid', payment: updated } : prev));
+      setConfirmedCheckout((prev) => (prev ? { ...prev, checkout_status: updated?.payment_status === 'paid' ? 'paid' : prev.checkout_status, payment: updated } : prev));
     } catch (err) {
       setPaymentActionError(err?.message || 'Unable to confirm payment.');
+    } finally {
+      setPaymentActionLoading(false);
+    }
+  };
+
+  const handleRefreshPaymentStatus = async () => {
+    if (!confirmedCheckout?.payment?.payment_id) return;
+    setPaymentActionLoading(true);
+    setPaymentActionError('');
+    try {
+      const updated = await customerService.getPayment(confirmedCheckout.payment.payment_id);
+      setConfirmedCheckout((prev) => (
+        prev
+          ? {
+            ...prev,
+            checkout_status: updated?.payment_status === 'paid' ? 'paid' : prev.checkout_status,
+            payment: updated,
+          }
+          : prev
+      ));
+    } catch (err) {
+      setPaymentActionError(err?.message || 'Unable to refresh payment status.');
+    } finally {
+      setPaymentActionLoading(false);
+    }
+  };
+
+  const handleRetryPaymentInitiation = async () => {
+    if (!confirmedCheckout?.payment?.payment_id || paymentActionLoading) return;
+    setPaymentActionLoading(true);
+    setPaymentActionError('');
+    try {
+      const updated = await customerService.initiatePayment(confirmedCheckout.payment.payment_id);
+      setConfirmedCheckout((prev) => (prev ? { ...prev, payment: updated } : prev));
+    } catch (err) {
+      setPaymentActionError(err?.message || 'Unable to generate payment link. Please try again.');
     } finally {
       setPaymentActionLoading(false);
     }
@@ -195,6 +231,7 @@ export default function CheckoutPage() {
     const paymentObj = confirmedCheckout.payment;
     const needsOnlineAction = paymentObj && paymentObj.payment_status === 'requires_customer_action';
     const isOnlinePaid = paymentObj && paymentObj.payment_status === 'paid';
+    const isOnlineFailed = paymentObj && ['failed', 'expired', 'declined', 'cancelled', 'voided'].includes(paymentObj.payment_status);
 
     return (
       <CustomerLayout>
@@ -231,9 +268,44 @@ export default function CheckoutPage() {
                   {paymentActionError}
                 </p>
               )}
-              <Button variant="primary" onClick={handleConfirmOnlinePayment} disabled={paymentActionLoading}>
-                {paymentActionLoading ? 'Confirming Payment...' : `Pay ₱${Number(paymentObj.amount || 0).toFixed(2)} Now`}
-              </Button>
+              {paymentObj.checkout_url ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                  <a
+                    href={paymentObj.checkout_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <Button variant="primary" type="button">
+                      {`Proceed to Payment (₱${Number(paymentObj.amount || 0).toFixed(2)})`}
+                    </Button>
+                  </a>
+                  <Button variant="secondary" onClick={handleRefreshPaymentStatus} disabled={paymentActionLoading}>
+                    {paymentActionLoading ? 'Checking Status...' : 'Refresh Payment Status'}
+                  </Button>
+                </div>
+              ) : paymentObj.provider_name === 'xendit' ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                  <Button variant="primary" onClick={handleRetryPaymentInitiation} disabled={paymentActionLoading}>
+                    {paymentActionLoading ? 'Generating Payment Link...' : 'Retry Payment Link'}
+                  </Button>
+                  <Button variant="secondary" onClick={handleRefreshPaymentStatus} disabled={paymentActionLoading}>
+                    {paymentActionLoading ? 'Checking Status...' : 'Refresh Payment Status'}
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="primary" onClick={handleConfirmOnlinePayment} disabled={paymentActionLoading}>
+                  {paymentActionLoading ? 'Confirming Payment...' : `Pay ₱${Number(paymentObj.amount || 0).toFixed(2)} Now`}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {isOnlineFailed && (
+            <div style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-5)', border: '1px solid var(--status-error-border, #f5c2c7)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-secondary)' }}>
+              <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--status-error-text)', margin: 0 }}>
+                Payment {paymentObj.payment_status}. Your order has not been confirmed for fulfillment.
+              </p>
             </div>
           )}
 

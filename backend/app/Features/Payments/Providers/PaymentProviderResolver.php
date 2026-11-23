@@ -9,6 +9,7 @@ class PaymentProviderResolver
 {
     public function __construct(
         private readonly SandboxPaymentProvider $sandboxProvider,
+        private readonly XenditPaymentProvider $xenditProvider,
     ) {}
 
     public function resolve(?string $driver = null): PaymentProviderInterface
@@ -17,8 +18,15 @@ class PaymentProviderResolver
 
         return match ($resolved) {
             'sandbox' => $this->sandboxProvider,
-            'xendit' => throw new RuntimeException('Xendit payment provider is not yet activated (Phase 3).'),
+            'xendit' => $this->resolveXenditProvider(),
             default => throw new InvalidArgumentException("Unsupported payment driver '{$resolved}'."),
         };
+    }
+
+    private function resolveXenditProvider(): XenditPaymentProvider
+    {
+        $this->xenditProvider->assertTestModeReady();
+
+        return $this->xenditProvider;
     }
 }
