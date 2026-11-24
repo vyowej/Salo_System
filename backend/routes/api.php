@@ -91,6 +91,8 @@ Route::prefix('auth')->group(function (): void {
     Route::get('/csrf', [AuthController::class, 'csrf']);
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
     Route::post('/login', [AuthController::class, 'login']);
+    Route::get('/google/url', [AuthController::class, 'googleAuthUrl']);
+    Route::get('/google/callback', [AuthController::class, 'googleCallback']);
     Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);
     Route::post('/password/reset', [AuthController::class, 'resetPassword']);
     Route::post('/reactivation-request', [AccountLifecycleController::class, 'requestReactivation'])->middleware('throttle:10,1');

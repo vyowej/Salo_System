@@ -169,6 +169,13 @@ export const authService = {
     inFlightCurrentUserPromise = requestPromise;
     return requestPromise;
   },
+
+  async getGoogleAuthUrl() {
+    const response = await apiClient.get('/auth/google/url', {
+      skipAuthInvalidEvent: true,
+    });
+    return response?.data?.url || '';
+  },
 };
 
 export default authService;

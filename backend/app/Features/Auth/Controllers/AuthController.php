@@ -12,7 +12,9 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Throwable;
 
 class AuthController extends Controller
 {
@@ -104,5 +106,32 @@ class AuthController extends Controller
             data: null,
             message: 'Password has been reset successfully.',
         );
+    }
+
+    public function googleAuthUrl(Request $request, AuthService $authService): JsonResponse
+    {
+        $url = $authService->getGoogleAuthUrl($request);
+
+        return ApiResponse::success(
+            data: ['url' => $url],
+            message: 'Google sign-in URL generated.',
+        );
+    }
+
+    public function googleCallback(Request $request, AuthService $authService): RedirectResponse
+    {
+        $frontendUrl = rtrim((string) config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173')), '/');
+
+        try {
+            $userPayload = $authService->handleGoogleCallback($request);
+            $roles = $userPayload['roles'] ?? [];
+            $destination = in_array('admin', $roles, true) ? '/admin' : '/customer';
+
+            return redirect()->away($frontendUrl.$destination);
+        } catch (Throwable $e) {
+            $message = $e->getMessage() ?: 'Unable to sign in with Google.';
+
+            return redirect()->away($frontendUrl.'/login?google_error='.urlencode($message));
+        }
     }
 }
