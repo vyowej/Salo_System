@@ -91,6 +91,12 @@
   font-weight: var(--font-weight-medium);
 }
 
+.rider-schedule-notice--error {
+  background: var(--status-error-bg);
+  color: var(--status-error-text);
+  border: 1px solid var(--status-cancelled-border);
+}
+
 .rider-schedule-notice-dismiss {
   border: none;
   background: transparent;

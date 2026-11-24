@@ -141,81 +141,13 @@ export function validateScheduleChangeRequest(form, todayIso = getTodayIsoDate()
   };
 }
 
-export function hasPendingScheduleRequest(requests) {
-  return Array.isArray(requests) && requests.some((req) => req?.status === 'pending');
+export function extractScheduleFieldErrors(err) {
+  const next = {};
+  if (err?.errors && typeof err.errors === 'object') {
+    Object.entries(err.errors).forEach(([key, msgs]) => {
+      const firstMsg = Array.isArray(msgs) ? msgs[0] : String(msgs);
+      if (firstMsg) next[key] = firstMsg;
+    });
+  }
+  return next;
 }
-
-export function getPendingScheduleRequest(requests) {
-  if (!Array.isArray(requests)) return null;
-  return requests.find((req) => req?.status === 'pending') || null;
-}
-
-export function createScheduleChangeRequest(form, now = new Date()) {
-  const idSuffix = Math.floor(1000 + Math.random() * 9000);
-  const hubTags = Array.isArray(form?.preferred_hubs)
-    ? form.preferred_hubs.map((t) => String(t || '').trim()).filter(Boolean)
-    : parseHubTags(form?.preferred_hubs);
-
-  return {
-    id: `SCR-${now.getFullYear()}-${idSuffix}`,
-    status: 'pending',
-    available_days: Array.isArray(form?.available_days)
-      ? form.available_days.filter((d) => VALID_DAYS.has(d))
-      : [],
-    preferred_shifts: Array.isArray(form?.preferred_shifts)
-      ? form.preferred_shifts.filter((s) => VALID_SHIFTS.has(s))
-      : [],
-    preferred_hubs: hubTags,
-    effective_date: String(form?.effective_date || '').trim(),
-    reason: String(form?.reason || '').trim(),
-    submitted_at: now.toISOString(),
-    reviewed_at: null,
-    admin_remarks: '',
-  };
-}
-
-export function cancelScheduleChangeRequest(requests, requestId, now = new Date()) {
-  if (!Array.isArray(requests)) return [];
-  return requests.map((req) => {
-    if (req.id !== requestId || req.status !== 'pending') {
-      return req;
-    }
-    return {
-      ...req,
-      status: 'cancelled',
-      reviewed_at: now.toISOString(),
-      admin_remarks: req.admin_remarks || 'Cancelled by rider prior to review.',
-    };
-  });
-}
-
-/**
- * Frontend-only mock schedule change request history for SALO demonstration.
- * In production, schedule change requests are reviewed by an administrator.
- */
-export const INITIAL_MOCK_SCHEDULE_REQUESTS = [
-  {
-    id: 'SCR-2026-1042',
-    status: 'approved',
-    available_days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'],
-    preferred_shifts: ['lunch', 'dinner'],
-    preferred_hubs: ['Diliman', 'Katipunan'],
-    effective_date: '2026-10-15',
-    reason: 'Added Saturday availability to cover weekend lunch and dinner peak demand.',
-    submitted_at: '2026-10-10T09:30:00Z',
-    reviewed_at: '2026-10-11T14:15:00Z',
-    admin_remarks: 'Approved. Saturday peak coverage confirmed for Diliman and Katipunan hubs.',
-  },
-  {
-    id: 'SCR-2026-0918',
-    status: 'rejected',
-    available_days: ['mon', 'tue', 'wed', 'thu', 'fri'],
-    preferred_shifts: ['late_night'],
-    preferred_hubs: ['Cubao'],
-    effective_date: '2026-09-20',
-    reason: 'Requesting switch to late night only shifts for September.',
-    submitted_at: '2026-09-14T11:20:00Z',
-    reviewed_at: '2026-09-15T16:40:00Z',
-    admin_remarks: 'Late-night slots in Cubao are currently at full capacity. Please retain midday/evening shifts.',
-  },
-];

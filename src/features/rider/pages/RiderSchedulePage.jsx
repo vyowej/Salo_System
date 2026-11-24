@@ -10,14 +10,9 @@ import PageHeader from '../components/PageHeader';
 import ScheduleChangeRequestModal from '../components/ScheduleChangeRequestModal';
 import {
   DAY_OPTIONS,
-  INITIAL_MOCK_SCHEDULE_REQUESTS,
-  cancelScheduleChangeRequest,
-  createScheduleChangeRequest,
   formatScheduleDate,
   getDayLabel,
-  getPendingScheduleRequest,
   getShiftMeta,
-  hasPendingScheduleRequest,
   parseHubTags,
 } from '../utils/riderScheduleRequests';
 import './RiderSchedulePage.css';
@@ -31,21 +26,26 @@ const HISTORY_STATUS_CONFIG = {
 
 export default function RiderSchedulePage() {
   const [profile, setProfile] = useState(null);
+  const [scheduleData, setScheduleData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
-  // Frontend-only mock state for schedule change requests
-  const [scheduleRequests, setScheduleRequests] = useState(() => INITIAL_MOCK_SCHEDULE_REQUESTS);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [cancelTargetId, setCancelTargetId] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
   const [actionNotice, setActionNotice] = useState('');
+  const [actionError, setActionError] = useState('');
 
-  const loadProfile = useCallback(async () => {
+  const loadSchedule = useCallback(async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const data = await riderService.getProfile();
-      setProfile(data);
+      const [profileRes, scheduleRes] = await Promise.all([
+        riderService.getProfile(),
+        riderService.getSchedule(),
+      ]);
+      setProfile(profileRes);
+      setScheduleData(scheduleRes);
     } catch (err) {
       setLoadError(err?.message || 'Unable to load rider schedule.');
     } finally {
@@ -54,15 +54,25 @@ export default function RiderSchedulePage() {
   }, []);
 
   useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+    loadSchedule();
+  }, [loadSchedule]);
 
   const approvedSchedule = useMemo(() => {
-    const availableDays = Array.isArray(profile?.available_days) ? profile.available_days : [];
-    const preferredShifts = Array.isArray(profile?.preferred_shifts) ? profile.preferred_shifts : [];
-    const hubTags = parseHubTags(profile?.preferred_hubs);
-    const effectiveDate =
-      profile?.schedule_effective_date || profile?.approved_at || profile?.created_at || null;
+    const approved = scheduleData?.approved_schedule;
+    const availableDays = Array.isArray(approved?.available_days)
+      ? approved.available_days
+      : Array.isArray(profile?.available_days)
+        ? profile.available_days
+        : [];
+    const preferredShifts = Array.isArray(approved?.preferred_shifts)
+      ? approved.preferred_shifts
+      : Array.isArray(profile?.preferred_shifts)
+        ? profile.preferred_shifts
+        : [];
+    const hubTags = Array.isArray(approved?.preferred_hubs)
+      ? approved.preferred_hubs
+      : parseHubTags(profile?.preferred_hubs);
+    const effectiveDate = approved?.effective_date || profile?.approved_at || null;
 
     return {
       availableDays,
@@ -70,40 +80,48 @@ export default function RiderSchedulePage() {
       hubTags,
       effectiveDate,
     };
-  }, [profile]);
+  }, [scheduleData, profile]);
 
-  const pendingRequest = useMemo(
-    () => getPendingScheduleRequest(scheduleRequests),
-    [scheduleRequests],
-  );
-  const hasPending = hasPendingScheduleRequest(scheduleRequests);
-
+  const upcomingSchedule = scheduleData?.upcoming_schedule || null;
+  const pendingRequest = scheduleData?.pending_request || null;
+  const hasPending = Boolean(pendingRequest);
   const requestHistory = useMemo(
-    () => scheduleRequests.filter((req) => req.status !== 'pending'),
-    [scheduleRequests],
+    () => (Array.isArray(scheduleData?.history) ? scheduleData.history : []),
+    [scheduleData],
   );
 
   const handleOpenRequestModal = () => {
     if (hasPending) return;
     setActionNotice('');
+    setActionError('');
     setRequestModalOpen(true);
   };
 
-  const handleSubmitScheduleRequest = (formPayload) => {
+  const handleSubmitScheduleRequest = async (formPayload) => {
     if (hasPending) return;
-    const nextRequest = createScheduleChangeRequest(formPayload);
-    setScheduleRequests((prev) => [nextRequest, ...prev]);
+    await riderService.submitScheduleChangeRequest(formPayload);
+    await loadSchedule();
     setRequestModalOpen(false);
     setActionNotice(
       'Schedule change request submitted for administrator review. Your approved availability remains unchanged until approved.',
     );
   };
 
-  const handleConfirmCancelRequest = () => {
-    if (!cancelTargetId) return;
-    setScheduleRequests((prev) => cancelScheduleChangeRequest(prev, cancelTargetId));
-    setCancelTargetId(null);
-    setActionNotice('Pending schedule change request cancelled.');
+  const handleConfirmCancelRequest = async () => {
+    if (!cancelTargetId || cancelling) return;
+    setCancelling(true);
+    setActionError('');
+    try {
+      await riderService.cancelScheduleChangeRequest(cancelTargetId);
+      setCancelTargetId(null);
+      await loadSchedule();
+      setActionNotice('Pending schedule change request cancelled.');
+    } catch (err) {
+      setActionError(err?.message || 'Unable to cancel pending schedule change request.');
+      setCancelTargetId(null);
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const isOnline = Boolean(
@@ -130,7 +148,7 @@ export default function RiderSchedulePage() {
           state="error"
           title="Could not load shift schedule"
           description={loadError}
-          onRetry={loadProfile}
+          onRetry={loadSchedule}
         />
       ) : (
         <div className="rider-schedule-stack">
@@ -156,6 +174,20 @@ export default function RiderSchedulePage() {
               </Link>
             </CardBody>
           </Card>
+
+          {actionError && (
+            <div className="rider-schedule-notice rider-schedule-notice--error" role="alert">
+              <span>{actionError}</span>
+              <button
+                type="button"
+                className="rider-schedule-notice-dismiss"
+                onClick={() => setActionError('')}
+                aria-label="Dismiss error"
+              >
+                ×
+              </button>
+            </div>
+          )}
 
           {actionNotice && (
             <div className="rider-schedule-notice rider-schedule-notice--success" role="status">
@@ -191,6 +223,7 @@ export default function RiderSchedulePage() {
                     type="button"
                     variant="outline"
                     size="sm"
+                    disabled={cancelling}
                     onClick={() => setCancelTargetId(pendingRequest.id)}
                   >
                     Cancel Request
@@ -211,7 +244,7 @@ export default function RiderSchedulePage() {
                   <div className="rider-schedule-summary-item">
                     <span className="rider-schedule-summary-label">Requested Available Days</span>
                     <div className="rider-schedule-chip-list">
-                      {pendingRequest.available_days.map((day) => (
+                      {(pendingRequest.available_days || []).map((day) => (
                         <span key={day} className="rider-schedule-chip rider-schedule-chip--pending">
                           {getDayLabel(day, { short: true })}
                         </span>
@@ -221,7 +254,7 @@ export default function RiderSchedulePage() {
                   <div className="rider-schedule-summary-item">
                     <span className="rider-schedule-summary-label">Requested Preferred Shifts</span>
                     <div className="rider-schedule-chip-list">
-                      {pendingRequest.preferred_shifts.map((shift) => {
+                      {(pendingRequest.preferred_shifts || []).map((shift) => {
                         const meta = getShiftMeta(shift);
                         return (
                           <span key={shift} className="rider-schedule-chip rider-schedule-chip--pending">
@@ -234,7 +267,7 @@ export default function RiderSchedulePage() {
                   <div className="rider-schedule-summary-item">
                     <span className="rider-schedule-summary-label">Requested Delivery Hubs</span>
                     <div className="rider-schedule-chip-list">
-                      {pendingRequest.preferred_hubs.length > 0 ? (
+                      {(pendingRequest.preferred_hubs || []).length > 0 ? (
                         pendingRequest.preferred_hubs.map((hub) => (
                           <span key={hub} className="rider-schedule-chip">
                             {hub}
@@ -255,7 +288,65 @@ export default function RiderSchedulePage() {
             </Card>
           )}
 
-          {/* 3. Approved Availability (Read-Only) + Request Schedule Change Action */}
+          {/* 3. Approved Upcoming Schedule (if approved for a future effective date) */}
+          {upcomingSchedule && (
+            <Card>
+              <CardBody className="rider-schedule-section-body">
+                <div className="rider-schedule-card-header">
+                  <div>
+                    <div className="rider-schedule-title-row">
+                      <h2 className="rider-schedule-card-title">Upcoming Approved Schedule</h2>
+                      <Badge variant="info" size="sm" dot>
+                        Effective {formatScheduleDate(upcomingSchedule.effective_date)}
+                      </Badge>
+                    </div>
+                    <p className="rider-schedule-muted-copy">
+                      Approved and scheduled to replace your current availability on{' '}
+                      {formatScheduleDate(upcomingSchedule.effective_date)}.
+                    </p>
+                  </div>
+                </div>
+                <div className="rider-schedule-summary-grid">
+                  <div className="rider-schedule-summary-item">
+                    <span className="rider-schedule-summary-label">Upcoming Days</span>
+                    <div className="rider-schedule-chip-list">
+                      {(upcomingSchedule.available_days || []).map((day) => (
+                        <span key={day} className="rider-schedule-chip">
+                          {getDayLabel(day, { short: true })}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rider-schedule-summary-item">
+                    <span className="rider-schedule-summary-label">Upcoming Shifts</span>
+                    <div className="rider-schedule-chip-list">
+                      {(upcomingSchedule.preferred_shifts || []).map((shift) => (
+                        <span key={shift} className="rider-schedule-chip">
+                          {getShiftMeta(shift).label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rider-schedule-summary-item">
+                    <span className="rider-schedule-summary-label">Upcoming Hubs</span>
+                    <div className="rider-schedule-chip-list">
+                      {(upcomingSchedule.preferred_hubs || []).length > 0 ? (
+                        upcomingSchedule.preferred_hubs.map((hub) => (
+                          <span key={hub} className="rider-schedule-chip">
+                            {hub}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="rider-schedule-muted-copy">No specific hub preference</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* 4. Approved Availability (Read-Only) + Request Schedule Change Action */}
           <Card>
             <CardBody className="rider-schedule-section-body">
               <div className="rider-schedule-card-header">
@@ -270,7 +361,7 @@ export default function RiderSchedulePage() {
                     {approvedSchedule.effectiveDate
                       ? `Effective since ${formatScheduleDate(approvedSchedule.effectiveDate)} · `
                       : ''}
-                    Collected from your approved Rider Application.
+                    Official schedule on file.
                   </p>
                 </div>
 
@@ -361,7 +452,7 @@ export default function RiderSchedulePage() {
             </CardBody>
           </Card>
 
-          {/* 4. Schedule Change Request History */}
+          {/* 5. Schedule Change Request History */}
           <Card>
             <CardBody className="rider-schedule-section-body">
               <div className="rider-schedule-card-header">
@@ -388,9 +479,11 @@ export default function RiderSchedulePage() {
                       <article key={req.id} className="rider-schedule-history-item">
                         <div className="rider-schedule-history-top">
                           <div className="rider-schedule-title-row">
-                            <strong className="rider-schedule-history-id">Request #{req.id}</strong>
+                            <strong className="rider-schedule-history-id">
+                              {req.entry_type === 'admin_update' ? `Admin Update #${req.id}` : `Request #${req.id}`}
+                            </strong>
                             <Badge variant={statusMeta.variant} size="sm">
-                              {statusMeta.label}
+                              {req.entry_type === 'admin_update' ? 'Admin-Initiated' : statusMeta.label}
                             </Badge>
                           </div>
                           <span className="rider-schedule-muted-copy">
@@ -402,13 +495,13 @@ export default function RiderSchedulePage() {
                         <div className="rider-schedule-history-details">
                           <span>
                             <strong>Days:</strong>{' '}
-                            {req.available_days.map((d) => getDayLabel(d, { short: true })).join(', ') || '—'}
+                            {(req.available_days || []).map((d) => getDayLabel(d, { short: true })).join(', ') || '—'}
                           </span>
                           <span>
                             <strong>Shifts:</strong>{' '}
-                            {req.preferred_shifts.map((s) => getShiftMeta(s).label).join(', ') || '—'}
+                            {(req.preferred_shifts || []).map((s) => getShiftMeta(s).label).join(', ') || '—'}
                           </span>
-                          {req.preferred_hubs.length > 0 && (
+                          {(req.preferred_hubs || []).length > 0 && (
                             <span>
                               <strong>Hubs:</strong> {req.preferred_hubs.join(', ')}
                             </span>
@@ -445,10 +538,10 @@ export default function RiderSchedulePage() {
         open={Boolean(cancelTargetId)}
         title="Cancel Schedule Change Request?"
         message="This will withdraw your pending schedule change request. Your current approved availability will remain unchanged."
-        confirmLabel="Yes, Cancel Request"
+        confirmLabel={cancelling ? 'Cancelling...' : 'Yes, Cancel Request'}
         cancelLabel="Keep Pending"
         onConfirm={handleConfirmCancelRequest}
-        onCancel={() => setCancelTargetId(null)}
+        onCancel={() => { if (!cancelling) setCancelTargetId(null); }}
       />
     </div>
   );

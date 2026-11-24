@@ -4,6 +4,7 @@ import Modal from '../../../components/common/Modal';
 import {
   DAY_OPTIONS,
   SHIFT_OPTIONS,
+  extractScheduleFieldErrors,
   getTodayIsoDate,
   toggleShiftSelection,
   validateScheduleChangeRequest,
@@ -26,6 +27,8 @@ export default function ScheduleChangeRequestModal({
   const [effectiveDate, setEffectiveDate] = useState('');
   const [reason, setReason] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -36,6 +39,8 @@ export default function ScheduleChangeRequestModal({
     setEffectiveDate('');
     setReason('');
     setFieldErrors({});
+    setSubmitError('');
+    setSubmitting(false);
   }, [open, approvedSchedule]);
 
   const clearFieldError = (key) => {
@@ -74,8 +79,9 @@ export default function ScheduleChangeRequestModal({
     setHubTags((prev) => prev.filter((t) => t !== tag));
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    if (submitting) return;
 
     const pendingHub = hubInput.trim();
     const nextHubs =
@@ -102,27 +108,44 @@ export default function ScheduleChangeRequestModal({
       return;
     }
 
-    onSubmitRequest?.(payload);
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      await onSubmitRequest?.(payload);
+    } catch (err) {
+      const serverFieldErrors = extractScheduleFieldErrors(err);
+      if (Object.keys(serverFieldErrors).length > 0) {
+        setFieldErrors(serverFieldErrors);
+      }
+      setSubmitError(err?.message || 'Unable to submit schedule change request.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={submitting ? undefined : onClose}
       title="Request Schedule Change"
       size="lg"
       footer={(
         <div className="rider-schedule-modal-footer">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={submitting}>
             Cancel
           </Button>
-          <Button type="submit" form={FORM_ID} variant="primary" size="sm">
+          <Button type="submit" form={FORM_ID} variant="primary" size="sm" loading={submitting}>
             Submit Request
           </Button>
         </div>
       )}
     >
       <form id={FORM_ID} onSubmit={handleSubmit} noValidate className="rider-schedule-form">
+        {submitError && (
+          <div className="rider-schedule-notice rider-schedule-notice--error" role="alert">
+            {submitError}
+          </div>
+        )}
         <div className="rider-schedule-notice rider-schedule-notice--info" role="note">
           Submitting a schedule change request does not alter your current approved availability. Changes take effect only after administrator approval.
         </div>

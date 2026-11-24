@@ -163,6 +163,21 @@ export const riderService = {
     const response = await apiClient.delete(`/rider/change-requests/${encodeURIComponent(requestId)}`);
     return response?.data?.request ?? null;
   },
+
+  async getSchedule() {
+    const response = await apiClient.get('/rider/schedule');
+    return response?.data ?? null;
+  },
+
+  async submitScheduleChangeRequest(payload) {
+    const response = await apiClient.post('/rider/schedule/requests', payload);
+    return response?.data?.request ?? null;
+  },
+
+  async cancelScheduleChangeRequest(requestId) {
+    const response = await apiClient.post(`/rider/schedule/requests/${encodeURIComponent(requestId)}/cancel`, {});
+    return response?.data?.request ?? null;
+  },
 };
 
 export default riderService;

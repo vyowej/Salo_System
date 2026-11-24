@@ -3,12 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  INITIAL_MOCK_SCHEDULE_REQUESTS,
-  cancelScheduleChangeRequest,
-  createScheduleChangeRequest,
+  extractScheduleFieldErrors,
   formatHubTags,
-  getPendingScheduleRequest,
-  hasPendingScheduleRequest,
   parseHubTags,
   toggleShiftSelection,
   validateScheduleChangeRequest,
@@ -55,37 +51,17 @@ test('validateScheduleChangeRequest enforces required days, shifts, effective da
   assert.deepEqual(validWithFlexible.errors, {});
 });
 
-test('createScheduleChangeRequest and cancelScheduleChangeRequest manage pending request lifecycle', () => {
-  assert.equal(hasPendingScheduleRequest(INITIAL_MOCK_SCHEDULE_REQUESTS), false);
-  assert.equal(getPendingScheduleRequest(INITIAL_MOCK_SCHEDULE_REQUESTS), null);
-
-  const created = createScheduleChangeRequest(
-    {
-      available_days: ['tue', 'thu', 'sat'],
-      preferred_shifts: ['lunch', 'dinner'],
-      preferred_hubs: ['Cubao'],
-      effective_date: '2026-12-05',
-      reason: 'Switching to Tuesday/Thursday/Saturday availability.',
+test('extractScheduleFieldErrors maps Laravel 422 validation errors cleanly', () => {
+  const mapped = extractScheduleFieldErrors({
+    errors: {
+      effective_date: ['Effective date cannot be in the past.'],
+      reason: 'Provide a reason.',
     },
-    new Date('2026-11-24T09:00:00Z'),
-  );
-
-  assert.equal(created.status, 'pending');
-  assert.deepEqual(created.available_days, ['tue', 'thu', 'sat']);
-  assert.deepEqual(created.preferred_shifts, ['lunch', 'dinner']);
-  assert.deepEqual(created.preferred_hubs, ['Cubao']);
-
-  const withPending = [created, ...INITIAL_MOCK_SCHEDULE_REQUESTS];
-  assert.equal(hasPendingScheduleRequest(withPending), true);
-  assert.equal(getPendingScheduleRequest(withPending)?.id, created.id);
-
-  const afterCancel = cancelScheduleChangeRequest(
-    withPending,
-    created.id,
-    new Date('2026-11-24T09:10:00Z'),
-  );
-  assert.equal(hasPendingScheduleRequest(afterCancel), false);
-  assert.equal(afterCancel[0].status, 'cancelled');
+  });
+  assert.deepEqual(mapped, {
+    effective_date: 'Effective date cannot be in the past.',
+    reason: 'Provide a reason.',
+  });
 });
 
 test('parseHubTags and formatHubTags round-trip comma-separated hub strings', () => {

@@ -15,6 +15,7 @@ use App\Features\Admin\Controllers\AdminOrderController;
 use App\Features\Admin\Controllers\AdminPromoController;
 use App\Features\Admin\Controllers\AdminReportController;
 use App\Features\Admin\Controllers\AdminReservationController;
+use App\Features\Admin\Controllers\AdminRiderScheduleController;
 use App\Features\Admin\Controllers\AdminSettingsRequestController;
 use App\Features\Admin\Controllers\AdminSupportController;
 use App\Features\Applications\Controllers\ApplicationDocumentController;
@@ -56,6 +57,7 @@ use App\Features\Riders\Controllers\RiderChangeRequestController;
 use App\Features\Riders\Controllers\RiderController;
 use App\Features\Riders\Controllers\RiderDeliveryController;
 use App\Features\Riders\Controllers\RiderFinanceController;
+use App\Features\Riders\Controllers\RiderScheduleController;
 use App\Support\ApiResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -155,6 +157,10 @@ Route::prefix('rider')->middleware('auth')->group(function (): void {
         Route::patch('/profile', [RiderController::class, 'updateProfile']);
         Route::patch('/availability', [RiderController::class, 'updateAvailability']);
         Route::post('/location', [TrackingController::class, 'recordRiderLocation']);
+
+        Route::get('/schedule', [RiderScheduleController::class, 'show']);
+        Route::post('/schedule/requests', [RiderScheduleController::class, 'store']);
+        Route::post('/schedule/requests/{id}/cancel', [RiderScheduleController::class, 'cancel'])->whereNumber('id');
 
         Route::get('/change-requests', [RiderChangeRequestController::class, 'index']);
         Route::post('/change-requests', [RiderChangeRequestController::class, 'store']);
@@ -369,6 +375,11 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::get('/riders', [AdminManagementController::class, 'riders']);
     Route::post('/riders/{id}/activate', [AdminManagementController::class, 'activateRider'])->whereNumber('id');
     Route::patch('/riders/{id}/status', [AdminManagementController::class, 'updateRiderStatus'])->whereNumber('id');
+    Route::get('/riders/{id}/schedule', [AdminRiderScheduleController::class, 'showRiderSchedule'])->whereNumber('id');
+    Route::patch('/riders/{id}/schedule', [AdminRiderScheduleController::class, 'updateRiderSchedule'])->whereNumber('id');
+    Route::get('/rider-schedule-requests', [AdminRiderScheduleController::class, 'index']);
+    Route::post('/rider-schedule-requests/{id}/approve', [AdminRiderScheduleController::class, 'approve'])->whereNumber('id');
+    Route::post('/rider-schedule-requests/{id}/reject', [AdminRiderScheduleController::class, 'reject'])->whereNumber('id');
 
     Route::get('/audit-logs', [AdminManagementController::class, 'auditLogs']);
 

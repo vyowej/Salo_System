@@ -221,6 +221,35 @@ export const adminApiService = {
     return response?.data?.rider ?? null;
   },
 
+  async getRiderScheduleRequests(params = {}) {
+    const response = await apiClient.get(`/admin/rider-schedule-requests${toQueryString(params)}`);
+    return response?.data ?? { items: [], pending_count: 0, meta: { current_page: 1, last_page: 1, per_page: 20, total: 0 } };
+  },
+
+  async getRiderSchedule(riderId) {
+    const response = await apiClient.get(`/admin/riders/${encodeURIComponent(riderId)}/schedule`);
+    return response?.data ?? null;
+  },
+
+  async updateRiderSchedule(riderId, payload) {
+    const response = await apiClient.patch(`/admin/riders/${encodeURIComponent(riderId)}/schedule`, payload);
+    return response?.data ?? null;
+  },
+
+  async approveRiderScheduleRequest(requestId, remarks = '') {
+    const response = await apiClient.post(`/admin/rider-schedule-requests/${encodeURIComponent(requestId)}/approve`, {
+      remarks: remarks || null,
+    });
+    return response?.data?.request ?? null;
+  },
+
+  async rejectRiderScheduleRequest(requestId, remarks) {
+    const response = await apiClient.post(`/admin/rider-schedule-requests/${encodeURIComponent(requestId)}/reject`, {
+      remarks,
+    });
+    return response?.data?.request ?? null;
+  },
+
   async getAuditLogs(params = {}) {
     const response = await apiClient.get(`/admin/audit-logs${toQueryString(params)}`);
     return response?.data ?? { items: [], meta: {} };

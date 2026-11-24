@@ -36,6 +36,11 @@ const NOTIFICATION_TYPE_TITLES = {
   reservation_expired: 'Reservation request expired',
   reservation_expiring_soon: 'Reservation expiring soon',
   reservation_reminder: 'Upcoming table reservation reminder',
+  rider_schedule_request_submitted: 'Rider schedule change request',
+  rider_schedule_request_cancelled: 'Rider schedule request cancelled',
+  rider_schedule_request_approved: 'Schedule change request approved',
+  rider_schedule_request_rejected: 'Schedule change request rejected',
+  rider_schedule_admin_updated: 'Approved schedule updated by Admin',
 };
 
 export function isValidWorkspace(workspace) {
@@ -130,6 +135,9 @@ export function getNotificationRoute(notification) {
   }
 
   if (workspace === 'rider') {
+    if (entityType === 'rider_schedule_requests' || type.startsWith('rider_schedule_')) {
+      return '/rider/schedule';
+    }
     if (type === 'rider_application_approved' || entityType === 'rider_applications') {
       return '/rider/application/status';
     }
@@ -161,6 +169,9 @@ export function getNotificationRoute(notification) {
     }
     if (entityType === 'reservation' || entityType === 'reservations' || type.startsWith('reservation_')) {
       return hasValidEntityId ? `/admin/reservations/${entityId}` : '/admin/reservations';
+    }
+    if (entityType === 'rider_schedule_requests' || type.startsWith('rider_schedule_')) {
+      return '/admin/riders?tab=schedule-requests';
     }
     if (entityType === 'rider') {
       return hasValidEntityId ? `/admin/riders/${entityId}` : '/admin/riders';

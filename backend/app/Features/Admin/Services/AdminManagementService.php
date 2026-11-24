@@ -689,7 +689,8 @@ class AdminManagementService
             ->select([
                 'r.rider_id', 'r.user_id', 'r.vehicle_type', 'r.vehicle_brand',
                 'r.vehicle_model', 'r.vehicle_color', 'r.plate_number',
-                'r.preferred_shifts', 'r.available_days', 'r.emergency_contact_name',
+                'r.preferred_shifts', 'r.available_days', 'r.preferred_hubs', 'r.schedule_effective_date',
+                'r.emergency_contact_name',
                 'r.emergency_contact_phone', 'r.rider_status', 'r.approved_at',
                 'r.created_at', 'u.first_name', 'u.last_name', 'u.username',
                 'u.email', 'u.phone_number', 'c.city_name as zone',
