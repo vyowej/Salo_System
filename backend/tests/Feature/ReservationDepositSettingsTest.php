@@ -479,7 +479,7 @@ class ReservationDepositSettingsTest extends TestCase
         string $depositAmount,
         ?CarbonImmutable $start = null,
     ): int {
-        $startAt = $start ?? CarbonImmutable::create(2026, 11, 24, 18, 0, 0, 'Asia/Manila');
+        $startAt = $start ?? CarbonImmutable::now('Asia/Manila')->addDays(2)->setTime(18, 0, 0);
 
         return DB::table('reservations')->insertGetId([
             'reservation_reference' => 'SALO-RES-DEP-'.random_int(10000, 99999),
