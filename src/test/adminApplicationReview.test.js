@@ -121,21 +121,19 @@ test('adminApiService handles list, detail, decision, document-requests, and 409
   }
 });
 
-test('AdminApplicationsPage and ApplicationReviewModal include required filters, pagination, actions, and error UI', async () => {
-  const pageSrc = await fs.readFile(
-    new URL('../../src/features/admin/pages/AdminApplicationsPage.jsx', import.meta.url),
-    'utf8',
-  );
-  assert.ok(pageSrc.includes('additional_documents_required'));
-  assert.ok(pageSrc.includes('last_page > 1'));
+test('AdminApplicationsPage and ApplicationReviewDrawer include required filters, pagination, actions, and error UI', async () => {
+  const [pageSrc, constantsSrc, drawerSrc, decisionSrc] = await Promise.all([
+    fs.readFile(new URL('../../src/features/admin/pages/AdminApplicationsPage.jsx', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../src/features/admin/constants/applicationDocuments.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../src/features/admin/components/applications/ApplicationReviewDrawer.jsx', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../src/features/admin/components/applications/DecisionPanel.jsx', import.meta.url), 'utf8'),
+  ]);
+  assert.ok(constantsSrc.includes('additional_documents_required'));
+  assert.ok(pageSrc.includes('lastPage > 1'));
 
-  const modalSrc = await fs.readFile(
-    new URL('../../src/features/admin/components/ApplicationReviewModal.jsx', import.meta.url),
-    'utf8',
-  );
-  assert.ok(modalSrc.includes('Start Review'));
-  assert.ok(modalSrc.includes('Request Additional Info'));
-  assert.ok(modalSrc.includes('role="alert"'));
-  assert.ok(modalSrc.includes('detail.menu_items'));
-  assert.ok(modalSrc.includes('resolveBackendUrl'));
+  assert.ok(drawerSrc.includes('under_review'));
+  assert.ok(decisionSrc.includes('Request more info'));
+  assert.ok(drawerSrc.includes('role="alert"'));
+  assert.ok(drawerSrc.includes('detail.menu_items'));
+  assert.ok(drawerSrc.includes('resolveBackendUrl'));
 });

@@ -38,7 +38,6 @@ export default function AdminTopbar({
     refresh,
     markAsRead,
     markAllAsRead,
-    pendingApplicationsCount,
   } = useAdminNotifications();
 
   const [notifOpen, setNotifOpen] = useState(false);
@@ -52,7 +51,6 @@ export default function AdminTopbar({
     ? 'Search is not available on this page'
     : (config.placeholder || 'Search records');
 
-  const canViewApplications = hasAdminPermission(currentAdmin.role, 'applications', 'view');
   const canViewSupport = hasAdminPermission(currentAdmin.role, 'support', 'view');
   const canViewSettings = hasAdminPermission(currentAdmin.role, 'settings', 'view');
   const canViewAdmins = hasAdminPermission(currentAdmin.role, 'administrators', 'view');
@@ -285,19 +283,6 @@ export default function AdminTopbar({
 
   const actionsNode = (
     <>
-      {canViewApplications && (
-        <Link
-          to="/admin/applications"
-          className="admin-topbar__apps-btn"
-          aria-label={`Applications (${pendingApplicationsCount} pending)`}
-        >
-          <span>Applications</span>
-          {pendingApplicationsCount > 0 && (
-            <span className="admin-topbar__pill-badge">{pendingApplicationsCount}</span>
-          )}
-        </Link>
-      )}
-
       {canViewSupport && (
         <Link
           to="/admin/support"

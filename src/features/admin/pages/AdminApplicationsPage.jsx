@@ -1,27 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
-import { DataTable, PageHeader, StatusBadge, showAdminToast } from '../components';
-import ApplicationReviewModal from '../components/ApplicationReviewModal';
+import { PageHeader, showAdminToast } from '../components';
 import AdminChangeRequestsPanel from '../components/AdminChangeRequestsPanel';
+import { ApplicationReviewDrawer, StatusChip } from '../components/applications';
+import {
+  APPLICATION_FILTER_TABS,
+  countApplicationsByFilter,
+  formatShortSubmittedDate,
+  isNeedsActionStatus,
+  matchesApplicationFilter,
+} from '../constants/applicationDocuments';
 import { hasAdminPermission } from '../constants';
 import { useAdminPageSearch } from '../contexts/useAdminSearch';
 import useAdminSession from '../contexts/useAdminSession';
 import adminApiService from '../../../services/adminApiService';
 import { mapBackendApplicationStatus } from '../../../services/applicationService';
-import { formatDate } from '../utils/format';
 import './AdminPages.css';
-
-const STATUS_CHIPS = [
-  { label: 'All', value: 'all' },
-  { label: 'Submitted', value: 'submitted' },
-  { label: 'Pending Review', value: 'pending_review' },
-  { label: 'Under Review', value: 'under_review' },
-  { label: 'Additional Info Required', value: 'additional_documents_required' },
-  { label: 'Resubmitted', value: 'resubmitted' },
-  { label: 'Approved', value: 'approved' },
-  { label: 'Rejected', value: 'rejected' },
-];
+import '../components/applications/AdminApplications.css';
 
 function mapListItem(item, kind) {
   return {
@@ -29,28 +25,74 @@ function mapListItem(item, kind) {
     kind,
     applicationId: item.reference_number,
     ownerName: item.owner_name || item.name,
-    vehicle: item.vehicle_type ? item.vehicle_type.replace('_', ' ').toUpperCase() : '',
-    joinedDate: item.submitted_at ? String(item.submitted_at).slice(0, 10) : '',
+    vehicle: item.vehicle_type ? item.vehicle_type.replace(/_/g, ' ') : '',
+    joinedDate: item.submitted_at ? String(item.submitted_at) : '',
     verifiedDocsCount: Number(item.verified_docs_count ?? 0),
     totalDocsCount: Number(item.total_docs_count ?? 0),
     reviewStatus: mapBackendApplicationStatus(item.application_status) || item.application_status,
   };
 }
 
+function getEmptyMessage(statusFilter, searchQuery) {
+  if (searchQuery) {
+    return 'No applications match your search.';
+  }
+  switch (statusFilter) {
+    case 'needs_action':
+      return 'Nothing needs your review right now.';
+    case 'waiting':
+      return 'No applications are waiting for an applicant.';
+    case 'approved':
+      return 'No approved applications yet.';
+    case 'rejected':
+      return 'No rejected applications.';
+    case 'all':
+    default:
+      return 'No applications found.';
+  }
+}
+
+async function fetchAllApplicationsByType(type) {
+  const first = await adminApiService.getApplications({
+    type,
+    status: 'all',
+    per_page: 100,
+    page: 1,
+  });
+  const items = [...(first?.items || [])];
+  const lastPage = Number(first?.meta?.last_page || 1);
+  if (lastPage > 1) {
+    const rest = await Promise.all(
+      Array.from({ length: lastPage - 1 }, (_, idx) =>
+        adminApiService.getApplications({
+          type,
+          status: 'all',
+          per_page: 100,
+          page: idx + 2,
+        }),
+      ),
+    );
+    for (const res of rest) {
+      if (Array.isArray(res?.items)) {
+        items.push(...res.items);
+      }
+    }
+  }
+  return items;
+}
+
 export default function AdminApplicationsPage() {
   const { currentAdmin } = useAdminSession();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [dateRange, setDateRange] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('needs_action');
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
   const [revision, setRevision] = useState(0);
   const [selectedApp, setSelectedApp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [restaurantApps, setRestaurantApps] = useState([]);
   const [riderApps, setRiderApps] = useState([]);
-  const [restaurantMeta, setRestaurantMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
-  const [riderMeta, setRiderMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
   const loadedTabsRef = useRef({ restaurant: false, rider: false });
 
   const canViewRestaurants = hasAdminPermission(currentAdmin.role, 'restaurants', 'view')
@@ -87,14 +129,6 @@ export default function AdminApplicationsPage() {
 
     (async () => {
       try {
-        const params = {
-          status: statusFilter,
-          date_range: dateRange,
-          search: globalQuery || undefined,
-          page,
-          per_page: 25,
-        };
-
         const shouldFetchRestaurant = Boolean(
           canViewRestaurants && (activeType === 'restaurant' || !loadedTabsRef.current.restaurant),
         );
@@ -102,21 +136,19 @@ export default function AdminApplicationsPage() {
           canViewRiders && (activeType === 'rider' || !loadedTabsRef.current.rider),
         );
 
-        const [restRes, riderRes] = await Promise.all([
-          shouldFetchRestaurant ? adminApiService.getApplications({ ...params, type: 'restaurant' }) : Promise.resolve(null),
-          shouldFetchRider ? adminApiService.getApplications({ ...params, type: 'rider' }) : Promise.resolve(null),
+        const [restItems, riderItems] = await Promise.all([
+          shouldFetchRestaurant ? fetchAllApplicationsByType('restaurant') : Promise.resolve(null),
+          shouldFetchRider ? fetchAllApplicationsByType('rider') : Promise.resolve(null),
         ]);
 
         if (!active) return;
-        if (restRes) {
+        if (restItems) {
           loadedTabsRef.current.restaurant = true;
-          setRestaurantApps((restRes.items || []).map((item) => mapListItem(item, 'restaurant')));
-          setRestaurantMeta(restRes.meta || { current_page: 1, last_page: 1, total: 0 });
+          setRestaurantApps(restItems.map((item) => mapListItem(item, 'restaurant')));
         }
-        if (riderRes) {
+        if (riderItems) {
           loadedTabsRef.current.rider = true;
-          setRiderApps((riderRes.items || []).map((item) => mapListItem(item, 'rider')));
-          setRiderMeta(riderRes.meta || { current_page: 1, last_page: 1, total: 0 });
+          setRiderApps(riderItems.map((item) => mapListItem(item, 'rider')));
         }
       } catch (err) {
         if (active) setError(err?.message || 'Failed to load applications from server.');
@@ -128,7 +160,7 @@ export default function AdminApplicationsPage() {
     return () => {
       active = false;
     };
-  }, [activeType, statusFilter, dateRange, globalQuery, page, revision, canViewRestaurants, canViewRiders]);
+  }, [activeType, revision, canViewRestaurants, canViewRiders]);
 
   async function openApplicationDetail(kind, item) {
     try {
@@ -139,14 +171,62 @@ export default function AdminApplicationsPage() {
     }
   }
 
-  const pendingRestaurantCount = useMemo(
-    () => restaurantApps.filter((item) => ['submitted', 'pending_review', 'under_review', 'needs_correction', 'additional_documents_required', 'resubmitted'].includes(item.application_status)).length,
+  const needsActionRestaurantCount = useMemo(
+    () => restaurantApps.filter((item) => isNeedsActionStatus(item.application_status)).length,
     [restaurantApps],
   );
-  const pendingRiderCount = useMemo(
-    () => riderApps.filter((item) => ['submitted', 'pending_review', 'under_review', 'needs_correction', 'additional_documents_required', 'resubmitted'].includes(item.application_status)).length,
+  const needsActionRiderCount = useMemo(
+    () => riderApps.filter((item) => isNeedsActionStatus(item.application_status)).length,
     [riderApps],
   );
+
+  const activeItems = activeType === 'rider' ? riderApps : restaurantApps;
+
+  const searchedItems = useMemo(() => {
+    const q = String(globalQuery || '').trim().toLowerCase();
+    const sorted = [...activeItems].sort((a, b) => {
+      const timeA = a.joinedDate ? new Date(a.joinedDate).getTime() : 0;
+      const timeB = b.joinedDate ? new Date(b.joinedDate).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    if (!q) return sorted;
+    return sorted.filter((item) => (
+      [
+        item.applicationId,
+        item.name,
+        item.ownerName,
+        item.zone,
+        item.vehicle,
+        item.email,
+        item.reviewStatus,
+      ]
+        .filter(Boolean)
+        .some((field) => String(field).toLowerCase().includes(q))
+    ));
+  }, [activeItems, globalQuery]);
+
+  const filterCounts = useMemo(
+    () => countApplicationsByFilter(searchedItems),
+    [searchedItems],
+  );
+
+  const filteredItems = useMemo(
+    () => searchedItems.filter((item) => matchesApplicationFilter(item.application_status, statusFilter)),
+    [searchedItems, statusFilter],
+  );
+
+  const totalItems = filteredItems.length;
+  const lastPage = Math.max(1, Math.ceil(totalItems / perPage));
+  const currentPage = Math.min(page, lastPage);
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * perPage;
+    return filteredItems.slice(start, start + perPage);
+  }, [filteredItems, currentPage, perPage]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [globalQuery, statusFilter, perPage, activeType]);
 
   function switchType(type) {
     setSearchParams({ type }, { replace: true });
@@ -154,87 +234,41 @@ export default function AdminApplicationsPage() {
     setPage(1);
   }
 
-  const restaurantColumns = [
-    { key: 'applicationId', title: 'Application ID' },
-    { key: 'name', title: 'Restaurant name' },
-    { key: 'ownerName', title: 'Owner' },
-    { key: 'zone', title: 'City / zone' },
-    {
-      key: 'joinedDate',
-      title: 'Submitted',
-      sortValue: (item) => new Date(item.joinedDate).getTime(),
-      render: (item) => formatDate(item.joinedDate),
-    },
-    {
-      key: 'verifiedDocsCount',
-      title: 'Documents',
-      render: (item) => `${item.verifiedDocsCount}/${item.totalDocsCount} verified`,
-    },
-    {
-      key: 'reviewStatus',
-      title: 'Status',
-      render: (item) => <StatusBadge status={item.reviewStatus} />,
-    },
-    {
-      key: 'actions',
-      title: 'Actions',
-      orderable: false,
-      searchable: false,
-      render: (item) => (
-        <button
-          type="button"
-          className="admin-action-button"
-          onClick={(event) => {
-            event.stopPropagation();
-            openApplicationDetail('restaurant', item);
-          }}
-        >
-          Review
-        </button>
-      ),
-    },
-  ];
+  function renderDocsProgress(item) {
+    const total = item.totalDocsCount;
+    const verified = item.verifiedDocsCount;
+    const pct = total > 0 ? Math.min(100, Math.round((verified / total) * 100)) : 0;
+    const isComplete = total > 0 && verified >= total;
+    return (
+      <div className="admin-app-docs-progress">
+        <span className="admin-app-docs-progress__text">
+          {verified}/{total}
+        </span>
+        <div className="admin-app-docs-progress__track" aria-hidden="true">
+          <div
+            className={`admin-app-docs-progress__fill ${isComplete ? 'is-complete' : ''}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
 
-  const riderColumns = [
-    { key: 'applicationId', title: 'Application ID' },
-    { key: 'name', title: 'Applicant name' },
-    { key: 'zone', title: 'City / zone' },
-    { key: 'vehicle', title: 'Vehicle type' },
-    {
-      key: 'joinedDate',
-      title: 'Submitted',
-      sortValue: (item) => new Date(item.joinedDate).getTime(),
-      render: (item) => formatDate(item.joinedDate),
-    },
-    {
-      key: 'verifiedDocsCount',
-      title: 'Documents',
-      render: (item) => `${item.verifiedDocsCount}/${item.totalDocsCount} verified`,
-    },
-    {
-      key: 'reviewStatus',
-      title: 'Status',
-      render: (item) => <StatusBadge status={item.reviewStatus} />,
-    },
-    {
-      key: 'actions',
-      title: 'Actions',
-      orderable: false,
-      searchable: false,
-      render: (item) => (
-        <button
-          type="button"
-          className="admin-action-button"
-          onClick={(event) => {
-            event.stopPropagation();
-            openApplicationDetail('rider', item);
-          }}
-        >
-          Review
-        </button>
-      ),
-    },
-  ];
+  function renderActionButton(item) {
+    const needsAction = isNeedsActionStatus(item.application_status);
+    return (
+      <button
+        type="button"
+        className={`admin-app-row-btn ${needsAction ? 'admin-app-row-btn--primary' : 'admin-app-row-btn--secondary'}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          openApplicationDetail(item.kind, item);
+        }}
+      >
+        {needsAction ? 'Review' : 'View'}
+      </button>
+    );
+  }
 
   return (
     <AdminLayout>
@@ -253,7 +287,9 @@ export default function AdminApplicationsPage() {
                   onClick={() => switchType('restaurant')}
                 >
                   <span>Restaurant Applications</span>
-                  <span className="admin-segmented-tab__badge">{pendingRestaurantCount}</span>
+                  {needsActionRestaurantCount > 0 && (
+                    <span className="admin-segmented-tab__badge">{needsActionRestaurantCount}</span>
+                  )}
                 </button>
               )}
               {canViewRiders && (
@@ -265,7 +301,9 @@ export default function AdminApplicationsPage() {
                   onClick={() => switchType('rider')}
                 >
                   <span>Rider Applications</span>
-                  <span className="admin-segmented-tab__badge">{pendingRiderCount}</span>
+                  {needsActionRiderCount > 0 && (
+                    <span className="admin-segmented-tab__badge">{needsActionRiderCount}</span>
+                  )}
                 </button>
               )}
               <button
@@ -285,91 +323,180 @@ export default function AdminApplicationsPage() {
           <AdminChangeRequestsPanel canApprove={canApproveRestaurant || canApproveRider} />
         ) : (
           <>
-
-        <div className="admin-status-chips" role="group" aria-label="Filter applications by status">
-          {STATUS_CHIPS.map((chip) => (
-            <button
-              key={chip.value}
-              type="button"
-              className={`admin-status-chip ${statusFilter === chip.value ? 'is-active' : ''}`}
-              aria-pressed={statusFilter === chip.value}
-              onClick={() => {
-                setStatusFilter(chip.value);
-                setPage(1);
-              }}
-            >
-              {chip.label}
-            </button>
-          ))}
-          <label className="admin-filter-control" style={{ marginLeft: 'auto' }}>
-            <span className="sr-only">Submitted date range</span>
-            <select value={dateRange} onChange={(event) => setDateRange(event.target.value)} aria-label="Submitted date range">
-              <option value="all">All dates</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-            </select>
-          </label>
-        </div>
-
-        {error && <p role="alert" style={{ color: '#b91c1c', marginBottom: 12 }}>{error}</p>}
-        {loading && <p className="admin-muted" style={{ marginBottom: 12 }}>Loading applications...</p>}
-
-        {activeType === 'restaurant' ? (
-          <DataTable
-            columns={restaurantColumns}
-            data={restaurantApps}
-            tableSearch={globalQuery}
-            defaultOrder={[[4, 'desc']]}
-            onRowClick={(item) => openApplicationDetail('restaurant', item)}
-            emptyTitle="No restaurant applications"
-            emptyDescription="No restaurant applications match the current filter."
-          />
-        ) : (
-          <DataTable
-            columns={riderColumns}
-            data={riderApps}
-            tableSearch={globalQuery}
-            defaultOrder={[[4, 'desc']]}
-            onRowClick={(item) => openApplicationDetail('rider', item)}
-            emptyTitle="No rider applications"
-            emptyDescription="No rider applications match the current filter."
-          />
-        )}
-
-        {((activeType === 'restaurant' ? restaurantMeta : riderMeta).last_page > 1) && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-            <span className="admin-muted">
-              Page {(activeType === 'restaurant' ? restaurantMeta : riderMeta).current_page} of {(activeType === 'restaurant' ? restaurantMeta : riderMeta).last_page}
-            </span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                type="button"
-                className="admin-action-button"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                className="admin-action-button"
-                disabled={page >= ((activeType === 'restaurant' ? restaurantMeta : riderMeta).last_page || 1)}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </button>
+            <div className="admin-app-filters" role="group" aria-label="Filter applications by status">
+              {APPLICATION_FILTER_TABS.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  className={`admin-app-filter-btn ${statusFilter === tab.value ? 'is-active' : ''}`}
+                  aria-pressed={statusFilter === tab.value}
+                  onClick={() => setStatusFilter(tab.value)}
+                >
+                  <span>{tab.label}</span>
+                  <span className="admin-app-filter-btn__count">{filterCounts[tab.value] ?? 0}</span>
+                </button>
+              ))}
             </div>
-          </div>
-        )}
 
-        <ApplicationReviewModal
-          open={Boolean(selectedApp)}
-          kind={selectedApp?.kind || activeType}
-          application={selectedApp?.item}
-          canApprove={selectedApp?.kind === 'rider' ? canApproveRider : canApproveRestaurant}
-          onClose={() => setSelectedApp(null)}
-          onUpdated={() => setRevision((value) => value + 1)}
-        />
+            {error && (
+              <div className="admin-app-drawer__error" role="alert">
+                {error}
+              </div>
+            )}
+
+            {loading ? (
+              <div className="admin-app-empty" role="status">
+                <p>Loading applications...</p>
+              </div>
+            ) : paginatedItems.length === 0 ? (
+              <div className="admin-app-empty" role="status">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                  <path d="M9 12l2 2 4-4" />
+                  <circle cx="12" cy="12" r="9" />
+                </svg>
+                <p>{getEmptyMessage(statusFilter, globalQuery)}</p>
+              </div>
+            ) : (
+              <div className="admin-app-table-card">
+                <div className="admin-app-table-wrap">
+                  <table className="admin-app-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">{activeType === 'restaurant' ? 'Restaurant' : 'Applicant'}</th>
+                        <th scope="col">City</th>
+                        <th scope="col">Submitted</th>
+                        <th scope="col">Documents</th>
+                        <th scope="col">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedItems.map((item) => (
+                        <tr
+                          key={`${item.kind}-${item.id}`}
+                          className="admin-app-table__row"
+                          tabIndex={0}
+                          onClick={() => openApplicationDetail(item.kind, item)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              openApplicationDetail(item.kind, item);
+                            }
+                          }}
+                        >
+                          <td>
+                            <div className="admin-app-name-cell">
+                              <span className="admin-app-name-cell__primary">{item.name}</span>
+                              <span className="admin-app-name-cell__secondary">
+                                {item.kind === 'restaurant'
+                                  ? item.ownerName
+                                  : (item.vehicle || item.email || '—')}
+                              </span>
+                            </div>
+                          </td>
+                          <td>{item.zone || '—'}</td>
+                          <td>{formatShortSubmittedDate(item.joinedDate)}</td>
+                          <td>{renderDocsProgress(item)}</td>
+                          <td>
+                            <div className="admin-app-status-actions">
+                              <StatusChip status={item.application_status} label={item.reviewStatus} />
+                              {renderActionButton(item)}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="admin-app-mobile-list">
+                  {paginatedItems.map((item) => (
+                    <article
+                      key={`${item.kind}-${item.id}-mobile`}
+                      className="admin-app-mobile-card"
+                      onClick={() => openApplicationDetail(item.kind, item)}
+                    >
+                      <div className="admin-app-mobile-card__top">
+                        <div className="admin-app-name-cell">
+                          <span className="admin-app-name-cell__primary">{item.name}</span>
+                          <span className="admin-app-name-cell__secondary">
+                            {item.kind === 'restaurant'
+                              ? item.ownerName
+                              : (item.vehicle || item.email || '—')}
+                          </span>
+                        </div>
+                        <StatusChip status={item.application_status} label={item.reviewStatus} />
+                      </div>
+                      <div className="admin-app-mobile-card__meta">
+                        <span>{item.zone || '—'}</span>
+                        <span>{formatShortSubmittedDate(item.joinedDate)}</span>
+                      </div>
+                      <div className="admin-app-mobile-card__footer">
+                        {renderDocsProgress(item)}
+                        {renderActionButton(item)}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <footer className="admin-app-table-footer">
+                  <div className="admin-app-table-footer__meta">
+                    <span>
+                      Showing {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, totalItems)} of {totalItems}
+                    </span>
+                    <label className="admin-app-per-page">
+                      <span>Per page</span>
+                      <select
+                        value={perPage}
+                        onChange={(event) => setPerPage(Number(event.target.value))}
+                        aria-label="Rows per page"
+                      >
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  {lastPage > 1 && (
+                    <div className="admin-app-pagination">
+                      <button
+                        type="button"
+                        className="admin-app-page-btn"
+                        disabled={currentPage <= 1}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      >
+                        Previous
+                      </button>
+                      <span className="admin-app-per-page">
+                        Page {currentPage} of {lastPage}
+                      </span>
+                      <button
+                        type="button"
+                        className="admin-app-page-btn"
+                        disabled={currentPage >= lastPage}
+                        onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </footer>
+              </div>
+            )}
+
+            <ApplicationReviewDrawer
+              open={Boolean(selectedApp)}
+              kind={selectedApp?.kind || activeType}
+              application={selectedApp?.item}
+              canApprove={selectedApp?.kind === 'rider' ? canApproveRider : canApproveRestaurant}
+              onClose={() => setSelectedApp(null)}
+              onUpdated={(updatedApp) => {
+                if (updatedApp) {
+                  setSelectedApp((prev) => (prev ? { ...prev, item: updatedApp } : null));
+                }
+                setRevision((value) => value + 1);
+              }}
+            />
           </>
         )}
       </section>
