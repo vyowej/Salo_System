@@ -309,6 +309,24 @@ export default function OwnerProfilePage() {
         });
       }
 
+      const numericId = Number(selectedRestaurantId);
+      const nextAreas = Array.isArray(formData.deliveryCoverage?.areas)
+        ? formData.deliveryCoverage.areas
+        : [];
+      const prevAreas = Array.isArray(initial?.deliveryCoverage?.areas)
+        ? initial.deliveryCoverage.areas
+        : [];
+      if (
+        Number.isFinite(numericId) &&
+        numericId > 0 &&
+        JSON.stringify(nextAreas) !== JSON.stringify(prevAreas)
+      ) {
+        await locationApiService.updateRestaurantCoverage({
+          restaurant_id: numericId,
+          areas: nextAreas,
+        });
+      }
+
       const nextData = toBusinessProfileForm({
         ...formData,
         description: updatedProfile?.description || '',
@@ -662,10 +680,20 @@ export default function OwnerProfilePage() {
                   onSaveCoverage={async (areas) => {
                     const numericId = Number(selectedRestaurantId);
                     if (Number.isFinite(numericId) && numericId > 0) {
-                      await locationApiService.updateRestaurantCoverage({
+                      const updatedCov = await locationApiService.updateRestaurantCoverage({
                         restaurant_id: numericId,
                         areas,
                       });
+                      const persistedAreas = updatedCov?.coverage_areas || areas;
+                      setInitial((prev) => (prev
+                        ? {
+                            ...prev,
+                            deliveryCoverage: {
+                              ...prev.deliveryCoverage,
+                              areas: persistedAreas,
+                            },
+                          }
+                        : prev));
                     }
                   }}
                   saving={saving}
