@@ -53,15 +53,51 @@ class ServiceAreaValidationService
     }
 
     /**
+     * Map OpenStreetMap/Nominatim region names for Philippine Highly Urbanized Cities
+     * to their PSGC province names so city/barangay service areas match reliably.
+     *
+     * @return list<string>
+     */
+    private function resolveEquivalentProvinces(string $cleanProvince): array
+    {
+        $aliases = [
+            'zamboanga peninsula' => ['zamboanga del sur'],
+            'region ix' => ['zamboanga del sur'],
+            'davao region' => ['davao del sur'],
+            'region xi' => ['davao del sur'],
+            'central visayas' => ['cebu'],
+            'region vii' => ['cebu'],
+            'western visayas' => ['iloilo'],
+            'region vi' => ['iloilo'],
+            'northern mindanao' => ['misamis oriental'],
+            'region x' => ['misamis oriental'],
+            'cordillera administrative region' => ['benguet'],
+            'national capital region' => ['metro manila'],
+            'ncr' => ['metro manila'],
+        ];
+
+        $result = [$cleanProvince];
+        foreach ($aliases[$cleanProvince] ?? [] as $mapped) {
+            if (! in_array($mapped, $result, true)) {
+                $result[] = $mapped;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * @param  iterable<int, object>|null  $preloadedActiveAreas
      * @return iterable<int, object>
      */
     private function loadMatchingActiveAreas(string $cleanProvince, ?iterable $preloadedActiveAreas): iterable
     {
+        $equivalentProvinces = $this->resolveEquivalentProvinces($cleanProvince);
+
         if ($preloadedActiveAreas !== null) {
             $filtered = [];
             foreach ($preloadedActiveAreas as $candidate) {
-                if (mb_strtolower((string) ($candidate->province_name ?? '')) === $cleanProvince) {
+                if (in_array(mb_strtolower((string) ($candidate->province_name ?? '')), $equivalentProvinces, true)) {
                     $filtered[] = $candidate;
                 }
             }
@@ -74,7 +110,7 @@ class ServiceAreaValidationService
             ->leftJoin('cities as c', 'c.city_id', '=', 'psa.city_id')
             ->leftJoin('barangays as b', 'b.barangay_id', '=', 'psa.barangay_id')
             ->where('psa.is_active', 1)
-            ->where('p.province_name', $cleanProvince)
+            ->whereIn('p.province_name', $equivalentProvinces)
             ->select([
                 'psa.platform_service_area_id',
                 'psa.area_level',
@@ -170,7 +206,17 @@ class ServiceAreaValidationService
      */
     public function loadActiveAreasForProvinces(array $provinceNames)
     {
-        $uniqueProvinces = array_values(array_unique(array_filter(array_map('trim', $provinceNames))));
+        $expanded = [];
+        foreach ($provinceNames as $name) {
+            $clean = mb_strtolower(trim((string) $name));
+            if ($clean === '') {
+                continue;
+            }
+            foreach ($this->resolveEquivalentProvinces($clean) as $eq) {
+                $expanded[] = $eq;
+            }
+        }
+        $uniqueProvinces = array_values(array_unique($expanded));
         if ($uniqueProvinces === []) {
             return collect();
         }

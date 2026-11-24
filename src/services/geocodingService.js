@@ -42,12 +42,23 @@ function scheduleNominatimRequest(fn) {
  */
 export function parseNominatimAddress(data) {
   const addr = data?.address || {};
-  const rawProvince = addr.province || addr.state || addr.region || '';
-  const province = /metro manila|national capital region/i.test(rawProvince)
-    ? 'Metro Manila'
-    : rawProvince;
-
   const city = addr.city || addr.town || addr.municipality || addr.city_district || '';
+  const rawProvince = addr.province || addr.state || addr.region || '';
+  let province = rawProvince;
+  if (/metro manila|national capital region/i.test(rawProvince)) {
+    province = 'Metro Manila';
+  } else if (/zamboanga peninsula/i.test(rawProvince) && /zamboanga/i.test(city)) {
+    province = 'Zamboanga del Sur';
+  } else if (/davao region/i.test(rawProvince) && /davao/i.test(city)) {
+    province = 'Davao del Sur';
+  } else if (/central visayas/i.test(rawProvince) && /cebu/i.test(city)) {
+    province = 'Cebu';
+  } else if (/western visayas/i.test(rawProvince) && /iloilo/i.test(city)) {
+    province = 'Iloilo';
+  } else if (/northern mindanao/i.test(rawProvince) && /cagayan de oro/i.test(city)) {
+    province = 'Misamis Oriental';
+  }
+
   const rawBarangay = addr.suburb || addr.quarter || addr.neighbourhood || addr.village || '';
   const barangay = rawBarangay.replace(/^Barangay\s+/i, '').replace(/^Brgy\.?\s+/i, '');
   const street = addr.road || addr.pedestrian || addr.residential || '';

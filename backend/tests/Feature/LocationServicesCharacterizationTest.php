@@ -178,6 +178,29 @@ class LocationServicesCharacterizationTest extends TestCase
         $this->assertTrue($uncovered['platform_supported']);
         $this->assertFalse($uncovered['restaurant_supported']);
         $this->assertTrue($uncovered['restaurant_configured']);
+
+        // Region name from Nominatim (e.g. "Zamboanga Peninsula") matches PSGC province ("Zamboanga del Sur") for city-level areas
+        $zdsProvinceId = (int) DB::table('provinces')->insertGetId([
+            'province_name' => 'Zamboanga del Sur',
+            'created_at' => now(),
+        ]);
+        $zamboCityId = (int) DB::table('cities')->insertGetId([
+            'province_id' => $zdsProvinceId,
+            'city_name' => 'Zamboanga City',
+            'created_at' => now(),
+        ]);
+        DB::table('platform_service_areas')->insert([
+            'province_id' => $zdsProvinceId,
+            'city_id' => $zamboCityId,
+            'barangay_id' => null,
+            'area_level' => 'city',
+            'is_active' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $zamboSupport = $service->checkPlatformSupport('Zamboanga Peninsula', 'Zamboanga City', 'Pasonanca');
+        $this->assertTrue($zamboSupport['platform_supported']);
+        $this->assertSame('city', $zamboSupport['matched_level']);
     }
 
     public function test_rider_tracking_service_deduplication_stale_detection_and_access(): void
