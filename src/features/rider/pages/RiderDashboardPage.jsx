@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../../../components/common/Button';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import WarningDialog from '../../../components/common/WarningDialog';
 import { StateView as GlobalStateView } from '../../../components/feedback';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
@@ -16,6 +18,12 @@ const RIDER_DECK_TABS = [
   { id: 'tips', label: 'Rider Tips' },
 ];
 
+const isRiderOnline = (avail) => (
+  typeof avail === 'string'
+    ? avail === 'online'
+    : Boolean(avail?.is_online || avail?.status === 'online')
+);
+
 export default function RiderDashboardPage() {
   const { user } = useAuth();
   const [dashboard, setDashboard] = useState(null);
@@ -25,6 +33,10 @@ export default function RiderDashboardPage() {
   const [toggling, setToggling] = useState(false);
   const [deckIndex, setDeckIndex] = useState(0);
   const [heroPhotoFailed, setHeroPhotoFailed] = useState(false);
+  const [offlineNoticeOpen, setOfflineNoticeOpen] = useState(false);
+  const [confirmOfflineOpen, setConfirmOfflineOpen] = useState(false);
+  const [offlineBlockedMessage, setOfflineBlockedMessage] = useState('');
+  const offlinePromptShownRef = useRef(false);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -52,15 +64,19 @@ export default function RiderDashboardPage() {
     loadDashboard();
   }, [loadDashboard]);
 
-  const isRiderOnline = (avail) => (
-    typeof avail === 'string'
-      ? avail === 'online'
-      : Boolean(avail?.is_online || avail?.status === 'online')
-  );
+  useEffect(() => {
+    if (loading || !dashboard || offlinePromptShownRef.current) return;
+    const riderStatus = dashboard?.rider?.rider_status;
+    const online = isRiderOnline(dashboard?.availability);
+    const hasPending = Boolean(dashboard?.active_delivery || dashboard?.stats?.has_active_delivery);
+    if (riderStatus === 'active' && !online && !hasPending) {
+      offlinePromptShownRef.current = true;
+      setOfflineNoticeOpen(true);
+    }
+  }, [dashboard, loading]);
 
-  const handleToggleAvailability = async () => {
+  const performAvailabilityUpdate = async (nextStatus) => {
     if (toggling) return;
-    const nextStatus = isRiderOnline(dashboard?.availability) ? 'offline' : 'online';
     setToggling(true);
     setError(null);
     try {
@@ -68,10 +84,34 @@ export default function RiderDashboardPage() {
       await loadDashboard();
       window.dispatchEvent(new Event('salo:riderUpdated'));
     } catch (err) {
-      setError(err?.message || 'Unable to update availability.');
+      const msg = err?.message || 'Unable to update availability.';
+      if (nextStatus === 'offline') {
+        setOfflineBlockedMessage(msg);
+      } else {
+        setError(msg);
+      }
     } finally {
       setToggling(false);
     }
+  };
+
+  const handleToggleAvailability = () => {
+    if (toggling) return;
+    const currentlyOnline = isRiderOnline(dashboard?.availability);
+    if (!currentlyOnline) {
+      performAvailabilityUpdate('online');
+      return;
+    }
+
+    const hasPendingDelivery = Boolean(dashboard?.active_delivery || dashboard?.stats?.has_active_delivery);
+    if (hasPendingDelivery) {
+      setOfflineBlockedMessage(
+        'You cannot go offline while you have a pending or active delivery. Please complete your current delivery first.',
+      );
+      return;
+    }
+
+    setConfirmOfflineOpen(true);
   };
 
   if (loading) {
@@ -185,6 +225,7 @@ export default function RiderDashboardPage() {
             <Button
               variant={isOnline ? 'secondary' : 'primary'}
               size="md"
+              className={!isOnline && isRiderActive ? 'rider-go-online-btn' : ''}
               onClick={handleToggleAvailability}
               disabled={toggling || !isRiderActive}
             >
@@ -398,6 +439,40 @@ export default function RiderDashboardPage() {
           )}
         </div>
       </section>
+
+      <ConfirmDialog
+        open={offlineNoticeOpen}
+        title="You are currently offline"
+        message="You won't receive or be matched with any new delivery orders while offline. Go online whenever you're ready to start riding."
+        confirmLabel="Go online now"
+        cancelLabel="Stay offline"
+        confirmClassName="rider-go-online-btn"
+        onCancel={() => setOfflineNoticeOpen(false)}
+        onConfirm={() => {
+          setOfflineNoticeOpen(false);
+          performAvailabilityUpdate('online');
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmOfflineOpen}
+        title="Go offline?"
+        message="Are you sure you want to go offline? You won't receive any new delivery orders while offline."
+        confirmLabel="Yes, go offline"
+        cancelLabel="Stay online"
+        onCancel={() => setConfirmOfflineOpen(false)}
+        onConfirm={() => {
+          setConfirmOfflineOpen(false);
+          performAvailabilityUpdate('offline');
+        }}
+      />
+
+      <WarningDialog
+        open={Boolean(offlineBlockedMessage)}
+        title="Cannot go offline"
+        message={offlineBlockedMessage}
+        onClose={() => setOfflineBlockedMessage('')}
+      />
     </div>
   );
 }

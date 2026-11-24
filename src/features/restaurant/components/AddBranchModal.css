@@ -38,23 +38,42 @@
 
 .salo-add-branch-fieldset {
   margin: 0;
-  padding: var(--space-3, 12px);
-  border-radius: var(--radius-md, 10px);
-  border: 1px solid var(--border-secondary, #e5e7eb);
+  padding: var(--space-4, 16px);
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--border-primary, #e5e7eb);
+  background: var(--surface-secondary, #f8f9fa);
+  display: grid;
+  gap: var(--space-3, 12px);
 }
 
 .salo-add-branch-fieldset legend {
-  padding: 0 var(--space-1, 4px);
+  padding: 0 var(--space-2, 8px);
   font-size: var(--font-size-xs, 12px);
   font-weight: 700;
-  color: var(--text-secondary, #525252);
+  color: var(--text-primary, #171717);
 }
 
-.salo-add-branch-checks,
-.salo-add-branch-copy-options {
+.salo-add-branch-permit-helper {
+  margin: 0;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-secondary, #525252);
+  line-height: 1.45;
+}
+
+.salo-add-branch-checks {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4, 16px);
+  gap: var(--space-3, 12px) var(--space-5, 20px);
+}
+
+.salo-add-branch-copy-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-secondary, #e5e7eb);
+  background: var(--surface-secondary, #f8f9fa);
 }
 
 .salo-add-branch-checks label,

@@ -635,6 +635,17 @@
   background: rgba(255, 255, 255, 0.22);
 }
 
+.rider-go-online-btn {
+  background: var(--salo-green, #2E7D32) !important;
+  border-color: var(--salo-green, #2E7D32) !important;
+  color: #FFFFFF !important;
+}
+
+.rider-go-online-btn:hover:not(:disabled) {
+  background: #256628 !important;
+  border-color: #256628 !important;
+}
+
 /* ── Quick Actions Launchpad ───────────────────────────────── */
 .rider-quick-actions {
   display: grid;

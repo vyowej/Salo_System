@@ -6,6 +6,16 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
 import { formatTimeUntilExpiry } from '../../../utils/reservationExpiryUtils';
+import {
+  AlertIcon,
+  CalendarIcon,
+  ClipboardIcon,
+  CreditCardIcon,
+  PhoneIcon,
+  SearchIcon,
+  TableIcon,
+  UsersIcon,
+} from '../../../components/common/ReservationIcons';
 import './CustomerRecords.css';
 import './CustomerReservationsPage.css';
 
@@ -536,14 +546,14 @@ export default function ReservationsPage() {
               className={`customer-cal-nav__tab ${viewMode === 'calendar' ? 'is-active' : ''}`}
               onClick={() => setViewMode('calendar')}
             >
-              📅 Reservation Calendar
+              <CalendarIcon size={15} /> Reservation Calendar
             </button>
             <button
               type="button"
               className={`customer-cal-nav__tab ${viewMode === 'list' ? 'is-active' : ''}`}
               onClick={() => setViewMode('list')}
             >
-              📋 All Bookings List
+              <ClipboardIcon size={15} /> All Bookings List
             </button>
           </div>
         </section>
@@ -636,7 +646,7 @@ export default function ReservationsPage() {
               <div className="customer-date-schedule__header">
                 <div>
                   <h3 className="customer-date-schedule__title">
-                    📅 Schedule for {new Date(`${selectedCalendarDate}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                    <CalendarIcon size={15} /> Schedule for {new Date(`${selectedCalendarDate}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                   </h3>
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                     {selectedDateBookings.length === 0
@@ -726,7 +736,7 @@ export default function ReservationsPage() {
 
                         {res.status === 'Rejected' && (
                           <div className="customer-res-card__alert customer-res-card__alert--danger" role="alert">
-                            <span style={{ fontSize: 16 }}>⚠️</span>
+                            <AlertIcon size={16} />
                             <div>
                               <strong>Reservation Declined by Restaurant</strong>
                               <span style={{ display: 'block', marginTop: 2 }}>
@@ -738,22 +748,22 @@ export default function ReservationsPage() {
 
                         <div className="customer-res-card__details customer-reservation-card__details">
                           <div className="customer-res-detail-item">
-                            <span className="customer-res-detail-item__label">📅 Date &amp; Time</span>
+                            <span className="customer-res-detail-item__label"><CalendarIcon size={13} /> Date &amp; Time</span>
                             <p className="customer-res-detail-item__value">{res.date} at {res.time}</p>
                           </div>
                           <div className="customer-res-detail-item">
-                            <span className="customer-res-detail-item__label">👥 Party Size</span>
+                            <span className="customer-res-detail-item__label"><UsersIcon size={13} /> Party Size</span>
                             <p className="customer-res-detail-item__value">{res.guests} {res.guests === 1 ? 'Guest' : 'Guests'}</p>
                           </div>
                           <div className="customer-res-detail-item">
-                            <span className="customer-res-detail-item__label">🪑 Seating &amp; Table</span>
+                            <span className="customer-res-detail-item__label"><TableIcon size={13} /> Seating &amp; Table</span>
                             <p className="customer-res-detail-item__value">
                               {res.seatingArea}
                               {res.assignedTable && ` · Table ${res.assignedTable.name || res.assignedTable.id}`}
                             </p>
                           </div>
                           <div className="customer-res-detail-item">
-                            <span className="customer-res-detail-item__label">💳 Reservation fee / payment</span>
+                            <span className="customer-res-detail-item__label"><CreditCardIcon size={13} /> Reservation fee / payment</span>
                             <p className="customer-res-detail-item__value">
                               ₱{Number(res.depositAmount > 0 ? res.depositAmount : res.serviceFee).toLocaleString('en-PH')} · {res.paymentStatus}
                             </p>
@@ -810,7 +820,7 @@ export default function ReservationsPage() {
             <section className="customer-res-toolbar" aria-label="Search and filter reservations">
               <div className="customer-res-toolbar__row">
                 <div className="customer-res-search-box">
-                  <span className="customer-res-search-box__icon">🔍</span>
+                  <span className="customer-res-search-box__icon"><SearchIcon size={15} /></span>
                   <input
                     type="text"
                     className="customer-res-search-box__input"
@@ -944,22 +954,22 @@ export default function ReservationsPage() {
 
                       <div className="customer-res-card__details customer-reservation-card__details">
                         <div className="customer-res-detail-item">
-                          <span className="customer-res-detail-item__label">📅 Date &amp; Time</span>
+                          <span className="customer-res-detail-item__label"><CalendarIcon size={13} /> Date &amp; Time</span>
                           <p className="customer-res-detail-item__value">{res.date} at {res.time}</p>
                         </div>
                         <div className="customer-res-detail-item">
-                          <span className="customer-res-detail-item__label">👥 Party Size</span>
+                          <span className="customer-res-detail-item__label"><UsersIcon size={13} /> Party Size</span>
                           <p className="customer-res-detail-item__value">{res.guests} {res.guests === 1 ? 'Guest' : 'Guests'}</p>
                         </div>
                         <div className="customer-res-detail-item">
-                          <span className="customer-res-detail-item__label">🪑 Seating &amp; Table</span>
+                          <span className="customer-res-detail-item__label"><TableIcon size={13} /> Seating &amp; Table</span>
                           <p className="customer-res-detail-item__value">
                             {res.seatingArea}
                             {res.assignedTable && ` · Table ${res.assignedTable.name || res.assignedTable.id}`}
                           </p>
                         </div>
                         <div className="customer-res-detail-item">
-                          <span className="customer-res-detail-item__label">💳 Reservation fee / payment</span>
+                          <span className="customer-res-detail-item__label"><CreditCardIcon size={13} /> Reservation fee / payment</span>
                           <p className="customer-res-detail-item__value">
                             ₱{Number(res.depositAmount > 0 ? res.depositAmount : res.serviceFee).toLocaleString('en-PH')} · {res.paymentStatus}
                           </p>
@@ -1086,7 +1096,7 @@ export default function ReservationsPage() {
                   )}
                   {detailsRes.restaurantPhone && (
                     <span style={{ display: 'block', fontSize: 11, color: 'var(--text-secondary)' }}>
-                      📞 {detailsRes.restaurantPhone}
+                      <PhoneIcon size={12} /> {detailsRes.restaurantPhone}
                     </span>
                   )}
                 </div>

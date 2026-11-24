@@ -8,7 +8,10 @@ import OwnerLayout from '../../../layouts/OwnerLayout';
 import staffInvitationService, { STAFF_POSITIONS } from '../../../services/staffInvitationService';
 import { formatDateTimeManila } from '../../../utils/format';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
+import AddBranchModal from '../components/AddBranchModal';
+import { BRANCH_WORKSPACE_COPY } from '../content/branchContent';
 import { TEAM_STAFF_COPY } from '../content/teamContent';
+import { getBranchPermitMeta } from '../utils/branchWorkspaceUtils';
 import './team/TeamAndStaffPage.css';
 
 const STAFF_STATUS_BADGE = {
@@ -36,6 +39,9 @@ export default function TeamAndStaffPage() {
   }, [access.user?.staff_positions]);
 
   const [allBranches, setAllBranches] = useState(false);
+  const [activeSection, setActiveSection] = useState('all');
+  const [addBranchOpen, setAddBranchOpen] = useState(false);
+  const [branchFeedback, setBranchFeedback] = useState('');
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -204,6 +210,111 @@ export default function TeamAndStaffPage() {
           />
         ) : (
           <>
+            <div className="manage-restaurant-header">
+              <div>
+                <p className="team-eyebrow">MANAGE RESTAURANT</p>
+                <h1 className="manage-restaurant-title">Branches &amp; Team</h1>
+                <p className="manage-restaurant-sub">
+                  Switch between branches, add new locations, and manage your staff invitations.
+                </p>
+              </div>
+              <div className="manage-restaurant-actions">
+                <div className="manage-restaurant-pills" role="tablist" aria-label="Manage restaurant sections">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeSection === 'all'}
+                    className={`manage-pill ${activeSection === 'all' ? 'is-active' : ''}`.trim()}
+                    onClick={() => setActiveSection('all')}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeSection === 'branches'}
+                    className={`manage-pill ${activeSection === 'branches' ? 'is-active' : ''}`.trim()}
+                    onClick={() => setActiveSection('branches')}
+                  >
+                    Branches ({access.restaurants.length})
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeSection === 'team'}
+                    className={`manage-pill ${activeSection === 'team' ? 'is-active' : ''}`.trim()}
+                    onClick={() => setActiveSection('team')}
+                  >
+                    Team ({staff.length})
+                  </button>
+                </div>
+                <Button variant="primary" size="sm" onClick={() => setAddBranchOpen(true)}>
+                  + Add a New Branch
+                </Button>
+              </div>
+            </div>
+
+            {branchFeedback && (
+              <div className="manage-branch-notice" role="status">
+                <span>{branchFeedback}</span>
+                <button type="button" onClick={() => setBranchFeedback('')} aria-label="Dismiss notice">×</button>
+              </div>
+            )}
+
+            {(activeSection === 'all' || activeSection === 'branches') && (
+              <section className="manage-branches-section" aria-label="Restaurant branches">
+                <div className="manage-branches-grid">
+                  {access.restaurants.map((branch) => {
+                    const isCurrent = branch.id === access.selectedRestaurantId;
+                    const permitMeta = !branch.isMainBranch && branch.permitStatus
+                      ? getBranchPermitMeta(branch.permitStatus)
+                      : null;
+
+                    return (
+                      <Card key={branch.id} className={`manage-branch-card ${isCurrent ? 'is-current' : ''}`.trim()}>
+                        <div className="manage-branch-card-top">
+                          <div>
+                            <div className="manage-branch-title-row">
+                              <strong>{branch.branchName || branch.displayName || branch.name}</strong>
+                              {branch.isMainBranch && <Badge variant="default" size="sm">Main</Badge>}
+                            </div>
+                            <p className="manage-branch-addr">
+                              {branch.shortAddress || branch.displayName || branch.name}
+                            </p>
+                          </div>
+                          <div className="manage-branch-badges">
+                            <Badge variant={branch.status === 'active' ? 'completed' : 'warning'} size="sm">
+                              {branch.status || 'active'}
+                            </Badge>
+                            {permitMeta && (
+                              <Badge variant={permitMeta.variant} size="sm">
+                                {permitMeta.label}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="manage-branch-card-foot">
+                          {isCurrent ? (
+                            <span className="manage-branch-current-label">Active branch</span>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => access.selectRestaurant(branch.id)}
+                            >
+                              Switch to branch
+                            </Button>
+                          )}
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {(activeSection === 'all' || activeSection === 'team') && (
+              <>
             {feedback && (
               <div
                 role="status"
@@ -437,9 +548,17 @@ export default function TeamAndStaffPage() {
                 })}
               </div>
             )}
+              </>
+            )}
           </>
         )}
       </div>
+
+      <AddBranchModal
+        open={addBranchOpen}
+        onClose={() => setAddBranchOpen(false)}
+        onCreated={() => setBranchFeedback(BRANCH_WORKSPACE_COPY.addBranchSuccessNote)}
+      />
 
       <ConfirmDialog
         open={Boolean(cancelTarget)}

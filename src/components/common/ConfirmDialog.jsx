@@ -12,6 +12,7 @@ export default function ConfirmDialog({
   message,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
+  confirmClassName = '',
   onConfirm,
   onCancel,
 }) {
@@ -127,6 +128,7 @@ export default function ConfirmDialog({
             type="button"
             variant="primary"
             size="md"
+            className={confirmClassName}
             onClick={onConfirm}
           >
             {confirmLabel}

@@ -46,7 +46,7 @@ export const OWNER_NAV_CONFIG = [
   },
   {
     id: 'reservations',
-    label: 'Reservations',
+    label: 'Dining & Tables',
     href: '/owner/reservations',
     icon: (
       <svg {...iconProps}>
@@ -77,16 +77,6 @@ export const OWNER_NAV_CONFIG = [
     ),
   },
   {
-    id: 'tables',
-    label: 'Tables',
-    href: '/owner/tables',
-    icon: (
-      <svg {...iconProps}>
-        <path d="M3 10h18M5 10V5h14v5M7 10v10M17 10v10" />
-      </svg>
-    ),
-  },
-  {
     id: 'promotions',
     label: 'Promotions',
     href: '/owner/promotions',
@@ -99,13 +89,12 @@ export const OWNER_NAV_CONFIG = [
   },
   {
     id: 'team',
-    label: 'Staff',
+    label: 'Manage Restaurant',
     href: '/owner/team',
     icon: (
       <svg {...iconProps}>
-        <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+        <path d="M3 21h18M5 21V7l7-4 7 4v14" />
+        <path d="M9 21v-6h6v6M9 10h.01M15 10h.01" />
       </svg>
     ),
   },

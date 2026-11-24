@@ -7,6 +7,18 @@ import Modal from '../../../components/common/Modal';
 import { StateView } from '../../../components/feedback';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import { formatTimeUntilExpiry } from '../../../utils/reservationExpiryUtils';
+import OwnerTablesPage from './OwnerTablesPage';
+import {
+  CheckCircleIcon,
+  ClipboardIcon,
+  ClockIcon,
+  FlagIcon,
+  MailIcon,
+  PhoneIcon,
+  TableIcon,
+  UsersIcon,
+  UtensilsIcon,
+} from '../../../components/common/ReservationIcons';
 
 function sanitizeTelHref(phone) {
   const cleaned = String(phone || '').replace(/[^+\d]/g, '');
@@ -128,6 +140,7 @@ export default function OwnerReservationsPage() {
   const todayKey = useMemo(() => getManilaTodayKey(), []);
 
   // View & Navigation
+  const [sectionTab, setSectionTab] = useState('reservations');
   const [viewMode, setViewMode] = useState('day'); // 'day' | 'week' | 'list'
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [calendarMonth, setCalendarMonth] = useState(() => monthKeyFromDateKey(todayKey));
@@ -745,17 +758,47 @@ export default function OwnerReservationsPage() {
           </div>
 
           <div className="owner-reservations__header-right">
-            <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-secondary)' }}>
-              <div>Expected Covers</div>
-              <strong style={{ fontSize: 18, color: 'var(--text-primary)' }}>
-                {summary.expectedCovers} guests
-              </strong>
-            </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => loadReservations()}>
-              Refresh
-            </Button>
+            {sectionTab === 'reservations' && (
+              <>
+                <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <div>Expected Covers</div>
+                  <strong style={{ fontSize: 18, color: 'var(--text-primary)' }}>
+                    {summary.expectedCovers} guests
+                  </strong>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => loadReservations()}>
+                  Refresh
+                </Button>
+              </>
+            )}
           </div>
         </header>
+
+        <div className="owner-dining-tabs" role="tablist" aria-label="Dining and tables sections">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={sectionTab === 'reservations'}
+            className={`owner-dining-tab ${sectionTab === 'reservations' ? 'is-active' : ''}`.trim()}
+            onClick={() => setSectionTab('reservations')}
+          >
+            Reservations
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={sectionTab === 'tables'}
+            className={`owner-dining-tab ${sectionTab === 'tables' ? 'is-active' : ''}`.trim()}
+            onClick={() => setSectionTab('tables')}
+          >
+            Tables
+          </button>
+        </div>
+
+        {sectionTab === 'tables' ? (
+          <OwnerTablesPage embedded />
+        ) : (
+          <>
 
         {/* Toast Banner */}
         {toast && (
@@ -803,7 +846,7 @@ export default function OwnerReservationsPage() {
                 setGroupFilter('all');
               }}
             >
-              <div className="owner-stat-box__icon-wrap icon-badge--blue">📋</div>
+              <div className="owner-stat-box__icon-wrap icon-badge--blue"><ClipboardIcon size={16} /></div>
               <div className="owner-stat-box__content">
                 <span className="owner-stat-box__label">Total</span>
                 <p className="owner-stat-box__count">{summary.total}</p>
@@ -837,7 +880,7 @@ export default function OwnerReservationsPage() {
                 );
               }}
             >
-              <div className="owner-stat-box__icon-wrap icon-badge--green">✅</div>
+              <div className="owner-stat-box__icon-wrap icon-badge--green"><CheckCircleIcon size={16} /></div>
               <div className="owner-stat-box__content">
                 <span className="owner-stat-box__label">Confirmed</span>
                 <p className="owner-stat-box__count">{summary.confirmed}</p>
@@ -852,7 +895,7 @@ export default function OwnerReservationsPage() {
                 setStatusFilter(statusFilter === 'arrived,seated' ? 'all' : 'arrived,seated');
               }}
             >
-              <div className="owner-stat-box__icon-wrap icon-badge--purple">🍽️</div>
+              <div className="owner-stat-box__icon-wrap icon-badge--purple"><UtensilsIcon size={16} /></div>
               <div className="owner-stat-box__content">
                 <span className="owner-stat-box__label">In House</span>
                 <p className="owner-stat-box__count">{summary.inHouse}</p>
@@ -867,7 +910,7 @@ export default function OwnerReservationsPage() {
                 setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed');
               }}
             >
-              <div className="owner-stat-box__icon-wrap icon-badge--teal">🏁</div>
+              <div className="owner-stat-box__icon-wrap icon-badge--teal"><FlagIcon size={16} /></div>
               <div className="owner-stat-box__content">
                 <span className="owner-stat-box__label">Completed</span>
                 <p className="owner-stat-box__count">{summary.completed}</p>
@@ -1205,7 +1248,7 @@ export default function OwnerReservationsPage() {
                   {timeGroupedSlots.map((slot) => (
                     <div key={slot.timeKey} className="owner-slot-card">
                       <div className="owner-slot-card__header">
-                        <span className="owner-slot-card__time">🕒 {slot.timeLabel}</span>
+                        <span className="owner-slot-card__time"><ClockIcon size={14} /> {slot.timeLabel}</span>
                         <span className="owner-slot-card__cap-pill owner-slot-card__cap-pill--available">
                           {slot.items.length} {slot.items.length === 1 ? 'booking' : 'bookings'}
                         </span>
@@ -1252,7 +1295,7 @@ export default function OwnerReservationsPage() {
                                       {formatManilaTime(res.reservationStart)}–{formatManilaTime(res.reservationEnd)}
                                     </span>
                                     <span>·</span>
-                                    <span>👥 {res.partySize}</span>
+                                    <span><UsersIcon size={13} /> {res.partySize}</span>
                                     {(res.statusCode === 'pending' || res.statusCode === 'awaiting_payment') && res.expiresAt && (() => {
                                       const exp = formatTimeUntilExpiry(res.expiresAt);
                                       if (!exp) return null;
@@ -1267,13 +1310,13 @@ export default function OwnerReservationsPage() {
                                     })()}
                                     <span>·</span>
                                     <span>
-                                      🪑 {res.tableName ? `Table ${res.tableName}` : 'Unassigned'}
+                                      <TableIcon size={13} /> {res.tableName ? `Table ${res.tableName}` : 'Unassigned'}
                                       {res.diningArea ? ` (${res.diningArea})` : ''}
                                     </span>
                                     {res.guestPhone && (
                                       <>
                                         <span>·</span>
-                                        <span>📞 {res.guestPhone}</span>
+                                        <span><PhoneIcon size={13} /> {res.guestPhone}</span>
                                       </>
                                     )}
                                   </div>
@@ -1344,7 +1387,7 @@ export default function OwnerReservationsPage() {
                             </div>
                             <span className="owner-week-card__guest">{res.guestName}</span>
                             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                              👥 {res.partySize} · {res.tableName ? `T-${res.tableName}` : 'No table'}
+                              <UsersIcon size={13} /> {res.partySize} · {res.tableName ? `T-${res.tableName}` : 'No table'}
                             </span>
                           </button>
                         );
@@ -1483,14 +1526,14 @@ export default function OwnerReservationsPage() {
                   {detailRes.guestPhone && (
                     <div>
                       <a href={sanitizeTelHref(detailRes.guestPhone)} style={{ color: 'var(--accent)', fontSize: 12 }}>
-                        📞 {detailRes.guestPhone}
+                        <PhoneIcon size={13} /> {detailRes.guestPhone}
                       </a>
                     </div>
                   )}
                   {detailRes.customerEmail && (
                     <div>
                       <a href={sanitizeMailtoHref(detailRes.customerEmail)} style={{ color: 'var(--accent)', fontSize: 12 }}>
-                        ✉️ {detailRes.customerEmail}
+                        <MailIcon size={13} /> {detailRes.customerEmail}
                       </a>
                     </div>
                   )}
@@ -1769,6 +1812,8 @@ export default function OwnerReservationsPage() {
             </form>
           )}
         </Modal>
+          </>
+        )}
       </div>
     </OwnerLayout>
   );

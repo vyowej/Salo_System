@@ -256,9 +256,9 @@ export default function AddBranchModal({ open, onClose, onCreated }) {
             </label>
           </div>
 
-          <fieldset className="salo-add-branch-services">
+          <fieldset className="salo-add-branch-fieldset salo-add-branch-permit-fieldset">
             <legend>{BRANCH_PERMIT_COPY.sectionTitle}</legend>
-            <HelperText>{BRANCH_PERMIT_COPY.sectionSubtitle}</HelperText>
+            <p className="salo-add-branch-permit-helper">{BRANCH_PERMIT_COPY.sectionSubtitle}</p>
             <BranchPermitFields
               idPrefix="add-branch-permit"
               file={form.mayors_permit}

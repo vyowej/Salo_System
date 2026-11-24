@@ -4,6 +4,147 @@
   color: var(--text-primary);
 }
 
+.manage-restaurant-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+.manage-restaurant-title {
+  margin: 4px 0;
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.manage-restaurant-sub {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.manage-restaurant-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.manage-restaurant-pills {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--border-primary);
+  background: var(--surface-primary);
+  gap: 2px;
+}
+
+.manage-pill {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.manage-pill.is-active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.manage-branch-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  background: var(--accent-subtle);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.manage-branch-notice button {
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.manage-branches-section {
+  margin-bottom: var(--space-5);
+}
+
+.manage-branches-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-3);
+}
+
+.manage-branch-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-primary);
+}
+
+.manage-branch-card.is-current {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.manage-branch-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.manage-branch-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.manage-branch-addr {
+  margin: 4px 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.manage-branch-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.manage-branch-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-secondary);
+}
+
+.manage-branch-current-label {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: var(--accent);
+}
+
 .team-page *,
 .team-page *::before,
 .team-page *::after,

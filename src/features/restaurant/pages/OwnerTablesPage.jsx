@@ -5,6 +5,14 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
 import { StateView } from '../../../components/feedback';
+import {
+  CalendarIcon,
+  CheckCircleIcon,
+  MapPinIcon,
+  TableIcon,
+  UsersIcon,
+  UtensilsIcon,
+} from '../../../components/common/ReservationIcons';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import './OwnerTablesPage.css';
 
@@ -65,7 +73,7 @@ function extractFieldErrors(apiError) {
   return mapped;
 }
 
-export default function OwnerTablesPage() {
+export default function OwnerTablesPage({ embedded = false } = {}) {
   const access = useRestaurantAccess();
   const { selectedRestaurantId } = access;
 
@@ -345,9 +353,8 @@ export default function OwnerTablesPage() {
     }
   }
 
-  return (
-    <OwnerLayout>
-      <div className="owner-tables-page">
+  const pageContent = (
+    <div className="owner-tables-page">
         {/* Header */}
         <header className="owner-tables__header">
           <div className="owner-tables__header-left">
@@ -411,7 +418,7 @@ export default function OwnerTablesPage() {
         {/* 5 Summary Stat Cards */}
         <section className="owner-tables-stats" aria-label="Table summary statistics">
           <div className="owner-tables-stat-card">
-            <div className="owner-tables-stat-icon" aria-hidden="true">🪑</div>
+            <div className="owner-tables-stat-icon" aria-hidden="true"><TableIcon size={18} /></div>
             <div className="owner-tables-stat-info">
               <span className="owner-tables-stat-value">{summary.totalTables}</span>
               <span className="owner-tables-stat-label">
@@ -421,7 +428,7 @@ export default function OwnerTablesPage() {
           </div>
 
           <div className="owner-tables-stat-card">
-            <div className="owner-tables-stat-icon" aria-hidden="true">👥</div>
+            <div className="owner-tables-stat-icon" aria-hidden="true"><UsersIcon size={18} /></div>
             <div className="owner-tables-stat-info">
               <span className="owner-tables-stat-value">{summary.totalSeats}</span>
               <span className="owner-tables-stat-label">Total Active Seats</span>
@@ -429,7 +436,7 @@ export default function OwnerTablesPage() {
           </div>
 
           <div className="owner-tables-stat-card">
-            <div className="owner-tables-stat-icon" aria-hidden="true">✅</div>
+            <div className="owner-tables-stat-icon" aria-hidden="true"><CheckCircleIcon size={18} /></div>
             <div className="owner-tables-stat-info">
               <span className="owner-tables-stat-value">{summary.availableNow}</span>
               <span className="owner-tables-stat-label">Available Now</span>
@@ -437,7 +444,7 @@ export default function OwnerTablesPage() {
           </div>
 
           <div className="owner-tables-stat-card">
-            <div className="owner-tables-stat-icon" aria-hidden="true">📅</div>
+            <div className="owner-tables-stat-icon" aria-hidden="true"><CalendarIcon size={18} /></div>
             <div className="owner-tables-stat-info">
               <span className="owner-tables-stat-value">{summary.reservedCount}</span>
               <span className="owner-tables-stat-label">Reserved ({selectedDate})</span>
@@ -445,7 +452,7 @@ export default function OwnerTablesPage() {
           </div>
 
           <div className="owner-tables-stat-card">
-            <div className="owner-tables-stat-icon" aria-hidden="true">🍽️</div>
+            <div className="owner-tables-stat-icon" aria-hidden="true"><UtensilsIcon size={18} /></div>
             <div className="owner-tables-stat-info">
               <span className="owner-tables-stat-value">{summary.occupiedCount}</span>
               <span className="owner-tables-stat-label">Occupied Right Now</span>
@@ -637,13 +644,13 @@ export default function OwnerTablesPage() {
 
                   <div className="owner-table-chips">
                     <span className="owner-table-chip owner-table-chip--capacity">
-                      👥 Capacity: {table.capacity} {table.capacity === 1 ? 'seat' : 'seats'}
+                      <UsersIcon size={14} /> Capacity: {table.capacity} {table.capacity === 1 ? 'seat' : 'seats'}
                     </span>
                     <span className="owner-table-chip owner-table-chip--type">
                       Min party: {table.minPartySize} {table.minPartySize === 1 ? 'guest' : 'guests'}
                     </span>
                     {table.diningArea && (
-                      <span className="owner-table-chip">📍 {table.diningArea}</span>
+                      <span className="owner-table-chip"><MapPinIcon size={13} /> {table.diningArea}</span>
                     )}
                   </div>
 
@@ -930,6 +937,7 @@ export default function OwnerTablesPage() {
           )}
         </Modal>
       </div>
-    </OwnerLayout>
   );
+
+  return embedded ? pageContent : <OwnerLayout>{pageContent}</OwnerLayout>;
 }

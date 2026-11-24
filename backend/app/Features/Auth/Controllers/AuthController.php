@@ -110,6 +110,13 @@ class AuthController extends Controller
 
     public function googleAuthUrl(Request $request, AuthService $authService): JsonResponse
     {
+        if (trim((string) config('services.google.client_id')) === '' || trim((string) config('services.google.client_secret')) === '') {
+            return ApiResponse::error(
+                message: 'Google Sign-In is not configured yet. Please add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to backend/.env.',
+                status: 503,
+            );
+        }
+
         $url = $authService->getGoogleAuthUrl($request);
 
         return ApiResponse::success(
