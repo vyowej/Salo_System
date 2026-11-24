@@ -156,3 +156,15 @@ test('no deposit notAvailable stubs remain and OwnerSettingsPage renders reserva
   assert.match(settingsSrc, /reservation_duration_minutes/);
   assert.match(settingsSrc, /reservation_deposit_required/);
 });
+
+test('customer paid-reservation cancel and order cancel copy are explicit and policy-aligned', async () => {
+  const resPageSrc = await fs.readFile(`${ROOT_DIR}/src/features/customer/pages/ReservationsPage.jsx`, 'utf8');
+  assert.match(resPageSrc, /not automatically refunded/i);
+  assert.match(resPageSrc, /under admin review/i);
+  assert.doesNotMatch(resPageSrc, /instant refund/i);
+
+  const orderDetailSrc = await fs.readFile(`${ROOT_DIR}/src/features/customer/pages/OrderDetailPage.jsx`, 'utf8');
+  assert.match(orderDetailSrc, /Cash on Delivery payment will also be cancelled/i);
+  assert.match(orderDetailSrc, /refund request will be initiated automatically/i);
+  assert.doesNotMatch(orderDetailSrc, /instant refund/i);
+});

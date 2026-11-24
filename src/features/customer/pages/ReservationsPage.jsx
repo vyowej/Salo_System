@@ -337,8 +337,15 @@ export default function ReservationsPage() {
       const updated = await customerService.cancelReservation(targetId, cancelReason.trim());
       setCancelModalOpen(false);
       setSelectedRes(null);
+      const cancelledRef = updated?.reference || selectedRes.reference || selectedRes.id;
+      const isPaidCancel =
+        selectedRes.depositStatus === 'paid' ||
+        Boolean(updated?.depositUnderReview) ||
+        updated?.depositStatus === 'paid';
       setSuccessBanner(
-        `Reservation ${updated?.reference || selectedRes.reference || selectedRes.id} has been cancelled.`,
+        isPaidCancel
+          ? `Reservation ${cancelledRef} has been cancelled. Your paid deposit is not automatically refunded and is now under admin review.`
+          : `Reservation ${cancelledRef} has been cancelled.`,
       );
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('salo:notificationsUpdated'));
@@ -976,6 +983,23 @@ export default function ReservationsPage() {
                         </div>
                       </div>
 
+                      {res.depositUnderReview && (
+                        <p
+                          role="status"
+                          style={{
+                            margin: '8px 0 0',
+                            padding: '8px 10px',
+                            borderRadius: 8,
+                            background: '#fffbeb',
+                            color: '#92400e',
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          Cancelled with paid deposit — not automatically refunded; currently under admin review.
+                        </p>
+                      )}
+
                       <div className="customer-res-card__footer">
                         <Button variant="secondary" size="sm" onClick={() => handleOpenDetails(res)}>
                           View Full Details
@@ -1032,9 +1056,23 @@ export default function ReservationsPage() {
             )}
 
             {selectedRes?.depositStatus === 'paid' && (
-              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', padding: '8px 10px', borderRadius: 6, background: 'var(--bg-secondary, #f8fafc)' }}>
-                If you cancel after paying a deposit, your deposit will be held pending admin review.
-              </p>
+              <div
+                role="note"
+                style={{
+                  margin: 0,
+                  fontSize: 12,
+                  color: '#92400e',
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  background: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  lineHeight: 1.5,
+                }}
+              >
+                <strong>Paid deposit policy:</strong> Your cancellation will be accepted and your table released,
+                but your paid deposit is <strong>not automatically refunded</strong>. Your request will be placed{' '}
+                <strong>under admin review</strong>.
+              </div>
             )}
 
             <div>
@@ -1168,7 +1206,7 @@ export default function ReservationsPage() {
 
                   {detailsRes.depositUnderReview && (
                     <p role="status" style={{ margin: '8px 0 0', padding: '8px 10px', borderRadius: 8, background: '#fffbeb', color: '#92400e', fontSize: 12, fontWeight: 600 }}>
-                      Your deposit is currently under admin review.
+                      Reservation cancelled with paid deposit — not automatically refunded; currently under admin review.
                     </p>
                   )}
 
