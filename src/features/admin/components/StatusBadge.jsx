@@ -31,6 +31,8 @@ const TONES = {
   'on delivery': 'info',
   confirmed: 'success',
   arrived: 'info',
+  customer_reached: 'success',
+  out_for_delivery: 'info',
   seated: 'info',
   awaiting_payment: 'action',
   'awaiting deposit': 'action',

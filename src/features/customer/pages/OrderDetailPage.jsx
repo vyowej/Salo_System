@@ -1,16 +1,28 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useCart } from '../../../hooks/useCart';
 import customerService from '../../../services/customerService';
+import { getEcho, subscribeEchoConnectionStatus } from '../../../services/echoService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
+import ReverbStatusBadge from '../../../components/common/ReverbStatusBadge';
+import OrderChatPanel from '../../../components/connect/OrderChatPanel';
 import { SharedMap } from '../../../components/location';
 import { useDeliverySimulation } from '../../../hooks/useDeliverySimulation';
+import { formatMinutesSeconds, useServerCountdown } from '../../../hooks/useServerCountdown';
+import connectService from '../../../services/connectService';
 import { buildRiderMapState } from '../../rider/utils/riderMapData';
+import IncomingCallModal from '../components/IncomingCallModal';
 import OrderReviewSection from '../components/OrderReviewSection';
 import { formatDateTimeManila, formatShortOrderId, formatPeso } from '../../../utils/format';
+import {
+  playRingToneBurst,
+  requestBrowserNotificationPermission,
+  showIncomingCallBrowserNotification,
+  unlockCallAudio,
+} from '../../../utils/ringtone';
 import {
   buildOrderTimelineSteps,
   canCustomerCancelOrder,
@@ -81,6 +93,14 @@ export default function OrderDetailPage() {
   ]);
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentError, setPaymentError] = useState('');
+  const [callBusy, setCallBusy] = useState(false);
+  const [callError, setCallError] = useState('');
+  const [callNotice, setCallNotice] = useState('');
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [waitBusy, setWaitBusy] = useState(false);
+  const [waitError, setWaitError] = useState('');
+  const prevConnRef = useRef('disconnected');
+  const lastNotifiedCallIdRef = useRef(null);
 
   const mapBackendOrder = (raw) => ({
     id: String(raw.order_id),
@@ -92,11 +112,25 @@ export default function OrderDetailPage() {
     cancelledBy: raw.cancelled_by ?? null,
     createdAt: raw.placed_at ?? null,
     acceptedAt: raw.accepted_at ?? null,
+    arrivedAt: raw.arrived_at ?? null,
     deliveredAt: raw.delivered_at ?? null,
     completedAt: raw.completed_at ?? null,
     cancelledAt: raw.cancelled_at ?? null,
     rejectedAt: raw.rejected_at ?? null,
     riderFirstName: raw.rider?.first_name ?? null,
+    callAttempts: Number(raw.call_attempts ?? 0),
+    maxStrikes: Number(raw.max_strikes ?? 3),
+    pendingCall: raw.pending_call ?? null,
+    activeWaitingRequest: raw.active_waiting_request ?? null,
+    waitingRequestsCount: Number(raw.waiting_requests_count ?? 0),
+    maxWaitRequests: Number(raw.max_wait_requests ?? 2),
+    unreadMessagesCount: Number(raw.unread_messages_count ?? 0),
+    cooldownEndsAt: raw.cooldown_ends_at ?? null,
+    cancelAvailableAt: raw.cancel_available_at ?? null,
+    customerOrderingSuspended: Boolean(raw.customer_ordering_suspended),
+    orderingSuspendedUntil: raw.ordering_suspended_until ?? null,
+    suspensionReason: raw.suspension_reason ?? null,
+    serverNow: raw.server_now ?? null,
     grandTotal: Number(raw.total_amount ?? 0),
     totalAmount: Number(raw.total_amount ?? 0),
     paymentId: raw.payment?.payment_id ?? null,
@@ -234,6 +268,273 @@ export default function OrderDetailPage() {
   );
 
   const defaultAddress = useMemo(() => customerService.getDefaultAddress(), []);
+
+  const refreshOrderDetail = useCallback(async (orderId) => {
+    if (!orderId) return;
+    try {
+      const fresh = await customerService.fetchOrderDetail(orderId);
+      if (fresh) {
+        setOrder(mapBackendOrder(fresh));
+      }
+    } catch {
+      // ignore transient refresh failures
+    }
+  }, []);
+
+  const activeOrderId = order?.id ?? null;
+
+  // Subscribe to Reverb order channel (private events + presence for online check)
+  useEffect(() => {
+    if (!activeOrderId) return undefined;
+    const echo = getEcho();
+    if (!echo) return undefined;
+
+    const channel = echo.join(`order.${activeOrderId}`);
+
+    channel.listen('.IncomingCallRequested', (payload) => {
+      setCallError('');
+      setOrder((prev) => {
+        if (!prev || String(prev.id) !== String(activeOrderId)) return prev;
+        return {
+          ...prev,
+          pendingCall: payload?.call ?? prev.pendingCall,
+          serverNow: payload?.server_now ?? prev.serverNow,
+        };
+      });
+    });
+
+    channel.listen('.CallAccepted', (payload) => {
+      setOrder((prev) => {
+        if (!prev || String(prev.id) !== String(activeOrderId)) return prev;
+        return {
+          ...prev,
+          overallStatus: payload?.order_status || 'customer_reached',
+          pendingCall: null,
+          serverNow: payload?.server_now ?? prev.serverNow,
+          subOrders: (prev.subOrders || []).map((s) => ({
+            ...s,
+            status: payload?.order_status || 'customer_reached',
+          })),
+        };
+      });
+      setCallNotice('Call accepted. Your rider is on the way to hand off your order.');
+    });
+
+    channel.listen('.CallDeclined', (payload) => {
+      const attempts = Number(payload?.call_attempts ?? 0);
+      const maxStrikes = Number(payload?.max_strikes ?? 3);
+      setOrder((prev) => {
+        if (!prev || String(prev.id) !== String(activeOrderId)) return prev;
+        return {
+          ...prev,
+          callAttempts: attempts,
+          maxStrikes,
+          pendingCall: null,
+          serverNow: payload?.server_now ?? prev.serverNow,
+        };
+      });
+      setCallNotice(`Call declined. Strike ${attempts} of ${maxStrikes} recorded.`);
+    });
+
+    channel.listen('.CallTimedOut', (payload) => {
+      const attempts = Number(payload?.call_attempts ?? 0);
+      const maxStrikes = Number(payload?.max_strikes ?? 3);
+      setOrder((prev) => {
+        if (!prev || String(prev.id) !== String(activeOrderId)) return prev;
+        return {
+          ...prev,
+          callAttempts: attempts,
+          maxStrikes,
+          pendingCall: null,
+          serverNow: payload?.server_now ?? prev.serverNow,
+        };
+      });
+      if (payload?.call?.counted_as_strike) {
+        setCallNotice(`Missed call from your rider. Strike ${attempts} of ${maxStrikes} recorded.`);
+      }
+    });
+
+    channel.listen('.OrderStatusUpdated', (payload) => {
+      setOrder((prev) => {
+        if (!prev || String(prev.id) !== String(activeOrderId)) return prev;
+        const nextStatus = payload?.order_status ?? prev.overallStatus;
+        return {
+          ...prev,
+          overallStatus: nextStatus,
+          arrivedAt: payload?.arrived_at ?? prev.arrivedAt,
+          serverNow: payload?.server_now ?? prev.serverNow,
+          subOrders: (prev.subOrders || []).map((s) => ({
+            ...s,
+            status: nextStatus,
+          })),
+        };
+      });
+    });
+
+    channel.listen('.OrderCancelled', (payload) => {
+      setOrder((prev) => {
+        if (!prev || String(prev.id) !== String(activeOrderId)) return prev;
+        return {
+          ...prev,
+          overallStatus: 'cancelled',
+          cancellationReason: payload?.cancel_reason ?? 'customer_unreachable',
+          cancelledAt: payload?.cancelled_at ?? prev.cancelledAt,
+          pendingCall: null,
+          customerOrderingSuspended: Boolean(payload?.ordering_suspended_until),
+          orderingSuspendedUntil: payload?.ordering_suspended_until ?? prev.orderingSuspendedUntil,
+          serverNow: payload?.server_now ?? prev.serverNow,
+          subOrders: (prev.subOrders || []).map((s) => ({
+            ...s,
+            status: 'cancelled',
+            cancellationReason: payload?.cancel_reason ?? 'customer_unreachable',
+          })),
+        };
+      });
+      setCallNotice('Order cancelled because you could not be reached.');
+    });
+
+    channel.listen('.WaitingRequestReceived', (payload) => {
+      setOrder((prev) => {
+        if (!prev || String(prev.id) !== String(activeOrderId)) return prev;
+        return {
+          ...prev,
+          activeWaitingRequest: payload?.waiting_request ?? prev.activeWaitingRequest,
+          serverNow: payload?.server_now ?? prev.serverNow,
+        };
+      });
+    });
+
+    channel.listen('.WaitingRequestUpdated', (payload) => {
+      const wr = payload?.waiting_request;
+      setOrder((prev) => {
+        if (!prev || String(prev.id) !== String(activeOrderId)) return prev;
+        const isEnded = Boolean(payload?.wait_ended) || (wr && ['declined', 'expired'].includes(wr.status));
+        return {
+          ...prev,
+          activeWaitingRequest: isEnded ? null : wr ?? prev.activeWaitingRequest,
+          serverNow: payload?.server_now ?? prev.serverNow,
+        };
+      });
+      if (wr?.status === 'accepted' && !payload?.wait_ended) {
+        setCallNotice('Your rider agreed to wait 5 minutes.');
+      } else if (wr?.status === 'declined') {
+        setCallNotice('Your rider declined the waiting request.');
+      } else if (wr?.status === 'expired') {
+        setCallNotice('Waiting request expired without rider response.');
+      } else if (payload?.wait_ended) {
+        setCallNotice('Waiting period ended. Normal rules resumed.');
+      }
+    });
+
+    return () => {
+      echo.leave(`order.${activeOrderId}`);
+    };
+  }, [activeOrderId]);
+
+  // Refetch on WebSocket reconnect
+  useEffect(() => {
+    return subscribeEchoConnectionStatus((status) => {
+      const prev = prevConnRef.current;
+      prevConnRef.current = status;
+      if (status === 'connected' && prev !== 'connected' && activeOrderId) {
+        refreshOrderDetail(activeOrderId);
+      }
+    });
+  }, [activeOrderId, refreshOrderDetail]);
+
+  // Ringing sound, flashing title, and browser notification when a call is pending
+  useEffect(() => {
+    const pendingCall = order?.pendingCall;
+    if (!pendingCall) return undefined;
+
+    if (lastNotifiedCallIdRef.current !== pendingCall.id) {
+      lastNotifiedCallIdRef.current = pendingCall.id;
+      showIncomingCallBrowserNotification(order?.orderReference);
+    }
+
+    const originalTitle = document.title;
+    let flash = false;
+    playRingToneBurst();
+    const interval = setInterval(() => {
+      flash = !flash;
+      document.title = flash ? '(1) Incoming call' : originalTitle;
+      playRingToneBurst();
+    }, 1400);
+
+    return () => {
+      clearInterval(interval);
+      document.title = originalTitle;
+    };
+  }, [order?.pendingCall, order?.orderReference]);
+
+  const handleEnableCallSounds = async () => {
+    const unlocked = unlockCallAudio();
+    await requestBrowserNotificationPermission();
+    setSoundEnabled(unlocked);
+    if (unlocked) {
+      playRingToneBurst();
+    }
+  };
+
+  const handleCallRespond = async (action) => {
+    if (!order || callBusy) return;
+    setCallBusy(true);
+    setCallError('');
+    try {
+      const state = await customerService.respondToCall(order.id, action);
+      if (state) {
+        setOrder((prev) => (prev ? {
+          ...prev,
+          overallStatus: state.order_status ?? prev.overallStatus,
+          callAttempts: state.call_attempts ?? prev.callAttempts,
+          maxStrikes: state.max_strikes ?? prev.maxStrikes,
+          pendingCall: state.pending_call ?? null,
+          serverNow: state.server_now ?? prev.serverNow,
+          subOrders: (prev.subOrders || []).map((s) => ({
+            ...s,
+            status: state.order_status ?? s.status,
+          })),
+        } : prev));
+      }
+    } catch (err) {
+      setCallError(err?.message || 'Unable to respond to call.');
+      refreshOrderDetail(order.id);
+    } finally {
+      setCallBusy(false);
+    }
+  };
+
+  const handleRequestWaitingTime = async () => {
+    if (!order || waitBusy) return;
+    setWaitBusy(true);
+    setWaitError('');
+    try {
+      const res = await connectService.requestWaitingTime(order.id);
+      if (res?.waiting_request) {
+        setOrder((prev) => (prev ? {
+          ...prev,
+          activeWaitingRequest: res.waiting_request,
+          waitingRequestsCount: (prev.waitingRequestsCount ?? 0) + 1,
+          serverNow: res.server_now ?? prev.serverNow,
+        } : prev));
+      }
+    } catch (err) {
+      setWaitError(err?.message || 'Unable to send waiting request.');
+    } finally {
+      setWaitBusy(false);
+    }
+  };
+
+  const activeWaitRequest = order?.activeWaitingRequest ?? null;
+  const waitCountdownSeconds = useServerCountdown(
+    activeWaitRequest?.status === 'pending'
+      ? activeWaitRequest.expires_at
+      : activeWaitRequest?.status === 'accepted'
+        ? activeWaitRequest.wait_ends_at
+        : null,
+    order?.serverNow,
+    () => activeOrderId && refreshOrderDetail(activeOrderId),
+  );
 
   // Ensure selectedSubIdx stays in bounds when switching orders
   const subOrders = order?.subOrders || [];
@@ -588,18 +889,21 @@ export default function OrderDetailPage() {
                   </h1>
                 </div>
               </div>
-              <Badge
-                variant={
-                  statusKey === 'completed'
-                    ? 'success'
-                    : statusKey === 'cancelled' || statusKey === 'rejected'
-                      ? 'error'
-                      : 'primary'
-                }
-                dot
-              >
-                {formatOrderStatusText(subStatus, fulfillment)}
-              </Badge>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ReverbStatusBadge />
+                <Badge
+                  variant={
+                    statusKey === 'completed'
+                      ? 'success'
+                      : statusKey === 'cancelled' || statusKey === 'rejected'
+                        ? 'error'
+                        : 'primary'
+                  }
+                  dot
+                >
+                  {formatOrderStatusText(subStatus, fulfillment)}
+                </Badge>
+              </div>
             </div>
 
             {/* Multi-Kitchen Sub-Order Switcher (When ordered from multiple kitchens at once) */}
@@ -630,6 +934,91 @@ export default function OrderDetailPage() {
                 Placed {formatDateTimeManila(order.createdAt)} · {fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}
               </span>
             </div>
+
+            {fulfillment === 'delivery' && !['delivered', 'completed', 'cancelled', 'rejected', 'failed'].includes(statusKey) && (
+              <div
+                className="customer-track-status-banner"
+                style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span>
+                    {statusKey === 'arrived'
+                      ? `Rider is at your drop-off · Contact attempts remaining: ${Math.max(0, (order.maxStrikes ?? 3) - (order.callAttempts ?? 0))} / ${order.maxStrikes ?? 3}`
+                      : 'Keep this page open to receive rider call alerts.'}
+                  </span>
+                  {!soundEnabled && (
+                    <Button variant="outline" size="sm" onClick={handleEnableCallSounds}>
+                      Enable call sounds
+                    </Button>
+                  )}
+                </div>
+                {callNotice && (
+                  <small role="status" style={{ color: 'var(--accent, #f36b2b)', fontWeight: 600 }}>
+                    {callNotice}
+                  </small>
+                )}
+                {statusKey === 'arrived' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                    {activeWaitRequest?.status === 'pending' && waitCountdownSeconds > 0 && (
+                      <small role="status" style={{ fontWeight: 600 }}>
+                        Waiting request sent — awaiting rider response ({formatMinutesSeconds(waitCountdownSeconds)})
+                      </small>
+                    )}
+                    {activeWaitRequest?.status === 'accepted' && waitCountdownSeconds > 0 && (
+                      <small role="status" style={{ color: 'var(--status-success-text, #15803d)', fontWeight: 700 }}>
+                        Rider agreed to wait — {formatMinutesSeconds(waitCountdownSeconds)} remaining
+                      </small>
+                    )}
+                    {!activeWaitRequest && (order.waitingRequestsCount ?? 0) < (order.maxWaitRequests ?? 2) && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={waitBusy}
+                        onClick={handleRequestWaitingTime}
+                      >
+                        {waitBusy
+                          ? 'Sending request…'
+                          : `Request 5 min wait (${order.waitingRequestsCount ?? 0}/${order.maxWaitRequests ?? 2} used)`}
+                      </Button>
+                    )}
+                    {waitError && (
+                      <small role="alert" style={{ color: 'var(--status-error-text, #b91c1c)' }}>
+                        {waitError}
+                      </small>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {fulfillment === 'delivery' && (order.riderFirstName || tracking?.rider) && (
+              <div style={{ marginBottom: 14 }}>
+                <OrderChatPanel
+                  orderId={order.id}
+                  viewerRole="customer"
+                  initialUnreadCount={order.unreadMessagesCount ?? 0}
+                  isOrderEnded={['delivered', 'completed', 'cancelled', 'rejected', 'failed'].includes(statusKey)}
+                />
+              </div>
+            )}
+
+            {order.customerOrderingSuspended && (
+              <div
+                className="customer-track-status-banner"
+                role="alert"
+                style={{
+                  background: 'var(--status-error-bg)',
+                  color: 'var(--status-error-text)',
+                  marginBottom: 14,
+                }}
+              >
+                <strong>Ordering Temporarily Suspended</strong>
+                <span>
+                  {order.suspensionReason || 'Your ordering privileges are temporarily suspended.'}
+                  {order.orderingSuspendedUntil ? ` (Until ${formatDateTimeManila(order.orderingSuspendedUntil)})` : ''}
+                </span>
+              </div>
+            )}
 
             {(statusKey === 'rejected' || activeSub?.rejectionReason || order.rejectionReason) && (
               <div
@@ -964,6 +1353,18 @@ export default function OrderDetailPage() {
           />
         </div>
       </div>
+
+      <IncomingCallModal
+        pendingCall={order.pendingCall}
+        serverNow={order.serverNow}
+        riderName={tracking?.rider?.name || order.riderFirstName || null}
+        orderReference={order.orderReference}
+        busy={callBusy}
+        error={callError}
+        onAccept={() => handleCallRespond('accept')}
+        onDecline={() => handleCallRespond('decline')}
+        onExpire={() => refreshOrderDetail(order.id)}
+      />
     </CustomerLayout>
   );
 }

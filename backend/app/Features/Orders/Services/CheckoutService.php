@@ -5,7 +5,9 @@ namespace App\Features\Orders\Services;
 use App\Features\Account\Requests\UpdateProfileRequest;
 use App\Features\Locations\Services\ServiceAreaValidationService;
 use App\Features\Notifications\Services\NotificationService;
+use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Features\Payments\Services\PaymentService;
+use Carbon\CarbonImmutable;
 use App\Features\Restaurants\Services\AvailabilityService;
 use App\Features\Reviews\Services\PlatformSettingsService;
 use App\Models\User;
@@ -42,6 +44,26 @@ class CheckoutService
      */
     public function placeOrder(User $user, array $validated, Request $request): array
     {
+        $suspension = DB::table('users')
+            ->where('user_id', $user->user_id)
+            ->first(['ordering_suspended_until', 'suspension_reason']);
+
+        if ($suspension && $suspension->ordering_suspended_until !== null) {
+            $until = CarbonImmutable::parse((string) $suspension->ordering_suspended_until);
+            if ($until->gt(CarbonImmutable::now())) {
+                $untilText = OrderTimestampFormatter::toManilaIso($until) ?? $until->toDateTimeString();
+                $reason = $suspension->suspension_reason ?: 'Your ordering privileges are temporarily suspended.';
+                throw new HttpResponseException(response()->json([
+                    'success' => false,
+                    'message' => "{$reason} Suspension ends at {$untilText}.",
+                    'data' => [
+                        'ordering_suspended_until' => $untilText,
+                        'suspension_reason' => $reason,
+                    ],
+                ], 403));
+            }
+        }
+
         $idempotencyKey = trim((string) $validated['idempotency_key']);
         $paymentChannel = strtolower(trim((string) ($validated['payment_method'] ?? 'cod')));
         $promoCode = isset($validated['promo_code']) ? strtoupper(trim((string) $validated['promo_code'])) : '';

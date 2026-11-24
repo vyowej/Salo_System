@@ -54,6 +54,32 @@ export const riderService = {
     return response?.data?.delivery ?? null;
   },
 
+  async getOrder(orderId) {
+    const response = await apiClient.get(`/rider/orders/${encodeURIComponent(orderId)}`);
+    return response?.data?.order ?? null;
+  },
+
+  async arriveAtDropoff(orderId, coords = {}) {
+    const response = await apiClient.post(`/rider/orders/${encodeURIComponent(orderId)}/arrive`, coords);
+    return response?.data ?? null;
+  },
+
+  async startCall(orderId) {
+    const response = await apiClient.post(`/rider/orders/${encodeURIComponent(orderId)}/call/start`, {});
+    return response?.data ?? null;
+  },
+
+  async deliverOrder(orderId, collectedAmount = null, pod = {}) {
+    const payload = {};
+    if (collectedAmount !== null && collectedAmount !== undefined) {
+      payload.collected_amount = collectedAmount;
+    }
+    if (pod?.recipientName) payload.recipient_name = pod.recipientName;
+    if (pod?.deliveryNotes) payload.delivery_notes = pod.deliveryNotes;
+    const response = await apiClient.post(`/rider/orders/${encodeURIComponent(orderId)}/deliver`, payload);
+    return response?.data?.delivery ?? null;
+  },
+
   async getDeliveryHistory({ page = 1, perPage = 20, status = 'all', search = '' } = {}) {
     const params = new URLSearchParams();
     if (page) params.set('page', String(page));

@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "dev:api": "php backend/artisan serve --host=localhost --port=8000",
-    "dev:all": "concurrently -k -n API,WEB \"npm run dev:api\" \"npm run dev\"",
+    "dev:reverb": "php backend/artisan reverb:start",
+    "dev:queue": "php backend/artisan queue:work",
+    "dev:scheduler": "php backend/artisan schedule:work",
+    "dev:all": "concurrently -k -n API,REVERB,QUEUE,WEB \"npm run dev:api\" \"npm run dev:reverb\" \"npm run dev:queue\" \"npm run dev\"",
     "build": "vite build",
     "lint": "eslint .",
     "test": "node --test",
@@ -20,6 +23,8 @@
     "datatables.net-react": "^2.0.0",
     "datatables.net-responsive-dt": "^4.1.1",
     "datatables.net-select-dt": "^4.1.1",
+    "laravel-echo": "^2.6.3",
+    "pusher-js": "^8.6.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.5"

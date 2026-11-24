@@ -277,7 +277,7 @@ class AccountLifecycleService
             if ($ownerCount <= 1) {
                 $hasActiveOrders = DB::table('orders')
                     ->where('restaurant_id', $restaurantId)
-                    ->whereIn('order_status', ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'])
+                    ->whereIn('order_status', ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'arrived', 'customer_reached'])
                     ->exists();
 
                 if ($hasActiveOrders) {

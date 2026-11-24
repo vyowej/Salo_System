@@ -128,6 +128,7 @@ class DeliveryProofDriveTest extends TestCase
             'total_amount' => '250.00',
             'placed_at' => now(),
         ]);
+        DB::table('orders')->where('order_id', $orderId)->update(['order_status' => 'customer_reached']);
         $deliveryId = (int) DB::table('deliveries')->insertGetId([
             'order_id' => $orderId,
             'rider_id' => $riderId,

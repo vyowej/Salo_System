@@ -259,4 +259,16 @@ return [
         'min_platform_reviews_for_baseline' => max(1, (int) env('SALO_FEATURED_MIN_PLATFORM_REVIEWS', 10)),
         'auto_selection_enabled' => filter_var(env('SALO_FEATURED_AUTO_SELECTION', true), FILTER_VALIDATE_BOOLEAN),
     ],
+
+    'connect' => [
+        'call_response_seconds' => max(5, (int) env('CALL_RESPONSE_SECONDS', 20)),
+        'call_cooldown_seconds' => max(0, (int) env('CALL_COOLDOWN_SECONDS', 60)),
+        'max_strikes' => max(1, (int) env('MAX_STRIKES', 3)),
+        'min_wait_before_cancel_minutes' => max(1, (int) env('MIN_WAIT_BEFORE_CANCEL_MINUTES', 5)),
+        'wait_request_minutes' => max(1, (int) env('WAIT_REQUEST_MINUTES', 5)),
+        'wait_request_rider_response_minutes' => max(1, (int) env('WAIT_REQUEST_RIDER_RESPONSE_MINUTES', 5)),
+        'max_wait_requests_per_order' => max(1, (int) env('MAX_WAIT_REQUESTS_PER_ORDER', 2)),
+        'unreachable_ordering_ban_hours' => max(1, (int) env('UNREACHABLE_ORDERING_BAN_HOURS', 24)),
+        'message_max_length' => max(50, (int) env('CONNECT_MESSAGE_MAX_LENGTH', 500)),
+    ],
 ];

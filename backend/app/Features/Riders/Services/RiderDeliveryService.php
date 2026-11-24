@@ -2,6 +2,9 @@
 
 namespace App\Features\Riders\Services;
 
+use App\Features\Connect\Events\OrderStatusUpdated;
+use App\Features\Connect\Services\ConversationService;
+use App\Features\Connect\Services\OrderConnectService;
 use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Features\Restaurants\Services\OwnerInventoryService;
@@ -30,6 +33,7 @@ class RiderDeliveryService
         private readonly WorkspaceAccessResolver $workspaceAccessResolver,
         private readonly FileStorageService $fileStorageService,
         private readonly OwnerInventoryService $ownerInventoryService,
+        private readonly OrderConnectService $connectService,
     ) {}
 
     public function requireActiveRider(User $user): object
@@ -181,7 +185,50 @@ class RiderDeliveryService
             ->orderByDesc('d.accepted_at')
             ->first();
 
-        return $row ? $this->formatAssignedDelivery($row) : null;
+        if (! $row) {
+            return null;
+        }
+
+        $this->connectService->syncAndGetConnectState((int) $row->order_id);
+
+        $freshRow = $this->baseAssignedDeliveryQuery((int) $rider->rider_id)
+            ->where('d.order_id', (int) $row->order_id)
+            ->whereIn('d.delivery_status', ['accepted', 'picked_up'])
+            ->first();
+
+        return $freshRow ? $this->formatAssignedDelivery($freshRow) : null;
+    }
+
+    /**
+     * Return a single order assigned to the authenticated rider (404 if not assigned to them).
+     *
+     * @return array<string, mixed>
+     */
+    public function getAssignedOrderDetail(User $user, int $orderId): array
+    {
+        $rider = $this->requireActiveRider($user);
+        $riderId = (int) $rider->rider_id;
+
+        $exists = DB::table('deliveries')
+            ->where('order_id', $orderId)
+            ->where('rider_id', $riderId)
+            ->exists();
+
+        if (! $exists) {
+            throw new NotFoundHttpException('Delivery not found.');
+        }
+
+        $this->connectService->syncAndGetConnectState($orderId);
+
+        $row = $this->baseAssignedDeliveryQuery($riderId)
+            ->where('d.order_id', $orderId)
+            ->first();
+
+        if (! $row) {
+            throw new NotFoundHttpException('Delivery not found.');
+        }
+
+        return $this->formatAssignedDelivery($row);
     }
 
     /**
@@ -654,9 +701,9 @@ class RiderDeliveryService
                     throw new NotFoundHttpException('Delivery not found.');
                 }
 
-                if ($delivery->delivery_status !== 'picked_up' || $order->order_status !== 'out_for_delivery') {
+                if ($delivery->delivery_status !== 'picked_up' || $order->order_status !== 'customer_reached') {
                     throw new ConflictHttpException(
-                        "Cannot mark delivered from delivery status '{$delivery->delivery_status}' and order status '{$order->order_status}'."
+                        "Cannot mark delivered from delivery status '{$delivery->delivery_status}' and order status '{$order->order_status}'. Customer must be reached first."
                     );
                 }
 
@@ -691,7 +738,7 @@ class RiderDeliveryService
                     $deliveryUpdates['proof_captured_at'] = $now;
                 }
 
-                $oldAudit = ['delivery_status' => 'picked_up', 'order_status' => 'out_for_delivery'];
+                $oldAudit = ['delivery_status' => 'picked_up', 'order_status' => 'customer_reached'];
                 $newAudit = ['delivery_status' => 'delivered', 'order_status' => 'delivered'];
                 if ($recipientName !== null) {
                     $newAudit['recipient_name'] = $recipientName;
@@ -824,7 +871,7 @@ class RiderDeliveryService
             }
 
             if (! in_array($delivery->delivery_status, ['accepted', 'picked_up'], true)
-                || ! in_array($order->order_status, ['ready', 'out_for_delivery'], true)) {
+                || ! in_array($order->order_status, ['ready', 'out_for_delivery', 'arrived', 'customer_reached'], true)) {
                 throw new ConflictHttpException(
                     "Cannot mark failed from delivery status '{$delivery->delivery_status}' and order status '{$order->order_status}'."
                 );
@@ -1078,6 +1125,13 @@ class RiderDeliveryService
         $requiresCod = $payment?->payment_method === 'cash' && $paymentStatus === 'pending';
 
         $restaurantDisplayName = RestaurantBranchService::formatDisplayName((string) $row->restaurant_name, $row->branch_name ?? null);
+        $connectState = $this->connectService->getConnectStateForOrder($orderId);
+        $orderEnded = in_array((string) $row->order_status, ['delivered', 'completed', 'cancelled', 'failed', 'rejected'], true)
+            || in_array((string) $row->delivery_status, ['delivered', 'failed', 'cancelled'], true);
+        $riderUserId = (int) (DB::table('riders')->where('rider_id', $row->rider_id)->value('user_id') ?? 0);
+        $unreadMessages = $riderUserId > 0
+            ? app(ConversationService::class)->countUnreadForUser($orderId, $riderUserId)
+            : 0;
 
         return [
             'delivery_id' => (int) $row->delivery_id,
@@ -1101,7 +1155,7 @@ class RiderDeliveryService
             'dropoff_longitude' => $row->dropoff_longitude !== null ? (float) $row->dropoff_longitude : null,
             'delivery_notes' => $row->delivery_notes,
             'customer_name' => $row->delivery_recipient_name ?: $row->customer_name,
-            'customer_phone' => $row->delivery_phone ?: $row->customer_phone,
+            'customer_phone' => $orderEnded ? null : ($row->delivery_phone ?: $row->customer_phone),
             'subtotal_amount' => (float) $row->subtotal_amount,
             'delivery_fee' => (float) $row->delivery_fee,
             'order_total' => (float) $row->total_amount,
@@ -1125,6 +1179,19 @@ class RiderDeliveryService
             'proof_delivery_notes' => $row->proof_delivery_notes ?? null,
             'placed_at' => OrderTimestampFormatter::toManilaIso($row->placed_at),
             'items' => $items,
+            'arrived_at' => $connectState['arrived_at'],
+            'call_attempts' => $connectState['call_attempts'],
+            'max_strikes' => $connectState['max_strikes'],
+            'last_call_resolved_at' => $connectState['last_call_resolved_at'],
+            'cooldown_ends_at' => $connectState['cooldown_ends_at'],
+            'cancel_available_at' => $connectState['cancel_available_at'],
+            'cancel_reason' => $connectState['cancel_reason'],
+            'pending_call' => $connectState['pending_call'],
+            'active_waiting_request' => $connectState['active_waiting_request'],
+            'waiting_requests_count' => $connectState['waiting_requests_count'],
+            'max_wait_requests' => $connectState['max_wait_requests'],
+            'unread_messages_count' => $unreadMessages,
+            'server_now' => $connectState['server_now'],
         ];
     }
 

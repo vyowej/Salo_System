@@ -4,13 +4,15 @@
  */
 
 const PICKUP_PROGRESSION = ['pending', 'accepted', 'preparing', 'ready', 'completed'];
-const DELIVERY_PROGRESSION = ['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
+const DELIVERY_PROGRESSION = ['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'arrived', 'customer_reached', 'delivered'];
 
 export function normalizeOrderStatusKey(status) {
   const raw = String(status || 'pending').trim().toLowerCase();
   if (raw === 'pending confirmation') return 'pending';
   if (raw === 'ready for pickup' || raw === 'ready for dispatch') return 'ready';
   if (raw === 'out for delivery') return 'out_for_delivery';
+  if (raw === 'rider arrived') return 'arrived';
+  if (raw === 'customer reached') return 'customer_reached';
   return raw;
 }
 
@@ -21,6 +23,8 @@ export function formatOrderStatusText(status, fulfillment = 'delivery') {
   if (key === 'preparing') return 'Preparing';
   if (key === 'ready') return fulfillment === 'pickup' ? 'Ready for pickup' : 'Ready';
   if (key === 'out_for_delivery') return 'Out for delivery';
+  if (key === 'arrived') return 'Rider arrived';
+  if (key === 'customer_reached') return 'Customer reached';
   if (key === 'delivered') return 'Delivered';
   if (key === 'completed') return 'Completed';
   if (key === 'rejected') return 'Rejected';
@@ -86,6 +90,7 @@ export function buildOrderTimelineSteps(order) {
   const statusKey = normalizeOrderStatusKey(order?.overallStatus ?? order?.order_status ?? order?.status);
   const placedAt = order?.createdAt ?? order?.placedAt ?? order?.placed_at ?? null;
   const acceptedAt = order?.acceptedAt ?? order?.accepted_at ?? null;
+  const arrivedAt = order?.arrivedAt ?? order?.arrived_at ?? null;
   const deliveredAt = order?.deliveredAt ?? order?.delivered_at ?? null;
   const completedAt = order?.completedAt ?? order?.completed_at ?? null;
   const rejectedAt = order?.rejectedAt ?? order?.rejected_at ?? null;
@@ -157,10 +162,24 @@ export function buildOrderTimelineSteps(order) {
         timestamp: null,
       },
       {
-        key: 'delivered',
-        label: 'Delivered',
+        key: 'arrived',
+        label: 'Rider arrived',
         reached: currentIdx >= 5,
         current: currentIdx === 5,
+        timestamp: arrivedAt,
+      },
+      {
+        key: 'customer_reached',
+        label: 'Customer reached',
+        reached: currentIdx >= 6,
+        current: currentIdx === 6,
+        timestamp: null,
+      },
+      {
+        key: 'delivered',
+        label: 'Delivered',
+        reached: currentIdx >= 7,
+        current: currentIdx === 7,
         timestamp: deliveredAt,
       },
     );

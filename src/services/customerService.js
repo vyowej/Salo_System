@@ -304,6 +304,11 @@ export const customerService = {
     return res?.data?.order ?? null;
   },
 
+  async respondToCall(orderId, action) {
+    const res = await apiClient.post(`/customer/orders/${encodeURIComponent(orderId)}/call/respond`, { action });
+    return res?.data ?? null;
+  },
+
   getOrders() {
     return [];
   },

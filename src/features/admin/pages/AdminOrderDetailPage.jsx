@@ -4,6 +4,7 @@ import AdminLayout from '../../../layouts/AdminLayout';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import adminApiService from '../../../services/adminApiService';
+import connectService from '../../../services/connectService';
 import { formatDateTimeManila } from '../../../utils/format';
 import { formatPeso } from '../utils/format';
 import { ConfirmDialog, PageHeader, StateView } from '../components';
@@ -29,6 +30,7 @@ export default function AdminOrderDetailPage() {
   const [error, setError] = useState('');
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [liftingSuspension, setLiftingSuspension] = useState(false);
   const [actionError, setActionError] = useState('');
   const [actionNotice, setActionNotice] = useState('');
 
@@ -238,6 +240,98 @@ export default function AdminOrderDetailPage() {
                     <strong>{formatPeso(p.amount)}</strong>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {order.connect && (
+              <div style={{ padding: 'var(--space-4)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-primary)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <h2 style={{ margin: 0, fontSize: 'var(--font-size-base)' }}>SALO Connect Audit (Calls, Waits &amp; Chat)</h2>
+                  {order.connect.customer_ordering_suspended && order.customer?.user_id && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={liftingSuspension}
+                      onClick={async () => {
+                        setLiftingSuspension(true);
+                        try {
+                          await connectService.liftCustomerSuspension(order.customer.user_id);
+                          const refreshed = await adminApiService.getOrderDetail(id);
+                          setOrder(refreshed);
+                        } finally {
+                          setLiftingSuspension(false);
+                        }
+                      }}
+                    >
+                      {liftingSuspension ? 'Lifting…' : 'Lift Ordering Suspension'}
+                    </Button>
+                  )}
+                </div>
+
+                <div style={{ fontSize: '0.85rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  <span>Arrived: <strong>{order.connect.arrived_at ? formatDateTimeManila(order.connect.arrived_at) : '—'}</strong></span>
+                  <span>Strikes: <strong>{order.connect.call_attempts ?? 0}</strong></span>
+                  {order.connect.cancel_reason && (
+                    <span>Cancel Reason: <strong>{order.connect.cancel_reason}</strong></span>
+                  )}
+                </div>
+
+                {order.connect.customer_ordering_suspended && (
+                  <div style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--status-error-bg)', color: 'var(--status-error-text)', fontSize: '0.85rem' }}>
+                    <strong>Ordering Suspended</strong> until {formatDateTimeManila(order.connect.ordering_suspended_until)} — {order.connect.suspension_reason}
+                  </div>
+                )}
+
+                {Array.isArray(order.connect.call_logs) && order.connect.call_logs.length > 0 && (
+                  <div>
+                    <strong style={{ fontSize: '0.85rem' }}>Call History</strong>
+                    {order.connect.call_logs.map((cl) => (
+                      <div key={cl.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--border-primary)', fontSize: '0.82rem' }}>
+                        <span>
+                          Attempt #{cl.attempt_no} · <strong>{cl.status}</strong>
+                          {cl.counted_as_strike ? ' (Strike)' : ''}
+                          {' · '}Customer: {cl.customer_was_offline === null ? 'Unknown' : cl.customer_was_offline ? 'Offline' : 'Online'}
+                        </span>
+                        <span>{formatDateTimeManila(cl.created_at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {Array.isArray(order.connect.waiting_requests) && order.connect.waiting_requests.length > 0 && (
+                  <div>
+                    <strong style={{ fontSize: '0.85rem' }}>Waiting Requests</strong>
+                    {order.connect.waiting_requests.map((wr) => (
+                      <div key={wr.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--border-primary)', fontSize: '0.82rem' }}>
+                        <span>Request #{wr.request_no} ({wr.requested_minutes}m) · <strong>{wr.status}</strong></span>
+                        <span>{formatDateTimeManila(wr.requested_at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {Array.isArray(order.connect.messages) && order.connect.messages.length > 0 && (
+                  <div>
+                    <strong style={{ fontSize: '0.85rem' }}>Message History</strong>
+                    {order.connect.messages.map((m) => (
+                      <div key={m.id} style={{ padding: '4px 0', borderBottom: '1px solid var(--border-primary)', fontSize: '0.82rem' }}>
+                        <strong>{m.sender_name || m.sender_role} ({m.sender_role}):</strong> {m.message}{' '}
+                        <span style={{ opacity: 0.7 }}>· {formatDateTimeManila(m.created_at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {Array.isArray(order.connect.customer_incidents) && order.connect.customer_incidents.length > 0 && (
+                  <div>
+                    <strong style={{ fontSize: '0.85rem' }}>Customer Incidents</strong>
+                    {order.connect.customer_incidents.map((inc) => (
+                      <div key={inc.id} style={{ padding: '4px 0', borderBottom: '1px solid var(--border-primary)', fontSize: '0.82rem' }}>
+                        <strong>{inc.type}</strong> · {formatDateTimeManila(inc.created_at)}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

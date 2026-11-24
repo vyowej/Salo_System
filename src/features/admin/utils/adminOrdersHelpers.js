@@ -5,6 +5,8 @@ export const ORDER_STATUS_OPTIONS = [
   { value: 'preparing', label: 'Preparing' },
   { value: 'ready', label: 'Ready' },
   { value: 'out_for_delivery', label: 'Out for delivery' },
+  { value: 'arrived', label: 'Arrived' },
+  { value: 'customer_reached', label: 'Customer reached' },
   { value: 'delivered', label: 'Delivered' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },

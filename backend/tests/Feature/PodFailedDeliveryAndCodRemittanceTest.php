@@ -151,6 +151,9 @@ class PodFailedDeliveryAndCodRemittanceTest extends TestCase
 
         $this->actingAs($riderUser)->postJson("/api/rider/deliveries/{$orderId}/accept")->assertOk();
         $this->actingAs($riderUser)->postJson("/api/rider/deliveries/{$orderId}/picked-up")->assertOk();
+        $this->actingAs($riderUser)->postJson("/api/rider/orders/{$orderId}/arrive")->assertOk();
+        $this->actingAs($riderUser)->postJson("/api/rider/orders/{$orderId}/call/start")->assertOk();
+        $this->actingAs($buyer)->postJson("/api/customer/orders/{$orderId}/call/respond", ['action' => 'accept'])->assertOk();
 
         $proofFile = UploadedFile::fake()->image('pod.jpg', 320, 240);
 
@@ -230,6 +233,9 @@ class PodFailedDeliveryAndCodRemittanceTest extends TestCase
 
         $this->actingAs($riderUser)->postJson("/api/rider/deliveries/{$orderId}/accept")->assertOk();
         $this->actingAs($riderUser)->postJson("/api/rider/deliveries/{$orderId}/picked-up")->assertOk();
+        $this->actingAs($riderUser)->postJson("/api/rider/orders/{$orderId}/arrive")->assertOk();
+        $this->actingAs($riderUser)->postJson("/api/rider/orders/{$orderId}/call/start")->assertOk();
+        $this->actingAs($buyer)->postJson("/api/customer/orders/{$orderId}/call/respond", ['action' => 'accept'])->assertOk();
 
         $this->actingAs($riderUser)->postJson("/api/rider/deliveries/{$orderId}/fail", [
             'failure_reason' => 'Customer unreachable after 3 calls',

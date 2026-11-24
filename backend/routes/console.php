@@ -25,3 +25,9 @@ Schedule::command('salo:send-reservation-reminders')
     ->everyFiveMinutes()
     ->timezone('Asia/Manila')
     ->withoutOverlapping(10);
+
+// Cancel arrived orders that reached max call strikes and passed minimum wait.
+Schedule::command('salo:cancel-unreachable-orders')
+    ->everyMinute()
+    ->timezone('Asia/Manila')
+    ->withoutOverlapping();

@@ -2,6 +2,8 @@
 
 namespace App\Features\Orders\Services;
 
+use App\Features\Connect\Services\ConversationService;
+use App\Features\Connect\Services\OrderConnectService;
 use App\Features\Notifications\Services\NotificationService;
 use App\Features\Orders\Support\OrderPaymentSnapshotLoader;
 use App\Features\Orders\Support\OrderTimestampFormatter;
@@ -21,6 +23,7 @@ class CustomerOrderService
         private readonly AuditLogService $auditLogService,
         private readonly NotificationService $notificationService,
         private readonly RefundService $refundService,
+        private readonly OrderConnectService $connectService,
     ) {}
 
     /**
@@ -166,6 +169,8 @@ class CustomerOrderService
             throw new NotFoundHttpException('Order not found.');
         }
 
+        $connectState = $this->connectService->syncAndGetConnectState($orderId);
+
         $rawItems = DB::table('order_items')
             ->where('order_id', $orderId)
             ->orderBy('order_item_id')
@@ -230,7 +235,7 @@ class CustomerOrderService
             'restaurant_logo_url' => $this->fileStorageService->publicUrl($row->logo_image),
             'customer_name' => $row->customer_name,
             'fulfillment' => $row->order_type,
-            'order_status' => $row->order_status,
+            'order_status' => $connectState['order_status'] ?? $row->order_status,
             'subtotal_amount' => (float) $row->subtotal_amount,
             'delivery_fee' => (float) $row->delivery_fee,
             'total_amount' => (float) $row->total_amount,
@@ -267,9 +272,25 @@ class CustomerOrderService
             'accepted_at' => OrderTimestampFormatter::toManilaIso($row->accepted_at),
             'delivered_at' => OrderTimestampFormatter::toManilaIso($row->delivered_at),
             'completed_at' => OrderTimestampFormatter::toManilaIso($row->completed_at),
-            'cancelled_at' => OrderTimestampFormatter::toManilaIso($row->cancelled_at),
-            'cancelled_by' => $row->cancelled_by,
-            'cancellation_reason' => $row->cancellation_reason,
+            'cancelled_at' => $connectState['cancelled_at'] ?? OrderTimestampFormatter::toManilaIso($row->cancelled_at),
+            'cancelled_by' => $connectState['cancelled_by'] ?? $row->cancelled_by,
+            'cancellation_reason' => $connectState['cancellation_reason'] ?? $row->cancellation_reason,
+            'cancel_reason' => $connectState['cancel_reason'] ?? $row->cancellation_reason,
+            'arrived_at' => $connectState['arrived_at'],
+            'call_attempts' => $connectState['call_attempts'],
+            'max_strikes' => $connectState['max_strikes'],
+            'last_call_resolved_at' => $connectState['last_call_resolved_at'],
+            'cooldown_ends_at' => $connectState['cooldown_ends_at'],
+            'cancel_available_at' => $connectState['cancel_available_at'],
+            'pending_call' => $connectState['pending_call'],
+            'active_waiting_request' => $connectState['active_waiting_request'],
+            'waiting_requests_count' => $connectState['waiting_requests_count'],
+            'max_wait_requests' => $connectState['max_wait_requests'],
+            'unread_messages_count' => app(ConversationService::class)->countUnreadForUser($orderId, (int) $user->user_id),
+            'customer_ordering_suspended' => $connectState['customer_ordering_suspended'],
+            'ordering_suspended_until' => $connectState['ordering_suspended_until'],
+            'suspension_reason' => $connectState['suspension_reason'],
+            'server_now' => $connectState['server_now'],
             'rejection_reason' => $row->rejection_reason,
             'rejected_at' => OrderTimestampFormatter::toManilaIso($row->rejected_at),
             'placed_at' => OrderTimestampFormatter::toManilaIso($row->placed_at),

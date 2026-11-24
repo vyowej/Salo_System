@@ -21,6 +21,11 @@ use App\Features\Admin\Controllers\AdminSupportController;
 use App\Features\Applications\Controllers\ApplicationDocumentController;
 use App\Features\Auth\Controllers\AuthController;
 use App\Features\Auth\Controllers\OtpController;
+use App\Features\Connect\Controllers\AdminConnectController;
+use App\Features\Connect\Controllers\ConversationController;
+use App\Features\Connect\Controllers\CustomerConnectController;
+use App\Features\Connect\Controllers\RiderConnectController;
+use App\Features\Connect\Controllers\WaitingRequestController;
 use App\Features\Locations\Controllers\AdminServiceAreaController;
 use App\Features\Locations\Controllers\CustomerAddressController;
 use App\Features\Locations\Controllers\LocationLookupController;
@@ -177,6 +182,11 @@ Route::prefix('rider')->middleware('auth')->group(function (): void {
         Route::post('/deliveries/{orderId}/fail', [RiderDeliveryController::class, 'fail'])->whereNumber('orderId');
         Route::get('/deliveries/{orderId}/proof', [RiderDeliveryController::class, 'proof'])->whereNumber('orderId');
 
+        Route::get('/orders/{id}', [RiderConnectController::class, 'showOrder'])->whereNumber('id');
+        Route::post('/orders/{id}/arrive', [RiderConnectController::class, 'arrive'])->whereNumber('id');
+        Route::post('/orders/{id}/call/start', [RiderConnectController::class, 'startCall'])->whereNumber('id');
+        Route::post('/orders/{id}/deliver', [RiderConnectController::class, 'deliver'])->whereNumber('id');
+
         Route::get('/finance', [RiderFinanceController::class, 'index']);
         Route::post('/finance/remit', [RiderFinanceController::class, 'remit']);
 
@@ -202,6 +212,7 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
     Route::get('/orders', [CustomerOrderController::class, 'index']);
     Route::get('/orders/{id}', [CustomerOrderController::class, 'show'])->whereNumber('id');
     Route::post('/orders/{id}/cancel', [CustomerOrderController::class, 'cancel'])->whereNumber('id');
+    Route::post('/orders/{id}/call/respond', [CustomerConnectController::class, 'respondToCall'])->whereNumber('id');
 
     Route::get('/orders/{id}/reviews', [CustomerReviewController::class, 'showOrderReviews'])->whereNumber('id');
     Route::post('/orders/{id}/reviews/restaurant', [CustomerReviewController::class, 'storeRestaurantReview'])->whereNumber('id');
@@ -218,6 +229,13 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
         Route::put('/favorites/{restaurantId}', [CustomerFavoriteController::class, 'store'])->whereNumber('restaurantId');
         Route::delete('/favorites/{restaurantId}', [CustomerFavoriteController::class, 'destroy'])->whereNumber('restaurantId');
     });
+});
+
+Route::middleware('auth')->group(function (): void {
+    Route::get('/orders/{id}/conversation', [ConversationController::class, 'show'])->whereNumber('id');
+    Route::post('/orders/{id}/messages', [ConversationController::class, 'store'])->whereNumber('id')->middleware('throttle:30,1');
+    Route::post('/orders/{id}/waiting-requests', [WaitingRequestController::class, 'store'])->whereNumber('id');
+    Route::patch('/waiting-requests/{id}', [WaitingRequestController::class, 'respond'])->whereNumber('id');
 });
 
 Route::prefix('restaurant')->middleware('auth')->group(function (): void {
@@ -345,6 +363,7 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function (): v
     Route::get('/users/{id}/activity', [AdminManagementController::class, 'userActivity'])->whereNumber('id');
     Route::post('/users', [AdminManagementController::class, 'createUser'])->middleware('throttle:10,1');
     Route::patch('/users/{id}', [AdminManagementController::class, 'updateUser'])->whereNumber('id')->middleware('throttle:20,1');
+    Route::post('/users/{id}/lift-suspension', [AdminConnectController::class, 'liftSuspension'])->whereNumber('id')->middleware('throttle:20,1');
     Route::post('/users/{id}/revoke-sessions', [AdminManagementController::class, 'revokeSessions'])->whereNumber('id')->middleware('throttle:10,1');
 
     Route::get('/security/sessions', [AdminManagementController::class, 'securitySessions']);

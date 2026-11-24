@@ -436,6 +436,15 @@ class RiderDeliveryTest extends TestCase
         // Repeated picked-up -> 409
         $this->actingAs($rider1)->postJson("/api/rider/deliveries/{$orderId}/picked-up")->assertStatus(409);
 
+        // Delivered before customer_reached -> 409
+        $this->actingAs($rider1)->postJson("/api/rider/deliveries/{$orderId}/delivered", ['collected_amount' => 229.00])
+            ->assertStatus(409);
+
+        // Arrive -> Call -> Customer Accept -> customer_reached
+        $this->actingAs($rider1)->postJson("/api/rider/orders/{$orderId}/arrive")->assertOk();
+        $this->actingAs($rider1)->postJson("/api/rider/orders/{$orderId}/call/start")->assertOk();
+        $this->actingAs($buyer)->postJson("/api/customer/orders/{$orderId}/call/respond", ['action' => 'accept'])->assertOk();
+
         // Another rider delivered -> 404
         $this->actingAs($rider2)->postJson("/api/rider/deliveries/{$orderId}/delivered", ['collected_amount' => 229.00])
             ->assertStatus(404);
@@ -469,6 +478,9 @@ class RiderDeliveryTest extends TestCase
 
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$codOrderId}/accept")->assertOk();
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$codOrderId}/picked-up")->assertOk();
+        $this->actingAs($rider)->postJson("/api/rider/orders/{$codOrderId}/arrive")->assertOk();
+        $this->actingAs($rider)->postJson("/api/rider/orders/{$codOrderId}/call/start")->assertOk();
+        $this->actingAs($buyer)->postJson("/api/customer/orders/{$codOrderId}/call/respond", ['action' => 'accept'])->assertOk();
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$codOrderId}/delivered", ['collected_amount' => 229.00])
             ->assertOk()
             ->assertJsonPath('data.delivery.payment_status', 'paid')
@@ -500,13 +512,16 @@ class RiderDeliveryTest extends TestCase
         [, $orderId, $paymentId] = $this->createReadyDeliveryOrder($owner, $buyer, 'delivery', 'ready', 'cash', 'pending');
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$orderId}/accept")->assertOk();
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$orderId}/picked-up")->assertOk();
+        $this->actingAs($rider)->postJson("/api/rider/orders/{$orderId}/arrive")->assertOk();
+        $this->actingAs($rider)->postJson("/api/rider/orders/{$orderId}/call/start")->assertOk();
+        $this->actingAs($buyer)->postJson("/api/customer/orders/{$orderId}/call/respond", ['action' => 'accept'])->assertOk();
 
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$orderId}/delivered", ['collected_amount' => 200.00])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['collected_amount']);
 
         $this->assertSame('pending', DB::table('payments')->where('payment_id', $paymentId)->value('payment_status'));
-        $this->assertSame('out_for_delivery', DB::table('orders')->where('order_id', $orderId)->value('order_status'));
+        $this->assertSame('customer_reached', DB::table('orders')->where('order_id', $orderId)->value('order_status'));
         $this->assertNull(DB::table('deliveries')->where('order_id', $orderId)->value('cod_amount_collected'));
     }
 
@@ -521,13 +536,16 @@ class RiderDeliveryTest extends TestCase
         [, $orderId, $paymentId] = $this->createReadyDeliveryOrder($owner, $buyer, 'delivery', 'ready', 'cash', 'pending');
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$orderId}/accept")->assertOk();
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$orderId}/picked-up")->assertOk();
+        $this->actingAs($rider)->postJson("/api/rider/orders/{$orderId}/arrive")->assertOk();
+        $this->actingAs($rider)->postJson("/api/rider/orders/{$orderId}/call/start")->assertOk();
+        $this->actingAs($buyer)->postJson("/api/customer/orders/{$orderId}/call/respond", ['action' => 'accept'])->assertOk();
 
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$orderId}/delivered", [])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['collected_amount']);
 
         $this->assertSame('pending', DB::table('payments')->where('payment_id', $paymentId)->value('payment_status'));
-        $this->assertSame('out_for_delivery', DB::table('orders')->where('order_id', $orderId)->value('order_status'));
+        $this->assertSame('customer_reached', DB::table('orders')->where('order_id', $orderId)->value('order_status'));
     }
 
     public function test_cod_zero_amount_gets_422_and_changes_nothing(): void
@@ -541,13 +559,16 @@ class RiderDeliveryTest extends TestCase
         [, $orderId, $paymentId] = $this->createReadyDeliveryOrder($owner, $buyer, 'delivery', 'ready', 'cash', 'pending');
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$orderId}/accept")->assertOk();
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$orderId}/picked-up")->assertOk();
+        $this->actingAs($rider)->postJson("/api/rider/orders/{$orderId}/arrive")->assertOk();
+        $this->actingAs($rider)->postJson("/api/rider/orders/{$orderId}/call/start")->assertOk();
+        $this->actingAs($buyer)->postJson("/api/customer/orders/{$orderId}/call/respond", ['action' => 'accept'])->assertOk();
 
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$orderId}/delivered", ['collected_amount' => 0])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['collected_amount']);
 
         $this->assertSame('pending', DB::table('payments')->where('payment_id', $paymentId)->value('payment_status'));
-        $this->assertSame('out_for_delivery', DB::table('orders')->where('order_id', $orderId)->value('order_status'));
+        $this->assertSame('customer_reached', DB::table('orders')->where('order_id', $orderId)->value('order_status'));
     }
 
     public function test_cod_non_cash_or_already_paid_payment_is_untouched(): void
@@ -561,6 +582,9 @@ class RiderDeliveryTest extends TestCase
         [, $cardOrderId, $cardPaymentId] = $this->createReadyDeliveryOrder($owner, $buyer, 'delivery', 'ready', 'card', 'paid');
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$cardOrderId}/accept")->assertOk();
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$cardOrderId}/picked-up")->assertOk();
+        $this->actingAs($rider)->postJson("/api/rider/orders/{$cardOrderId}/arrive")->assertOk();
+        $this->actingAs($rider)->postJson("/api/rider/orders/{$cardOrderId}/call/start")->assertOk();
+        $this->actingAs($buyer)->postJson("/api/customer/orders/{$cardOrderId}/call/respond", ['action' => 'accept'])->assertOk();
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$cardOrderId}/delivered")->assertOk();
 
         $payment = DB::table('payments')->where('payment_id', $cardPaymentId)->first();
@@ -583,6 +607,9 @@ class RiderDeliveryTest extends TestCase
         $this->actingAs($rider)->patchJson('/api/rider/availability', ['status' => 'online'])->assertOk();
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$orderId}/accept")->assertOk();
         $this->actingAs($rider)->postJson("/api/rider/deliveries/{$orderId}/picked-up")->assertOk();
+        $this->actingAs($rider)->postJson("/api/rider/orders/{$orderId}/arrive")->assertOk();
+        $this->actingAs($rider)->postJson("/api/rider/orders/{$orderId}/call/start")->assertOk();
+        $this->actingAs($buyer)->postJson("/api/customer/orders/{$orderId}/call/respond", ['action' => 'accept'])->assertOk();
         $deliveredRes = $this->actingAs($rider)->postJson("/api/rider/deliveries/{$orderId}/delivered", ['collected_amount' => 229.00])
             ->assertOk()
             ->json('data.delivery');

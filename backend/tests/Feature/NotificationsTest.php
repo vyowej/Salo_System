@@ -328,6 +328,9 @@ class NotificationsTest extends TestCase
         ]);
 
         $this->actingAs($riderUser)->postJson("/api/rider/deliveries/{$orderId}/picked-up")->assertOk();
+        $this->actingAs($riderUser)->postJson("/api/rider/orders/{$orderId}/arrive")->assertOk();
+        $this->actingAs($riderUser)->postJson("/api/rider/orders/{$orderId}/call/start")->assertOk();
+        $this->actingAs($customer)->postJson("/api/customer/orders/{$orderId}/call/respond", ['action' => 'accept'])->assertOk();
         $this->actingAs($riderUser)->postJson("/api/rider/deliveries/{$orderId}/delivered", [
             'collected_amount' => 150.00,
         ])->assertOk();

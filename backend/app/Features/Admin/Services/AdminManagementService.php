@@ -130,7 +130,7 @@ class AdminManagementService
             ->selectRaw("
                 COUNT(*) as total,
                 SUM(CASE WHEN DATE(placed_at) = ? THEN 1 ELSE 0 END) as today,
-                SUM(CASE WHEN order_status IN ('pending','accepted','preparing','ready','out_for_delivery') THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN order_status IN ('pending','accepted','preparing','ready','out_for_delivery','arrived','customer_reached') THEN 1 ELSE 0 END) as active,
                 SUM(CASE WHEN order_status IN ('delivered','completed') THEN 1 ELSE 0 END) as completed,
                 SUM(CASE WHEN order_status = 'failed' THEN 1 ELSE 0 END) as failed,
                 COALESCE(SUM(CASE WHEN order_status NOT IN ('cancelled','rejected','failed') THEN total_amount ELSE 0 END), 0) as gmv_total

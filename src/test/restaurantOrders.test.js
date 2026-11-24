@@ -257,9 +257,11 @@ test('Step 9a orderTimeline, complete/cancel service methods, and UI pages match
       'Preparing',
       'Ready',
       'Out for delivery',
+      'Rider arrived',
+      'Customer reached',
       'Delivered',
     ]);
-    assert.equal(deliverySteps[5].timestamp, '2026-11-18T11:30:00+08:00');
+    assert.equal(deliverySteps[7].timestamp, '2026-11-18T11:30:00+08:00');
     assert.equal(formatOrderStatusText('ready', 'delivery'), 'Ready');
     assert.equal(formatOrderStatusText('out_for_delivery', 'delivery'), 'Out for delivery');
     assert.equal(formatOrderStatusText('delivered', 'delivery'), 'Delivered');

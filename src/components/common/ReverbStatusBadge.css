@@ -1,0 +1,53 @@
+.reverb-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid var(--border-primary, #e5e5e5);
+  background: var(--bg-secondary, #faf6f0);
+  color: var(--text-secondary, #525252);
+}
+
+.reverb-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.reverb-status-badge.is-connected {
+  color: #15803d;
+  border-color: rgba(21, 128, 61, 0.25);
+  background: rgba(21, 128, 61, 0.08);
+}
+
+.reverb-status-badge.is-connecting {
+  color: #b45309;
+  border-color: rgba(180, 83, 9, 0.25);
+  background: rgba(180, 83, 9, 0.08);
+}
+
+.reverb-status-badge.is-disconnected {
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.25);
+  background: rgba(185, 28, 28, 0.08);
+}
+
+[data-theme='dark'] .reverb-status-badge.is-connected {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+}
+
+[data-theme='dark'] .reverb-status-badge.is-connecting {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+}
+
+[data-theme='dark'] .reverb-status-badge.is-disconnected {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+}

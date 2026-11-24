@@ -14,6 +14,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -25,6 +26,8 @@ class AdminOrderService
         'preparing',
         'ready',
         'out_for_delivery',
+        'arrived',
+        'customer_reached',
     ];
 
     public function __construct(
@@ -38,6 +41,8 @@ class AdminOrderService
         'preparing',
         'ready',
         'out_for_delivery',
+        'arrived',
+        'customer_reached',
         'delivered',
         'completed',
         'cancelled',
@@ -420,8 +425,110 @@ class AdminOrderService
             'cancelled_at' => OrderTimestampFormatter::toManilaIso($row->cancelled_at),
             'cancelled_by' => $row->cancelled_by,
             'cancellation_reason' => $row->cancellation_reason,
+            'cancel_reason' => $row->cancellation_reason,
             'rejection_reason' => $row->rejection_reason,
             'rejected_at' => OrderTimestampFormatter::toManilaIso($row->rejected_at),
+            'connect' => $this->loadConnectDetailsForAdmin($orderId, (int) $row->customer_id, $row),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadConnectDetailsForAdmin(int $orderId, int $customerId, object $orderRow): array
+    {
+        $customer = DB::table('users')
+            ->where('user_id', $customerId)
+            ->first(['ordering_suspended_until', 'suspension_reason']);
+
+        $callLogs = Schema::hasTable('call_logs')
+            ? DB::table('call_logs')
+                ->where('order_id', $orderId)
+                ->orderBy('attempt_no')
+                ->get()
+                ->map(static fn (object $c): array => [
+                    'id' => (int) $c->id,
+                    'attempt_no' => (int) $c->attempt_no,
+                    'status' => $c->status,
+                    'counted_as_strike' => (bool) $c->counted_as_strike,
+                    'customer_was_offline' => $c->customer_was_offline === null ? null : (bool) $c->customer_was_offline,
+                    'created_at' => OrderTimestampFormatter::toManilaIso($c->created_at),
+                    'expires_at' => OrderTimestampFormatter::toManilaIso($c->expires_at),
+                    'responded_at' => OrderTimestampFormatter::toManilaIso($c->responded_at),
+                ])
+                ->all()
+            : [];
+
+        $waitingRequests = Schema::hasTable('waiting_requests')
+            ? DB::table('waiting_requests')
+                ->where('order_id', $orderId)
+                ->orderBy('request_no')
+                ->get()
+                ->map(static fn (object $w): array => [
+                    'id' => (int) $w->id,
+                    'request_no' => (int) $w->request_no,
+                    'status' => $w->status,
+                    'requested_minutes' => (int) $w->requested_minutes,
+                    'requested_at' => OrderTimestampFormatter::toManilaIso($w->requested_at),
+                    'expires_at' => OrderTimestampFormatter::toManilaIso($w->expires_at),
+                    'responded_at' => OrderTimestampFormatter::toManilaIso($w->responded_at),
+                    'wait_ends_at' => OrderTimestampFormatter::toManilaIso($w->wait_ends_at),
+                ])
+                ->all()
+            : [];
+
+        $messages = [];
+        if (Schema::hasTable('conversations') && Schema::hasTable('messages')) {
+            $convId = DB::table('conversations')->where('order_id', $orderId)->value('id');
+            if ($convId) {
+                $messages = DB::table('messages as m')
+                    ->leftJoin('users as u', 'u.user_id', '=', 'm.sender_id')
+                    ->where('m.conversation_id', $convId)
+                    ->orderBy('m.created_at')
+                    ->orderBy('m.id')
+                    ->get(['m.id', 'm.sender_id', 'm.message', 'm.created_at', 'm.read_at', 'u.first_name'])
+                    ->map(static fn (object $m): array => [
+                        'id' => (int) $m->id,
+                        'sender_id' => (int) $m->sender_id,
+                        'sender_role' => (int) $m->sender_id === $customerId ? 'customer' : 'rider',
+                        'sender_name' => $m->first_name,
+                        'message' => $m->message,
+                        'created_at' => OrderTimestampFormatter::toManilaIso($m->created_at),
+                        'read_at' => OrderTimestampFormatter::toManilaIso($m->read_at),
+                    ])
+                    ->all();
+            }
+        }
+
+        $incidents = Schema::hasTable('customer_incidents')
+            ? DB::table('customer_incidents')
+                ->where('order_id', $orderId)
+                ->orderByDesc('id')
+                ->get()
+                ->map(static fn (object $inc): array => [
+                    'id' => (int) $inc->id,
+                    'type' => $inc->type,
+                    'details' => $inc->details ? json_decode((string) $inc->details, true) : null,
+                    'created_at' => OrderTimestampFormatter::toManilaIso($inc->created_at),
+                ])
+                ->all()
+            : [];
+
+        $isSuspended = $customer && $customer->ordering_suspended_until !== null
+            && CarbonImmutable::parse((string) $customer->ordering_suspended_until)->gt(CarbonImmutable::now());
+
+        return [
+            'arrived_at' => OrderTimestampFormatter::toManilaIso($orderRow->arrived_at ?? null),
+            'call_attempts' => (int) ($orderRow->call_attempts ?? 0),
+            'last_call_resolved_at' => OrderTimestampFormatter::toManilaIso($orderRow->last_call_resolved_at ?? null),
+            'cancel_reason' => $orderRow->cancellation_reason,
+            'call_logs' => $callLogs,
+            'waiting_requests' => $waitingRequests,
+            'messages' => $messages,
+            'customer_incidents' => $incidents,
+            'customer_ordering_suspended' => $isSuspended,
+            'ordering_suspended_until' => $isSuspended ? OrderTimestampFormatter::toManilaIso($customer->ordering_suspended_until) : null,
+            'suspension_reason' => $isSuspended ? $customer->suspension_reason : null,
         ];
     }
 
