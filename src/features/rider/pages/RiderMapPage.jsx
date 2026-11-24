@@ -27,6 +27,7 @@ export default function RiderMapPage() {
   const [connectError, setConnectError] = useState('');
   const [connectToast, setConnectToast] = useState('');
   const [codConfirmed, setCodConfirmed] = useState(false);
+  const [proofPhoto, setProofPhoto] = useState(null);
   const [deliverBusy, setDeliverBusy] = useState(false);
   const [waitBusy, setWaitBusy] = useState(false);
 
@@ -352,6 +353,10 @@ export default function RiderMapPage() {
 
   const handleMarkDelivered = async () => {
     if (!delivery || deliverBusy) return;
+    if (!proofPhoto) {
+      setConnectError('Please take or upload a proof of delivery photo first.');
+      return;
+    }
     if (delivery.requires_cod_collection && !codConfirmed) {
       setConnectError(`Confirm exact cash collection of ${formatPeso(delivery.amount_to_collect)} first.`);
       return;
@@ -361,8 +366,12 @@ export default function RiderMapPage() {
     setConnectError('');
     try {
       const collected = delivery.requires_cod_collection ? delivery.amount_to_collect : null;
-      const updated = await riderService.deliverOrder(delivery.order_id, collected);
+      const updated = await riderService.markDelivered(delivery.order_id, collected, {
+        proofPhoto,
+        recipientName: delivery.customer_name || undefined,
+      });
       setDelivery(updated);
+      setProofPhoto(null);
       setConnectToast('Delivery completed! You are now available.');
       window.dispatchEvent(new Event('salo:riderUpdated'));
     } catch (err) {
@@ -648,6 +657,21 @@ export default function RiderMapPage() {
 
                     {isCustomerReached && (
                       <div className="rider-connect-deliver-box">
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem', fontWeight: 600 }}>
+                          <span>Proof of delivery photo (required)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            disabled={deliverBusy}
+                            onChange={(e) => setProofPhoto(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                        {proofPhoto && (
+                          <small style={{ color: 'var(--status-success-text, #15803d)', fontWeight: 600 }}>
+                            Photo ready: {proofPhoto.name}
+                          </small>
+                        )}
                         {delivery.requires_cod_collection && (
                           <label className="rider-connect-cod-check">
                             <input
@@ -663,7 +687,7 @@ export default function RiderMapPage() {
                           variant="primary"
                           fullWidth
                           onClick={handleMarkDelivered}
-                          disabled={deliverBusy || (delivery.requires_cod_collection && !codConfirmed)}
+                          disabled={deliverBusy || !proofPhoto || (delivery.requires_cod_collection && !codConfirmed)}
                         >
                           {deliverBusy ? 'Completing delivery…' : 'Mark delivered'}
                         </Button>
