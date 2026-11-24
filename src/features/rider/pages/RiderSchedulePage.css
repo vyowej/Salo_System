@@ -1,109 +1,534 @@
-.rider-schedule-toolbar {
+.rider-schedule-stack {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.rider-schedule-duty-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
   flex-wrap: wrap;
+}
+
+.rider-schedule-duty-title-row,
+.rider-schedule-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-1);
+}
+
+.rider-schedule-muted-copy {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.rider-schedule-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.rider-schedule-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.rider-schedule-card-title {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-heading);
+}
+
+.rider-schedule-action-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.rider-schedule-action-hint {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+/* ── Notices ─────────────────────────────────────────── */
+.rider-schedule-notice {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-snug);
 }
 
-.rider-segmented {
-  display: inline-flex;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-pill);
-  background: var(--surface-secondary);
+.rider-schedule-notice--info {
+  background: var(--status-info-bg);
+  color: var(--status-info-text);
+  border: 1px solid color-mix(in srgb, var(--status-info-text) 20%, transparent);
 }
 
-.rider-segmented button {
-  border: 0;
+.rider-schedule-notice--warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-text);
+  border: 1px solid var(--status-upcoming-border);
+}
+
+.rider-schedule-notice--success {
+  background: var(--status-success-bg);
+  color: var(--status-success-text);
+  border: 1px solid var(--status-completed-border);
+  font-weight: var(--font-weight-medium);
+}
+
+.rider-schedule-notice-dismiss {
+  border: none;
   background: transparent;
-  color: var(--text-secondary);
-  min-height: 36px;
-  min-width: 72px;
-  border-radius: var(--radius-pill);
-  font: inherit;
+  color: inherit;
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 var(--space-1);
 }
 
-.rider-segmented button.active {
-  background: var(--surface-primary);
-  color: var(--text-primary);
-  box-shadow: 0 0 0 1px var(--border-primary);
+/* ── Read-Only Approved Availability ─────────────────── */
+.rider-schedule-readonly-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
-.rider-shift-list {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.rider-shift-row {
-  display: grid;
-  grid-template-columns: 1.1fr 1.4fr auto auto;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
-  background: var(--surface-primary);
-}
-
-.rider-shift-row strong,
-.rider-shift-row p,
-.rider-shift-row span {
+.rider-schedule-section-title {
   margin: 0;
-}
-
-.rider-shift-row p {
-  color: var(--text-secondary);
-}
-
-.rider-change-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--salo-orange-light);
-  color: var(--accent);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
 }
 
-.rider-calendar-grid {
+.rider-schedule-days-readonly {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: var(--space-2);
 }
 
-.rider-calendar-day {
-  display: grid;
-  gap: var(--space-2);
+.rider-schedule-day-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   padding: var(--space-3);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
-  background: var(--surface-primary);
+  background: var(--surface-secondary);
 }
 
-.rider-calendar-day span {
+.rider-schedule-day-card.is-approved {
+  background: var(--card-green-bg);
+  border-color: var(--card-green-border);
+}
+
+.rider-schedule-day-card.is-off {
+  opacity: 0.72;
+}
+
+.rider-schedule-day-name {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.rider-schedule-day-card.is-approved .rider-schedule-day-name {
+  color: var(--card-green-text);
+}
+
+.rider-schedule-day-state {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.rider-schedule-day-card.is-approved .rider-schedule-day-state {
+  color: var(--status-success-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rider-schedule-shifts-readonly {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: var(--space-3);
+}
+
+.rider-schedule-shift-card-readonly {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--card-green-border);
+  background: var(--card-green-bg);
+}
+
+.rider-schedule-shift-card-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--card-green-text);
+}
+
+.rider-schedule-shift-card-hours {
+  margin-top: var(--space-1);
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
+}
+
+.rider-schedule-hub-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.rider-schedule-hub-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
 }
 
-.rider-calendar-slot {
-  padding: var(--space-2);
-  border-radius: var(--radius-md);
-  background: var(--surface-secondary);
-  color: var(--text-primary);
-  font-size: var(--font-size-xs);
+.rider-schedule-empty-inline {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
-@media (max-width: 760px) {
-  .rider-shift-row {
-    grid-template-columns: 1fr;
+/* ── Pending Request Card ────────────────────────────── */
+.rider-schedule-pending-card {
+  border-color: var(--status-upcoming-border);
+}
+
+.rider-schedule-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+.rider-schedule-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-secondary);
+}
+
+.rider-schedule-summary-label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rider-schedule-summary-value {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+.rider-schedule-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.rider-schedule-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--surface-primary);
+  border: 1px solid var(--border-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.rider-schedule-chip--pending {
+  background: var(--status-warning-bg);
+  border-color: var(--status-upcoming-border);
+  color: var(--status-warning-text);
+}
+
+.rider-schedule-reason-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-secondary);
+}
+
+.rider-schedule-reason-text {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  line-height: var(--line-height-normal);
+}
+
+/* ── Request History ─────────────────────────────────── */
+.rider-schedule-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.rider-schedule-history-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-secondary);
+}
+
+.rider-schedule-history-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.rider-schedule-history-id {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+.rider-schedule-history-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.rider-schedule-history-reason {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+}
+
+.rider-schedule-admin-remarks {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-primary);
+  border-left: 3px solid var(--accent);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/* ── Request Modal Form ──────────────────────────────── */
+.rider-schedule-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.rider-schedule-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.rider-schedule-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.rider-schedule-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.rider-schedule-form-title {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.rider-schedule-required {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--accent);
+}
+
+.rider-schedule-optional {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.rider-schedule-form-hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.rider-schedule-day-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.rider-schedule-day-pill {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.rider-schedule-day-pill.is-selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.rider-schedule-shift-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+  gap: var(--space-2);
+}
+
+.rider-schedule-shift-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-primary);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.rider-schedule-shift-option.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.rider-schedule-shift-option-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.rider-schedule-shift-option-hours {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.rider-schedule-hub-input-row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.rider-schedule-input,
+.rider-schedule-textarea {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+}
+
+.rider-schedule-hub-input-row .rider-schedule-input {
+  flex: 1 1 220px;
+  width: auto;
+}
+
+.rider-schedule-input:focus,
+.rider-schedule-textarea:focus {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.rider-schedule-hub-tag--editable {
+  padding-right: var(--space-2);
+}
+
+.rider-schedule-hub-remove {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  color: var(--text-muted);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+}
+
+.rider-schedule-form-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+.rider-schedule-textarea-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rider-schedule-char-count {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.rider-schedule-field-error {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--status-error-text);
+}
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 900px) {
+  .rider-schedule-days-readonly {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .rider-schedule-days-readonly {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .rider-calendar-grid {
-    grid-template-columns: 1fr 1fr;
+  .rider-schedule-action-wrap {
+    align-items: flex-start;
   }
 }

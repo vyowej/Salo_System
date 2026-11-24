@@ -1,51 +1,44 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { Card, CardBody } from '../../../components/common/Card';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { StateView as GlobalStateView } from '../../../components/feedback';
 import riderService from '../../../services/riderService';
 import PageHeader from '../components/PageHeader';
+import ScheduleChangeRequestModal from '../components/ScheduleChangeRequestModal';
+import {
+  DAY_OPTIONS,
+  INITIAL_MOCK_SCHEDULE_REQUESTS,
+  cancelScheduleChangeRequest,
+  createScheduleChangeRequest,
+  formatScheduleDate,
+  getDayLabel,
+  getPendingScheduleRequest,
+  getShiftMeta,
+  hasPendingScheduleRequest,
+  parseHubTags,
+} from '../utils/riderScheduleRequests';
+import './RiderSchedulePage.css';
 
-const DAY_OPTIONS = [
-  { value: 'mon', label: 'Monday', short: 'Mon' },
-  { value: 'tue', label: 'Tuesday', short: 'Tue' },
-  { value: 'wed', label: 'Wednesday', short: 'Wed' },
-  { value: 'thu', label: 'Thursday', short: 'Thu' },
-  { value: 'fri', label: 'Friday', short: 'Fri' },
-  { value: 'sat', label: 'Saturday', short: 'Sat' },
-  { value: 'sun', label: 'Sunday', short: 'Sun' },
-];
-
-const SHIFT_OPTIONS = [
-  { value: 'breakfast', label: 'Morning / Breakfast', hours: '6:00 AM – 10:00 AM' },
-  { value: 'lunch', label: 'Midday / Lunch', hours: '10:00 AM – 2:00 PM' },
-  { value: 'afternoon', label: 'Afternoon', hours: '2:00 PM – 5:00 PM' },
-  { value: 'dinner', label: 'Evening / Dinner', hours: '5:00 PM – 10:00 PM' },
-  { value: 'late_night', label: 'Late Night', hours: '10:00 PM – 6:00 AM' },
-  { value: 'flexible', label: 'Flexible (Anytime)', hours: 'All available hours' },
-];
-
-function parseHubTags(hubsString) {
-  if (!hubsString || typeof hubsString !== 'string') return [];
-  return hubsString
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+const HISTORY_STATUS_CONFIG = {
+  approved: { label: 'Approved', variant: 'completed' },
+  rejected: { label: 'Rejected', variant: 'cancelled' },
+  cancelled: { label: 'Cancelled', variant: 'default' },
+  pending: { label: 'Pending', variant: 'upcoming' },
+};
 
 export default function RiderSchedulePage() {
   const [profile, setProfile] = useState(null);
-  const [availableDays, setAvailableDays] = useState([]);
-  const [preferredShifts, setPreferredShifts] = useState([]);
-  const [hubTags, setHubTags] = useState([]);
-  const [hubInput, setHubInput] = useState('');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [saveError, setSaveError] = useState('');
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [saveSuccess, setSaveSuccess] = useState('');
+
+  // Frontend-only mock state for schedule change requests
+  const [scheduleRequests, setScheduleRequests] = useState(() => INITIAL_MOCK_SCHEDULE_REQUESTS);
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const [cancelTargetId, setCancelTargetId] = useState(null);
+  const [actionNotice, setActionNotice] = useState('');
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -53,9 +46,6 @@ export default function RiderSchedulePage() {
     try {
       const data = await riderService.getProfile();
       setProfile(data);
-      setAvailableDays(Array.isArray(data?.available_days) ? data.available_days : []);
-      setPreferredShifts(Array.isArray(data?.preferred_shifts) ? data.preferred_shifts : []);
-      setHubTags(parseHubTags(data?.preferred_hubs));
     } catch (err) {
       setLoadError(err?.message || 'Unable to load rider schedule.');
     } finally {
@@ -67,87 +57,58 @@ export default function RiderSchedulePage() {
     loadProfile();
   }, [loadProfile]);
 
-  const toggleDay = (day) => {
-    setSaveSuccess('');
-    setSaveError('');
-    setAvailableDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
+  const approvedSchedule = useMemo(() => {
+    const availableDays = Array.isArray(profile?.available_days) ? profile.available_days : [];
+    const preferredShifts = Array.isArray(profile?.preferred_shifts) ? profile.preferred_shifts : [];
+    const hubTags = parseHubTags(profile?.preferred_hubs);
+    const effectiveDate =
+      profile?.schedule_effective_date || profile?.approved_at || profile?.created_at || null;
+
+    return {
+      availableDays,
+      preferredShifts,
+      hubTags,
+      effectiveDate,
+    };
+  }, [profile]);
+
+  const pendingRequest = useMemo(
+    () => getPendingScheduleRequest(scheduleRequests),
+    [scheduleRequests],
+  );
+  const hasPending = hasPendingScheduleRequest(scheduleRequests);
+
+  const requestHistory = useMemo(
+    () => scheduleRequests.filter((req) => req.status !== 'pending'),
+    [scheduleRequests],
+  );
+
+  const handleOpenRequestModal = () => {
+    if (hasPending) return;
+    setActionNotice('');
+    setRequestModalOpen(true);
+  };
+
+  const handleSubmitScheduleRequest = (formPayload) => {
+    if (hasPending) return;
+    const nextRequest = createScheduleChangeRequest(formPayload);
+    setScheduleRequests((prev) => [nextRequest, ...prev]);
+    setRequestModalOpen(false);
+    setActionNotice(
+      'Schedule change request submitted for administrator review. Your approved availability remains unchanged until approved.',
     );
   };
 
-  const toggleShift = (shift) => {
-    setSaveSuccess('');
-    setSaveError('');
-    setPreferredShifts((prev) =>
-      prev.includes(shift) ? prev.filter((s) => s !== shift) : [...prev, shift],
-    );
+  const handleConfirmCancelRequest = () => {
+    if (!cancelTargetId) return;
+    setScheduleRequests((prev) => cancelScheduleChangeRequest(prev, cancelTargetId));
+    setCancelTargetId(null);
+    setActionNotice('Pending schedule change request cancelled.');
   };
 
-  const handleAddHub = () => {
-    const trimmed = hubInput.trim();
-    if (!trimmed) return;
-    setSaveSuccess('');
-    setSaveError('');
-    if (!hubTags.some((t) => t.toLowerCase() === trimmed.toLowerCase())) {
-      setHubTags((prev) => [...prev, trimmed]);
-    }
-    setHubInput('');
-  };
-
-  const handleRemoveHub = (tag) => {
-    setSaveSuccess('');
-    setSaveError('');
-    setHubTags((prev) => prev.filter((t) => t !== tag));
-  };
-
-  const handleSave = async (event) => {
-    event.preventDefault();
-    if (saving) return;
-
-    setSaving(true);
-    setSaveError('');
-    setFieldErrors({});
-    setSaveSuccess('');
-
-    const pendingHub = hubInput.trim();
-    const nextHubs = pendingHub && !hubTags.some((t) => t.toLowerCase() === pendingHub.toLowerCase())
-      ? [...hubTags, pendingHub]
-      : hubTags;
-    if (pendingHub) {
-      setHubTags(nextHubs);
-      setHubInput('');
-    }
-
-    const hubsPayload = nextHubs.length > 0 ? nextHubs.join(', ') : null;
-
-    try {
-      const updated = await riderService.updateProfile({
-        available_days: availableDays,
-        preferred_shifts: preferredShifts,
-        preferred_hubs: hubsPayload,
-      });
-      setProfile(updated);
-      setAvailableDays(Array.isArray(updated?.available_days) ? updated.available_days : availableDays);
-      setPreferredShifts(Array.isArray(updated?.preferred_shifts) ? updated.preferred_shifts : preferredShifts);
-      setHubTags(parseHubTags(updated?.preferred_hubs ?? hubsPayload));
-      setSaveSuccess('Schedule preferences saved.');
-      window.dispatchEvent(new Event('salo:riderUpdated'));
-    } catch (err) {
-      const nextFieldErrors = {};
-      if (err?.errors && typeof err.errors === 'object') {
-        Object.entries(err.errors).forEach(([key, msgs]) => {
-          const firstMsg = Array.isArray(msgs) ? msgs[0] : String(msgs);
-          if (firstMsg) nextFieldErrors[key] = firstMsg;
-        });
-      }
-      setFieldErrors(nextFieldErrors);
-      setSaveError(err?.message || 'Unable to save schedule preferences.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const isOnline = Boolean(profile?.availability?.is_online || profile?.availability?.status === 'online');
+  const isOnline = Boolean(
+    profile?.availability?.is_online || profile?.availability?.status === 'online',
+  );
   const availabilityLabel = isOnline
     ? 'Online & Available'
     : profile?.availability?.status === 'temporarily_unavailable'
@@ -158,7 +119,7 @@ export default function RiderSchedulePage() {
     <div className="rider-page-shell">
       <PageHeader
         title="Shift schedule"
-        subtitle="Set your available days, preferred delivery shifts, and hubs."
+        subtitle="View your approved delivery availability and request schedule adjustments."
         eyebrow="Schedule"
       />
 
@@ -172,17 +133,18 @@ export default function RiderSchedulePage() {
           onRetry={loadProfile}
         />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <div className="rider-schedule-stack">
+          {/* 1. Current Duty Status (Online/Offline remains separate) */}
           <Card>
-            <CardBody style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <CardBody className="rider-schedule-duty-body">
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <div className="rider-schedule-duty-title-row">
                   <strong>Current Duty Status</strong>
-                  <Badge variant={isOnline ? 'success' : 'neutral'} size="sm">
+                  <Badge variant={isOnline ? 'success' : 'default'} size="sm" dot>
                     {availabilityLabel}
                   </Badge>
                 </div>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                <p className="rider-schedule-muted-copy">
                   {profile?.base_city ? `Base city: ${profile.base_city} · ` : ''}
                   Toggle your live availability before accepting deliveries.
                 </p>
@@ -195,209 +157,299 @@ export default function RiderSchedulePage() {
             </CardBody>
           </Card>
 
-          <form onSubmit={handleSave} noValidate>
-            <Card>
-              <CardBody style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-                {saveError && (
-                  <div
-                    role="alert"
-                    style={{
-                      padding: 'var(--space-3) var(--space-4)',
-                      borderRadius: 'var(--radius-md)',
-                      background: 'var(--status-error-bg)',
-                      color: 'var(--status-error-text)',
-                      fontSize: 'var(--font-size-sm)',
-                    }}
-                  >
-                    {saveError}
-                  </div>
-                )}
+          {actionNotice && (
+            <div className="rider-schedule-notice rider-schedule-notice--success" role="status">
+              <span>{actionNotice}</span>
+              <button
+                type="button"
+                className="rider-schedule-notice-dismiss"
+                onClick={() => setActionNotice('')}
+                aria-label="Dismiss notice"
+              >
+                ×
+              </button>
+            </div>
+          )}
 
-                {saveSuccess && (
-                  <div
-                    role="status"
-                    style={{
-                      padding: 'var(--space-3) var(--space-4)',
-                      borderRadius: 'var(--radius-md)',
-                      background: 'var(--status-success-bg, #ecfdf5)',
-                      color: 'var(--status-success-text, #065f46)',
-                      fontSize: 'var(--font-size-sm)',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {saveSuccess}
-                  </div>
-                )}
-
-                <section>
-                  <h3 style={{ margin: '0 0 6px', fontSize: 'var(--font-size-base)' }}>Available Days</h3>
-                  <p style={{ margin: '0 0 12px', fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-                    Select the days of the week you are available to deliver.
-                  </p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {DAY_OPTIONS.map((day) => {
-                      const selected = availableDays.includes(day.value);
-                      return (
-                        <button
-                          key={day.value}
-                          type="button"
-                          aria-pressed={selected}
-                          onClick={() => toggleDay(day.value)}
-                          style={{
-                            padding: '8px 14px',
-                            borderRadius: '999px',
-                            border: selected
-                              ? '1px solid var(--accent, #F36B2B)'
-                              : '1px solid var(--border-primary, #d4d4d4)',
-                            background: selected ? 'var(--accent, #F36B2B)' : 'var(--surface-primary, #fff)',
-                            color: selected ? '#fff' : 'var(--text-primary, #171717)',
-                            fontSize: 'var(--font-size-xs)',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {day.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {fieldErrors.available_days && (
-                    <p role="alert" style={{ margin: '6px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)' }}>
-                      {fieldErrors.available_days}
+          {/* 2. Pending Request (if one exists) */}
+          {pendingRequest && (
+            <Card className="rider-schedule-pending-card">
+              <CardBody className="rider-schedule-section-body">
+                <div className="rider-schedule-card-header">
+                  <div>
+                    <div className="rider-schedule-title-row">
+                      <h2 className="rider-schedule-card-title">Pending Schedule Change Request</h2>
+                      <Badge variant="upcoming" size="sm" dot>
+                        Pending Review
+                      </Badge>
+                    </div>
+                    <p className="rider-schedule-muted-copy">
+                      Submitted {formatScheduleDate(pendingRequest.submitted_at)} · Request #{pendingRequest.id}
                     </p>
-                  )}
-                </section>
-
-                <section>
-                  <h3 style={{ margin: '0 0 6px', fontSize: 'var(--font-size-base)' }}>Preferred Shifts</h3>
-                  <p style={{ margin: '0 0 12px', fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-                    Choose the delivery windows you prefer to work.
-                  </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 10 }}>
-                    {SHIFT_OPTIONS.map((shift) => {
-                      const selected = preferredShifts.includes(shift.value);
-                      return (
-                        <button
-                          key={shift.value}
-                          type="button"
-                          aria-pressed={selected}
-                          onClick={() => toggleShift(shift.value)}
-                          style={{
-                            textAlign: 'left',
-                            padding: '10px 12px',
-                            borderRadius: 'var(--radius-md)',
-                            border: selected
-                              ? '1.5px solid var(--accent, #F36B2B)'
-                              : '1px solid var(--border-primary, #d4d4d4)',
-                            background: selected ? 'var(--accent-subtle, #fff7ed)' : 'var(--surface-primary, #fff)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <div style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>
-                            {shift.label}
-                          </div>
-                          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
-                            {shift.hours}
-                          </div>
-                        </button>
-                      );
-                    })}
                   </div>
-                  {fieldErrors.preferred_shifts && (
-                    <p role="alert" style={{ margin: '6px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)' }}>
-                      {fieldErrors.preferred_shifts}
-                    </p>
-                  )}
-                </section>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCancelTargetId(pendingRequest.id)}
+                  >
+                    Cancel Request
+                  </Button>
+                </div>
 
-                <section>
-                  <h3 style={{ margin: '0 0 6px', fontSize: 'var(--font-size-base)' }}>Preferred Delivery Hubs (Optional)</h3>
-                  <p style={{ margin: '0 0 12px', fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-                    Add areas or hubs where you prefer to pick up orders (max 255 characters total).
-                  </p>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-                    <input
-                      type="text"
-                      value={hubInput}
-                      onChange={(e) => setHubInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddHub();
-                        }
-                      }}
-                      placeholder="e.g., Diliman, Katipunan, Cubao"
-                      maxLength={100}
-                      aria-label="Add preferred hub"
-                      style={{
-                        flex: '1 1 220px',
-                        padding: '8px 12px',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--border-primary, #d4d4d4)',
-                        fontSize: 'var(--font-size-sm)',
-                      }}
-                    />
-                    <Button type="button" variant="outline" size="sm" onClick={handleAddHub}>
-                      Add Hub
-                    </Button>
+                <div className="rider-schedule-notice rider-schedule-notice--warning" role="status">
+                  Your schedule change request is awaiting administrator review. Your current approved availability remains active until this request is approved.
+                </div>
+
+                <div className="rider-schedule-summary-grid">
+                  <div className="rider-schedule-summary-item">
+                    <span className="rider-schedule-summary-label">Requested Effective Date</span>
+                    <strong className="rider-schedule-summary-value">
+                      {formatScheduleDate(pendingRequest.effective_date)}
+                    </strong>
                   </div>
-                  {hubTags.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {hubTags.map((tag) => (
-                        <span
-                          key={tag}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '4px 10px',
-                            borderRadius: '999px',
-                            background: 'var(--surface-secondary, #f5f5f5)',
-                            fontSize: 'var(--font-size-xs)',
-                            fontWeight: 600,
-                          }}
-                        >
-                          {tag}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveHub(tag)}
-                            aria-label={`Remove ${tag}`}
-                            style={{
-                              border: 'none',
-                              background: 'transparent',
-                              cursor: 'pointer',
-                              padding: 0,
-                              lineHeight: 1,
-                              color: 'var(--text-muted)',
-                              fontWeight: 700,
-                            }}
-                          >
-                            ×
-                          </button>
+                  <div className="rider-schedule-summary-item">
+                    <span className="rider-schedule-summary-label">Requested Available Days</span>
+                    <div className="rider-schedule-chip-list">
+                      {pendingRequest.available_days.map((day) => (
+                        <span key={day} className="rider-schedule-chip rider-schedule-chip--pending">
+                          {getDayLabel(day, { short: true })}
                         </span>
                       ))}
                     </div>
-                  )}
-                  {fieldErrors.preferred_hubs && (
-                    <p role="alert" style={{ margin: '6px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)' }}>
-                      {fieldErrors.preferred_hubs}
-                    </p>
-                  )}
-                </section>
+                  </div>
+                  <div className="rider-schedule-summary-item">
+                    <span className="rider-schedule-summary-label">Requested Preferred Shifts</span>
+                    <div className="rider-schedule-chip-list">
+                      {pendingRequest.preferred_shifts.map((shift) => {
+                        const meta = getShiftMeta(shift);
+                        return (
+                          <span key={shift} className="rider-schedule-chip rider-schedule-chip--pending">
+                            {meta.label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="rider-schedule-summary-item">
+                    <span className="rider-schedule-summary-label">Requested Delivery Hubs</span>
+                    <div className="rider-schedule-chip-list">
+                      {pendingRequest.preferred_hubs.length > 0 ? (
+                        pendingRequest.preferred_hubs.map((hub) => (
+                          <span key={hub} className="rider-schedule-chip">
+                            {hub}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="rider-schedule-muted-copy">No specific hub preference</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                  <Button type="button" variant="outline" size="sm" onClick={loadProfile} disabled={saving}>
-                    Reset
-                  </Button>
-                  <Button type="submit" variant="primary" size="sm" disabled={saving}>
-                    {saving ? 'Saving...' : 'Save Schedule'}
-                  </Button>
+                <div className="rider-schedule-reason-box">
+                  <span className="rider-schedule-summary-label">Reason for Change</span>
+                  <p className="rider-schedule-reason-text">{pendingRequest.reason}</p>
                 </div>
               </CardBody>
             </Card>
-          </form>
+          )}
+
+          {/* 3. Approved Availability (Read-Only) + Request Schedule Change Action */}
+          <Card>
+            <CardBody className="rider-schedule-section-body">
+              <div className="rider-schedule-card-header">
+                <div>
+                  <div className="rider-schedule-title-row">
+                    <h2 className="rider-schedule-card-title">Approved Availability</h2>
+                    <Badge variant="completed" size="sm" dot>
+                      Approved &amp; Active
+                    </Badge>
+                  </div>
+                  <p className="rider-schedule-muted-copy">
+                    {approvedSchedule.effectiveDate
+                      ? `Effective since ${formatScheduleDate(approvedSchedule.effectiveDate)} · `
+                      : ''}
+                    Collected from your approved Rider Application.
+                  </p>
+                </div>
+
+                <div className="rider-schedule-action-wrap">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    disabled={hasPending}
+                    onClick={handleOpenRequestModal}
+                  >
+                    Request Schedule Change
+                  </Button>
+                  {hasPending && (
+                    <span className="rider-schedule-action-hint">
+                      Pending request in review
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="rider-schedule-notice rider-schedule-notice--info" role="note">
+                Your approved availability is shown here. Changes to your schedule require approval.
+              </div>
+
+              {/* Approved Available Days */}
+              <section className="rider-schedule-readonly-section" aria-label="Approved available days">
+                <h3 className="rider-schedule-section-title">Available Days</h3>
+                <div className="rider-schedule-days-readonly">
+                  {DAY_OPTIONS.map((day) => {
+                    const isApproved = approvedSchedule.availableDays.includes(day.value);
+                    return (
+                      <div
+                        key={day.value}
+                        className={`rider-schedule-day-card ${isApproved ? 'is-approved' : 'is-off'}`}
+                      >
+                        <span className="rider-schedule-day-name">{day.label}</span>
+                        <span className="rider-schedule-day-state">
+                          {isApproved ? 'Approved' : 'Off'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* Approved Preferred Shifts */}
+              <section className="rider-schedule-readonly-section" aria-label="Approved preferred shifts">
+                <h3 className="rider-schedule-section-title">Preferred Shifts</h3>
+                {approvedSchedule.preferredShifts.length > 0 ? (
+                  <div className="rider-schedule-shifts-readonly">
+                    {approvedSchedule.preferredShifts.map((shiftValue) => {
+                      const meta = getShiftMeta(shiftValue);
+                      return (
+                        <div key={shiftValue} className="rider-schedule-shift-card-readonly">
+                          <div className="rider-schedule-shift-card-label">{meta.label}</div>
+                          {meta.hours && (
+                            <div className="rider-schedule-shift-card-hours">{meta.hours}</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="rider-schedule-empty-inline">
+                    No approved shift preferences on file.
+                  </p>
+                )}
+              </section>
+
+              {/* Approved Preferred Delivery Hubs */}
+              <section className="rider-schedule-readonly-section" aria-label="Approved preferred delivery hubs">
+                <h3 className="rider-schedule-section-title">Preferred Delivery Hubs</h3>
+                {approvedSchedule.hubTags.length > 0 ? (
+                  <div className="rider-schedule-hub-tags">
+                    {approvedSchedule.hubTags.map((hub) => (
+                      <span key={hub} className="rider-schedule-hub-tag">
+                        {hub}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rider-schedule-empty-inline">
+                    No specific delivery hubs configured.
+                  </p>
+                )}
+              </section>
+            </CardBody>
+          </Card>
+
+          {/* 4. Schedule Change Request History */}
+          <Card>
+            <CardBody className="rider-schedule-section-body">
+              <div className="rider-schedule-card-header">
+                <div>
+                  <h2 className="rider-schedule-card-title">Schedule Change History</h2>
+                  <p className="rider-schedule-muted-copy">
+                    Past schedule change requests and administrator review remarks.
+                  </p>
+                </div>
+              </div>
+
+              {requestHistory.length === 0 ? (
+                <p className="rider-schedule-empty-inline">
+                  No past schedule change requests yet.
+                </p>
+              ) : (
+                <div className="rider-schedule-history-list">
+                  {requestHistory.map((req) => {
+                    const statusMeta = HISTORY_STATUS_CONFIG[req.status] || {
+                      label: req.status,
+                      variant: 'default',
+                    };
+                    return (
+                      <article key={req.id} className="rider-schedule-history-item">
+                        <div className="rider-schedule-history-top">
+                          <div className="rider-schedule-title-row">
+                            <strong className="rider-schedule-history-id">Request #{req.id}</strong>
+                            <Badge variant={statusMeta.variant} size="sm">
+                              {statusMeta.label}
+                            </Badge>
+                          </div>
+                          <span className="rider-schedule-muted-copy">
+                            Submitted {formatScheduleDate(req.submitted_at)} · Effective{' '}
+                            {formatScheduleDate(req.effective_date)}
+                          </span>
+                        </div>
+
+                        <div className="rider-schedule-history-details">
+                          <span>
+                            <strong>Days:</strong>{' '}
+                            {req.available_days.map((d) => getDayLabel(d, { short: true })).join(', ') || '—'}
+                          </span>
+                          <span>
+                            <strong>Shifts:</strong>{' '}
+                            {req.preferred_shifts.map((s) => getShiftMeta(s).label).join(', ') || '—'}
+                          </span>
+                          {req.preferred_hubs.length > 0 && (
+                            <span>
+                              <strong>Hubs:</strong> {req.preferred_hubs.join(', ')}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="rider-schedule-history-reason">
+                          <strong>Reason:</strong> {req.reason}
+                        </p>
+
+                        {req.admin_remarks && (
+                          <div className="rider-schedule-admin-remarks">
+                            <strong>Admin Remarks:</strong> {req.admin_remarks}
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </CardBody>
+          </Card>
         </div>
       )}
+
+      <ScheduleChangeRequestModal
+        open={requestModalOpen}
+        onClose={() => setRequestModalOpen(false)}
+        approvedSchedule={approvedSchedule}
+        onSubmitRequest={handleSubmitScheduleRequest}
+      />
+
+      <ConfirmDialog
+        open={Boolean(cancelTargetId)}
+        title="Cancel Schedule Change Request?"
+        message="This will withdraw your pending schedule change request. Your current approved availability will remain unchanged."
+        confirmLabel="Yes, Cancel Request"
+        cancelLabel="Keep Pending"
+        onConfirm={handleConfirmCancelRequest}
+        onCancel={() => setCancelTargetId(null)}
+      />
     </div>
   );
 }
