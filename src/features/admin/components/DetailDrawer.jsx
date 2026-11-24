@@ -1,17 +1,20 @@
 import { useEffect } from 'react';
+import { acquireBodyScrollLock } from '../../../utils/bodyScrollLock';
 import './AdminComponents.css';
 
 export default function DetailDrawer({ open, title, onClose, children }) {
   useEffect(() => {
     if (!open) return undefined;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    return acquireBodyScrollLock();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') onClose?.();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.body.style.overflow = prevOverflow;
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [open, onClose]);

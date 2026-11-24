@@ -20,6 +20,7 @@ import {
   isValidPhilippineMobile,
   deriveRiderGoOnlineChecklist,
 } from '../../services/onboardingService';
+import { acquireBodyScrollLock } from '../../utils/bodyScrollLock';
 import './RoleOnboardingModal.css';
 
 /**
@@ -75,11 +76,10 @@ export function RoleOnboardingModal({
 
     if (typeof document !== 'undefined') {
       previousFocusRef.current = document.activeElement;
-      const prevOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
+      const releaseLock = acquireBodyScrollLock();
 
       return () => {
-        document.body.style.overflow = prevOverflow;
+        releaseLock();
         if (previousFocusRef.current && typeof previousFocusRef.current.focus === 'function') {
           try {
             previousFocusRef.current.focus();

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Button from './Button';
+import { acquireBodyScrollLock } from '../../utils/bodyScrollLock';
 import './ConfirmDialog.css';
 
 /**
@@ -43,11 +44,7 @@ export default function ConfirmDialog({
   // Lock body scroll while open
   useEffect(() => {
     if (!open) return undefined;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    return acquireBodyScrollLock();
   }, [open]);
 
   // Escape to cancel + Tab focus trap

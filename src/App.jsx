@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import cleanupLegacyDemoStorage from './utils/cleanupLegacyDemoStorage';
+import { ensureBodyScrollUnlockedIfNoModal } from './utils/bodyScrollLock';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import ProtectedRoute from './routes/ProtectedRoute';
 import RequireAccess from './routes/RequireAccess';
@@ -351,6 +352,9 @@ function AppShell() {
       document.head.appendChild(meta);
     }
     meta.content = page.description;
+
+    // Safeguard: unlock body scroll on route change if no modal is mounted
+    ensureBodyScrollUnlockedIfNoModal();
   }, [location.pathname]);
 
   return (

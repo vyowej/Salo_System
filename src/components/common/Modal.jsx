@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { acquireBodyScrollLock } from '../../utils/bodyScrollLock';
 import './Modal.css';
 
 /**
@@ -36,11 +37,8 @@ export default function Modal({
 
   // Lock body scroll
   useEffect(() => {
-    if (isVisible) {
-      const prev = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = prev; };
-    }
+    if (!isVisible) return undefined;
+    return acquireBodyScrollLock();
   }, [isVisible]);
 
   // Focus trap: move focus to modal on open

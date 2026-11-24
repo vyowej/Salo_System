@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { acquireBodyScrollLock } from '../../../../utils/bodyScrollLock';
 import './modal.css';
 
 const FOCUSABLE_SELECTOR = [
@@ -43,8 +44,7 @@ export default function Modal({
     if (!visible) return undefined;
     setConfirmDiscard(false);
     previousFocusRef.current = document.activeElement;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const releaseLock = acquireBodyScrollLock();
 
     const focusTimer = window.setTimeout(() => {
       if (!dialogRef.current) return;
@@ -58,7 +58,7 @@ export default function Modal({
 
     return () => {
       window.clearTimeout(focusTimer);
-      document.body.style.overflow = prevOverflow;
+      releaseLock();
       const prev = previousFocusRef.current;
       if (prev && typeof prev.focus === 'function') {
         prev.focus();

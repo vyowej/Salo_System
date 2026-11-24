@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useCart } from '../../../hooks/useCart';
+import { acquireBodyScrollLock } from '../../../utils/bodyScrollLock';
 import OrderPanel from './OrderPanel';
 import './MobileOrderBar.css';
 
@@ -71,12 +72,8 @@ export default function MobileOrderBar({ restaurantId, restaurantName }) {
 
   // Lock body scroll when sheet is open
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
+    if (!open) return undefined;
+    return acquireBodyScrollLock();
   }, [open]);
 
   if (totalItemCount === 0) return null;

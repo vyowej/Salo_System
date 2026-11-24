@@ -27,6 +27,7 @@ export default function SharedMap({
   route = null, // { origin: { lat, lng }, destination: { lat, lng }, waypoints?: [{ lat, lng }] }
   onRouteCalculated = null,
   interactive = true,
+  scrollWheelZoom = false,
   showCoordsChip = true,
   className = '',
   ariaLabel = 'Interactive OpenStreetMap',
@@ -62,7 +63,7 @@ export default function SharedMap({
             zoom: initialZoom,
             zoomControl: true,
             dragging: interactive,
-            scrollWheelZoom: interactive,
+            scrollWheelZoom: Boolean(interactive && scrollWheelZoom),
             doubleClickZoom: interactive,
           });
 

@@ -16,6 +16,7 @@ import StatusChip from './StatusChip';
 import DocumentCard from './DocumentCard';
 import DocumentLightbox from './DocumentLightbox';
 import DecisionPanel from './DecisionPanel';
+import { acquireBodyScrollLock } from '../../../../utils/bodyScrollLock';
 import './AdminApplications.css';
 
 export default function ApplicationReviewDrawer({
@@ -49,8 +50,11 @@ export default function ApplicationReviewDrawer({
 
   useEffect(() => {
     if (!open) return undefined;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    return acquireBodyScrollLock();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape' && lightboxIndex === null && !pendingDecision && !markAllOpen && !selectedPermitId) {
@@ -59,7 +63,6 @@ export default function ApplicationReviewDrawer({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.body.style.overflow = prevOverflow;
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [open, lightboxIndex, pendingDecision, markAllOpen, selectedPermitId, onClose]);
