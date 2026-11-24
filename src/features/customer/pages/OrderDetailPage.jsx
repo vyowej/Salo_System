@@ -6,6 +6,9 @@ import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
+import { SharedMap } from '../../../components/location';
+import { useDeliverySimulation } from '../../../hooks/useDeliverySimulation';
+import { buildRiderMapState } from '../../rider/utils/riderMapData';
 import OrderReviewSection from '../components/OrderReviewSection';
 import { formatDateTimeManila, formatShortOrderId, formatPeso } from '../../../utils/format';
 import {
@@ -43,6 +46,39 @@ export default function OrderDetailPage() {
   const [tracking, setTracking] = useState(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [trackingError, setTrackingError] = useState('');
+  const [routeSummary, setRouteSummary] = useState(null);
+  const simulation = useDeliverySimulation({
+    path: routeSummary?.path,
+    distanceMeters: routeSummary?.distanceMeters,
+  });
+
+  const customerMapState = useMemo(() => {
+    if (!tracking) return null;
+    const simulatedPos =
+      simulation.isSimulating || simulation.hasCompletedSimulation
+        ? simulation.simulatedPosition
+        : null;
+    return buildRiderMapState({
+      delivery: {
+        restaurant_name: tracking.pickup?.restaurant_name,
+        pickup_address_text: tracking.pickup?.address,
+        pickup_latitude: tracking.pickup?.latitude,
+        pickup_longitude: tracking.pickup?.longitude,
+        customer_name: tracking.dropoff?.recipient_name || 'Your Location',
+        dropoff_address_text: tracking.dropoff?.address,
+        dropoff_latitude: tracking.dropoff?.latitude,
+        dropoff_longitude: tracking.dropoff?.longitude,
+        delivery_status: tracking.delivery?.status,
+      },
+      riderLocation: tracking.rider_location,
+      simulatedPosition: simulatedPos,
+    });
+  }, [
+    tracking,
+    simulation.isSimulating,
+    simulation.hasCompletedSimulation,
+    simulation.simulatedPosition,
+  ]);
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentError, setPaymentError] = useState('');
 
@@ -877,6 +913,41 @@ export default function OrderDetailPage() {
                       ? 'Rider GPS coordinates will appear here once the rider starts sharing live location.'
                       : 'No delivery rider has been assigned yet.'}
                   </small>
+                )}
+
+                {customerMapState && (customerMapState.pickupMarker || customerMapState.dropoffMarker || customerMapState.riderMarker) && (
+                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <SharedMap
+                      center={customerMapState.center}
+                      zoom={14}
+                      height={260}
+                      markers={customerMapState.markers}
+                      route={customerMapState.route}
+                      onRouteCalculated={setRouteSummary}
+                      showCoordsChip={false}
+                      ariaLabel="Live delivery route map"
+                    />
+                    {simulation.canSimulate && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={simulation.isSimulating ? simulation.stopSimulation : simulation.startSimulation}
+                        >
+                          {simulation.isSimulating
+                            ? `Simulating rider (${Math.round(simulation.progress * 100)}%) — Stop`
+                            : simulation.hasCompletedSimulation
+                              ? `Replay route simulation (~${simulation.durationSec}s)`
+                              : `Simulate rider movement (~${simulation.durationSec}s)`}
+                        </Button>
+                        <small style={{ color: 'var(--text-muted)' }}>
+                          {simulation.hasCompletedSimulation
+                            ? 'Simulation complete. Order is marked Delivered only after the rider confirms with a photo.'
+                            : 'Shows rider vehicle along the route; photo proof is required to mark Delivered.'}
+                        </small>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )}

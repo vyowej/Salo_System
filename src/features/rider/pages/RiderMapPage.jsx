@@ -5,6 +5,7 @@ import Button from '../../../components/common/Button';
 import { Card, CardBody } from '../../../components/common/Card';
 import { StateView as GlobalStateView } from '../../../components/feedback';
 import { SharedMap } from '../../../components/location';
+import { useDeliverySimulation } from '../../../hooks/useDeliverySimulation';
 import riderService from '../../../services/riderService';
 import { formatDateTimeManila, formatPeso } from '../../../utils/format';
 import { useRiderGps } from '../context/RiderGpsContext';
@@ -17,6 +18,10 @@ export default function RiderMapPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [routeSummary, setRouteSummary] = useState(null);
+  const simulation = useDeliverySimulation({
+    path: routeSummary?.path,
+    distanceMeters: routeSummary?.distanceMeters,
+  });
 
   const loadDelivery = useCallback(async () => {
     setLoading(true);
@@ -41,8 +46,12 @@ export default function RiderMapPage() {
   }, [loadDelivery]);
 
   const mapState = useMemo(
-    () => buildRiderMapState({ delivery, riderLocation }),
-    [delivery, riderLocation],
+    () => buildRiderMapState({
+      delivery,
+      riderLocation,
+      simulatedPosition: simulation.isSimulating || simulation.hasCompletedSimulation ? simulation.simulatedPosition : null,
+    }),
+    [delivery, riderLocation, simulation.isSimulating, simulation.hasCompletedSimulation, simulation.simulatedPosition],
   );
 
   if (loading) {
@@ -197,6 +206,27 @@ export default function RiderMapPage() {
                 </div>
 
                 <div className="rider-map-actions">
+                  {simulation.canSimulate && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      fullWidth
+                      onClick={simulation.isSimulating ? simulation.stopSimulation : simulation.startSimulation}
+                    >
+                      {simulation.isSimulating
+                        ? `Simulating route (${Math.round(simulation.progress * 100)}%) — Stop`
+                        : simulation.hasCompletedSimulation
+                          ? `Replay route simulation (~${simulation.durationSec}s)`
+                          : `Simulate route (~${simulation.durationSec}s)`}
+                    </Button>
+                  )}
+                  {(simulation.isSimulating || simulation.hasCompletedSimulation) && (
+                    <p role="status" style={{ margin: '4px 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                      {simulation.hasCompletedSimulation
+                        ? 'Arrived in simulation. Upload a proof-of-delivery photo in Manage delivery steps to mark Delivered.'
+                        : 'Visual route simulation active — photo proof is required to mark Delivered.'}
+                    </p>
+                  )}
                   <Link to="/rider/deliveries/active">
                     <Button variant="primary" fullWidth>Manage delivery steps</Button>
                   </Link>

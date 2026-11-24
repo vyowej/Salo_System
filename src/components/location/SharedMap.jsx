@@ -37,6 +37,7 @@ export default function SharedMap({
   const pinMarkerRef = useRef(null);
   const layersRef = useRef({
     markers: [],
+    markersById: new Map(),
     circles: [],
     polygons: [],
     routeLine: null,
@@ -172,23 +173,74 @@ export default function SharedMap({
     if (!mapsReady || !mapRef.current || !window.L) return;
     const L = window.L;
 
-    layersRef.current.markers.forEach((m) => m.remove());
-    layersRef.current.markers = [];
-
+    const layersMap = layersRef.current.markersById;
     const validMarkers = (markers || []).filter(
       (m) => m && Number.isFinite(Number(m.lat)) && Number.isFinite(Number(m.lng)),
     );
+    const nextIds = new Set(validMarkers.map((m, idx) => String(m.id ?? idx)));
 
-    validMarkers.forEach((item) => {
-      const color = MARKER_COLORS[item.type] || MARKER_COLORS.pin;
-      const marker = L.circleMarker([Number(item.lat), Number(item.lng)], {
-        radius: item.type === 'rider' ? 10 : 8,
-        fillColor: color,
-        color: '#ffffff',
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 0.95,
-      }).addTo(mapRef.current);
+    // Remove markers that are no longer present
+    for (const [id, entry] of layersMap.entries()) {
+      if (!nextIds.has(id)) {
+        entry.layer.remove();
+        layersMap.delete(id);
+      }
+    }
+
+    const buildMarkerIcon = (type) => {
+      if (type === 'rider') {
+        return L.divIcon({
+          className: 'salo-map-div-icon',
+          iconSize: [38, 38],
+          iconAnchor: [19, 19],
+          html: `<div class="salo-rider-vehicle-marker" title="Rider"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6h3l2 5h-4l-2-5z"/><path d="M5.5 17.5L9 11h5l2.5 6.5"/><path d="M9 11l-1.5-3H5"/></svg></div>`,
+        });
+      }
+      if (type === 'dropoff') {
+        return L.divIcon({
+          className: 'salo-map-div-icon',
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+          html: '<div class="salo-customer-glow-marker" title="Customer Location"><span class="salo-customer-glow-ring"></span><span class="salo-customer-glow-core"></span></div>',
+        });
+      }
+      if (type === 'pickup') {
+        return L.divIcon({
+          className: 'salo-map-div-icon',
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
+          html: '<div class="salo-pickup-pin-marker" title="Restaurant Pickup"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-6 9 6v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>',
+        });
+      }
+      return null;
+    };
+
+    validMarkers.forEach((item, idx) => {
+      const id = String(item.id ?? idx);
+      const latLng = [Number(item.lat), Number(item.lng)];
+      const existing = layersMap.get(id);
+
+      if (existing && existing.type === item.type) {
+        existing.layer.setLatLng(latLng);
+        return;
+      }
+
+      if (existing) {
+        existing.layer.remove();
+        layersMap.delete(id);
+      }
+
+      const customIcon = buildMarkerIcon(item.type);
+      const marker = customIcon
+        ? L.marker(latLng, { icon: customIcon, zIndexOffset: item.type === 'rider' ? 1000 : 200 }).addTo(mapRef.current)
+        : L.circleMarker(latLng, {
+            radius: 8,
+            fillColor: MARKER_COLORS[item.type] || MARKER_COLORS.pin,
+            color: '#ffffff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.95,
+          }).addTo(mapRef.current);
 
       if (item.title || item.subtitle) {
         const safeTitle = String(item.title || '').replace(/[<>]/g, '');
@@ -200,8 +252,10 @@ export default function SharedMap({
         marker.on('click', () => item.onClick(item));
       }
 
-      layersRef.current.markers.push(marker);
+      layersMap.set(id, { layer: marker, type: item.type });
     });
+
+    layersRef.current.markers = Array.from(layersMap.values()).map((entry) => entry.layer);
 
     if (!route && validMarkers.length > 1 && !pin) {
       const bounds = L.latLngBounds(validMarkers.map((m) => [Number(m.lat), Number(m.lng)]));
@@ -306,26 +360,38 @@ export default function SharedMap({
         layersRef.current.routeLine = line;
         mapRef.current.fitBounds(line.getBounds(), { padding: [40, 40] });
 
-        if (osrm && typeof onRouteCalculated === 'function') {
+        if (typeof onRouteCalculated === 'function') {
           onRouteCalculated({
-            distanceText: osrm.distanceText,
-            durationText: osrm.durationText,
-            distanceMeters: osrm.distanceMeters,
-            durationSeconds: osrm.durationSeconds,
+            distanceText: osrm?.distanceText || '',
+            durationText: osrm?.durationText || '',
+            distanceMeters: osrm?.distanceMeters ?? null,
+            durationSeconds: osrm?.durationSeconds ?? null,
+            path,
           });
         }
       })
       .catch(() => {
         if (cancelled || !mapRef.current) return;
+        const fallbackPath = [
+          [origin.lat, origin.lng],
+          ...waypoints.filter((w) => Number.isFinite(Number(w.lat)) && Number.isFinite(Number(w.lng))).map((w) => [Number(w.lat), Number(w.lng)]),
+          [destination.lat, destination.lng],
+        ];
         const line = L.polyline(
-          [
-            [origin.lat, origin.lng],
-            [destination.lat, destination.lng],
-          ],
+          fallbackPath,
           { color: '#d94e28', weight: 4, opacity: 0.75, dashArray: '6, 6' },
         ).addTo(mapRef.current);
         layersRef.current.routeLine = line;
         mapRef.current.fitBounds(line.getBounds(), { padding: [40, 40] });
+        if (typeof onRouteCalculated === 'function') {
+          onRouteCalculated({
+            distanceText: '',
+            durationText: '',
+            distanceMeters: null,
+            durationSeconds: null,
+            path: fallbackPath,
+          });
+        }
       });
 
     return () => {

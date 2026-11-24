@@ -20,18 +20,20 @@ export function isValidCoordPair(lat, lng) {
  * Derive SharedMap markers, route, center, and missing-coordinate notices
  * strictly from real backend delivery data and live rider GPS state.
  */
-export function buildRiderMapState({ delivery = null, riderLocation = null } = {}) {
+export function buildRiderMapState({ delivery = null, riderLocation = null, simulatedPosition = null } = {}) {
   const markers = [];
 
-  const riderLat = riderLocation?.lat ?? riderLocation?.latitude;
-  const riderLng = riderLocation?.lng ?? riderLocation?.longitude;
+  const riderLat = simulatedPosition?.lat ?? riderLocation?.lat ?? riderLocation?.latitude;
+  const riderLng = simulatedPosition?.lng ?? riderLocation?.lng ?? riderLocation?.longitude;
   const riderMarker = isValidCoordPair(riderLat, riderLng)
     ? {
         id: 'rider',
         lat: Number(riderLat),
         lng: Number(riderLng),
-        title: 'Your Location',
-        subtitle: riderLocation?.accuracy != null ? `GPS accuracy ±${riderLocation.accuracy}m` : 'Live GPS',
+        title: simulatedPosition ? 'Rider Vehicle (Simulated)' : 'Your Location',
+        subtitle: simulatedPosition
+          ? 'Simulating route movement'
+          : (riderLocation?.accuracy != null ? `GPS accuracy ±${riderLocation.accuracy}m` : 'Live GPS'),
         type: 'rider',
       }
     : null;
@@ -73,14 +75,39 @@ export function buildRiderMapState({ delivery = null, riderLocation = null } = {
     }
   }
 
-  const route =
-    pickupMarker && dropoffMarker
+  const baseLat = riderLocation?.lat ?? riderLocation?.latitude;
+  const baseLng = riderLocation?.lng ?? riderLocation?.longitude;
+  const baseRiderPoint = isValidCoordPair(baseLat, baseLng)
+    ? { lat: Number(baseLat), lng: Number(baseLng) }
+    : null;
+  const isPickedUp = delivery?.delivery_status === 'picked_up';
+
+  let route = null;
+  if (pickupMarker && dropoffMarker) {
+    route = isPickedUp
       ? {
-          origin: { lat: pickupMarker.lat, lng: pickupMarker.lng },
+          origin: baseRiderPoint || { lat: pickupMarker.lat, lng: pickupMarker.lng },
           destination: { lat: dropoffMarker.lat, lng: dropoffMarker.lng },
-          waypoints: riderMarker ? [{ lat: riderMarker.lat, lng: riderMarker.lng }] : [],
+          waypoints: [],
         }
-      : null;
+      : {
+          origin: baseRiderPoint || { lat: pickupMarker.lat, lng: pickupMarker.lng },
+          destination: { lat: dropoffMarker.lat, lng: dropoffMarker.lng },
+          waypoints: baseRiderPoint ? [{ lat: pickupMarker.lat, lng: pickupMarker.lng }] : [],
+        };
+  } else if (baseRiderPoint && dropoffMarker) {
+    route = {
+      origin: baseRiderPoint,
+      destination: { lat: dropoffMarker.lat, lng: dropoffMarker.lng },
+      waypoints: [],
+    };
+  } else if (baseRiderPoint && pickupMarker) {
+    route = {
+      origin: baseRiderPoint,
+      destination: { lat: pickupMarker.lat, lng: pickupMarker.lng },
+      waypoints: [],
+    };
+  }
 
   const center = riderMarker
     ? { lat: riderMarker.lat, lng: riderMarker.lng }
