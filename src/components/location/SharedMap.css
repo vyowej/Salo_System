@@ -46,6 +46,46 @@
   pointer-events: none;
 }
 
+.salo-shared-map-toast {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 450;
+  max-width: calc(100% - 96px);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(23, 23, 23, 0.84);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  animation: saloMapToastFade 3.8s ease forwards;
+}
+
+@keyframes saloMapToastFade {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
+}
+
 .salo-shared-map-loading {
   position: absolute;
   inset: 0;

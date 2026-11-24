@@ -29,6 +29,7 @@ export default function SharedMap({
   interactive = true,
   scrollWheelZoom = false,
   showCoordsChip = true,
+  floatingNotice = '',
   className = '',
   ariaLabel = 'Interactive OpenStreetMap',
 }) {
@@ -419,6 +420,11 @@ export default function SharedMap({
         <>
           <div ref={containerRef} className="salo-shared-map-canvas" />
           {!mapsReady && <div className="salo-shared-map-loading">Loading OpenStreetMap…</div>}
+          {floatingNotice && (
+            <div key={floatingNotice} className="salo-shared-map-toast" role="status">
+              {floatingNotice}
+            </div>
+          )}
           {showCoordsChip && pin && Number.isFinite(pinLat) && Number.isFinite(pinLng) && (
             <div className="salo-shared-map-coords-chip">
               📍 {pinLat.toFixed(6)}, {pinLng.toFixed(6)}

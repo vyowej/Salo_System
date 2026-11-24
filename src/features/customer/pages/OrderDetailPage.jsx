@@ -925,6 +925,13 @@ export default function OrderDetailPage() {
                       route={customerMapState.route}
                       onRouteCalculated={setRouteSummary}
                       showCoordsChip={false}
+                      floatingNotice={
+                        simulation.hasCompletedSimulation
+                          ? 'Rider arrived in simulation — photo proof is required to mark Delivered.'
+                          : simulation.isSimulating
+                            ? 'Visual route simulation active — photo proof is required to mark Delivered.'
+                            : ''
+                      }
                       ariaLabel="Live delivery route map"
                     />
                     {simulation.canSimulate && (
@@ -940,11 +947,6 @@ export default function OrderDetailPage() {
                               ? `Replay route simulation (~${simulation.durationSec}s)`
                               : `Simulate rider movement (~${simulation.durationSec}s)`}
                         </Button>
-                        <small style={{ color: 'var(--text-muted)' }}>
-                          {simulation.hasCompletedSimulation
-                            ? 'Simulation complete. Order is marked Delivered only after the rider confirms with a photo.'
-                            : 'Shows rider vehicle along the route; photo proof is required to mark Delivered.'}
-                        </small>
                       </div>
                     )}
                   </div>

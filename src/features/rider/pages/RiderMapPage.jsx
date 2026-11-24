@@ -220,13 +220,6 @@ export default function RiderMapPage() {
                           : `Simulate route (~${simulation.durationSec}s)`}
                     </Button>
                   )}
-                  {(simulation.isSimulating || simulation.hasCompletedSimulation) && (
-                    <p role="status" style={{ margin: '4px 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-                      {simulation.hasCompletedSimulation
-                        ? 'Arrived in simulation. Upload a proof-of-delivery photo in Manage delivery steps to mark Delivered.'
-                        : 'Visual route simulation active — photo proof is required to mark Delivered.'}
-                    </p>
-                  )}
                   <Link to="/rider/deliveries/active">
                     <Button variant="primary" fullWidth>Manage delivery steps</Button>
                   </Link>
@@ -248,6 +241,13 @@ export default function RiderMapPage() {
                 route={mapState.route}
                 onRouteCalculated={setRouteSummary}
                 showCoordsChip={Boolean(mapState.riderMarker)}
+                floatingNotice={
+                  simulation.hasCompletedSimulation
+                    ? 'Arrived at customer location — upload delivery photo to mark Delivered.'
+                    : simulation.isSimulating
+                      ? 'Visual route simulation active — photo proof is required to mark Delivered.'
+                      : ''
+                }
                 ariaLabel="Active delivery map"
               />
             </div>
