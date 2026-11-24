@@ -72,9 +72,9 @@ export function useDeliverySimulation({ path = [], distanceMeters = null } = {})
     return routeData.totalKm;
   }, [distanceMeters, routeData.totalKm]);
 
-  // ~1 km per second, clamped to 5–10 seconds
+  // Smooth, readable pace (~3s per km, clamped to 12–24 seconds)
   const durationSec = useMemo(
-    () => Math.min(10, Math.max(5, Math.round(effectiveKm || 6))),
+    () => Math.min(24, Math.max(12, Math.round((effectiveKm || 4) * 3))),
     [effectiveKm],
   );
 

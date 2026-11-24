@@ -80,21 +80,14 @@ export function buildRiderMapState({ delivery = null, riderLocation = null, simu
   const baseRiderPoint = isValidCoordPair(baseLat, baseLng)
     ? { lat: Number(baseLat), lng: Number(baseLng) }
     : null;
-  const isPickedUp = delivery?.delivery_status === 'picked_up';
 
   let route = null;
   if (pickupMarker && dropoffMarker) {
-    route = isPickedUp
-      ? {
-          origin: baseRiderPoint || { lat: pickupMarker.lat, lng: pickupMarker.lng },
-          destination: { lat: dropoffMarker.lat, lng: dropoffMarker.lng },
-          waypoints: [],
-        }
-      : {
-          origin: baseRiderPoint || { lat: pickupMarker.lat, lng: pickupMarker.lng },
-          destination: { lat: dropoffMarker.lat, lng: dropoffMarker.lng },
-          waypoints: baseRiderPoint ? [{ lat: pickupMarker.lat, lng: pickupMarker.lng }] : [],
-        };
+    route = {
+      origin: { lat: pickupMarker.lat, lng: pickupMarker.lng },
+      destination: { lat: dropoffMarker.lat, lng: dropoffMarker.lng },
+      waypoints: [],
+    };
   } else if (baseRiderPoint && dropoffMarker) {
     route = {
       origin: baseRiderPoint,
