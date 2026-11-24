@@ -117,8 +117,8 @@ export function appendBranchPayloadToFormData(fd, addressData = {}) {
     if (branch?.houseNumber) fd.append(`branches[${idx}][house_number]`, branch.houseNumber);
     if (branch?.postalCode) fd.append(`branches[${idx}][postal_code]`, branch.postalCode);
     if (branch?.additionalDetails) fd.append(`branches[${idx}][landmark]`, branch.additionalDetails);
-    if (branch?.coordinates?.lat != null) fd.append(`branches[${idx}][latitude]`, String(branch.coordinates.lat));
-    if (branch?.coordinates?.lng != null) fd.append(`branches[${idx}][longitude]`, String(branch.coordinates.lng));
+    if (branch?.mapPinned !== false && branch?.coordinates?.lat != null) fd.append(`branches[${idx}][latitude]`, String(branch.coordinates.lat));
+    if (branch?.mapPinned !== false && branch?.coordinates?.lng != null) fd.append(`branches[${idx}][longitude]`, String(branch.coordinates.lng));
 
     const permitRequired = branch?.permitRequiredLocally !== false;
     fd.append(`branches[${idx}][permit_required_locally]`, permitRequired ? '1' : '0');

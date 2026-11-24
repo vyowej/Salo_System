@@ -418,8 +418,8 @@ export default function BusinessApplicationPage() {
         if (formData.address.street) fd.append('street', formData.address.street);
         if (formData.address.postalCode) fd.append('postal_code', formData.address.postalCode);
         if (formData.address.additionalDetails) fd.append('landmark', formData.address.additionalDetails);
-        if (formData.address.coordinates?.lat != null) fd.append('latitude', String(formData.address.coordinates.lat));
-        if (formData.address.coordinates?.lng != null) fd.append('longitude', String(formData.address.coordinates.lng));
+        if (formData.address.mapPinned && formData.address.coordinates?.lat != null) fd.append('latitude', String(formData.address.coordinates.lat));
+        if (formData.address.mapPinned && formData.address.coordinates?.lng != null) fd.append('longitude', String(formData.address.coordinates.lng));
         appendBranchPayloadToFormData(fd, formData.address);
 
         const services = formData.configuration?.services || {};
