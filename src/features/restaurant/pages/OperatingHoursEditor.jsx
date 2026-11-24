@@ -7,6 +7,7 @@ import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import {
   OPERATING_DAYS,
   getLocalDateKey,
+  isDayOpen24Hours,
   isRestaurantOpen,
   normalizeOperatingHours,
   validateOperatingHours,
@@ -62,6 +63,7 @@ function fromBackendHours(rows = [], profile = null, closures = []) {
       id: row.id ? String(row.id) : createId(),
       open: String(row.opening_time || '09:00').slice(0, 5),
       close: String(row.closing_time || '21:00').slice(0, 5),
+      closesNextDay: Boolean(row.closes_next_day),
     });
   });
 
@@ -115,7 +117,7 @@ function toBackendHoursPayload(hours) {
         day_of_week: dow,
         opening_time: open,
         closing_time: close,
-        closes_next_day: close <= open,
+        closes_next_day: Boolean(period.closesNextDay || close <= open),
         is_closed: false,
       });
     });
@@ -179,9 +181,39 @@ export default function OperatingHoursEditor({ restaurantId }) {
 
   function updatePeriod(dayKey, periodId, field, value) {
     updateDay(dayKey, {
-      periods: hours.weeklySchedule[dayKey].periods.map((period) => (
-        period.id === periodId ? { ...period, [field]: value } : period
-      )),
+      periods: hours.weeklySchedule[dayKey].periods.map((period) => {
+        if (period.id !== periodId) return period;
+        const next = { ...period, [field]: value };
+        next.closesNextDay = next.close < next.open;
+        return next;
+      }),
+    });
+  }
+
+  function toggleDay24Hours(dayKey, enabled) {
+    if (enabled) {
+      updateDay(dayKey, {
+        closed: false,
+        periods: [{ id: createId(), open: '00:00', close: '00:00', closesNextDay: true }],
+      });
+    } else {
+      updateDay(dayKey, {
+        closed: false,
+        periods: [{ id: createId(), open: '09:00', close: '21:00', closesNextDay: false }],
+      });
+    }
+  }
+
+  function apply24HoursAllDays() {
+    updateHours((current) => {
+      const nextSchedule = {};
+      OPERATING_DAYS.forEach(({ key }) => {
+        nextSchedule[key] = {
+          closed: false,
+          periods: [{ id: createId(), open: '00:00', close: '00:00', closesNextDay: true }],
+        };
+      });
+      return { ...current, weeklySchedule: nextSchedule };
     });
   }
 
@@ -343,21 +375,55 @@ export default function OperatingHoursEditor({ restaurantId }) {
       {saved && <p className="owner-profile-success" role="status">Operating hours and availability saved.</p>}
 
       <form onSubmit={saveHours}>
+        {canManageHours && (
+          <div className="hours-quick-actions">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving || OPERATING_DAYS.every(({ key }) => isDayOpen24Hours(hours.weeklySchedule[key]))}
+              onClick={apply24HoursAllDays}
+            >
+              Set all days Open 24 Hours
+            </Button>
+          </div>
+        )}
         <div className="hours-weekly-list">
           {OPERATING_DAYS.map(({ key, label }) => {
             const day = hours.weeklySchedule[key];
+            const is24Hours = isDayOpen24Hours(day);
             return (
               <fieldset key={key} className={`hours-day-row${todayKey === key ? ' is-today' : ''}`} disabled={!canManageHours || saving}>
                 <legend className="hours-day-name">{label}{todayKey === key && <span>Today</span>}</legend>
-                <label className="hours-closed-toggle">
-                  <input
-                    type="checkbox"
-                    checked={day.closed}
-                    onChange={(event) => updateDay(key, { closed: event.target.checked })}
-                  />
-                  <span>Closed</span>
-                </label>
-                {!day.closed && (
+                <div className="hours-day-toggles">
+                  <label className="hours-closed-toggle">
+                    <input
+                      type="checkbox"
+                      checked={day.closed}
+                      onChange={(event) => updateDay(key, {
+                        closed: event.target.checked,
+                        periods: event.target.checked
+                          ? []
+                          : (day.periods?.length ? day.periods : [{ id: createId(), open: '09:00', close: '21:00', closesNextDay: false }]),
+                      })}
+                    />
+                    <span>Closed</span>
+                  </label>
+                  <label className="hours-closed-toggle">
+                    <input
+                      type="checkbox"
+                      checked={is24Hours}
+                      onChange={(event) => toggleDay24Hours(key, event.target.checked)}
+                    />
+                    <span>Open 24 Hours</span>
+                  </label>
+                </div>
+                {!day.closed && is24Hours && (
+                  <div className="hours-periods">
+                    <span className="hours-24h-badge">Open 24 hours (00:00 – 24:00)</span>
+                  </div>
+                )}
+                {!day.closed && !is24Hours && (
                   <div className="hours-periods">
                     {day.periods.map((period, index) => (
                       <div className="hours-period-row" key={period.id}>

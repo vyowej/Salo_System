@@ -30,6 +30,25 @@ export function createDefaultOperatingHours() {
   };
 }
 
+export function is24HourPeriod(period) {
+  return Boolean(
+    period
+    && String(period.open || '').slice(0, 5) === '00:00'
+    && String(period.close || '').slice(0, 5) === '00:00'
+    && period.closesNextDay !== false,
+  );
+}
+
+export function isDayOpen24Hours(day) {
+  return Boolean(
+    day
+    && !day.closed
+    && Array.isArray(day.periods)
+    && day.periods.length === 1
+    && is24HourPeriod(day.periods[0]),
+  );
+}
+
 export function normalizeOperatingHours(value = {}) {
   value ||= {};
   const defaults = createDefaultOperatingHours();
@@ -39,11 +58,19 @@ export function normalizeOperatingHours(value = {}) {
     return [key, {
       closed: Boolean(day.closed),
       periods: Array.isArray(day.periods)
-        ? day.periods.map((period, index) => ({
-          id: period.id || `${key}-period-${index + 1}`,
-          open: period.open ?? '10:00',
-          close: period.close ?? '22:00',
-        }))
+        ? day.periods.map((period, index) => {
+          const open = period.open ?? '10:00';
+          const close = period.close ?? '22:00';
+          const closesNextDay = period.closesNextDay !== undefined
+            ? Boolean(period.closesNextDay)
+            : (open === '00:00' && close === '00:00') || close < open;
+          return {
+            id: period.id || `${key}-period-${index + 1}`,
+            open,
+            close,
+            closesNextDay,
+          };
+        })
         : [],
     }];
   }));
@@ -96,6 +123,9 @@ export function isRestaurantOpen(hours, closures = hours?.temporaryClosures, now
   const previousSchedule = schedule[previousDay];
 
   const inPeriod = (period, includeOvernightSpillover = false) => {
+    if (is24HourPeriod(period)) {
+      return !includeOvernightSpillover;
+    }
     const start = timeToMinutes(period.open);
     const end = timeToMinutes(period.close);
     if (start === null || end === null || start === end) return false;
@@ -126,12 +156,13 @@ export function validateOperatingHours(value) {
       if (start === null || end === null) {
         return `${label}: enter valid opening and closing times.`;
       }
-      if (start === end) {
+      const is24h = is24HourPeriod(period);
+      if (start === end && !is24h) {
         return `${label}: a period cannot have the same opening and closing time.`;
       }
       const dayIndex = OPERATING_DAYS.findIndex((entry) => entry.key === key);
       const absoluteStart = dayIndex * MINUTES_PER_DAY + start;
-      const absoluteEnd = dayIndex * MINUTES_PER_DAY + end + (end < start ? MINUTES_PER_DAY : 0);
+      const absoluteEnd = dayIndex * MINUTES_PER_DAY + (is24h ? MINUTES_PER_DAY : end + (end < start ? MINUTES_PER_DAY : 0));
       intervals.push({ label, index, start: absoluteStart, end: absoluteEnd });
     }
   }
@@ -166,10 +197,13 @@ export function formatOperatingHours(hours) {
   const openDays = OPERATING_DAYS.filter(({ key }) => !schedule[key].closed);
   if (openDays.length === 0) return 'Closed every day';
   const uniquePeriods = new Set(openDays.flatMap(({ key }) => (
-    schedule[key].periods.map((period) => `${period.open}–${period.close}`)
+    schedule[key].periods.map((period) => (
+      is24HourPeriod(period) ? 'Open 24 Hours' : `${period.open}–${period.close}`
+    ))
   )));
   if (uniquePeriods.size === 1 && openDays.length === OPERATING_DAYS.length) {
-    return [...uniquePeriods][0];
+    const label = [...uniquePeriods][0];
+    return label === 'Open 24 Hours' ? 'Open 24 Hours (Daily)' : label;
   }
   return `${openDays.length} days · ${[...uniquePeriods].join(', ') || 'hours not set'}`;
 }

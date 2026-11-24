@@ -207,6 +207,16 @@ class OwnerWorkspaceTest extends TestCase
         ])->assertOk()
             ->assertJsonCount(3, 'data.operating_hours');
 
+        // Valid Open 24 Hours across consecutive days (00:00 -> 00:00 with closes_next_day = true)
+        $this->actingAs($owner)->putJson('/api/restaurant/operating-hours', [
+            'restaurant_id' => $restId,
+            'operating_hours' => [
+                ['day_of_week' => 0, 'opening_time' => '00:00', 'closing_time' => '00:00', 'closes_next_day' => true, 'is_closed' => false],
+                ['day_of_week' => 1, 'opening_time' => '00:00', 'closing_time' => '00:00', 'closes_next_day' => true, 'is_closed' => false],
+            ],
+        ])->assertOk()
+            ->assertJsonCount(2, 'data.operating_hours');
+
         $this->assertDatabaseHas('audit_logs', ['entity_type' => 'restaurants', 'entity_id' => (string) $restId, 'action' => 'owner_profile_updated']);
         $this->assertDatabaseHas('audit_logs', ['entity_type' => 'restaurants', 'entity_id' => (string) $restId, 'action' => 'owner_operating_hours_updated']);
     }

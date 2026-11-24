@@ -564,8 +564,9 @@ class OwnerProfileService
         $open = $this->parseTimeMinutes((string) ($row['opening_time'] ?? ''), "operating_hours.{$idx}.opening_time");
         $close = $this->parseTimeMinutes((string) ($row['closing_time'] ?? ''), "operating_hours.{$idx}.closing_time");
         $closesNextDay = (bool) ($row['closes_next_day'] ?? ($close['minutes'] <= $open['minutes']));
+        $isFullDay24Hours = $open['minutes'] === 0 && $close['minutes'] === 0 && $closesNextDay;
 
-        if ($open['minutes'] === $close['minutes']) {
+        if ($open['minutes'] === $close['minutes'] && ! $isFullDay24Hours) {
             throw ValidationException::withMessages([
                 "operating_hours.{$idx}.closing_time" => ['Closing time must differ from opening time.'],
             ]);
