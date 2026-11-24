@@ -11,6 +11,18 @@
 4. Open the application at `http://localhost:5173` (not `127.0.0.1`).
    - Note: The Laravel backend API runs separately on port `8000` (`http://localhost:8000`).
 
+### Reservation Scheduler (Local XAMPP Demos)
+
+Reservation expiry (`salo:expire-stale-reservations`) and reminder (`salo:send-reservation-reminders`) commands are registered in `backend/routes/console.php` to run every 5 minutes (`Asia/Manila`). For local XAMPP demos, run the Laravel scheduler in a separate terminal:
+
+```bash
+cd backend
+php artisan schedule:work
+```
+
+- **Fallback:** Even when the scheduler is not running, reservation detail reads and lifecycle actions perform a lazy single-row expiry sweep automatically.
+- See `docs/reservation/SCHEDULER_SETUP.md` for manual `--dry-run` commands and Windows Task Scheduler setup.
+
 ---
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
