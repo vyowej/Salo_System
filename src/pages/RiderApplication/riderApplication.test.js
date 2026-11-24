@@ -217,6 +217,21 @@ test('riderDraftStorage saves, restores, and clears application drafts safely', 
     clearRiderDraft();
     assert.equal(hasRiderDraft(), false);
     assert.equal(loadRiderDraft(), null);
+
+    // Legacy unscoped draft or draft from another user is purged when loading for a specific logged-in user
+    await saveRiderDraft({
+      formData: sampleFormData,
+      currentStep: 2,
+      completedSteps: [1],
+      ownerUserId: 99,
+      ownerEmail: 'cvph2006@gmail.com',
+    });
+    assert.equal(
+      loadRiderDraft({ id: 1, email: 'icgallela3@gmail.com' }),
+      null,
+      'Draft belonging to another user/email must be discarded and cleared',
+    );
+    assert.equal(hasRiderDraft(), false);
   } finally {
     delete globalThis.window;
   }

@@ -180,11 +180,43 @@ export async function serializeFormData(formData) {
   return serialized;
 }
 
+export function isRiderDraftOwnedByUser(draft, currentUser) {
+  if (!draft || typeof draft !== 'object') return false;
+  if (!currentUser) return true;
+
+  const userId = currentUser.id ?? currentUser.user_id ?? null;
+  const userEmail = String(currentUser.email || '').trim().toLowerCase();
+
+  // If a logged-in user is present, reject legacy unscoped drafts or drafts from another user/email
+  const draftUserId = draft.ownerUserId ?? null;
+  const draftEmail = String(draft.ownerEmail || '').trim().toLowerCase();
+
+  if (!draftUserId || !draftEmail) {
+    return false;
+  }
+
+  if (userId !== null && Number(draftUserId) !== Number(userId)) {
+    return false;
+  }
+
+  if (userEmail && draftEmail !== userEmail) {
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * Saves rider application progress to localStorage.
  * Throws an Error with friendly message if storage quota is exceeded.
  */
-export async function saveRiderDraft({ formData, currentStep = 1, completedSteps = [1] }) {
+export async function saveRiderDraft({
+  formData,
+  currentStep = 1,
+  completedSteps = [],
+  ownerUserId = null,
+  ownerEmail = null,
+}) {
   if (typeof window === 'undefined' || !window.localStorage) {
     throw new Error('Local storage is not available in this browser environment.');
   }
@@ -195,8 +227,10 @@ export async function saveRiderDraft({ formData, currentStep = 1, completedSteps
   const payload = {
     version: 1,
     savedAt: timestamp,
+    ownerUserId: ownerUserId !== null && ownerUserId !== undefined ? Number(ownerUserId) : null,
+    ownerEmail: ownerEmail ? String(ownerEmail).trim().toLowerCase() : null,
     currentStep: Number(currentStep) || 1,
-    completedSteps: Array.isArray(completedSteps) ? completedSteps : [1],
+    completedSteps: Array.isArray(completedSteps) ? completedSteps : [],
     formData: serializedData,
   };
 
@@ -225,9 +259,9 @@ export async function saveRiderDraft({ formData, currentStep = 1, completedSteps
 }
 
 /**
- * Loads the saved draft from localStorage. Returns null if not found or corrupted.
+ * Loads the saved draft from localStorage. Returns null if not found, corrupted, or owned by another user.
  */
-export function loadRiderDraft() {
+export function loadRiderDraft(currentUser = null) {
   if (typeof window === 'undefined' || !window.localStorage) {
     return null;
   }
@@ -239,12 +273,21 @@ export function loadRiderDraft() {
     const parsed = JSON.parse(raw);
     if (!parsed || !parsed.formData) return null;
 
-    return {
+    const draft = {
       formData: parsed.formData,
       currentStep: parsed.currentStep || 1,
-      completedSteps: parsed.completedSteps || [1],
+      completedSteps: Array.isArray(parsed.completedSteps) ? parsed.completedSteps : [],
       savedAt: parsed.savedAt || null,
+      ownerUserId: parsed.ownerUserId ?? null,
+      ownerEmail: parsed.ownerEmail ?? null,
     };
+
+    if (currentUser && !isRiderDraftOwnedByUser(draft, currentUser)) {
+      clearRiderDraft();
+      return null;
+    }
+
+    return draft;
   } catch (err) {
     console.warn('Failed to parse rider application draft from localStorage', err);
     return null;

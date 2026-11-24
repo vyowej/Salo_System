@@ -33,6 +33,21 @@ import './BusinessApplicationPage.css';
 
 const SESSION_DRAFT_KEY = 'salo_partner_app_draft';
 
+function isPartnerDraftOwnedByUser(parsed, currentUser) {
+  if (!parsed || typeof parsed !== 'object') return false;
+  if (!currentUser) return true;
+
+  const userId = currentUser.id ?? currentUser.user_id ?? null;
+  const userEmail = String(currentUser.email || '').trim().toLowerCase();
+  const draftUserId = parsed._ownerUserId ?? null;
+  const draftEmail = String(parsed._ownerEmail || '').trim().toLowerCase();
+
+  if (!draftUserId || !draftEmail) return false;
+  if (userId !== null && Number(draftUserId) !== Number(userId)) return false;
+  if (userEmail && draftEmail !== userEmail) return false;
+  return true;
+}
+
 export default function BusinessApplicationPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -43,7 +58,6 @@ export default function BusinessApplicationPage() {
   const [currentStep, setCurrentStep] = useState(
     initialStepParam >= 1 && initialStepParam <= 8 ? initialStepParam : 1
   );
-  const [completedSteps, setCompletedSteps] = useState([1]);
 
   // Form State
   const [formData, setFormData] = useState(() => {
@@ -51,6 +65,10 @@ export default function BusinessApplicationPage() {
       const savedDraft = sessionStorage.getItem(SESSION_DRAFT_KEY);
       if (savedDraft) {
         const parsed = JSON.parse(savedDraft);
+        if (user && !isPartnerDraftOwnedByUser(parsed, user)) {
+          sessionStorage.removeItem(SESSION_DRAFT_KEY);
+          return INITIAL_APPLICATION_STATE;
+        }
         return {
           ...INITIAL_APPLICATION_STATE,
           ...parsed,
@@ -67,6 +85,10 @@ export default function BusinessApplicationPage() {
     return INITIAL_APPLICATION_STATE;
   });
 
+  const [completedSteps, setCompletedSteps] = useState(() =>
+    formData?.emailVerification?.isVerified ? [1] : []
+  );
+
   const [validationErrors, setValidationErrors] = useState({});
   const [isDraftSaved, setIsDraftSaved] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -77,8 +99,33 @@ export default function BusinessApplicationPage() {
   const [savedApplication, setSavedApplication] = useState(null);
   const [branchUploadProgress, setBranchUploadProgress] = useState({});
 
+  // Discard stale sessionStorage draft if user resolves/changes and doesn't match draft owner
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const raw = sessionStorage.getItem(SESSION_DRAFT_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!isPartnerDraftOwnedByUser(parsed, user)) {
+        sessionStorage.removeItem(SESSION_DRAFT_KEY);
+        setFormData(INITIAL_APPLICATION_STATE);
+        setCurrentStep(1);
+        setCompletedSteps([]);
+        setLastSavedTime(null);
+        setIsDraftSaved(false);
+      }
+    } catch {
+      sessionStorage.removeItem(SESSION_DRAFT_KEY);
+    }
+  }, [user]);
+
   // Sync email & company name to businessInfo if verified
   useEffect(() => {
+    if (formData.emailVerification?.isVerified) {
+      setCompletedSteps((prev) => (prev.includes(1) ? prev : [...prev, 1]));
+    } else {
+      setCompletedSteps((prev) => prev.filter((s) => s !== 1));
+    }
     if (formData.emailVerification?.isVerified && formData.emailVerification?.verifiedEmail) {
       const verified = formData.emailVerification.verifiedEmail;
       const compName = formData.emailVerification.companyName?.trim() || '';
@@ -108,6 +155,8 @@ export default function BusinessApplicationPage() {
     try {
       const serializableData = {
         ...formData,
+        _ownerUserId: user?.id ?? user?.user_id ?? null,
+        _ownerEmail: user?.email ? String(user.email).trim().toLowerCase() : null,
         address: stripFilesFromAddressDraft(formData.address),
         documents: {},
         payout: {
@@ -134,7 +183,7 @@ export default function BusinessApplicationPage() {
     } finally {
       setSavingDraft(false);
     }
-  }, [formData]);
+  }, [formData, user]);
 
   // Step Validation Functions
   const validateStep = (stepNumber) => {

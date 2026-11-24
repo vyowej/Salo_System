@@ -25,6 +25,7 @@ import {
   saveRiderDraft,
   loadRiderDraft,
   clearRiderDraft,
+  isRiderDraftOwnedByUser,
 } from './services/riderDraftStorage';
 import applicationService from '../../services/applicationService';
 import {
@@ -39,10 +40,10 @@ export default function RiderApplicationPage() {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
 
-  // Load existing draft from persistent storage on mount
-  const [initialDraft] = useState(() => {
+  // Load existing draft from persistent storage on mount (only if owned by current user)
+  const [initialDraft, setInitialDraft] = useState(() => {
     try {
-      return loadRiderDraft();
+      return loadRiderDraft(user);
     } catch {
       return null;
     }
@@ -60,9 +61,13 @@ export default function RiderApplicationPage() {
 
   const [completedSteps, setCompletedSteps] = useState(() => {
     if (initialDraft && Array.isArray(initialDraft.completedSteps) && initialDraft.completedSteps.length > 0) {
-      return initialDraft.completedSteps;
+      const steps = initialDraft.completedSteps;
+      if (!initialDraft.formData?.emailVerification?.isVerified) {
+        return steps.filter((s) => s !== 1);
+      }
+      return steps;
     }
-    return [1];
+    return [];
   });
 
   // Form State initialized from persistent draft if available (including photos and files)
@@ -118,6 +123,21 @@ export default function RiderApplicationPage() {
   const [submittedData, setSubmittedData] = useState(null);
   const [existingActiveApp, setExistingActiveApp] = useState(null);
 
+  // If auth user resolves or switches and initialDraft does not belong to them, reset immediately
+  useEffect(() => {
+    if (!user) return;
+    if (initialDraft && !isRiderDraftOwnedByUser(initialDraft, user)) {
+      clearRiderDraft();
+      setInitialDraft(null);
+      setFormData(INITIAL_RIDER_APPLICATION_STATE);
+      setCurrentStep(1);
+      setCompletedSteps([]);
+      setLastSavedTime(null);
+      setIsDraftSaved(false);
+      setIsDirty(false);
+    }
+  }, [user, initialDraft]);
+
   useEffect(() => {
     let active = true;
     (async () => {
@@ -169,6 +189,8 @@ export default function RiderApplicationPage() {
         formData,
         currentStep,
         completedSteps,
+        ownerUserId: user?.id ?? user?.user_id ?? null,
+        ownerEmail: user?.email ?? null,
       });
 
       setIsDraftSaved(true);
@@ -187,7 +209,7 @@ export default function RiderApplicationPage() {
     } finally {
       setSavingDraft(false);
     }
-  }, [formData, currentStep, completedSteps, savingDraft]);
+  }, [formData, currentStep, completedSteps, savingDraft, user]);
 
   // Step Validation Functions
   const validateStep = (stepNumber) => {
@@ -434,6 +456,8 @@ export default function RiderApplicationPage() {
     }));
     if (nextVerification.isVerified) {
       setCompletedSteps((prev) => (prev.includes(1) ? prev : [...prev, 1]));
+    } else {
+      setCompletedSteps((prev) => prev.filter((s) => s !== 1));
     }
     setValidationErrors((prev) => ({
       ...prev,
