@@ -25,8 +25,24 @@ function createId() {
     : `closure-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-const DAY_KEY_TO_DOW = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-const DOW_TO_DAY_KEY = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' };
+const DAY_KEY_TO_DOW = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+const DOW_TO_DAY_KEY = {
+  0: 'sunday',
+  1: 'monday',
+  2: 'tuesday',
+  3: 'wednesday',
+  4: 'thursday',
+  5: 'friday',
+  6: 'saturday',
+};
 
 function fromBackendHours(rows = [], profile = null, closures = []) {
   const weeklySchedule = {};
@@ -287,7 +303,10 @@ export default function OperatingHoursEditor({ restaurantId }) {
           accepting_reservations: Boolean(hours.acceptingReservations),
         }),
       ]);
-      const updated = fromBackendHours(savedRows, savedProfile);
+      const updated = {
+        ...fromBackendHours(savedRows, savedProfile),
+        temporaryClosures: hours.temporaryClosures,
+      };
       setHours(updated);
       setInitial(updated);
       setSaved(true);
