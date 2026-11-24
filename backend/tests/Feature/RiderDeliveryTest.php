@@ -695,6 +695,19 @@ class RiderDeliveryTest extends TestCase
 
         // Declining rider does not see the order, and order status is untouched
         $this->assertSame('ready', DB::table('orders')->where('order_id', $orderId)->value('order_status'));
+        $rider1Id = (int) DB::table('riders')->where('user_id', $rider1->user_id)->value('rider_id');
+        $this->assertTrue(
+            DB::table('rider_delivery_declines')
+                ->where('rider_id', $rider1Id)
+                ->where('order_id', $orderId)
+                ->exists()
+        );
+
+        // Decline survives cache flush (durable DB persistence)
+        \Illuminate\Support\Facades\Cache::flush();
+        $this->actingAs($rider1)->patchJson('/api/rider/availability', ['status' => 'online'])->assertOk();
+        $this->actingAs($rider2)->patchJson('/api/rider/availability', ['status' => 'online'])->assertOk();
+
         $r1Ids = collect($this->actingAs($rider1)->getJson('/api/rider/deliveries/available')->assertOk()->json('data.deliveries'))
             ->pluck('order_id')
             ->all();

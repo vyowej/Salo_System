@@ -15,7 +15,6 @@ use App\Support\WorkspaceAccessResolver;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
@@ -24,8 +23,6 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class RiderDeliveryService
 {
-    private const DECLINED_OFFER_TTL_MINUTES = 720;
-
     public function __construct(
         private readonly RiderService $riderService,
         private readonly AuditLogService $auditLogService,
@@ -74,15 +71,12 @@ class RiderDeliveryService
                     });
             });
 
-        $candidateOrderIds = (clone $baseQuery)->pluck('o.order_id')->all();
-        $declinedOrderIds = array_values(array_filter(
-            array_map('intval', $candidateOrderIds),
-            fn (int $orderId): bool => Cache::has($this->declinedOfferCacheKey($riderId, $orderId)),
-        ));
-
-        if ($declinedOrderIds !== []) {
-            $baseQuery->whereNotIn('o.order_id', $declinedOrderIds);
-        }
+        $baseQuery->whereNotExists(function ($sub) use ($riderId): void {
+            $sub->select(DB::raw(1))
+                ->from('rider_delivery_declines as rdd')
+                ->whereColumn('rdd.order_id', 'o.order_id')
+                ->where('rdd.rider_id', $riderId);
+        });
 
         $total = (int) (clone $baseQuery)->count();
         $lastPage = max(1, (int) ceil($total / $perPage));
@@ -293,7 +287,7 @@ class RiderDeliveryService
 
     /**
      * Decline / skip an available delivery offer for the authenticated rider only.
-     * Stores a volatile cache marker and records an audit log without modifying orders/deliveries.
+     * Persists a durable decline row and records an audit log without modifying orders/deliveries.
      *
      * @return array<string, mixed>
      */
@@ -330,8 +324,12 @@ class RiderDeliveryService
             throw new ConflictHttpException('This delivery offer is no longer available.');
         }
 
-        $cacheKey = $this->declinedOfferCacheKey($riderId, $orderId);
-        if (Cache::has($cacheKey)) {
+        $alreadyDeclined = DB::table('rider_delivery_declines')
+            ->where('rider_id', $riderId)
+            ->where('order_id', $orderId)
+            ->exists();
+
+        if ($alreadyDeclined) {
             return [
                 'order_id' => $orderId,
                 'declined' => true,
@@ -339,11 +337,22 @@ class RiderDeliveryService
             ];
         }
 
-        Cache::put($cacheKey, [
+        $now = now();
+        $inserted = DB::table('rider_delivery_declines')->insertOrIgnore([
             'rider_id' => $riderId,
             'order_id' => $orderId,
-            'declined_at' => now()->toIso8601String(),
-        ], now()->addMinutes(self::DECLINED_OFFER_TTL_MINUTES));
+            'declined_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        if ($inserted === 0) {
+            return [
+                'order_id' => $orderId,
+                'declined' => true,
+                'already_declined' => true,
+            ];
+        }
 
         $this->auditLogService->record(
             actorUserId: (int) $user->user_id,
@@ -354,7 +363,7 @@ class RiderDeliveryService
             newValues: [
                 'rider_id' => $riderId,
                 'order_id' => $orderId,
-                'ttl_minutes' => self::DECLINED_OFFER_TTL_MINUTES,
+                'persisted' => true,
             ],
             request: $request,
         );
@@ -364,11 +373,6 @@ class RiderDeliveryService
             'declined' => true,
             'already_declined' => false,
         ];
-    }
-
-    private function declinedOfferCacheKey(int $riderId, int $orderId): string
-    {
-        return "rider:declined:{$riderId}:{$orderId}";
     }
 
     /**

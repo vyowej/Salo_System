@@ -428,6 +428,7 @@ CREATE TABLE riders (
     preferred_hubs                 VARCHAR(255)    NULL,
     preferred_shifts               SET('breakfast','lunch','afternoon','dinner','late_night','flexible') NULL,
     available_days                 SET('mon','tue','wed','thu','fri','sat','sun') NULL,
+    schedule_effective_date        DATE            NULL,
     rider_status                   ENUM('pending','approved','rejected','active','inactive','suspended') NOT NULL DEFAULT 'pending',
     approved_at                    TIMESTAMP       NULL,
     created_at                     TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1822,7 +1823,68 @@ CREATE TABLE customer_favorites (
         ON DELETE CASCADE ON UPDATE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Total tables: 51
+-- ----------------------------------------------------------------------------
+-- 53. RIDER SCHEDULE CHANGE REQUESTS
+-- ----------------------------------------------------------------------------
+CREATE TABLE rider_schedule_change_requests (
+    schedule_request_id        BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    rider_id                   BIGINT UNSIGNED NOT NULL,
+    entry_type                 ENUM('rider_request', 'admin_update') NOT NULL DEFAULT 'rider_request',
+    status                     ENUM('pending', 'approved', 'rejected', 'cancelled') NOT NULL DEFAULT 'pending',
+    previous_available_days    VARCHAR(100) NULL,
+    previous_preferred_shifts  VARCHAR(150) NULL,
+    previous_preferred_hubs    VARCHAR(255) NULL,
+    previous_effective_date    DATE NULL,
+    requested_available_days   VARCHAR(100) NOT NULL,
+    requested_preferred_shifts VARCHAR(150) NOT NULL,
+    requested_preferred_hubs   VARCHAR(255) NULL,
+    effective_date             DATE NOT NULL,
+    reason                     TEXT NOT NULL,
+    submitted_by_user_id       BIGINT UNSIGNED NOT NULL,
+    submitted_at               TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by_user_id        BIGINT UNSIGNED NULL,
+    reviewed_at                TIMESTAMP NULL,
+    admin_remarks              TEXT NULL,
+    applied_at                 TIMESTAMP NULL,
+    created_at                 TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                 TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (schedule_request_id),
+    KEY idx_rscr_rider_status (rider_id, status),
+    KEY idx_rscr_status_submitted (status, submitted_at),
+    KEY idx_rscr_rider_applied (rider_id, status, applied_at, effective_date),
+    CONSTRAINT fk_rscr_rider
+        FOREIGN KEY (rider_id) REFERENCES riders (rider_id)
+        ON DELETE CASCADE ON UPDATE RESTRICT,
+    CONSTRAINT fk_rscr_submitted_by
+        FOREIGN KEY (submitted_by_user_id) REFERENCES users (user_id)
+        ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_rscr_reviewed_by
+        FOREIGN KEY (reviewed_by_user_id) REFERENCES users (user_id)
+        ON DELETE SET NULL ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
+-- 54. RIDER DELIVERY DECLINES
+-- ----------------------------------------------------------------------------
+CREATE TABLE rider_delivery_declines (
+    decline_id   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    rider_id     BIGINT UNSIGNED NOT NULL,
+    order_id     BIGINT UNSIGNED NOT NULL,
+    declined_at  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (decline_id),
+    UNIQUE KEY uk_rider_delivery_declines_rider_order (rider_id, order_id),
+    KEY idx_rider_delivery_declines_order (order_id),
+    CONSTRAINT fk_rider_delivery_declines_rider
+        FOREIGN KEY (rider_id) REFERENCES riders (rider_id)
+        ON DELETE CASCADE ON UPDATE RESTRICT,
+    CONSTRAINT fk_rider_delivery_declines_order
+        FOREIGN KEY (order_id) REFERENCES orders (order_id)
+        ON DELETE CASCADE ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Total tables: 53
 -- ============================================================================
 -- Location hierarchy:
 --   provinces → cities → barangays → addresses  (Philippines only)
