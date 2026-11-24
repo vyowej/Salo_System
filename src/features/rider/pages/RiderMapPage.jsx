@@ -4,6 +4,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { Card, CardBody } from '../../../components/common/Card';
 import ReverbStatusBadge from '../../../components/common/ReverbStatusBadge';
+import CameraCaptureModal from '../../../components/application/CameraCaptureModal';
 import OrderChatPanel from '../../../components/connect/OrderChatPanel';
 import { StateView as GlobalStateView } from '../../../components/feedback';
 import { SharedMap } from '../../../components/location';
@@ -28,6 +29,9 @@ export default function RiderMapPage() {
   const [connectToast, setConnectToast] = useState('');
   const [codConfirmed, setCodConfirmed] = useState(false);
   const [proofPhoto, setProofPhoto] = useState(null);
+  const [proofPreviewUrl, setProofPreviewUrl] = useState('');
+  const [proofCapturedAt, setProofCapturedAt] = useState('');
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [deliverBusy, setDeliverBusy] = useState(false);
   const [waitBusy, setWaitBusy] = useState(false);
 
@@ -351,12 +355,8 @@ export default function RiderMapPage() {
     }
   };
 
-  const handleMarkDelivered = async () => {
-    if (!delivery || deliverBusy) return;
-    if (!proofPhoto) {
-      setConnectError('Please take or upload a proof of delivery photo first.');
-      return;
-    }
+  const submitDeliveryWithPhoto = async (photoFile) => {
+    if (!delivery || deliverBusy || !photoFile) return;
     if (delivery.requires_cod_collection && !codConfirmed) {
       setConnectError(`Confirm exact cash collection of ${formatPeso(delivery.amount_to_collect)} first.`);
       return;
@@ -367,18 +367,49 @@ export default function RiderMapPage() {
     try {
       const collected = delivery.requires_cod_collection ? delivery.amount_to_collect : null;
       const updated = await riderService.markDelivered(delivery.order_id, collected, {
-        proofPhoto,
+        proofPhoto: photoFile,
         recipientName: delivery.customer_name || undefined,
       });
       setDelivery(updated);
       setProofPhoto(null);
-      setConnectToast('Delivery completed! You are now available.');
+      setProofPreviewUrl('');
+      setProofCapturedAt('');
+      setConnectToast('Delivery completed with live photo proof!');
       window.dispatchEvent(new Event('salo:riderUpdated'));
     } catch (err) {
       setConnectError(err?.message || 'Unable to mark order delivered.');
     } finally {
       setDeliverBusy(false);
     }
+  };
+
+  const handleCameraCapture = async (_docId, payload) => {
+    if (!payload?.dataUrl) return;
+    try {
+      const res = await fetch(payload.dataUrl);
+      const blob = await res.blob();
+      const file = new File([blob], payload.name || `delivery_proof_${Date.now()}.jpg`, {
+        type: payload.type || 'image/jpeg',
+      });
+      setProofPhoto(file);
+      setProofPreviewUrl(payload.previewUrl || payload.dataUrl);
+      setProofCapturedAt(payload.uploadedAt || new Date().toISOString());
+
+      // Automatically complete delivery once photo is captured (if COD is already confirmed or not COD)
+      if (!delivery?.requires_cod_collection || codConfirmed) {
+        await submitDeliveryWithPhoto(file);
+      }
+    } catch {
+      setConnectError('Could not process captured photo. Please try again.');
+    }
+  };
+
+  const handleMarkDelivered = async () => {
+    if (!proofPhoto) {
+      setCameraOpen(true);
+      return;
+    }
+    await submitDeliveryWithPhoto(proofPhoto);
   };
 
   const mapState = useMemo(
@@ -657,21 +688,6 @@ export default function RiderMapPage() {
 
                     {isCustomerReached && (
                       <div className="rider-connect-deliver-box">
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem', fontWeight: 600 }}>
-                          <span>Proof of delivery photo (required)</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            disabled={deliverBusy}
-                            onChange={(e) => setProofPhoto(e.target.files?.[0] || null)}
-                          />
-                        </label>
-                        {proofPhoto && (
-                          <small style={{ color: 'var(--status-success-text, #15803d)', fontWeight: 600 }}>
-                            Photo ready: {proofPhoto.name}
-                          </small>
-                        )}
                         {delivery.requires_cod_collection && (
                           <label className="rider-connect-cod-check">
                             <input
@@ -683,14 +699,42 @@ export default function RiderMapPage() {
                             <span>Collected exact COD ({formatPeso(delivery.amount_to_collect)})</span>
                           </label>
                         )}
+                        {proofPreviewUrl && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <img
+                              src={proofPreviewUrl}
+                              alt="Captured delivery proof"
+                              style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border-primary)' }}
+                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: '0.75rem' }}>
+                              <strong style={{ color: 'var(--status-success-text, #15803d)' }}>Live photo captured</strong>
+                              {proofCapturedAt && <span>{formatDateTimeManila(proofCapturedAt)}</span>}
+                            </div>
+                          </div>
+                        )}
                         <Button
-                          variant="primary"
+                          variant="secondary"
+                          size="sm"
                           fullWidth
-                          onClick={handleMarkDelivered}
-                          disabled={deliverBusy || !proofPhoto || (delivery.requires_cod_collection && !codConfirmed)}
+                          disabled={deliverBusy || (delivery.requires_cod_collection && !codConfirmed)}
+                          onClick={() => setCameraOpen(true)}
                         >
-                          {deliverBusy ? 'Completing delivery…' : 'Mark delivered'}
+                          {deliverBusy
+                            ? 'Completing delivery…'
+                            : proofPhoto
+                              ? 'Retake live photo'
+                              : 'Take live photo & deliver'}
                         </Button>
+                        {proofPhoto && (
+                          <Button
+                            variant="primary"
+                            fullWidth
+                            onClick={handleMarkDelivered}
+                            disabled={deliverBusy || (delivery.requires_cod_collection && !codConfirmed)}
+                          >
+                            {deliverBusy ? 'Completing delivery…' : 'Mark delivered'}
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -809,6 +853,17 @@ export default function RiderMapPage() {
           </section>
         </div>
       </div>
+
+      <CameraCaptureModal
+        isOpen={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onCapture={handleCameraCapture}
+        docConfig={{
+          id: 'delivery_proof',
+          title: 'Live Proof of Delivery',
+          description: 'Take a live photo at handoff. Timestamp is recorded automatically for admin review.',
+        }}
+      />
     </div>
   );
 }

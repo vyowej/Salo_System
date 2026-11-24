@@ -271,10 +271,26 @@ export default function AdminOrderDetailPage() {
                 <div style={{ fontSize: '0.85rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                   <span>Arrived: <strong>{order.connect.arrived_at ? formatDateTimeManila(order.connect.arrived_at) : '—'}</strong></span>
                   <span>Strikes: <strong>{order.connect.call_attempts ?? 0}</strong></span>
+                  {order.delivery?.has_proof_photo && (
+                    <span>
+                      Proof Captured: <strong>{order.delivery.proof_captured_at ? formatDateTimeManila(order.delivery.proof_captured_at) : 'Yes'}</strong>
+                    </span>
+                  )}
                   {order.connect.cancel_reason && (
                     <span>Cancel Reason: <strong>{order.connect.cancel_reason}</strong></span>
                   )}
                 </div>
+
+                {order.delivery?.has_proof_photo && (
+                  <div>
+                    <strong style={{ fontSize: '0.85rem', display: 'block', marginBottom: 6 }}>Delivery Proof Photo</strong>
+                    <img
+                      src={`${import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api'}/admin/orders/${order.order_id}/delivery-proof`}
+                      alt="Delivery proof"
+                      style={{ maxWidth: 260, borderRadius: 8, border: '1px solid var(--border-primary)' }}
+                    />
+                  </div>
+                )}
 
                 {order.connect.customer_ordering_suspended && (
                   <div style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--status-error-bg)', color: 'var(--status-error-text)', fontSize: '0.85rem' }}>

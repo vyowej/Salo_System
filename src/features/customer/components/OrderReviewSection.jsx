@@ -113,6 +113,7 @@ export default function OrderReviewSection({
   riderName = null,
   isDelivery = false,
   isEligible = false,
+  onStatusChange,
 }) {
   const [statusData, setStatusData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -139,6 +140,17 @@ export default function OrderReviewSection({
   useEffect(() => {
     loadStatus();
   }, [loadStatus]);
+
+  useEffect(() => {
+    if (!statusData || typeof onStatusChange !== 'function') return;
+    const hasRest = Boolean(statusData.restaurant_review);
+    const hasRider = Boolean(statusData.rider_review);
+    const needsRider = Boolean((isDelivery || statusData.order_type === 'delivery') && (statusData.can_review_rider || hasRider));
+    onStatusChange({
+      allSubmitted: hasRest && (!needsRider || hasRider),
+      hasAnySubmitted: hasRest || hasRider,
+    });
+  }, [statusData, isDelivery, onStatusChange]);
 
   if (!isEligible) {
     return null;

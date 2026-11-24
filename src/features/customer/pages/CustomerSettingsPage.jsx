@@ -18,6 +18,7 @@ import {
   SettingsToggleRow,
 } from '../../../components/settings/SettingsPrimitives';
 import { getSettingsSectionsForRole } from '../../../config/settingsConfig';
+import { isCallSoundEnabled, requestBrowserNotificationPermission, setCallSoundEnabled } from '../../../utils/ringtone';
 
 const INITIAL_NOTIFICATIONS = {
   orderUpdates: true,
@@ -50,6 +51,7 @@ export default function CustomerSettingsPage() {
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const [security, setSecurity] = useState(INITIAL_SECURITY);
   const [privacy, setPrivacy] = useState(INITIAL_PRIVACY);
+  const [callSounds, setCallSounds] = useState(() => isCallSoundEnabled());
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
@@ -272,6 +274,19 @@ export default function CustomerSettingsPage() {
                 onChange={(checked) => {
                   setNotifications((prev) => ({ ...prev, smsNotifications: checked }));
                   setDirty(true);
+                }}
+              />
+              <SettingsToggleRow
+                id="customer-notif-call-sounds"
+                label="Incoming call ringtone"
+                description="Play an audio ringtone when your rider calls you during delivery (saved on this device)."
+                checked={callSounds}
+                onChange={async (checked) => {
+                  setCallSounds(checked);
+                  setCallSoundEnabled(checked);
+                  if (checked) {
+                    await requestBrowserNotificationPermission();
+                  }
                 }}
               />
             </div>

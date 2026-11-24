@@ -397,6 +397,8 @@ class AdminOrderService
                 'delivery_status' => $row->delivery_status,
                 'rider_id' => $row->rider_id !== null ? (int) $row->rider_id : null,
                 'rider_name' => $row->rider_name !== '' ? $row->rider_name : null,
+                'has_proof_photo' => ! empty($row->proof_photo),
+                'proof_captured_at' => OrderTimestampFormatter::toManilaIso($row->proof_captured_at ?? null),
             ] : null,
             'payment_method' => $pMethod === 'cash' ? 'cod' : $pMethod,
             'payment_status' => $latestPayment->payment_status ?? 'pending',

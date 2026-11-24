@@ -509,8 +509,8 @@
 /* Customer 6-Step Progress Bar */
 .customer-track-steps {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(46px, 1fr));
-  gap: 0.2rem;
+  grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
+  gap: 0.15rem;
   margin: 0;
   padding: 0.2rem 0;
   list-style: none;

@@ -3,7 +3,29 @@
  * for incoming rider call alerts. No external audio files required.
  */
 
+const CALL_SOUND_STORAGE_KEY = 'salo-customer-call-sounds';
 let audioCtx = null;
+
+export function isCallSoundEnabled() {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(CALL_SOUND_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function setCallSoundEnabled(enabled) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CALL_SOUND_STORAGE_KEY, enabled ? 'true' : 'false');
+  } catch {
+    // ignore storage errors
+  }
+  if (enabled) {
+    unlockCallAudio();
+  }
+}
 
 export function unlockCallAudio() {
   if (typeof window === 'undefined') return false;
@@ -23,6 +45,10 @@ export function unlockCallAudio() {
 }
 
 export function playRingToneBurst() {
+  if (!isCallSoundEnabled()) return;
+  if (!audioCtx) {
+    unlockCallAudio();
+  }
   if (!audioCtx || audioCtx.state !== 'running') return;
   try {
     const now = audioCtx.currentTime;

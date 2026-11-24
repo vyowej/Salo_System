@@ -99,6 +99,8 @@ export default function OrderDetailPage() {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [waitBusy, setWaitBusy] = useState(false);
   const [waitError, setWaitError] = useState('');
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState({ allSubmitted: false, hasAnySubmitted: false });
   const prevConnRef = useRef('disconnected');
   const lastNotifiedCallIdRef = useRef(null);
 
@@ -282,6 +284,46 @@ export default function OrderDetailPage() {
   }, []);
 
   const activeOrderId = order?.id ?? null;
+  const orderOverallStatusKey = normalizeOrderStatusKey(order?.overallStatus);
+
+  // Auto-open review modal once when order is delivered/completed unless skipped or already fully rated
+  useEffect(() => {
+    if (!activeOrderId) return;
+    if (!['completed', 'delivered'].includes(orderOverallStatusKey)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const skipped = localStorage.getItem(`salo-review-skipped-${activeOrderId}`) === 'true';
+        if (skipped) return;
+        const rev = await import('../../../services/reviewService').then((m) => m.default.getOrderReviewStatus(activeOrderId)).catch(() => null);
+        if (cancelled) return;
+        const hasRest = Boolean(rev?.restaurant_review);
+        const hasRider = Boolean(rev?.rider_review);
+        const needsRider = Boolean(rev?.order_type === 'delivery' && (rev?.can_review_rider || hasRider));
+        const allDone = hasRest && (!needsRider || hasRider);
+        setReviewStatus({ allSubmitted: allDone, hasAnySubmitted: hasRest || hasRider });
+        if (!allDone) {
+          setReviewModalOpen(true);
+        }
+      } catch {
+        if (!cancelled) setReviewModalOpen(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeOrderId, orderOverallStatusKey]);
+
+  const handleSkipReviewModal = () => {
+    if (activeOrderId) {
+      try {
+        localStorage.setItem(`salo-review-skipped-${activeOrderId}`, 'true');
+      } catch {
+        // ignore storage errors
+      }
+    }
+    setReviewModalOpen(false);
+  };
 
   // Subscribe to Reverb order channel (private events + presence for online check)
   useEffect(() => {
@@ -430,6 +472,32 @@ export default function OrderDetailPage() {
       echo.leave(`order.${activeOrderId}`);
     };
   }, [activeOrderId]);
+
+  // Sync if global call listener answered/declined the call
+  useEffect(() => {
+    const onCallUpdated = (e) => {
+      const detail = e?.detail;
+      if (!detail || String(detail.orderId) !== String(activeOrderId)) return;
+      if (detail.state) {
+        setOrder((prev) => (prev ? {
+          ...prev,
+          overallStatus: detail.state.order_status ?? prev.overallStatus,
+          callAttempts: detail.state.call_attempts ?? prev.callAttempts,
+          maxStrikes: detail.state.max_strikes ?? prev.maxStrikes,
+          pendingCall: detail.state.pending_call ?? null,
+          serverNow: detail.state.server_now ?? prev.serverNow,
+          subOrders: (prev.subOrders || []).map((s) => ({
+            ...s,
+            status: detail.state.order_status ?? s.status,
+          })),
+        } : prev));
+      } else if (activeOrderId) {
+        refreshOrderDetail(activeOrderId);
+      }
+    };
+    window.addEventListener('salo:customerCallUpdated', onCallUpdated);
+    return () => window.removeEventListener('salo:customerCallUpdated', onCallUpdated);
+  }, [activeOrderId, refreshOrderDetail]);
 
   // Refetch on WebSocket reconnect
   useEffect(() => {
@@ -761,8 +829,12 @@ export default function OrderDetailPage() {
   const customerMapStatusText =
     statusKey === 'delivered'
       ? `Order delivered${order.riderFirstName ? ` by ${order.riderFirstName}` : ''}`
-      : statusKey === 'out_for_delivery'
-        ? `Out for delivery${order.riderFirstName ? ` with ${order.riderFirstName}` : ''}`
+      : statusKey === 'customer_reached'
+        ? `Call connected${order.riderFirstName ? ` · Meet ${order.riderFirstName} at your drop-off` : ' · Meet your rider at your drop-off'}`
+        : statusKey === 'arrived'
+          ? `${order.riderFirstName ? `${order.riderFirstName} has arrived` : 'Your rider has arrived'} at your drop-off`
+          : statusKey === 'out_for_delivery'
+            ? `Out for delivery${order.riderFirstName ? ` with ${order.riderFirstName}` : ''}`
         : statusKey === 'ready'
           ? fulfillment === 'pickup'
             ? `Your order from ${activeSub?.restaurantName} is ready for pickup`
@@ -944,13 +1016,10 @@ export default function OrderDetailPage() {
                   <span>
                     {statusKey === 'arrived'
                       ? `Rider is at your drop-off · Contact attempts remaining: ${Math.max(0, (order.maxStrikes ?? 3) - (order.callAttempts ?? 0))} / ${order.maxStrikes ?? 3}`
-                      : 'Keep this page open to receive rider call alerts.'}
+                      : statusKey === 'customer_reached'
+                        ? 'Call connected — your rider is ready to hand off your order.'
+                        : 'Keep this page open or check Notifications for rider updates.'}
                   </span>
-                  {!soundEnabled && (
-                    <Button variant="outline" size="sm" onClick={handleEnableCallSounds}>
-                      Enable call sounds
-                    </Button>
-                  )}
                 </div>
                 {callNotice && (
                   <small role="status" style={{ color: 'var(--accent, #f36b2b)', fontWeight: 600 }}>
@@ -1267,104 +1336,108 @@ export default function OrderDetailPage() {
                 </small>
               </div>
             )}
-
-            {fulfillment === 'delivery' && (
-              <div className="customer-track-checkpoint" aria-live="polite">
-                <div className="customer-track-checkpoint__top">
-                  <span>Live Rider Tracking</span>
-                  <em>
-                    {trackingLoading
-                      ? 'Loading...'
-                      : trackingError
-                        ? 'Unavailable'
-                        : tracking?.rider_location
-                          ? (tracking.rider_location.is_stale ? 'Last known GPS' : 'Live GPS active')
-                          : 'Waiting for GPS'}
-                  </em>
-                </div>
-                {trackingLoading ? (
-                  <small>Fetching latest delivery tracking...</small>
-                ) : trackingError ? (
-                  <small role="alert">{trackingError}</small>
-                ) : tracking?.rider_location ? (
-                  <>
-                    <strong>
-                      {tracking.rider_location.latitude.toFixed(5)}, {tracking.rider_location.longitude.toFixed(5)}
-                    </strong>
-                    <small>
-                      Updated {formatDateTimeManila(tracking.rider_location.recorded_at)}
-                      {tracking.rider_location.is_stale ? ' (signal may be delayed)' : ''}
-                    </small>
-                  </>
-                ) : (
-                  <small>
-                    {tracking?.delivery
-                      ? 'Rider GPS coordinates will appear here once the rider starts sharing live location.'
-                      : 'No delivery rider has been assigned yet.'}
-                  </small>
-                )}
-
-                {customerMapState && (customerMapState.pickupMarker || customerMapState.dropoffMarker || customerMapState.riderMarker) && (
-                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <SharedMap
-                      center={customerMapState.center}
-                      zoom={14}
-                      height={260}
-                      markers={customerMapState.markers}
-                      route={customerMapState.route}
-                      onRouteCalculated={setRouteSummary}
-                      showCoordsChip={false}
-                      floatingNotice={
-                        simulation.hasCompletedSimulation
-                          ? 'Rider arrived in simulation — photo proof is required to mark Delivered.'
-                          : simulation.isSimulating
-                            ? 'Visual route simulation active — photo proof is required to mark Delivered.'
-                            : ''
-                      }
-                      ariaLabel="Live delivery route map"
-                    />
-                    {simulation.canSimulate && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={simulation.isSimulating ? simulation.stopSimulation : simulation.startSimulation}
-                        >
-                          {simulation.isSimulating
-                            ? `Simulating rider (${Math.round(simulation.progress * 100)}%) — Stop`
-                            : simulation.hasCompletedSimulation
-                              ? `Replay route simulation (~${simulation.durationSec}s)`
-                              : `Simulate rider movement (~${simulation.durationSec}s)`}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
+          {fulfillment === 'delivery' && (
+            <div className="customer-track-checkpoint" aria-live="polite">
+              <div className="customer-track-checkpoint__top">
+                <span>Live Rider Tracking</span>
+                <em>
+                  {trackingLoading
+                    ? 'Loading...'
+                    : trackingError
+                      ? 'Unavailable'
+                      : tracking?.rider_location
+                        ? (tracking.rider_location.is_stale ? 'Last known GPS' : 'Live GPS active')
+                        : 'Waiting for GPS'}
+                </em>
+              </div>
+              {trackingLoading ? (
+                <small>Fetching latest delivery tracking...</small>
+              ) : trackingError ? (
+                <small role="alert">{trackingError}</small>
+              ) : tracking?.rider_location ? (
+                <small>
+                  GPS: {tracking.rider_location.latitude.toFixed(5)}, {tracking.rider_location.longitude.toFixed(5)} · Updated {formatDateTimeManila(tracking.rider_location.recorded_at)}
+                  {tracking.rider_location.is_stale ? ' (signal may be delayed)' : ''}
+                </small>
+              ) : (
+                <small>
+                  {tracking?.delivery
+                    ? 'Rider GPS coordinates will appear here once the rider starts sharing live location.'
+                    : 'No delivery rider has been assigned yet.'}
+                </small>
+              )}
+            </div>
+          )}
+
+          {fulfillment === 'delivery' && customerMapState && (customerMapState.pickupMarker || customerMapState.dropoffMarker || customerMapState.riderMarker) && (
+            <div className="customer-track-map-viewport">
+              <SharedMap
+                center={customerMapState.center}
+                zoom={15}
+                height="100%"
+                markers={customerMapState.markers}
+                route={customerMapState.route}
+                onRouteCalculated={setRouteSummary}
+                showCoordsChip={Boolean(customerMapState.riderMarker)}
+                floatingNotice={
+                  simulation.hasCompletedSimulation
+                    ? 'Rider arrived in simulation — photo proof is required to mark Delivered.'
+                    : simulation.isSimulating
+                      ? 'Visual route simulation active.'
+                      : ''
+                }
+                ariaLabel="Live delivery route map"
+              />
+            </div>
+          )}
+
+          {fulfillment === 'delivery' && simulation.canSimulate && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={simulation.isSimulating ? simulation.stopSimulation : simulation.startSimulation}
+              >
+                {simulation.isSimulating
+                  ? `Simulating rider (${Math.round(simulation.progress * 100)}%) — Stop`
+                  : simulation.hasCompletedSimulation
+                    ? `Replay route simulation (~${simulation.durationSec}s)`
+                    : `Simulate rider movement (~${simulation.durationSec}s)`}
+              </Button>
+            </div>
+          )}
+
+        </div>
+      </div>
+
+      {['completed', 'delivered'].includes(statusKey) && (
+        <Modal
+          isOpen={reviewModalOpen}
+          onClose={handleSkipReviewModal}
+          title="Rate Your Experience"
+          size="lg"
+        >
           <OrderReviewSection
             orderId={order.id}
             restaurantName={activeSub?.restaurantName || 'Restaurant'}
             riderName={tracking?.rider?.name || order.riderFirstName || null}
             isDelivery={fulfillment === 'delivery'}
-            isEligible={['completed', 'delivered'].includes(statusKey)}
+            isEligible
+            onStatusChange={setReviewStatus}
           />
-        </div>
-      </div>
-
-      <IncomingCallModal
-        pendingCall={order.pendingCall}
-        serverNow={order.serverNow}
-        riderName={tracking?.rider?.name || order.riderFirstName || null}
-        orderReference={order.orderReference}
-        busy={callBusy}
-        error={callError}
-        onAccept={() => handleCallRespond('accept')}
-        onDecline={() => handleCallRespond('decline')}
-        onExpire={() => refreshOrderDetail(order.id)}
-      />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+            <Button
+              variant={reviewStatus.hasAnySubmitted ? 'primary' : 'outline'}
+              size="sm"
+              onClick={handleSkipReviewModal}
+            >
+              {reviewStatus.hasAnySubmitted ? 'Done' : 'Skip for now'}
+            </Button>
+          </div>
+        </Modal>
+      )}
     </CustomerLayout>
   );
 }

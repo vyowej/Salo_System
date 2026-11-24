@@ -11,6 +11,7 @@ import SwitchAccountModal from '../components/navigation/SwitchAccountModal';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import BackButton from '../components/common/BackButton';
+import CustomerGlobalCallListener from '../features/customer/components/CustomerGlobalCallListener';
 import CustomerNotificationsMenu from '../features/customer/components/CustomerNotificationsMenu';
 import {
   CUSTOMER_NAV_CONFIG,
@@ -460,6 +461,7 @@ export default function CustomerLayout({ children }) {
       />
 
       <ConfirmDialog {...logoutDialogProps} />
+      <CustomerGlobalCallListener />
     </div>
   );
 }
