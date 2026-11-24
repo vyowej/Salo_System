@@ -319,9 +319,10 @@ export default function AdminServiceAreasPage() {
         )}
 
         <Tabs
-          tabs={['Service areas & map', 'Operational monitoring']}
-          activeTab={view}
+          items={['Service areas & map', 'Operational monitoring']}
+          value={view}
           onChange={setView}
+          label="Service area sections"
         />
 
         {view === 'Service areas & map' ? (
@@ -477,7 +478,7 @@ export default function AdminServiceAreasPage() {
           description="This administrative change will be recorded in SALO audit logs."
           confirmLabel="Confirm & Save"
           requireReason
-          onCancel={() => setPendingAreaSave(null)}
+          onClose={() => setPendingAreaSave(null)}
           onConfirm={confirmAreaSave}
         />
 
@@ -491,7 +492,7 @@ export default function AdminServiceAreasPage() {
           }
           confirmLabel={pendingAreaStatus?.nextActive ? 'Activate' : 'Deactivate'}
           requireReason
-          onCancel={() => setPendingAreaStatus(null)}
+          onClose={() => setPendingAreaStatus(null)}
           onConfirm={confirmAreaStatus}
         />
       </div>
