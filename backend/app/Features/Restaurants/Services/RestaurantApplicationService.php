@@ -614,6 +614,8 @@ class RestaurantApplicationService
         array &$storedPrivatePaths,
     ): void {
         $appContext = $this->buildApplicationDriveContext($applicationId, $user);
+        $uploadedAt = $now->format('Y-m-d H:i:s');
+        $docRows = [];
 
         foreach ($documentFiles as $code => $file) {
             $stored = $this->fileStorageService->storePrivateFileForPurpose(
@@ -625,7 +627,7 @@ class RestaurantApplicationService
             );
             $storedPrivatePaths[] = $stored['path'];
 
-            DB::table('application_documents')->insert([
+            $docRows[] = [
                 'restaurant_application_id' => $applicationId,
                 'document_code' => $code,
                 'file_path' => $stored['path'],
@@ -634,8 +636,12 @@ class RestaurantApplicationService
                 'file_size_bytes' => $stored['size_bytes'],
                 'document_status' => 'pending_review',
                 'uploaded_by' => $user->user_id,
-                'uploaded_at' => $now->format('Y-m-d H:i:s'),
-            ]);
+                'uploaded_at' => $uploadedAt,
+            ];
+        }
+
+        if ($docRows !== []) {
+            DB::table('application_documents')->insert($docRows);
         }
     }
 

@@ -108,9 +108,9 @@ class OwnerMenuService
             return $id;
         });
 
-        $this->bestEffortEnsureCategoryFolder($restaurant, $categoryId, $name);
+        $row = DB::table('menu_categories')->where('menu_category_id', $categoryId)->first();
 
-        return collect($this->listCategories($user, $targetId))->firstWhere('id', $categoryId);
+        return $this->formatCategory($row, 0);
     }
 
     /**

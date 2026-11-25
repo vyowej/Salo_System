@@ -241,6 +241,9 @@ class RiderApplicationService
             'rider_name' => $riderName !== '' ? $riderName : 'Rider',
         ];
 
+        $uploadedAt = $now->format('Y-m-d H:i:s');
+        $docRows = [];
+
         foreach ($documentFiles as $code => $file) {
             $stored = $this->fileStorageService->storePrivateFileForPurpose(
                 file: $file,
@@ -251,7 +254,7 @@ class RiderApplicationService
             );
             $storedPrivatePaths[] = $stored['path'];
 
-            DB::table('application_documents')->insert([
+            $docRows[] = [
                 'rider_application_id' => $applicationId,
                 'document_code' => $code,
                 'file_path' => $stored['path'],
@@ -260,8 +263,12 @@ class RiderApplicationService
                 'file_size_bytes' => $stored['size_bytes'],
                 'document_status' => 'pending_review',
                 'uploaded_by' => $user->user_id,
-                'uploaded_at' => $now->format('Y-m-d H:i:s'),
-            ]);
+                'uploaded_at' => $uploadedAt,
+            ];
+        }
+
+        if ($docRows !== []) {
+            DB::table('application_documents')->insert($docRows);
         }
     }
 

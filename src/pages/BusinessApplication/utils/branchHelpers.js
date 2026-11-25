@@ -183,17 +183,16 @@ export async function executeTwoStepApplicationSubmit({
 
   let hasFailure = false;
 
-  for (let idx = 0; idx < branches.length; idx += 1) {
-    const localBranch = branches[idx];
+  const tasks = branches.map(async (localBranch, idx) => {
     const remoteBranch = createdBranches[idx];
     const appBranchId = remoteBranch?.application_branch_id;
 
     if (!appBranchId || localBranch?.permitRequiredLocally === false || !localBranch?.permitFile) {
-      continue;
+      return;
     }
 
     if (progress[appBranchId]?.status === 'uploaded') {
-      continue;
+      return;
     }
 
     progress[appBranchId] = {
@@ -220,7 +219,9 @@ export async function executeTwoStepApplicationSubmit({
       };
     }
     onProgress?.({ ...progress });
-  }
+  });
+
+  await Promise.all(tasks);
 
   return {
     application: created,

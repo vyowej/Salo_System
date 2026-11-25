@@ -16,6 +16,7 @@ export default function RiderAgreementStep({
   onSubmitApplication,
   submitting = false,
   allRequiredValid = false,
+  missingRequirements = [],
 }) {
   const agreeAllRef = useRef(null);
   const {
@@ -498,6 +499,8 @@ export default function RiderAgreementStep({
                 ? 'Please complete Step 1 (Email Verification) before submitting.'
                 : !isAllDeclared
                 ? 'Please check all four declaration boxes above to enable application submission.'
+                : missingRequirements.length > 0
+                ? `Missing required items: ${missingRequirements.map((m) => m.label).join(', ')}.`
                 : 'Please complete all required fields and documents.'}
             </span>
           </div>
@@ -513,7 +516,7 @@ export default function RiderAgreementStep({
             disabled={!canSubmit || submitting}
             loading={submitting}
           >
-            Submit Rider Application
+            {submitting ? 'Submitting Application...' : 'Submit Rider Application'}
           </Button>
         </div>
       </div>

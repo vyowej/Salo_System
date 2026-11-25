@@ -49,7 +49,7 @@ export default function SwitchAccountModal({
       return;
     }
     await logout();
-    navigate('/login');
+    navigate('/login', { replace: true, state: null });
   };
 
   return createPortal(

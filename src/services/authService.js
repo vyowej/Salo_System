@@ -41,6 +41,38 @@ export function getWorkspaceHomePath(role) {
   }
 }
 
+export function isPathAllowedForUser(pathname, user) {
+  if (!pathname || typeof pathname !== 'string') return false;
+  if (pathname === '/login' || pathname === '/register') return false;
+
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  const workspace = user?.role || getDefaultWorkspace(roles);
+  const hasRole = (target) => workspace === target || roles.includes(target);
+
+  if (pathname.startsWith('/admin')) {
+    return hasRole('admin');
+  }
+  if (pathname.startsWith('/owner')) {
+    return hasRole('owner') || hasRole('staff') || hasRole('restaurant');
+  }
+  if (pathname.startsWith('/rider')) {
+    return hasRole('rider');
+  }
+  if (workspace === 'admin') {
+    return false;
+  }
+  return true;
+}
+
+export function resolvePostLoginDestination(user, fromLocation = null) {
+  const workspace = user?.role || getDefaultWorkspace(user?.roles);
+  if (fromLocation?.pathname && isPathAllowedForUser(fromLocation.pathname, user)) {
+    const { pathname, search = '', hash = '' } = fromLocation;
+    return `${pathname}${search}${hash}`;
+  }
+  return getWorkspaceHomePath(workspace);
+}
+
 export function normalizeUser(rawUser, preferredWorkspace = null) {
   if (!rawUser) return null;
 

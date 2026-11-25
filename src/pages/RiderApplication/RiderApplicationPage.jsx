@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import Button from '../../components/common/Button';
@@ -25,8 +25,10 @@ import {
   saveRiderDraft,
   loadRiderDraft,
   clearRiderDraft,
+  restoreRiderDraftFiles,
   isRiderDraftOwnedByUser,
 } from './services/riderDraftStorage';
+import { getMissingRiderApplicationRequirements } from './utils/riderValidation';
 import applicationService from '../../services/applicationService';
 import {
   isActiveOrApprovedRiderApplication,
@@ -120,14 +122,16 @@ export default function RiderApplicationPage() {
 
   const [exitModalOpen, setExitModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submitInFlightRef = useRef(false);
   const [submittedData, setSubmittedData] = useState(null);
   const [existingActiveApp, setExistingActiveApp] = useState(null);
 
-  // If auth user resolves or switches and initialDraft does not belong to them, reset immediately
+  // If auth user resolves or switches and initialDraft does not belong to them, reset immediately;
+  // otherwise restore any binary files/PDFs from IndexedDB.
   useEffect(() => {
     if (!user) return;
     if (initialDraft && !isRiderDraftOwnedByUser(initialDraft, user)) {
-      clearRiderDraft();
+      clearRiderDraft(user?.id ?? user?.user_id ?? null);
       setInitialDraft(null);
       setFormData(INITIAL_RIDER_APPLICATION_STATE);
       setCurrentStep(1);
@@ -135,6 +139,20 @@ export default function RiderApplicationPage() {
       setLastSavedTime(null);
       setIsDraftSaved(false);
       setIsDirty(false);
+      return;
+    }
+    if (initialDraft) {
+      let active = true;
+      restoreRiderDraftFiles(initialDraft.formData, user?.id ?? user?.user_id ?? null)
+        .then((restored) => {
+          if (active && restored) {
+            setFormData((prev) => ({ ...prev, ...restored }));
+          }
+        })
+        .catch(() => {});
+      return () => {
+        active = false;
+      };
     }
   }, [user, initialDraft]);
 
@@ -604,11 +622,13 @@ export default function RiderApplicationPage() {
   };
 
   const handleSubmitApplication = async () => {
+    if (submitting || submitInFlightRef.current) return;
     if (!validateStep(10)) {
       window.scrollTo({ top: 100, behavior: 'smooth' });
       return;
     }
 
+    submitInFlightRef.current = true;
     setSubmitting(true);
     setValidationErrors((prev) => ({ ...prev, submit: undefined }));
 
@@ -782,7 +802,7 @@ export default function RiderApplicationPage() {
 
       const created = await applicationService.submitRiderApplication(fd);
 
-      clearRiderDraft();
+      clearRiderDraft(user?.id ?? user?.user_id ?? null);
       setIsDirty(false);
 
       const fullName = `${formData.personal.firstName} ${formData.personal.lastName}`.trim();
@@ -798,7 +818,7 @@ export default function RiderApplicationPage() {
     } catch (error) {
       const conflictRedirect = resolveRiderActiveApplicationConflictRedirect(error);
       if (conflictRedirect) {
-        clearRiderDraft();
+        clearRiderDraft(user?.id ?? user?.user_id ?? null);
         setIsDirty(false);
         navigate(conflictRedirect.to, {
           replace: true,
@@ -829,6 +849,7 @@ export default function RiderApplicationPage() {
         submit: firstFieldMsg || error?.message || 'Unable to submit rider application. Please review your details and try again.',
       }));
     } finally {
+      submitInFlightRef.current = false;
       setSubmitting(false);
     }
   };
@@ -861,17 +882,8 @@ export default function RiderApplicationPage() {
   };
 
   // Check if all essential previous steps are valid for review step
-  const areAllRequiredStepsValid = () => {
-    return (
-      Boolean(formData.emailVerification.isVerified) &&
-      Boolean(formData.personal.firstName) &&
-      Boolean(formData.personal.lastName) &&
-      Boolean(formData.identity.idNumber) &&
-      Boolean(formData.deliveryMethod) &&
-      Boolean(formData.emergency.contactName) &&
-      Boolean(formData.payout.accountHolder)
-    );
-  };
+  const missingRequirements = getMissingRiderApplicationRequirements(formData);
+  const areAllRequiredStepsValid = () => missingRequirements.length === 0;
 
   const hasVehicleDataEntered = Boolean(
     formData.vehicleInfo.motoBrand ||
@@ -1038,6 +1050,7 @@ export default function RiderApplicationPage() {
                   onSubmitApplication={handleSubmitApplication}
                   submitting={submitting}
                   allRequiredValid={areAllRequiredStepsValid()}
+                  missingRequirements={missingRequirements}
                   errors={validationErrors}
                 />
               )}

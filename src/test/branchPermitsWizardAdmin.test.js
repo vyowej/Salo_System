@@ -306,7 +306,7 @@ test('409 ACTIVE_APPLICATION_EXISTS maps to status redirect + notice, stops two-
   // Verify wizard clears draft & redirects without setting generic submit error, and status page renders notice + Upload/Retry
   const wizardSrc = fs.readFileSync(path.resolve('src/pages/BusinessApplication/BusinessApplicationPage.jsx'), 'utf8');
   assert.ok(wizardSrc.includes('resolveActiveApplicationConflictRedirect(error)'));
-  assert.ok(wizardSrc.includes('sessionStorage.removeItem(SESSION_DRAFT_KEY)'));
+  assert.ok(wizardSrc.includes('clearPartnerDraft('));
   assert.ok(wizardSrc.includes('navigate(conflictRedirect.to'));
 
   const statusPageSrc = fs.readFileSync(path.resolve('src/pages/BusinessApplication/BusinessApplicationStatusPage.jsx'), 'utf8');

@@ -321,13 +321,13 @@ export default function ApplicationReviewModal({
                     {detail.logo_image && (
                       <li>
                         <strong>Logo</strong>
-                        <img src={resolveBackendUrl(detail.logo_image)} alt="Restaurant logo" style={{ maxHeight: 48, borderRadius: 6 }} />
+                        <img src={resolveBackendUrl(detail.logo_image)} alt="Restaurant logo" loading="lazy" decoding="async" style={{ maxHeight: 48, borderRadius: 6 }} />
                       </li>
                     )}
                     {detail.cover_image && (
                       <li>
                         <strong>Cover photo</strong>
-                        <img src={resolveBackendUrl(detail.cover_image)} alt="Restaurant cover" style={{ maxHeight: 64, borderRadius: 6 }} />
+                        <img src={resolveBackendUrl(detail.cover_image)} alt="Restaurant cover" loading="lazy" decoding="async" style={{ maxHeight: 64, borderRadius: 6 }} />
                       </li>
                     )}
                     {detail.menu_items?.length > 0 && (
@@ -340,6 +340,8 @@ export default function ApplicationReviewModal({
                                 <img
                                   src={resolveBackendUrl(item.photo_url)}
                                   alt={item.name}
+                                  loading="lazy"
+                                  decoding="async"
                                   style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4 }}
                                 />
                               )}

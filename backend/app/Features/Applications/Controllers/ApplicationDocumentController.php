@@ -59,6 +59,8 @@ class ApplicationDocumentController extends Controller
             path: $doc->file_path,
             downloadName: $doc->original_filename,
             mimeType: $doc->mime_type,
+            thumbnail: $request->query('variant') === 'thumb',
+            request: $request,
         );
     }
 }

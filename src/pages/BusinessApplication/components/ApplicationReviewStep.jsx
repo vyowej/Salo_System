@@ -17,6 +17,7 @@ export default function ApplicationReviewStep({
   onSubmitApplication,
   submitting = false,
   allRequiredValid = false,
+  missingRequirements = [],
 }) {
   const {
     emailVerification = {},
@@ -578,6 +579,8 @@ export default function ApplicationReviewStep({
                 ? 'Please complete Step 1 (Email Verification) before submitting.'
                 : !isAllDeclarationsConfirmed
                 ? 'Please accept all declarations above to enable application submission.'
+                : missingRequirements.length > 0
+                ? `Missing required items: ${missingRequirements.map((m) => m.label).join(', ')}.`
                 : 'Please complete all required fields and documents.'}
             </span>
           </div>

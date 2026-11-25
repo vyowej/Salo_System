@@ -8,11 +8,12 @@ import {
 import { resolveBackendUrl } from '../../../../services/applicationService';
 import './AdminApplications.css';
 
-function buildRetryUrl(baseUrl, retryCount) {
+function buildThumbUrl(baseUrl, retryCount) {
   if (!baseUrl) return '';
-  if (!retryCount) return baseUrl;
   const separator = baseUrl.includes('?') ? '&' : '?';
-  return `${baseUrl}${separator}retry=${retryCount}`;
+  const withVariant = `${baseUrl}${separator}variant=thumb`;
+  if (!retryCount) return withVariant;
+  return `${withVariant}&retry=${retryCount}`;
 }
 
 export default function DocumentCard({
@@ -25,13 +26,14 @@ export default function DocumentCard({
   onOpenLightbox,
 }) {
   const [imgError, setImgError] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [reason, setReason] = useState(DOCUMENT_REJECTION_REASONS[0]);
   const [note, setNote] = useState('');
 
   const fileUrl = resolveBackendUrl(doc?.file_url);
-  const effectiveUrl = buildRetryUrl(fileUrl, retryCount);
+  const effectiveUrl = buildThumbUrl(fileUrl, retryCount);
   const label = getDocumentLabel(doc?.document_code);
   const isPdf = isPdfDocument(doc);
   const status = String(doc?.document_status || 'pending').toLowerCase();
@@ -41,6 +43,7 @@ export default function DocumentCard({
 
   useEffect(() => {
     setImgError(false);
+    setImgLoaded(false);
     setRetryCount(0);
     setRejectOpen(false);
     setNote('');
@@ -49,6 +52,7 @@ export default function DocumentCard({
   function handleRetry(event) {
     event.stopPropagation();
     setImgError(false);
+    setImgLoaded(false);
     setRetryCount((count) => count + 1);
   }
 
@@ -115,11 +119,18 @@ export default function DocumentCard({
             onClick={() => onOpenLightbox?.(doc)}
             aria-label={`View ${label} full size`}
           >
+            {!imgLoaded && <span className="admin-doc-card__skeleton" aria-hidden="true" />}
             <img
               src={effectiveUrl}
               alt={label}
-              className="admin-doc-card__thumb"
-              onError={() => setImgError(true)}
+              loading="lazy"
+              decoding="async"
+              className={`admin-doc-card__thumb ${imgLoaded ? 'is-loaded' : 'is-loading'}`}
+              onLoad={() => setImgLoaded(true)}
+              onError={() => {
+                setImgLoaded(true);
+                setImgError(true);
+              }}
             />
           </button>
         )}

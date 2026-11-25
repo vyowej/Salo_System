@@ -144,9 +144,9 @@ export function AuthProvider({ children }) {
     const currentUserId = user?.user_id ?? user?.id ?? null;
     try {
       await authService.logout();
+    } finally {
       writeStoredWorkspaceForUser(currentUserId, null);
       applyAuthenticatedUser(null);
-    } finally {
       setLoading(false);
     }
   }, [applyAuthenticatedUser, user]);

@@ -24,7 +24,7 @@ export function useLogout({ onBeforeLogout, redirectTo = '/login' } = {}) {
     setConfirmOpen(false);
     await onBeforeLogout?.();
     await logout();
-    navigate(redirectTo);
+    navigate(redirectTo, { replace: true, state: null });
   }, [logout, navigate, onBeforeLogout, redirectTo]);
 
   return {

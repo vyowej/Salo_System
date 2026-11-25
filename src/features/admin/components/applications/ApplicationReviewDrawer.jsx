@@ -351,6 +351,8 @@ export default function ApplicationReviewDrawer({
                         <img
                           src={resolveBackendUrl(detail.logo_image)}
                           alt={`${displayName} logo`}
+                          loading="lazy"
+                          decoding="async"
                           className="admin-app-media-preview__logo"
                         />
                       )}
@@ -358,6 +360,8 @@ export default function ApplicationReviewDrawer({
                         <img
                           src={resolveBackendUrl(detail.cover_image)}
                           alt={`${displayName} cover`}
+                          loading="lazy"
+                          decoding="async"
                           className="admin-app-media-preview__cover"
                         />
                       )}
@@ -490,6 +494,8 @@ export default function ApplicationReviewDrawer({
                                 <img
                                   src={resolveBackendUrl(item.photo_url)}
                                   alt={item.name}
+                                  loading="lazy"
+                                  decoding="async"
                                   className="admin-app-menu-item__img"
                                 />
                               )}

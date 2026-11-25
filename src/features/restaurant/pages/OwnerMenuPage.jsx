@@ -76,6 +76,7 @@ export default function OwnerMenuPage() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [categorySaving, setCategorySaving] = useState(false);
   const [error, setError] = useState('');
   const [warning, setWarning] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -360,7 +361,7 @@ export default function OwnerMenuPage() {
 
   async function submitCategory(event) {
     event.preventDefault();
-    if (saving) return;
+    if (categorySaving) return;
     const name = categoryName.trim();
     if (!name) {
       setWarning('Enter a category name.');
@@ -371,21 +372,39 @@ export default function OwnerMenuPage() {
       setWarning('A category with that name already exists.');
       return;
     }
-    setSaving(true);
+    setCategorySaving(true);
     try {
+      const toUiCategory = (cat) => ({
+        id: cat.id,
+        name: cat.name,
+        description: cat.description,
+        visible: cat.is_active !== false,
+        sortOrder: cat.sort_order ?? 0,
+        itemsCount: cat.items_count ?? 0,
+        publish_state: cat.publish_state || (cat.is_published ? 'published' : 'new'),
+        is_published: Boolean(cat.is_published),
+        published: cat.published || null,
+      });
+
       if (editingCategoryId) {
-        await ownerService.updateMenuCategory(selectedRestaurantId, editingCategoryId, { category_name: name });
+        const updated = await ownerService.updateMenuCategory(selectedRestaurantId, editingCategoryId, { category_name: name });
+        if (updated) {
+          setCategories((prev) => prev.map((cat) => (cat.id === editingCategoryId ? toUiCategory(updated) : cat)));
+        }
       } else {
-        await ownerService.createMenuCategory(selectedRestaurantId, { category_name: name });
+        const created = await ownerService.createMenuCategory(selectedRestaurantId, { category_name: name });
+        if (created) {
+          setCategories((prev) => [...prev, toUiCategory(created)]);
+        }
       }
       setCategoryName('');
       setEditingCategoryId(null);
-      await loadMenu();
+      ownerService.getMenuPublishStatus(selectedRestaurantId).then(setPublishStatus).catch(() => {});
     } catch (saveError) {
       const msg = saveError?.errors?.category_name?.[0] || saveError.message || 'Unable to save category.';
       setWarning(msg);
     } finally {
-      setSaving(false);
+      setCategorySaving(false);
     }
   }
 
@@ -528,9 +547,9 @@ export default function OwnerMenuPage() {
         </div>
         {access.canAccess(['menu.categories.manage']) && (
           <form onSubmit={submitCategory} style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-            <input aria-label="Category name" value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="New category name" style={{ ...CONTROL_STYLE, flex: 1, minWidth: 200 }} />
-            <Button type="submit" variant="primary" size="sm">{editingCategoryId ? 'Save category' : 'Add category'}</Button>
-            {editingCategoryId && <Button type="button" variant="ghost" size="sm" onClick={() => { setEditingCategoryId(null); setCategoryName(''); }}>Cancel</Button>}
+            <input aria-label="Category name" value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="New category name" style={{ ...CONTROL_STYLE, flex: 1, minWidth: 200 }} disabled={categorySaving} />
+            <Button type="submit" variant="primary" size="sm" loading={categorySaving} disabled={categorySaving}>{editingCategoryId ? (categorySaving ? 'Saving...' : 'Save category') : (categorySaving ? 'Adding...' : 'Add category')}</Button>
+            {editingCategoryId && <Button type="button" variant="ghost" size="sm" disabled={categorySaving} onClick={() => { setEditingCategoryId(null); setCategoryName(''); }}>Cancel</Button>}
           </form>
         )}
       </section>

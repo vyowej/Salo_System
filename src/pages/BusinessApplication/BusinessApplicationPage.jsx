@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import Button from '../../components/common/Button';
@@ -26,98 +26,127 @@ import {
   appendBranchPayloadToFormData,
   executeTwoStepApplicationSubmit,
   resolveActiveApplicationConflictRedirect,
-  stripFilesFromAddressDraft,
   validateAddressStep,
 } from './utils/branchHelpers';
+import {
+  getMissingBusinessApplicationRequirements,
+  hasUploadedEntry,
+} from './utils/applicationValidation';
+import {
+  savePartnerDraft,
+  loadPartnerDraftMetadata,
+  restorePartnerDraftFiles,
+  clearPartnerDraft,
+  isPartnerDraftOwnedByUser,
+} from './services/partnerDraftStorage';
 import './BusinessApplicationPage.css';
-
-const SESSION_DRAFT_KEY = 'salo_partner_app_draft';
-
-function isPartnerDraftOwnedByUser(parsed, currentUser) {
-  if (!parsed || typeof parsed !== 'object') return false;
-  if (!currentUser) return true;
-
-  const userId = currentUser.id ?? currentUser.user_id ?? null;
-  const userEmail = String(currentUser.email || '').trim().toLowerCase();
-  const draftUserId = parsed._ownerUserId ?? null;
-  const draftEmail = String(parsed._ownerEmail || '').trim().toLowerCase();
-
-  if (!draftUserId || !draftEmail) return false;
-  if (userId !== null && Number(draftUserId) !== Number(userId)) return false;
-  if (userEmail && draftEmail !== userEmail) return false;
-  return true;
-}
 
 export default function BusinessApplicationPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
 
+  const [initialDraft] = useState(() => loadPartnerDraftMetadata(user));
+
   // Wizard Step State
   const initialStepParam = parseInt(searchParams.get('step') || '1', 10);
-  const [currentStep, setCurrentStep] = useState(
-    initialStepParam >= 1 && initialStepParam <= 8 ? initialStepParam : 1
-  );
+  const [currentStep, setCurrentStep] = useState(() => {
+    if (initialStepParam >= 1 && initialStepParam <= 8) return initialStepParam;
+    return initialDraft?._currentStep >= 1 && initialDraft?._currentStep <= 8
+      ? initialDraft._currentStep
+      : 1;
+  });
 
   // Form State
   const [formData, setFormData] = useState(() => {
-    try {
-      const savedDraft = sessionStorage.getItem(SESSION_DRAFT_KEY);
-      if (savedDraft) {
-        const parsed = JSON.parse(savedDraft);
-        if (user && !isPartnerDraftOwnedByUser(parsed, user)) {
-          sessionStorage.removeItem(SESSION_DRAFT_KEY);
-          return INITIAL_APPLICATION_STATE;
-        }
-        return {
-          ...INITIAL_APPLICATION_STATE,
-          ...parsed,
-          address: {
-            ...INITIAL_APPLICATION_STATE.address,
-            ...(parsed.address || {}),
-          },
-          documents: {}, // Browser File objects cannot be persisted in JSON; keep clean
-        };
-      }
-    } catch {
-      // fallback to initial
+    if (initialDraft) {
+      return {
+        ...INITIAL_APPLICATION_STATE,
+        ...initialDraft,
+        address: {
+          ...INITIAL_APPLICATION_STATE.address,
+          ...(initialDraft.address || {}),
+        },
+        documents: initialDraft.documents || {},
+      };
     }
     return INITIAL_APPLICATION_STATE;
   });
 
   const [completedSteps, setCompletedSteps] = useState(() =>
-    formData?.emailVerification?.isVerified ? [1] : []
+    Array.isArray(initialDraft?._completedSteps) && initialDraft._completedSteps.length > 0
+      ? initialDraft._completedSteps
+      : formData?.emailVerification?.isVerified ? [1] : []
   );
 
   const [validationErrors, setValidationErrors] = useState({});
   const [isDraftSaved, setIsDraftSaved] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
-  const [lastSavedTime, setLastSavedTime] = useState(null);
+  const [lastSavedTime, setLastSavedTime] = useState(() => initialDraft?._savedAt || null);
+  const [isDirty, setIsDirty] = useState(false);
   const [exitModalOpen, setExitModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submitInFlightRef = useRef(false);
   const [submittedData, setSubmittedData] = useState(null);
   const [savedApplication, setSavedApplication] = useState(null);
   const [branchUploadProgress, setBranchUploadProgress] = useState({});
 
-  // Discard stale sessionStorage draft if user resolves/changes and doesn't match draft owner
+  const updateUserFormData = useCallback((updater) => {
+    setFormData(updater);
+    setIsDirty(true);
+    setIsDraftSaved(false);
+  }, []);
+
+  // Discard stale draft if user resolves/changes and doesn't match draft owner; otherwise restore files
   useEffect(() => {
     if (!user) return;
-    try {
-      const raw = sessionStorage.getItem(SESSION_DRAFT_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!isPartnerDraftOwnedByUser(parsed, user)) {
-        sessionStorage.removeItem(SESSION_DRAFT_KEY);
-        setFormData(INITIAL_APPLICATION_STATE);
-        setCurrentStep(1);
-        setCompletedSteps([]);
-        setLastSavedTime(null);
-        setIsDraftSaved(false);
-      }
-    } catch {
-      sessionStorage.removeItem(SESSION_DRAFT_KEY);
+    const ownerUserId = user.id ?? user.user_id ?? null;
+    if (initialDraft && !isPartnerDraftOwnedByUser(initialDraft, user)) {
+      clearPartnerDraft(ownerUserId).catch(() => {});
+      setFormData(INITIAL_APPLICATION_STATE);
+      setCurrentStep(1);
+      setCompletedSteps([]);
+      setLastSavedTime(null);
+      setIsDraftSaved(false);
+      setIsDirty(false);
+      return;
     }
-  }, [user]);
+    let active = true;
+    restorePartnerDraftFiles(initialDraft || formData, ownerUserId)
+      .then((restored) => {
+        if (!active || !restored) return;
+        setFormData((prev) => ({
+          ...prev,
+          documents: { ...(restored.documents || {}), ...(prev.documents || {}) },
+          payout: {
+            ...prev.payout,
+            proofDocument: prev.payout?.proofDocument || restored.payout?.proofDocument || null,
+          },
+          configuration: {
+            ...prev.configuration,
+            logo: prev.configuration?.logo?.file ? prev.configuration.logo : (restored.configuration?.logo || prev.configuration?.logo),
+            coverPhoto: prev.configuration?.coverPhoto?.file ? prev.configuration.coverPhoto : (restored.configuration?.coverPhoto || prev.configuration?.coverPhoto),
+            menuItems: (prev.configuration?.menuItems || []).map((item, idx) => {
+              const restoredItem = restored.configuration?.menuItems?.[idx];
+              if (item.photoFile || !restoredItem?.photoFile) return item;
+              return { ...item, photoUrl: restoredItem.photoUrl, photoName: restoredItem.photoName, photoFile: restoredItem.photoFile };
+            }),
+          },
+          address: {
+            ...prev.address,
+            branches: (prev.address?.branches || []).map((branch, idx) => {
+              const restoredBranch = restored.address?.branches?.[idx];
+              if (branch.permitFile || !restoredBranch?.permitFile) return branch;
+              return { ...branch, permitFile: restoredBranch.permitFile, hadPendingPermitFile: false };
+            }),
+          },
+        }));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync email & company name to businessInfo if verified
   useEffect(() => {
@@ -149,41 +178,30 @@ export default function BusinessApplicationPage() {
     formData.businessInfo.restaurantName,
   ]);
 
-  // Sync draft state to sessionStorage (without File objects)
-  const saveDraftLocally = useCallback(() => {
+  // Sync draft state + files to persistent storage
+  const saveDraftLocally = useCallback(async () => {
+    if (savingDraft) return false;
     setSavingDraft(true);
     try {
-      const serializableData = {
-        ...formData,
-        _ownerUserId: user?.id ?? user?.user_id ?? null,
-        _ownerEmail: user?.email ? String(user.email).trim().toLowerCase() : null,
-        address: stripFilesFromAddressDraft(formData.address),
-        documents: {},
-        payout: {
-          ...formData.payout,
-          accountNumber: formData.payout.accountNumber ? `••••${formData.payout.accountNumber.slice(-4)}` : '',
-          proofDocument: null,
-        },
-        configuration: {
-          ...formData.configuration,
-          logo: formData.configuration.logo ? { name: formData.configuration.logo.name } : null,
-          coverPhoto: formData.configuration.coverPhoto ? { name: formData.configuration.coverPhoto.name } : null,
-          menuItems: (formData.configuration.menuItems || []).map((item) => ({
-            ...item,
-            photoFile: null,
-          })),
-        },
-      };
-      sessionStorage.setItem(SESSION_DRAFT_KEY, JSON.stringify(serializableData));
+      const result = await savePartnerDraft({
+        formData,
+        currentStep,
+        completedSteps,
+        ownerUserId: user?.id ?? user?.user_id ?? null,
+        ownerEmail: user?.email ?? null,
+      });
       setIsDraftSaved(true);
-      setLastSavedTime(new Date().toISOString());
+      setIsDirty(false);
+      setLastSavedTime(result.savedAt);
       setTimeout(() => setIsDraftSaved(false), 3000);
+      return true;
     } catch (e) {
-      console.warn('Unable to save draft to sessionStorage', e);
+      console.warn('Unable to save partner application draft', e);
+      return false;
     } finally {
       setSavingDraft(false);
     }
-  }, [formData, user]);
+  }, [formData, currentStep, completedSteps, savingDraft, user]);
 
   // Step Validation Functions
   const validateStep = (stepNumber) => {
@@ -235,7 +253,7 @@ export default function BusinessApplicationPage() {
       ).filter((d) => d.required);
 
       for (const reqDoc of requiredDocs) {
-        if (!formData.documents[reqDoc.id]?.name && !formData.documents[reqDoc.id]?.dataUrl) {
+        if (!hasUploadedEntry(formData.documents[reqDoc.id])) {
           errors[reqDoc.id] = `${reqDoc.title} is required.`;
         }
       }
@@ -306,7 +324,7 @@ export default function BusinessApplicationPage() {
 
   // Document Upload Handlers
   const handleDocumentUpload = (docId, fileData) => {
-    setFormData((prev) => ({
+    updateUserFormData((prev) => ({
       ...prev,
       documents: {
         ...prev.documents,
@@ -317,7 +335,7 @@ export default function BusinessApplicationPage() {
   };
 
   const handleDocumentRemove = (docId) => {
-    setFormData((prev) => {
+    updateUserFormData((prev) => {
       const nextDocs = { ...prev.documents };
       delete nextDocs[docId];
       return { ...prev, documents: nextDocs };
@@ -326,7 +344,8 @@ export default function BusinessApplicationPage() {
 
   // Final Application Submission (Two-step: metadata first, then per-branch permit files)
   const handleSubmitApplication = async () => {
-    if (submitting) return;
+    if (submitting || submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
 
     const verifiedEmail = (
       formData.emailVerification?.isVerified ? formData.emailVerification?.verifiedEmail : ''
@@ -340,6 +359,7 @@ export default function BusinessApplicationPage() {
       }));
       setCurrentStep(1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      submitInFlightRef.current = false;
       return;
     }
 
@@ -500,7 +520,8 @@ export default function BusinessApplicationPage() {
       });
 
       setSavedApplication(result.application);
-      sessionStorage.removeItem(SESSION_DRAFT_KEY);
+      setIsDirty(false);
+      await clearPartnerDraft(user?.id ?? user?.user_id ?? null).catch(() => {});
 
       if (result.hasFailure) {
         setValidationErrors((prev) => ({
@@ -521,11 +542,7 @@ export default function BusinessApplicationPage() {
     } catch (error) {
       const conflictRedirect = resolveActiveApplicationConflictRedirect(error);
       if (conflictRedirect) {
-        try {
-          sessionStorage.removeItem(SESSION_DRAFT_KEY);
-        } catch {
-          // Ignore storage removal errors
-        }
+        await clearPartnerDraft(user?.id ?? user?.user_id ?? null).catch(() => {});
         navigate(conflictRedirect.to, {
           replace: true,
           state: {
@@ -566,7 +583,16 @@ export default function BusinessApplicationPage() {
         submit: firstFieldMsg || error?.message || 'Unable to submit application. Please review your details and try again.',
       }));
     } finally {
+      submitInFlightRef.current = false;
       setSubmitting(false);
+    }
+  };
+
+  const handleHeaderExit = () => {
+    if (!isDirty) {
+      navigate('/customer/partner');
+    } else {
+      setExitModalOpen(true);
     }
   };
 
@@ -575,18 +601,8 @@ export default function BusinessApplicationPage() {
     navigate('/customer/partner');
   };
 
-  // Check if all prior steps are valid for review submit
-  const areAllRequiredStepsValid = () => {
-    const addressErrors = validateAddressStep(formData.address);
-    return (
-      Boolean(formData.emailVerification?.isVerified) &&
-      Boolean(formData.businessInfo.restaurantName) &&
-      Boolean(formData.representative.firstName) &&
-      Object.keys(addressErrors).length === 0 &&
-      Boolean(formData.payout.accountHolder) &&
-      !validateRestaurantServices(formData.configuration?.services)
-    );
-  };
+  const missingRequirements = getMissingBusinessApplicationRequirements(formData);
+  const areAllRequiredStepsValid = () => missingRequirements.length === 0;
 
   return (
     <div className="business-app-page">
@@ -595,7 +611,7 @@ export default function BusinessApplicationPage() {
         currentStep={currentStep}
         totalSteps={WIZARD_STEPS.length}
         onSaveDraft={saveDraftLocally}
-        onExit={() => setExitModalOpen(true)}
+        onExit={handleHeaderExit}
         isDraftSaved={isDraftSaved}
         savingDraft={savingDraft}
         lastSavedTime={lastSavedTime}
@@ -629,7 +645,7 @@ export default function BusinessApplicationPage() {
                 <EmailVerificationStep
                   data={formData.emailVerification}
                   onChange={(next) => {
-                    setFormData((prev) => ({
+                    updateUserFormData((prev) => ({
                       ...prev,
                       emailVerification: next,
                       businessInfo: {
@@ -649,7 +665,7 @@ export default function BusinessApplicationPage() {
               {currentStep === 2 && (
                 <BusinessInformationStep
                   data={formData.businessInfo}
-                  onChange={(next) => setFormData((prev) => ({ ...prev, businessInfo: next }))}
+                  onChange={(next) => updateUserFormData((prev) => ({ ...prev, businessInfo: next }))}
                   verifiedEmail={formData.emailVerification?.verifiedEmail || formData.emailVerification?.email || ''}
                   errors={validationErrors}
                 />
@@ -658,7 +674,7 @@ export default function BusinessApplicationPage() {
               {currentStep === 3 && (
                 <RepresentativeInformationStep
                   data={formData.representative}
-                  onChange={(next) => setFormData((prev) => ({ ...prev, representative: next }))}
+                  onChange={(next) => updateUserFormData((prev) => ({ ...prev, representative: next }))}
                   verifiedEmail={formData.emailVerification?.verifiedEmail || formData.emailVerification?.email || ''}
                   errors={validationErrors}
                   currentUser={user}
@@ -680,7 +696,7 @@ export default function BusinessApplicationPage() {
               {currentStep === 5 && (
                 <BusinessAddressStep
                   data={formData.address}
-                  onChange={(next) => setFormData((prev) => ({ ...prev, address: next }))}
+                  onChange={(next) => updateUserFormData((prev) => ({ ...prev, address: next }))}
                   errors={validationErrors}
                 />
               )}
@@ -688,7 +704,7 @@ export default function BusinessApplicationPage() {
               {currentStep === 6 && (
                 <PayoutInformationStep
                   data={formData.payout}
-                  onChange={(next) => setFormData((prev) => ({ ...prev, payout: next }))}
+                  onChange={(next) => updateUserFormData((prev) => ({ ...prev, payout: next }))}
                   errors={validationErrors}
                 />
               )}
@@ -696,7 +712,7 @@ export default function BusinessApplicationPage() {
               {currentStep === 7 && (
                 <RestaurantConfigurationStep
                   data={formData.configuration}
-                  onChange={(next) => setFormData((prev) => ({ ...prev, configuration: next }))}
+                  onChange={(next) => updateUserFormData((prev) => ({ ...prev, configuration: next }))}
                   errors={validationErrors}
                 />
               )}
@@ -705,10 +721,11 @@ export default function BusinessApplicationPage() {
                 <ApplicationReviewStep
                   applicationData={formData}
                   onNavigateToStep={handleDirectStepJump}
-                  onDeclarationChange={(next) => setFormData((prev) => ({ ...prev, review: next }))}
+                  onDeclarationChange={(next) => updateUserFormData((prev) => ({ ...prev, review: next }))}
                   onSubmitApplication={handleSubmitApplication}
                   submitting={submitting}
                   allRequiredValid={areAllRequiredStepsValid()}
+                  missingRequirements={missingRequirements}
                 />
               )}
 
@@ -781,9 +798,9 @@ export default function BusinessApplicationPage() {
         isOpen={exitModalOpen}
         open={exitModalOpen}
         onClose={() => setExitModalOpen(false)}
-        onSaveAndExit={() => {
-          saveDraftLocally();
-          handleExitConfirm();
+        onSaveAndExit={async () => {
+          const ok = await saveDraftLocally();
+          if (ok) handleExitConfirm();
         }}
         onExitWithoutSaving={handleExitConfirm}
         isSaving={savingDraft}

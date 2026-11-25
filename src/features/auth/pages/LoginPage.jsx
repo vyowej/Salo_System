@@ -5,7 +5,7 @@ import { Input, PasswordField } from '../../../components/forms';
 import Button from '../../../components/common/Button';
 import { useAuth } from '../../../hooks/useAuth';
 import accountService from '../../../services/accountService';
-import authService, { getDefaultWorkspace, getWorkspaceHomePath } from '../../../services/authService';
+import authService, { resolvePostLoginDestination } from '../../../services/authService';
 import './LoginPage.css';
 
 export default function LoginPage({ embedded = false, onSwitch }) {
@@ -31,16 +31,7 @@ export default function LoginPage({ embedded = false, onSwitch }) {
     }
   }, [location.search]);
 
-  const getDestination = (resUser) => {
-    const workspace = resUser?.role || getDefaultWorkspace(resUser?.roles);
-    if (location.state?.from?.pathname) {
-      const { pathname, search = '', hash = '' } = location.state.from;
-      if (workspace !== 'admin' || pathname.startsWith('/admin')) {
-        return `${pathname}${search}${hash}`;
-      }
-    }
-    return getWorkspaceHomePath(workspace);
-  };
+  const getDestination = (resUser) => resolvePostLoginDestination(resUser, location.state?.from);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;

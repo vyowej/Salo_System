@@ -4,9 +4,14 @@
  */
 
 import { CAMERA_CONFIG } from '../constants/cameraConfig.js';
+import { saveDraftFiles, loadDraftFiles, clearDraftFiles } from '../../../services/draftFileStore.js';
 
 export const RIDER_DRAFT_STORAGE_KEY = 'salo_rider_app_draft_v1';
 export const RIDER_APPLICATIONS_STORAGE_KEY = 'salo_rider_applications';
+
+export function getRiderDraftScope(ownerUserId) {
+  return ownerUserId ? `rider_${ownerUserId}` : 'rider_anon';
+}
 
 /**
  * Compresses an image (Blob, File, or DataURL) to a JPEG data URL via HTML Canvas.
@@ -206,8 +211,89 @@ export function isRiderDraftOwnedByUser(draft, currentUser) {
   return true;
 }
 
+function collectRiderDraftFiles(formData) {
+  const filesMap = {};
+  if (!formData) return filesMap;
+
+  if (formData.identity) {
+    ['frontPhoto', 'backPhoto', 'selfiePhoto'].forEach((k) => {
+      if (formData.identity[k]) filesMap[`identity:${k}`] = formData.identity[k];
+    });
+  }
+  if (formData.vehicleInfo?.vehiclePhoto) {
+    filesMap['vehicle:vehiclePhoto'] = formData.vehicleInfo.vehiclePhoto;
+  }
+  Object.entries(formData.vehicleDocuments || {}).forEach(([docId, doc]) => {
+    if (doc) filesMap[`vehDoc:${docId}`] = doc;
+  });
+  Object.entries(formData.clearanceDocuments || {}).forEach(([docId, doc]) => {
+    if (doc) filesMap[`clrDoc:${docId}`] = doc;
+  });
+  if (formData.payout?.proofDocument) {
+    filesMap['payout:proofDocument'] = formData.payout.proofDocument;
+  }
+  return filesMap;
+}
+
+export async function restoreRiderDraftFiles(formData, ownerUserId = null) {
+  const files = await loadDraftFiles(getRiderDraftScope(ownerUserId));
+  if (!files || Object.keys(files).length === 0) return formData;
+
+  const mergeEntry = (existing, restored) => {
+    if (!restored) return existing;
+    return {
+      ...(existing || {}),
+      ...restored,
+      previewUrl: restored.previewUrl || existing?.previewUrl || restored.dataUrl || existing?.dataUrl || null,
+    };
+  };
+
+  const next = { ...formData };
+  if (next.identity) {
+    next.identity = {
+      ...next.identity,
+      frontPhoto: mergeEntry(next.identity.frontPhoto, files['identity:frontPhoto']),
+      backPhoto: mergeEntry(next.identity.backPhoto, files['identity:backPhoto']),
+      selfiePhoto: mergeEntry(next.identity.selfiePhoto, files['identity:selfiePhoto']),
+    };
+  }
+  if (next.vehicleInfo) {
+    next.vehicleInfo = {
+      ...next.vehicleInfo,
+      vehiclePhoto: mergeEntry(next.vehicleInfo.vehiclePhoto, files['vehicle:vehiclePhoto']),
+    };
+  }
+  if (next.vehicleDocuments) {
+    const nextVeh = { ...next.vehicleDocuments };
+    Object.entries(files).forEach(([slot, restored]) => {
+      if (slot.startsWith('vehDoc:')) {
+        const docId = slot.slice(7);
+        nextVeh[docId] = mergeEntry(nextVeh[docId], restored);
+      }
+    });
+    next.vehicleDocuments = nextVeh;
+  }
+  if (next.clearanceDocuments) {
+    const nextClr = { ...next.clearanceDocuments };
+    Object.entries(files).forEach(([slot, restored]) => {
+      if (slot.startsWith('clrDoc:')) {
+        const docId = slot.slice(7);
+        nextClr[docId] = mergeEntry(nextClr[docId], restored);
+      }
+    });
+    next.clearanceDocuments = nextClr;
+  }
+  if (next.payout) {
+    next.payout = {
+      ...next.payout,
+      proofDocument: mergeEntry(next.payout.proofDocument, files['payout:proofDocument']),
+    };
+  }
+  return next;
+}
+
 /**
- * Saves rider application progress to localStorage.
+ * Saves rider application progress to localStorage + IndexedDB (for binary files/PDFs).
  * Throws an Error with friendly message if storage quota is exceeded.
  */
 export async function saveRiderDraft({
@@ -220,6 +306,8 @@ export async function saveRiderDraft({
   if (typeof window === 'undefined' || !window.localStorage) {
     throw new Error('Local storage is not available in this browser environment.');
   }
+
+  await saveDraftFiles(getRiderDraftScope(ownerUserId), collectRiderDraftFiles(formData));
 
   const timestamp = new Date().toISOString();
   const serializedData = await serializeFormData(formData);
@@ -295,9 +383,10 @@ export function loadRiderDraft(currentUser = null) {
 }
 
 /**
- * Clears the saved draft from localStorage.
+ * Clears the saved draft from localStorage and IndexedDB.
  */
-export function clearRiderDraft() {
+export function clearRiderDraft(ownerUserId = null) {
+  clearDraftFiles(getRiderDraftScope(ownerUserId)).catch(() => {});
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     window.localStorage.removeItem(RIDER_DRAFT_STORAGE_KEY);

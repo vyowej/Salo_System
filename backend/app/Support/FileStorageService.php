@@ -8,6 +8,7 @@ use App\Support\Storage\GoogleDrivePublicImageStore;
 use App\Support\Storage\ImageProcessor;
 use App\Support\Storage\ImageStorageUnavailableException;
 use App\Support\Storage\PublicImageStore;
+use Illuminate\Http\Request;
 use App\Support\Storage\StoragePurpose;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -456,16 +457,53 @@ class FileStorageService
         return $trimmed === '' ? null : $trimmed;
     }
 
-    public function streamPrivateFile(string $path, string $downloadName, string $mimeType): StreamedResponse
-    {
+    public function streamPrivateFile(
+        string $path,
+        string $downloadName,
+        string $mimeType,
+        bool $thumbnail = false,
+        ?Request $request = null,
+    ): Response {
         $normalized = $this->normalizeRelativePath($path) ?? $path;
         /** @var \Illuminate\Filesystem\FilesystemAdapter $localDisk */
         $localDisk = Storage::disk('local');
         abort_unless($localDisk->exists($normalized), 404, 'Document file not found.');
 
+        $etag = '"'.sha1($normalized.($thumbnail ? ':thumb' : '')).'"';
+        if ($request !== null && $request->headers->get('If-None-Match') === $etag) {
+            return response('', 304, [
+                'ETag' => $etag,
+                'Cache-Control' => 'private, max-age=300',
+            ]);
+        }
+
+        if ($thumbnail && str_starts_with($mimeType, 'image/')) {
+            $thumbRel = 'private_thumbs/'.sha1($normalized).'.jpg';
+            if (! $localDisk->exists($thumbRel)) {
+                $fullPath = $localDisk->path($normalized);
+                $resized = ImageProcessor::sanitizeAndOptimize($fullPath, $mimeType, 320);
+                if ($resized !== null && is_file($resized)) {
+                    $thumbBytes = @file_get_contents($resized);
+                    @unlink($resized);
+                    if ($thumbBytes !== false) {
+                        $localDisk->put($thumbRel, $thumbBytes);
+                    }
+                }
+            }
+            if ($localDisk->exists($thumbRel)) {
+                return $localDisk->response($thumbRel, $downloadName, [
+                    'Content-Type' => 'image/jpeg',
+                    'Cache-Control' => 'private, max-age=300',
+                    'ETag' => $etag,
+                    'X-Content-Type-Options' => 'nosniff',
+                ]);
+            }
+        }
+
         return $localDisk->response($normalized, $downloadName, [
             'Content-Type' => $mimeType,
-            'Cache-Control' => 'private, no-store, max-age=0',
+            'Cache-Control' => 'private, max-age=300',
+            'ETag' => $etag,
             'X-Content-Type-Options' => 'nosniff',
         ]);
     }
@@ -473,11 +511,36 @@ class FileStorageService
     /**
      * Stream a private file from either Google Drive (enforcing visibility=private) or local storage.
      */
-    public function streamPrivateStoredFile(string $path, ?string $downloadName, string $mimeType): Response
-    {
+    public function streamPrivateStoredFile(
+        string $path,
+        ?string $downloadName,
+        string $mimeType,
+        bool $thumbnail = false,
+        ?Request $request = null,
+    ): Response {
         $trimmed = trim($path);
         if (! str_starts_with($trimmed, GoogleDrivePublicImageStore::PREFIX)) {
-            return $this->streamPrivateFile($trimmed, $downloadName ?: basename($trimmed), $mimeType);
+            return $this->streamPrivateFile($trimmed, $downloadName ?: basename($trimmed), $mimeType, $thumbnail, $request);
+        }
+
+        $etag = '"'.sha1($trimmed.($thumbnail ? ':thumb' : '')).'"';
+        if ($request !== null && $request->headers->get('If-None-Match') === $etag) {
+            return response('', 304, [
+                'ETag' => $etag,
+                'Cache-Control' => 'private, max-age=300',
+            ]);
+        }
+
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $localDisk */
+        $localDisk = Storage::disk('local');
+        $thumbRel = 'private_thumbs/'.sha1($trimmed).'.jpg';
+        if ($thumbnail && str_starts_with($mimeType, 'image/') && $localDisk->exists($thumbRel)) {
+            return $localDisk->response($thumbRel, $downloadName ?: 'thumb.jpg', [
+                'Content-Type' => 'image/jpeg',
+                'Cache-Control' => 'private, max-age=300',
+                'ETag' => $etag,
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
         }
 
         $result = $this->drive()->readStream($trimmed);
@@ -504,11 +567,36 @@ class FileStorageService
         $safeName = str_replace(['"', "\r", "\n"], '', $downloadName ?: 'document');
         $resolvedMime = $mimeType !== '' ? $mimeType : (string) ($result['mime'] ?? 'application/octet-stream');
 
+        if ($thumbnail && str_starts_with($resolvedMime, 'image/')) {
+            $tmpFile = tempnam(sys_get_temp_dir(), 'salo_thumb_');
+            if ($tmpFile !== false) {
+                @file_put_contents($tmpFile, $bytes);
+                $resized = ImageProcessor::sanitizeAndOptimize($tmpFile, $resolvedMime, 320);
+                @unlink($tmpFile);
+                if ($resized !== null && is_file($resized)) {
+                    $thumbBytes = @file_get_contents($resized);
+                    @unlink($resized);
+                    if ($thumbBytes !== false) {
+                        $localDisk->put($thumbRel, $thumbBytes);
+                        return response($thumbBytes, 200, [
+                            'Content-Type' => 'image/jpeg',
+                            'Content-Length' => (string) strlen($thumbBytes),
+                            'Content-Disposition' => 'inline; filename="'.$safeName.'"',
+                            'Cache-Control' => 'private, max-age=300',
+                            'ETag' => $etag,
+                            'X-Content-Type-Options' => 'nosniff',
+                        ]);
+                    }
+                }
+            }
+        }
+
         return response($bytes, 200, [
             'Content-Type' => $resolvedMime,
             'Content-Length' => (string) strlen($bytes),
             'Content-Disposition' => 'inline; filename="'.$safeName.'"',
-            'Cache-Control' => 'private, no-store, max-age=0',
+            'Cache-Control' => 'private, max-age=300',
+            'ETag' => $etag,
             'X-Content-Type-Options' => 'nosniff',
         ]);
     }
