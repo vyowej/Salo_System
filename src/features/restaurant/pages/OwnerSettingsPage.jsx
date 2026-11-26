@@ -80,7 +80,7 @@ export default function OwnerSettingsPage() {
   const canEditBusiness = can?.('business.profile.edit') ?? true;
   const canManagePhotos = can?.('business.photos.manage') ?? true;
 
-  const [activeSection, setActiveSection] = useState('account');
+  const [activeSection, setActiveSection] = useState(sections[0]?.id || 'business');
   const [loadingState, setLoadingState] = useState('loading');
   const [restaurant, setRestaurant] = useState(null);
   const [payoutAccount, setPayoutAccount] = useState(null);
@@ -948,9 +948,9 @@ export default function OwnerSettingsPage() {
   return (
     <OwnerLayout>
       <UnifiedSettingsShell
-        eyebrow="Restaurant preferences"
-        title="Settings"
-        subtitle="Manage your restaurant channels, branding, reservations, verified identity, and security."
+        eyebrow="Restaurant Mode"
+        title="Restaurant Settings"
+        subtitle="Manage your restaurant availability, orders, reservations, payouts, and shared account settings."
         sections={sections}
         activeSection={activeSection}
         onSectionChange={setActiveSection}

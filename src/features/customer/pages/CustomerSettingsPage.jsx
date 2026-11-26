@@ -43,7 +43,7 @@ export default function CustomerSettingsPage() {
   const { addresses, addAddress } = useAddresses();
   const sections = getSettingsSectionsForRole('customer');
 
-  const [activeSection, setActiveSection] = useState('account');
+  const [activeSection, setActiveSection] = useState(sections[0]?.id || 'addresses');
   const [savedSettings, setSavedSettings] = useState({
     notifications: INITIAL_NOTIFICATIONS,
     security: INITIAL_SECURITY,
@@ -337,9 +337,9 @@ export default function CustomerSettingsPage() {
   return (
     <CustomerLayout>
       <UnifiedSettingsShell
-        eyebrow="Customer preferences"
-        title="Settings"
-        subtitle="Manage your SALO account, saved addresses, notifications, security, and privacy."
+        eyebrow="Customer Mode"
+        title="Customer Settings"
+        subtitle="Manage your delivery details, customer notifications, and shared account settings."
         sections={sections}
         activeSection={activeSection}
         onSectionChange={setActiveSection}

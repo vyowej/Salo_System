@@ -10,7 +10,7 @@ function groupSections(sections) {
   for (const section of sections) {
     const groupName = section.group || 'General';
     if (!map.has(groupName)) {
-      const entry = { label: groupName, items: [] };
+      const entry = { label: groupName, hint: section.groupHint || '', items: [] };
       map.set(groupName, entry);
       groups.push(entry);
     }
@@ -85,6 +85,7 @@ export default function UnifiedSettingsShell({
             {groups.map((group) => (
               <div key={group.label} className="salo-settings-nav-group">
                 <p className="salo-settings-nav-group-label">{group.label}</p>
+                {group.hint && <p className="salo-settings-nav-group-hint">{group.hint}</p>}
                 {group.items.map((item) => (
                   <button
                     key={item.id}
@@ -105,6 +106,7 @@ export default function UnifiedSettingsShell({
             {groups.map((group) => (
               <div key={group.label} className="salo-settings-mobile-group">
                 <p className="salo-settings-nav-group-label">{group.label}</p>
+                {group.hint && <p className="salo-settings-nav-group-hint">{group.hint}</p>}
                 {group.items.map((item) => (
                   <button
                     key={item.id}

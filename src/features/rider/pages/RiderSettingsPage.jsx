@@ -68,7 +68,7 @@ export default function RiderSettingsPage() {
   const { user } = useAuth();
   const sections = getSettingsSectionsForRole('rider');
 
-  const [activeSection, setActiveSection] = useState('account');
+  const [activeSection, setActiveSection] = useState(sections[0]?.id || 'driver_mode');
   const [loadingState, setLoadingState] = useState('loading');
   const [riderProfile, setRiderProfile] = useState(null);
   const [availability, setAvailability] = useState({ status: 'offline', is_online: false });
@@ -493,35 +493,34 @@ export default function RiderSettingsPage() {
 
       case 'privacy':
         return (
-          <SettingsCard title="Customer Privacy & Data Handling" description="Rules for handling customer addresses and contact numbers.">
-            <div className="salo-settings-toggle-list">
-              <SettingsToggleRow
-                id="rider-privacy-ack"
-                label="Acknowledge customer contact privacy"
-                description="Use customer phone numbers and delivery addresses solely for active order fulfillment."
-                checked={accountSettings.privacy.riderContactPrivacyAck}
-                onChange={(checked) => {
-                  setAccountSettings((prev) => ({
-                    ...prev,
-                    privacy: { ...prev.privacy, riderContactPrivacyAck: checked },
-                  }));
-                  setDirty(true);
-                }}
-              />
-            </div>
-          </SettingsCard>
-        );
+          <>
+            <SettingsCard title="Customer Privacy & Data Handling" description="Rules for handling customer addresses and contact numbers.">
+              <div className="salo-settings-toggle-list">
+                <SettingsToggleRow
+                  id="rider-privacy-ack"
+                  label="Acknowledge customer contact privacy"
+                  description="Use customer phone numbers and delivery addresses solely for active order fulfillment."
+                  checked={accountSettings.privacy.riderContactPrivacyAck}
+                  onChange={(checked) => {
+                    setAccountSettings((prev) => ({
+                      ...prev,
+                      privacy: { ...prev.privacy, riderContactPrivacyAck: checked },
+                    }));
+                    setDirty(true);
+                  }}
+                />
+              </div>
+            </SettingsCard>
 
-      case 'terms':
-        return (
-          <SettingsCard title="SALO Rider Service Agreement" description="Core operational commitments for active SALO delivery partners.">
-            <ul style={{ margin: 0, paddingLeft: '18px', color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)', lineHeight: 1.7 }}>
-              <li>Maintain valid vehicle registration, driver&apos;s license (where applicable), and safety gear while online.</li>
-              <li>Handle food and beverages hygienically and deliver directly to the customer&apos;s specified address.</li>
-              <li>Update delivery milestones (picked up, delivered) accurately and collect COD amounts transparently.</li>
-              <li>Never retain or misuse customer phone numbers or personal details after delivery completion.</li>
-            </ul>
-          </SettingsCard>
+            <SettingsCard title="SALO Rider Service Agreement" description="Core operational commitments for active SALO delivery partners.">
+              <ul style={{ margin: 0, paddingLeft: '18px', color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)', lineHeight: 1.7 }}>
+                <li>Maintain valid vehicle registration, driver&apos;s license (where applicable), and safety gear while online.</li>
+                <li>Handle food and beverages hygienically and deliver directly to the customer&apos;s specified address.</li>
+                <li>Update delivery milestones (picked up, delivered) accurately and collect COD amounts transparently.</li>
+                <li>Never retain or misuse customer phone numbers or personal details after delivery completion.</li>
+              </ul>
+            </SettingsCard>
+          </>
         );
 
       case 'notifications':
@@ -619,9 +618,9 @@ export default function RiderSettingsPage() {
   return (
     <>
       <UnifiedSettingsShell
-        eyebrow="Rider preferences"
-        title="Settings"
-        subtitle="Manage your driver mode, vehicle verification requests, GPS, notifications, and security."
+        eyebrow="Rider Mode"
+        title="Rider Settings"
+        subtitle="Manage your driver mode, vehicle verification, GPS, notifications, and shared account settings."
         sections={sections}
         activeSection={activeSection}
         onSectionChange={setActiveSection}
