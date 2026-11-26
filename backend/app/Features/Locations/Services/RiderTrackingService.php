@@ -252,7 +252,7 @@ class RiderTrackingService
             'pickup' => [
                 'restaurant_id' => (int) $order->restaurant_id,
                 'restaurant_name' => $order->restaurant_name,
-                'address' => trim(($order->restaurant_street ? $order->restaurant_street . ', ' : '') . "Brgy. {$order->restaurant_barangay}, {$order->restaurant_city}, {$order->restaurant_province}"),
+                'address' => \App\Support\AddressFormatter::format($order),
                 'latitude' => $order->restaurant_latitude !== null ? (float) $order->restaurant_latitude : null,
                 'longitude' => $order->restaurant_longitude !== null ? (float) $order->restaurant_longitude : null,
             ],

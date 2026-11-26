@@ -341,13 +341,7 @@ export default function ApplicationReviewStep({
             <div className="review-item full-width">
               <span className="review-label">Full Street Address</span>
               <span className="review-value font-strong">
-                {[
-                  address.street,
-                  address.barangay ? `Brgy. ${address.barangay}` : null,
-                  address.city,
-                  address.province,
-                  address.postalCode,
-                ].filter(Boolean).join(', ') || '—'}
+                {formatBranchAddressSummary(address) || '—'}
               </span>
             </div>
             <div className="review-item">

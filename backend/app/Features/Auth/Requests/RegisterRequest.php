@@ -2,6 +2,7 @@
 
 namespace App\Features\Auth\Requests;
 
+use App\Support\PasswordPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 
 class RegisterRequest extends FormRequest
@@ -37,12 +38,20 @@ class RegisterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'username' => ['required', 'string', 'min:3', 'max:50', 'regex:/^[a-zA-Z0-9._-]+$/', 'unique:users,username'],
+            'username' => ['required', 'string', 'min:3', 'max:30', 'regex:/^[a-zA-Z0-9_]+$/', 'unique:users,username'],
             'first_name' => ['required', 'string', 'max:100'],
             'middle_initial' => ['nullable', 'string', 'size:1', 'regex:/^[a-zA-Z]$/'],
             'last_name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => [
+                'required',
+                'string',
+                'confirmed',
+                new PasswordPolicy(
+                    username: (string) $this->input('username', ''),
+                    email: (string) $this->input('email', ''),
+                ),
+            ],
         ];
     }
 

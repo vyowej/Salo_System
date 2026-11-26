@@ -16,6 +16,7 @@ import { AdminSearchProvider } from './features/admin/contexts/AdminSearchContex
 const LandingPage = lazy(() => import('./features/public/pages/LandingPage'));
 const ForgotPasswordPage = lazy(() => import('./features/auth/pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./features/auth/pages/ResetPasswordPage'));
+const GoogleCompletePage = lazy(() => import('./features/auth/pages/GoogleCompletePage'));
 
 // Customer Module (Phase 3)
 const CustomerDashboard = lazy(() => import('./features/customer/pages/CustomerDashboard'));
@@ -367,6 +368,7 @@ function AppShell() {
           <Route path="/register" element={<LandingPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/google-complete" element={<GoogleCompletePage />} />
 
           {/* ── Customer Module (Phase 3) ── */}
           <Route element={<ProtectedRoute><Outlet /></ProtectedRoute>}>

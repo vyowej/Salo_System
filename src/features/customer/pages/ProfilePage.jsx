@@ -4,11 +4,13 @@ import CustomerLayout from '../../../layouts/CustomerLayout';
 import { useAuth } from '../../../hooks/useAuth';
 import useAddresses from '../../../hooks/useAddresses';
 import accountService from '../../../services/accountService';
-import { Input } from '../../../components/forms';
+import { Input, PasswordStrengthMeter } from '../../../components/forms';
+import { getPasswordPolicyError } from '../../../utils/passwordPolicy';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import { AccountLifecycleModals } from '../../../components/settings/AccountLifecycleModals';
 import AddressFormModal from '../components/AddressFormModal';
+import { formatFormalAddress } from '../../../utils/addressFormatter';
 import ContactNumbersManager from '../components/ContactNumbersManager';
 import './ProfilePage.css';
 
@@ -196,9 +198,12 @@ export default function ProfilePage() {
 
     const nextErrors = {};
     if (!passwords.old)    nextErrors.old    = 'Current password is required.';
+    const pwPolicyErr = passwords.newPw
+      ? getPasswordPolicyError(passwords.newPw, { username: user?.username, email: user?.email })
+      : null;
     if (!passwords.newPw)  nextErrors.newPw  = 'New password is required.';
-    else if (passwords.newPw.length < 8)
-      nextErrors.newPw = 'Password must be at least 8 characters.';
+    else if (pwPolicyErr)
+      nextErrors.newPw = pwPolicyErr;
     if (passwords.newPw !== passwords.confirm)
       nextErrors.confirm = 'Passwords do not match.';
     setPwErrors(nextErrors);
@@ -487,6 +492,11 @@ export default function ProfilePage() {
                   onChange={(e) => setPasswords((p) => ({ ...p, newPw: e.target.value }))}
                   error={pwErrors.newPw}
                 />
+                <PasswordStrengthMeter
+                  password={passwords.newPw}
+                  username={user?.username}
+                  email={user?.email}
+                />
               </div>
             </div>
 
@@ -674,14 +684,7 @@ export default function ProfilePage() {
                     )}
                   </div>
                   <p className="profile-address-card__body">
-                    {[
-                      address.street,
-                      address.barangay && `Brgy. ${address.barangay}`,
-                      address.city,
-                      address.province,
-                    ]
-                      .filter(Boolean)
-                      .join(', ')}
+                    {formatFormalAddress(address)}
                   </p>
                   {address.notes && (
                     <p className="profile-address-card__meta">

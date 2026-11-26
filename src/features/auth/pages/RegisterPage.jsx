@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from '../../../layouts/AuthLayout';
-import { Input, PasswordField } from '../../../components/forms';
+import { Input, PasswordField, PasswordStrengthMeter } from '../../../components/forms';
 import Button from '../../../components/common/Button';
+import { getPasswordPolicyError } from '../../../utils/passwordPolicy';
+import { validateUsernameFormat } from '../../../utils/usernamePolicy';
+import authService from '../../../services/authService';
 import { useAuth } from '../../../hooks/useAuth';
-import { sanitizeMiddleInitial, toUsernameSlug } from '../utils/registerFieldUtils';
+import { sanitizeMiddleInitial } from '../utils/registerFieldUtils';
 import './RegisterPage.css';
 
 export default function RegisterPage({ embedded = false, onSwitch }) {
@@ -24,23 +27,43 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
 
   const [passwordResetKey, setPasswordResetKey] = useState(0);
   const [error, setError] = useState(null);
-  // Track whether the user has manually customised the username field
-  const isUsernameCustomized = useRef(false);
+  const [usernameStatus, setUsernameStatus] = useState({ status: 'idle', message: '' });
 
-  // Auto-generate username from first + last name ONLY (never includes middle initial)
   useEffect(() => {
-    if (isUsernameCustomized.current) return;
-    const slug = toUsernameSlug(formData.firstName + formData.lastName);
-    setFormData((prev) => ({ ...prev, username: slug }));
-  }, [formData.firstName, formData.lastName]);
+    const trimmed = formData.username.trim();
+    if (!trimmed) {
+      setUsernameStatus({ status: 'idle', message: '' });
+      return undefined;
+    }
+    const fmt = validateUsernameFormat(trimmed);
+    if (!fmt.valid) {
+      setUsernameStatus({ status: 'invalid', message: fmt.message });
+      return undefined;
+    }
+
+    let active = true;
+    setUsernameStatus({ status: 'checking', message: 'Checking availability...' });
+    const timer = setTimeout(async () => {
+      try {
+        const res = await authService.checkUsernameAvailable(trimmed);
+        if (!active) return;
+        setUsernameStatus({
+          status: res.available ? 'available' : 'taken',
+          message: res.message,
+        });
+      } catch {
+        if (active) setUsernameStatus({ status: 'idle', message: '' });
+      }
+    }, 300);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [formData.username]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-
-    if (name === 'username') {
-      // Once the user touches the username field, stop auto-generating
-      isUsernameCustomized.current = true;
-    }
 
     if (name === 'middleInitial') {
       const cleaned = sanitizeMiddleInitial(value);
@@ -73,16 +96,25 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
       setError('Please provide your last name.');
       return;
     }
-    if (!formData.username.trim() || formData.username.length < 3) {
-      setError('Username must be at least 3 characters long.');
+    const usernameFmt = validateUsernameFormat(formData.username);
+    if (!usernameFmt.valid) {
+      setError(usernameFmt.message);
+      return;
+    }
+    if (usernameStatus.status === 'taken') {
+      setError(usernameStatus.message || 'This username is already taken.');
       return;
     }
     if (!formData.email.trim() || !formData.email.includes('@')) {
       setError('Please enter a valid email address.');
       return;
     }
-    if (!formData.password || formData.password.length < 8) {
-      setError('Password must be at least 8 characters long.');
+    const pwPolicyErr = getPasswordPolicyError(formData.password, {
+      username: formData.username,
+      email: formData.email,
+    });
+    if (pwPolicyErr) {
+      setError(pwPolicyErr);
       return;
     }
     if (formData.password !== formData.passwordConfirmation) {
@@ -202,8 +234,25 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
             autoComplete="username"
           />
           <p className="register-field-hint">
-            Your unique handle on SALO — auto-suggested from your name, or customize it.
+            3–30 characters: letters, numbers, and underscores only (no spaces).
           </p>
+          {usernameStatus.status !== 'idle' && (
+            <p
+              role="status"
+              style={{
+                margin: '4px 0 0',
+                fontSize: 12,
+                color:
+                  usernameStatus.status === 'available'
+                    ? '#16a34a'
+                    : usernameStatus.status === 'checking'
+                    ? 'var(--text-muted)'
+                    : '#dc2626',
+              }}
+            >
+              {usernameStatus.message}
+            </p>
+          )}
         </div>
 
         {/* Row 4 — Passwords (independent per-field eye toggles) */}
@@ -232,6 +281,12 @@ export default function RegisterPage({ embedded = false, onSwitch }) {
             resetKey={passwordResetKey}
           />
         </div>
+
+        <PasswordStrengthMeter
+          password={formData.password}
+          username={formData.username}
+          email={formData.email}
+        />
 
         <label className="checkbox-group" style={{ fontSize: 'var(--font-size-xs)', alignItems: 'flex-start', marginTop: 'var(--space-1)' }}>
           <input

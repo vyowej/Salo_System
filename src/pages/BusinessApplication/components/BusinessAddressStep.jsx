@@ -20,6 +20,11 @@ export default function BusinessAddressStep({
   data,
   onChange,
   errors = {},
+  usingSavedAddress = false,
+  hasSavedAddresses = true,
+  saveAddressToAccount = false,
+  onToggleSaveAddressToAccount,
+  onUseDifferentAddress,
 }) {
   const [pinTarget, setPinTarget] = useState(null); // null | { type: 'main' } | { type: 'branch', index: number }
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
@@ -129,19 +134,56 @@ export default function BusinessAddressStep({
       </div>
 
       <div className="wizard-form-grid">
-        <PhilippineAddressFields
-          value={{
-            province: data.province || '',
-            city: data.city || '',
-            barangay: data.barangay || '',
-            street: data.street || '',
-            houseNumber: data.houseNumber || '',
-            postalCode: data.postalCode || '',
-            notes: data.additionalDetails || '',
-          }}
-          onChange={handleAddressChange}
-          errors={errors}
-        />
+        {usingSavedAddress ? (
+          <div
+            className="wizard-address-pin-card"
+            style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12 }}
+          >
+            <div>
+              <strong style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
+                Using your saved SALO address
+              </strong>
+              <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                {formatBranchAddressSummary(data)}
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onUseDifferentAddress}
+            >
+              Use a different address
+            </Button>
+          </div>
+        ) : (
+          <>
+            <PhilippineAddressFields
+              value={{
+                province: data.province || '',
+                city: data.city || '',
+                barangay: data.barangay || '',
+                street: data.street || '',
+                houseNumber: data.houseNumber || '',
+                postalCode: data.postalCode || '',
+                notes: data.additionalDetails || '',
+              }}
+              onChange={handleAddressChange}
+              errors={errors}
+            />
+
+            {!hasSavedAddresses && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(saveAddressToAccount)}
+                  onChange={(e) => onToggleSaveAddressToAccount?.(e.target.checked)}
+                />
+                <span>Save this address to my SALO account as my default address</span>
+              </label>
+            )}
+          </>
+        )}
 
         {/* Location Pin & Map Representation */}
         <div className="wizard-address-pin-card">

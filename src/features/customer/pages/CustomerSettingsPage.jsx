@@ -7,6 +7,7 @@ import accountService from '../../../services/accountService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import AddressFormModal from '../components/AddressFormModal';
+import { formatFormalAddress } from '../../../utils/addressFormatter';
 import ContactNumbersManager from '../components/ContactNumbersManager';
 import UnifiedSettingsShell from '../../../components/settings/UnifiedSettingsShell';
 import { AccountLifecycleModals } from '../../../components/settings/AccountLifecycleModals';
@@ -180,7 +181,7 @@ export default function CustomerSettingsPage() {
                       {address.isDefault && <Badge variant="success" size="sm">Default</Badge>}
                     </div>
                     <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                      {[address.street, address.barangay && `Brgy. ${address.barangay}`, address.city, address.province].filter(Boolean).join(', ')}
+                      {formatFormalAddress(address)}
                     </p>
                   </article>
                 ))}

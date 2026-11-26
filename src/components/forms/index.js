@@ -9,3 +9,4 @@ export {
   ErrorMessage,
 } from './FormElements';
 export { PasswordField } from './PasswordField';
+export { default as PasswordStrengthMeter } from './PasswordStrengthMeter';

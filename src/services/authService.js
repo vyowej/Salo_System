@@ -208,6 +208,32 @@ export const authService = {
     });
     return response?.data?.url || '';
   },
+
+  async checkUsernameAvailable(username) {
+    const response = await apiClient.get(
+      `/auth/username-available?username=${encodeURIComponent(String(username || '').trim())}`,
+      { skipAuthInvalidEvent: true },
+    );
+    return response?.data || { valid: false, available: false, message: '' };
+  },
+
+  async getGooglePendingSignup() {
+    const response = await apiClient.get('/auth/google/pending', {
+      skipAuthInvalidEvent: true,
+    });
+    return response?.data?.pending || null;
+  },
+
+  async completeGoogleSignup(username) {
+    invalidateInFlightCurrentUser();
+    const response = await apiClient.post(
+      '/auth/google/complete',
+      { username: String(username || '').trim() },
+      { skipAuthInvalidEvent: true },
+    );
+    invalidateInFlightCurrentUser();
+    return { user: normalizeUser(response?.data?.user) };
+  },
 };
 
 export default authService;

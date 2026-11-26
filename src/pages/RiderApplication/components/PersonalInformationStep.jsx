@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Input, Select } from '../../../components/forms';
+import Button from '../../../components/common/Button';
 import LinkedAccountBanner from '../../../components/application/LinkedAccountBanner';
+import { formatFormalAddress } from '../../../utils/addressFormatter';
 
 const GENDER_OPTIONS = [
   'Prefer not to say',
@@ -25,6 +27,11 @@ export default function PersonalInformationStep({
   errors = {},
   currentUser = null,
   verifiedEmail = '',
+  usingSavedAddress = false,
+  hasSavedAddresses = true,
+  saveAddressToAccount = false,
+  onToggleSaveAddressToAccount,
+  onUseDifferentAddress,
 }) {
   const [age, setAge] = useState(null);
   const accountName = (currentUser?.name || '').trim();
@@ -207,58 +214,106 @@ export default function PersonalInformationStep({
           <p className="rider-subform-desc">Where you currently reside. Used for zone routing and background clearances.</p>
 
           <div className="rider-form-grid" style={{ marginTop: 'var(--space-3)' }}>
-            <Input
-              id="rider-street"
-              label="House / Unit / Building Number & Street"
-              placeholder="e.g. Unit 2B, 45 Malakas St."
-              value={data.address?.street || ''}
-              onChange={(e) => handleAddressChange('street', e.target.value)}
-              error={errors.street}
-              required
-            />
+            {usingSavedAddress ? (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  border: '1px solid var(--border-primary, #e5e7eb)',
+                  background: 'var(--surface-secondary, #f9fafb)',
+                }}
+              >
+                <div>
+                  <strong style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
+                    Using your saved SALO address
+                  </strong>
+                  <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                    {formatFormalAddress(data.address)}
+                  </span>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={onUseDifferentAddress}>
+                  Use a different address
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Input
+                  id="rider-street"
+                  label="House/Building No. and Street"
+                  placeholder="e.g. 123 Rizal Street"
+                  value={data.address?.street || ''}
+                  onChange={(e) => handleAddressChange('street', e.target.value)}
+                  error={errors.street}
+                  required
+                />
 
-            <div className="grid-cols-2">
-              <Input
-                id="rider-barangay"
-                label="Barangay"
-                placeholder="e.g. Pinyahan"
-                value={data.address?.barangay || ''}
-                onChange={(e) => handleAddressChange('barangay', e.target.value)}
-                error={errors.barangay}
-                required
-              />
+                <div className="grid-cols-2">
+                  <Input
+                    id="rider-barangay"
+                    label="Barangay"
+                    placeholder="e.g. Pinyahan"
+                    value={data.address?.barangay || ''}
+                    onChange={(e) => handleAddressChange('barangay', e.target.value)}
+                    error={errors.barangay}
+                    required
+                  />
 
-              <Input
-                id="rider-city"
-                label="City / Municipality"
-                placeholder="e.g. Quezon City"
-                value={data.address?.city || ''}
-                onChange={(e) => handleAddressChange('city', e.target.value)}
-                error={errors.city}
-                required
-              />
-            </div>
+                  <Input
+                    id="rider-city"
+                    label="City / Municipality"
+                    placeholder="e.g. Quezon City"
+                    value={data.address?.city || ''}
+                    onChange={(e) => handleAddressChange('city', e.target.value)}
+                    error={errors.city}
+                    required
+                  />
+                </div>
 
-            <div className="grid-cols-2">
-              <Input
-                id="rider-province"
-                label="Province / Region"
-                placeholder="e.g. Metro Manila"
-                value={data.address?.province || ''}
-                onChange={(e) => handleAddressChange('province', e.target.value)}
-                required
-              />
+                <div className="grid-cols-2">
+                  <Input
+                    id="rider-province"
+                    label="Province"
+                    placeholder="e.g. Metro Manila"
+                    value={data.address?.province || ''}
+                    onChange={(e) => handleAddressChange('province', e.target.value)}
+                    required
+                  />
 
-              <Input
-                id="rider-postal"
-                label="Postal Code"
-                placeholder="e.g. 1100"
-                value={data.address?.postalCode || ''}
-                onChange={(e) => handleAddressChange('postalCode', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                error={errors.postalCode}
-                required
-              />
-            </div>
+                  <Input
+                    id="rider-postal"
+                    label="Postal Code"
+                    placeholder="e.g. 1100"
+                    value={data.address?.postalCode || ''}
+                    onChange={(e) => handleAddressChange('postalCode', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    error={errors.postalCode}
+                    required
+                  />
+                </div>
+
+                <Input
+                  id="rider-landmark"
+                  label="Landmark (Optional)"
+                  placeholder="e.g. near red gate / church"
+                  value={data.address?.landmark || ''}
+                  onChange={(e) => handleAddressChange('landmark', e.target.value)}
+                />
+
+                {!hasSavedAddresses && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(saveAddressToAccount)}
+                      onChange={(e) => onToggleSaveAddressToAccount?.(e.target.checked)}
+                    />
+                    <span>Save this address to my SALO account as my default address</span>
+                  </label>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>

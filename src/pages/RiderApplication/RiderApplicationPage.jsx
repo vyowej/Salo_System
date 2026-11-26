@@ -30,6 +30,8 @@ import {
 } from './services/riderDraftStorage';
 import { getMissingRiderApplicationRequirements } from './utils/riderValidation';
 import applicationService from '../../services/applicationService';
+import addressService from '../../services/addressService';
+import { hasAddressData, mapSavedAddressToForm } from '../../utils/applicationAddressPrefill';
 import {
   isActiveOrApprovedRiderApplication,
   resolveRiderActiveApplicationConflictRedirect,
@@ -125,6 +127,46 @@ export default function RiderApplicationPage() {
   const submitInFlightRef = useRef(false);
   const [submittedData, setSubmittedData] = useState(null);
   const [existingActiveApp, setExistingActiveApp] = useState(null);
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [usingSavedAddress, setUsingSavedAddress] = useState(false);
+  const [saveAddressToAccount, setSaveAddressToAccount] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    addressService.loadAddresses()
+      .then((list) => {
+        if (!active) return;
+        const rows = Array.isArray(list) ? list : [];
+        setSavedAddresses(rows);
+        const defaultAddr = rows.find((a) => a.isDefault) || rows[0] || null;
+        if (defaultAddr) {
+          setFormData((prev) => {
+            if (hasAddressData(prev.personal?.address)) return prev;
+            const mapped = mapSavedAddressToForm(defaultAddr);
+            setUsingSavedAddress(true);
+            return {
+              ...prev,
+              personal: {
+                ...prev.personal,
+                address: {
+                  ...prev.personal.address,
+                  ...mapped,
+                },
+              },
+              emergency: {
+                ...prev.emergency,
+                preferredCity: mapped.city || prev.emergency.preferredCity,
+              },
+            };
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   // If auth user resolves or switches and initialDraft does not belong to them, reset immediately;
   // otherwise restore any binary files/PDFs from IndexedDB.
@@ -802,6 +844,19 @@ export default function RiderApplicationPage() {
 
       const created = await applicationService.submitRiderApplication(fd);
 
+      if (saveAddressToAccount && savedAddresses.length === 0 && hasAddressData(formData.personal?.address)) {
+        addressService.addAddress({
+          label: 'Home',
+          province: formData.personal.address.province,
+          city: formData.personal.address.city,
+          barangay: formData.personal.address.barangay,
+          street: formData.personal.address.street,
+          postalCode: formData.personal.address.postalCode,
+          notes: formData.personal.address.landmark || '',
+          isDefault: true,
+        }).catch(() => {});
+      }
+
       clearRiderDraft(user?.id ?? user?.user_id ?? null);
       setIsDirty(false);
 
@@ -978,6 +1033,11 @@ export default function RiderApplicationPage() {
                   errors={validationErrors}
                   currentUser={user}
                   verifiedEmail={formData.emailVerification?.verifiedEmail || formData.emailVerification?.email || ''}
+                  usingSavedAddress={usingSavedAddress}
+                  hasSavedAddresses={savedAddresses.length > 0}
+                  saveAddressToAccount={saveAddressToAccount}
+                  onToggleSaveAddressToAccount={setSaveAddressToAccount}
+                  onUseDifferentAddress={() => setUsingSavedAddress(false)}
                 />
               )}
 
@@ -1031,6 +1091,8 @@ export default function RiderApplicationPage() {
                   data={formData.emergency}
                   onChange={handleEmergencyChange}
                   errors={validationErrors}
+                  addressProvince={formData.personal?.address?.province || ''}
+                  addressCity={formData.personal?.address?.city || ''}
                 />
               )}
 

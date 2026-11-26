@@ -5,6 +5,7 @@
  */
 
 import locationApiService from './locationApiService.js';
+import { mergeLegacyStreetLine } from '../utils/addressFormatter.js';
 
 export const ADDRESSES_CHANGED_EVENT = 'salo_addresses_changed';
 
@@ -48,14 +49,15 @@ export function mapBackendAddress(raw) {
 }
 
 export function toBackendAddressPayload(data = {}) {
+  const streetLine = mergeLegacyStreetLine(data);
   return {
     label: (data.label || 'Home').trim(),
     province: (data.province || '').trim(),
     city: (data.city || '').trim(),
     barangay: (data.barangay || '').trim(),
-    street: (data.street || '').trim(),
-    house_number: data.houseNumber ? String(data.houseNumber).trim() : null,
-    building_name: data.buildingName ? String(data.buildingName).trim() : null,
+    street: streetLine,
+    house_number: null,
+    building_name: null,
     landmark: (data.notes || data.landmark || '').slice(0, 500).trim() || null,
     postal_code: data.postalCode ? String(data.postalCode).trim() : null,
     latitude: typeof data.lat === 'number' ? data.lat : null,

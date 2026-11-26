@@ -1,6 +1,7 @@
 import { createContext, useState, useEffect, useCallback } from 'react';
 import authService, { getDefaultWorkspace, normalizeUser } from '../services/authService';
 import contactNumberService from '../services/contactNumberService';
+import { clearDraftFiles } from '../services/draftFileStore';
 
 const AuthContext = createContext(null);
 const ACTIVE_WORKSPACE_STORAGE_KEY = 'salo_active_workspace';
@@ -146,6 +147,25 @@ export function AuthProvider({ children }) {
       await authService.logout();
     } finally {
       writeStoredWorkspaceForUser(currentUserId, null);
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.removeItem('salo_partner_app_draft_v1');
+          localStorage.removeItem('salo_rider_app_draft_v1');
+        } catch {
+          // ignore storage errors
+        }
+      }
+      if (typeof sessionStorage !== 'undefined') {
+        try {
+          sessionStorage.removeItem('salo_partner_app_draft');
+        } catch {
+          // ignore storage errors
+        }
+      }
+      const scopes = currentUserId
+        ? [`partner_${currentUserId}`, `rider_${currentUserId}`, 'partner_anon', 'rider_anon']
+        : ['partner_anon', 'rider_anon'];
+      Promise.all(scopes.map((s) => clearDraftFiles(s))).catch(() => {});
       applyAuthenticatedUser(null);
       setLoading(false);
     }

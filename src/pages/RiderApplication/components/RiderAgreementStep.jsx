@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
+import { formatFormalAddress } from '../../../utils/addressFormatter';
 
 const declarationFields = [
   'infoConfirmed',
@@ -142,13 +143,7 @@ export default function RiderAgreementStep({
             <div className="rider-review-item full-width">
               <span className="rider-review-label">Residential Address</span>
               <span className="rider-review-val">
-                {[
-                  personal.address?.street,
-                  personal.address?.barangay ? `Brgy. ${personal.address.barangay}` : null,
-                  personal.address?.city,
-                  personal.address?.province,
-                  personal.address?.postalCode,
-                ].filter(Boolean).join(', ') || '—'}
+                {formatFormalAddress(personal.address) || '—'}
               </span>
             </div>
           </div>

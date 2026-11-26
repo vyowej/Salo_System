@@ -3,6 +3,7 @@ import Modal from '../../../components/common/Modal';
 import Button from '../../../components/common/Button';
 import { FormGroup, Input, Label, HelperText, ErrorMessage } from '../../../components/forms/FormElements';
 import { PhilippineAddressFields } from '../../../components/location';
+import { formatFormalAddress } from '../../../utils/addressFormatter';
 import LocationPickerModal from '../../../pages/BusinessApplication/components/LocationPickerModal';
 import ownerService from '../../../services/ownerService';
 import { useAuth } from '../../../hooks/useAuth';
@@ -77,9 +78,7 @@ export default function AddBranchModal({ open, onClose, onCreated }) {
 
   const serviceError = errors.offers_delivery || errors.offers_pickup || errors.offers_dine_in;
   const pinError = errors.latitude || errors.longitude;
-  const addressSummary = [form.house_number, form.street, form.barangay ? `Brgy. ${form.barangay}` : null, form.city, form.province, form.postal_code]
-    .filter(Boolean)
-    .join(', ');
+  const addressSummary = formatFormalAddress(form);
 
   return (
     <>

@@ -403,14 +403,8 @@ class RestaurantService
         ?object $ratingSummary,
         array $siblings = [],
     ): array {
-        $publicAddressParts = array_filter([
-            $row->building_name,
-            $row->street,
-            $row->barangay_name ? 'Brgy. '.$row->barangay_name : null,
-            $row->city_name,
-            $row->province_name,
-            $row->postal_code,
-        ]);
+        $formattedPublicAddress = \App\Support\AddressFormatter::format($row);
+        $publicAddressParts = $formattedPublicAddress !== '' ? [$formattedPublicAddress] : [];
         $shortAddress = implode(', ', array_filter([$row->barangay_name, $row->city_name]));
         $id = (int) $row->restaurant_id;
         $brandId = (int) ($row->brand_restaurant_id ?? $id);

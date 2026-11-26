@@ -2,6 +2,7 @@
 
 namespace App\Features\Account\Requests;
 
+use App\Support\PasswordPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdatePasswordRequest extends FormRequest
@@ -12,13 +13,24 @@ class UpdatePasswordRequest extends FormRequest
     }
 
     /**
-     * @return array<string, array<int, string>>
+     * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
+        $user = $this->user();
+
         return [
             'current_password' => ['required', 'string'],
-            'password' => ['required', 'string', 'min:8', 'confirmed', 'different:current_password'],
+            'password' => [
+                'required',
+                'string',
+                'confirmed',
+                'different:current_password',
+                new PasswordPolicy(
+                    username: $user?->username ? (string) $user->username : null,
+                    email: $user?->email ? (string) $user->email : null,
+                ),
+            ],
         ];
     }
 }

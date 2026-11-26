@@ -21,6 +21,11 @@ import {
 } from './constants/applicationDefaults';
 import { getRequiredDocuments } from './constants/documentRequirements';
 import applicationService from '../../services/applicationService';
+import addressService from '../../services/addressService';
+import {
+  hasAddressData,
+  mapSavedAddressToForm,
+} from '../../utils/applicationAddressPrefill';
 import { resolveUploadableFile, mapAccountTypeToEnum } from '../../services/formDataHelper';
 import {
   appendBranchPayloadToFormData,
@@ -90,6 +95,44 @@ export default function BusinessApplicationPage() {
   const [submittedData, setSubmittedData] = useState(null);
   const [savedApplication, setSavedApplication] = useState(null);
   const [branchUploadProgress, setBranchUploadProgress] = useState({});
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [usingSavedAddress, setUsingSavedAddress] = useState(false);
+  const [saveAddressToAccount, setSaveAddressToAccount] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    addressService.loadAddresses()
+      .then((list) => {
+        if (!active) return;
+        const rows = Array.isArray(list) ? list : [];
+        setSavedAddresses(rows);
+        const defaultAddr = rows.find((a) => a.isDefault) || rows[0] || null;
+        if (defaultAddr) {
+          setFormData((prev) => {
+            if (hasAddressData(prev.address)) return prev;
+            const mapped = mapSavedAddressToForm(defaultAddr);
+            setUsingSavedAddress(true);
+            return {
+              ...prev,
+              address: {
+                ...prev.address,
+                ...mapped,
+                additionalDetails: mapped.landmark || prev.address.additionalDetails || '',
+                coordinates: mapped.lat !== null && mapped.lng !== null
+                  ? { lat: mapped.lat, lng: mapped.lng }
+                  : prev.address.coordinates,
+                mapPinned: mapped.lat !== null && mapped.lng !== null,
+              },
+            };
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   const updateUserFormData = useCallback((updater) => {
     setFormData(updater);
@@ -521,6 +564,20 @@ export default function BusinessApplicationPage() {
 
       setSavedApplication(result.application);
       setIsDirty(false);
+      if (saveAddressToAccount && savedAddresses.length === 0 && hasAddressData(formData.address)) {
+        addressService.addAddress({
+          label: 'Home',
+          province: formData.address.province,
+          city: formData.address.city,
+          barangay: formData.address.barangay,
+          street: formData.address.street,
+          postalCode: formData.address.postalCode,
+          notes: formData.address.additionalDetails || '',
+          lat: formData.address.coordinates?.lat ?? null,
+          lng: formData.address.coordinates?.lng ?? null,
+          isDefault: true,
+        }).catch(() => {});
+      }
       await clearPartnerDraft(user?.id ?? user?.user_id ?? null).catch(() => {});
 
       if (result.hasFailure) {
@@ -698,6 +755,11 @@ export default function BusinessApplicationPage() {
                   data={formData.address}
                   onChange={(next) => updateUserFormData((prev) => ({ ...prev, address: next }))}
                   errors={validationErrors}
+                  usingSavedAddress={usingSavedAddress}
+                  hasSavedAddresses={savedAddresses.length > 0}
+                  saveAddressToAccount={saveAddressToAccount}
+                  onToggleSaveAddressToAccount={setSaveAddressToAccount}
+                  onUseDifferentAddress={() => setUsingSavedAddress(false)}
                 />
               )}
 

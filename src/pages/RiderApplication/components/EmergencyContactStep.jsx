@@ -1,4 +1,10 @@
+import { useEffect, useState } from 'react';
 import { Input, Select } from '../../../components/forms';
+import locationApiService from '../../../services/locationApiService';
+import {
+  filterMunicipalitiesByProvince,
+  filterPreferredBasesByMunicipality,
+} from '../../../utils/applicationAddressPrefill';
 import {
   EMERGENCY_RELATIONSHIPS,
   RIDER_SHIFTS,
@@ -10,7 +16,51 @@ export default function EmergencyContactStep({
   data,
   onChange,
   errors = {},
+  addressProvince = '',
+  addressCity = '',
 }) {
+  const [cityOptions, setCityOptions] = useState([]);
+  const [hubOptions, setHubOptions] = useState([]);
+
+  const selectedMunicipality = data.preferredCity || addressCity || '';
+
+  useEffect(() => {
+    if (!addressProvince) {
+      setCityOptions([]);
+      return;
+    }
+    let active = true;
+    locationApiService.searchCities(addressProvince, '')
+      .then((rows) => {
+        if (!active) return;
+        setCityOptions(filterMunicipalitiesByProvince(rows, addressProvince));
+      })
+      .catch(() => {
+        if (active) setCityOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [addressProvince]);
+
+  useEffect(() => {
+    if (!addressProvince || !selectedMunicipality) {
+      setHubOptions([]);
+      return;
+    }
+    let active = true;
+    locationApiService.searchBarangays(addressProvince, selectedMunicipality, '')
+      .then((rows) => {
+        if (!active) return;
+        setHubOptions(filterPreferredBasesByMunicipality(rows, selectedMunicipality));
+      })
+      .catch(() => {
+        if (active) setHubOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [addressProvince, selectedMunicipality]);
   const handleChange = (field, value) => {
     onChange?.({
       ...data,
@@ -111,25 +161,41 @@ export default function EmergencyContactStep({
 
           <div className="rider-form-grid rider-emergency-fields">
             <div className="grid-cols-2">
-              <Input
-                id="pref-city"
-                label="Preferred Base City / Municipality"
-                placeholder="e.g. Quezon City, Makati City, Pasig City"
-                value={data.preferredCity || ''}
-                onChange={(e) => handleChange('preferredCity', e.target.value)}
-                error={errors.preferredCity}
-                required
-                helper="Primary city where your shift begins."
-              />
+              <div>
+                <Input
+                  id="pref-city"
+                  list="rider-scoped-municipalities"
+                  label="Preferred Base City / Municipality"
+                  placeholder={addressCity || 'Select or type municipality'}
+                  value={data.preferredCity || ''}
+                  onChange={(e) => handleChange('preferredCity', e.target.value)}
+                  error={errors.preferredCity}
+                  required
+                  helper={addressProvince ? `Scoped to ${addressProvince}` : 'Primary city where your shift begins.'}
+                />
+                <datalist id="rider-scoped-municipalities">
+                  {cityOptions.map((city) => (
+                    <option key={city} value={city} />
+                  ))}
+                </datalist>
+              </div>
 
-              <Input
-                id="pref-hubs"
-                label="Preferred Commercial Hubs / Dining Areas"
-                placeholder="e.g. Tomas Morato, Eastwood City, BGC High St."
-                value={data.preferredBarangayHubs || ''}
-                onChange={(e) => handleChange('preferredBarangayHubs', e.target.value)}
-                helper="Specific malls or street strips where you like waiting for orders."
-              />
+              <div>
+                <Input
+                  id="pref-hubs"
+                  list="rider-scoped-bases"
+                  label="Preferred Commercial Hubs / Dining Areas"
+                  placeholder="e.g. Tomas Morato, Eastwood City, BGC High St."
+                  value={data.preferredBarangayHubs || ''}
+                  onChange={(e) => handleChange('preferredBarangayHubs', e.target.value)}
+                  helper={selectedMunicipality ? `Scoped to ${selectedMunicipality}` : 'Specific barangays or dining areas.'}
+                />
+                <datalist id="rider-scoped-bases">
+                  {hubOptions.map((hub) => (
+                    <option key={hub} value={hub} />
+                  ))}
+                </datalist>
+              </div>
             </div>
 
             {/* Shift selections */}

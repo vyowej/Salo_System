@@ -992,13 +992,8 @@ class CustomerReservationService
         CarbonImmutable $manilaNow,
         ?array $statusHistory = null,
     ): array {
-        $addressParts = array_filter([
-            $row->restaurant_street ?? null,
-            ! empty($row->restaurant_barangay) ? 'Brgy. ' . $row->restaurant_barangay : null,
-            $row->restaurant_city ?? null,
-        ]);
-
-        $row->restaurant_address = $addressParts !== [] ? implode(', ', $addressParts) : null;
+        $formattedAddress = \App\Support\AddressFormatter::format($row);
+        $row->restaurant_address = $formattedAddress !== '' ? $formattedAddress : null;
         $row->restaurant_logo_path = $this->fileStorageService->publicUrl($row->logo_image ?? null);
 
         $formatted = ReservationFormatter::format(

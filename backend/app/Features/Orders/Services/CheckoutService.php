@@ -11,6 +11,7 @@ use Carbon\CarbonImmutable;
 use App\Features\Restaurants\Services\AvailabilityService;
 use App\Features\Reviews\Services\PlatformSettingsService;
 use App\Models\User;
+use App\Support\AddressFormatter;
 use App\Support\AuditLogService;
 use App\Support\Money;
 use App\Support\PublicRestaurantVisibility;
@@ -219,16 +220,6 @@ class CheckoutService
                             if ($contactPhone === '' || preg_match('/^09\d{9}$/', $contactPhone) !== 1) {
                                 $groupErrors["groups.{$gIdx}.address_id"][] = 'A valid contact phone number is required for delivery orders.';
                             } else {
-                                $addressParts = array_filter([
-                                    $addressRow->house_number,
-                                    $addressRow->building_name,
-                                    $addressRow->street,
-                                    $addressRow->barangay_name ? 'Brgy. '.$addressRow->barangay_name : null,
-                                    $addressRow->city_name,
-                                    $addressRow->province_name,
-                                    $addressRow->postal_code,
-                                ]);
-
                                 $accountHolderName = trim("{$user->first_name} {$user->last_name}");
                                 if ($accountHolderName === '') {
                                     $accountHolderName = (string) $user->username;
@@ -238,7 +229,7 @@ class CheckoutService
                                     'address_id' => (int) $addressRow->address_id,
                                     'recipient_name' => mb_substr($accountHolderName, 0, 150),
                                     'phone' => $contactPhone,
-                                    'address_text' => implode(', ', $addressParts),
+                                    'address_text' => AddressFormatter::format($addressRow),
                                     'latitude' => $addressRow->latitude,
                                     'longitude' => $addressRow->longitude,
                                     'notes' => $deliveryNotes,

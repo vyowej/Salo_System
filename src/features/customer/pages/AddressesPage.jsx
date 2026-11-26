@@ -5,6 +5,7 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
 import AddressFormModal from '../components/AddressFormModal';
+import { formatFormalAddress } from '../../../utils/addressFormatter';
 import './AddressesPage.css';
 
 export default function AddressesPage() {
@@ -115,15 +116,7 @@ export default function AddressesPage() {
         ) : (
           <div className="salo-address-list">
             {addresses.map((address) => {
-              const fullAddressText = [
-                address.houseNumber,
-                address.street,
-                address.barangay && `Brgy. ${address.barangay}`,
-                address.city,
-                address.province,
-                address.postalCode,
-                'Philippines',
-              ].filter(Boolean).join(', ');
+              const fullAddressText = formatFormalAddress(address);
 
               return (
                 <div

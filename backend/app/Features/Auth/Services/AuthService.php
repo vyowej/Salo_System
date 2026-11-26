@@ -3,6 +3,7 @@
 namespace App\Features\Auth\Services;
 
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class AuthService
@@ -28,18 +30,33 @@ class AuthService
      */
     public function register(array $validated, Request $request): array
     {
-        $user = User::forceCreate([
-            'username' => trim((string) $validated['username']),
-            'first_name' => trim((string) $validated['first_name']),
-            'middle_initial' => isset($validated['middle_initial']) && $validated['middle_initial'] !== ''
-                ? strtoupper(trim((string) $validated['middle_initial']))
-                : null,
-            'last_name' => trim((string) $validated['last_name']),
-            'email' => strtolower(trim((string) $validated['email'])),
-            'password_hash' => Hash::make((string) $validated['password']),
-            'user_role' => 'customer',
-            'account_status' => 'active',
-        ]);
+        try {
+            $user = User::forceCreate([
+                'username' => trim((string) $validated['username']),
+                'first_name' => trim((string) $validated['first_name']),
+                'middle_initial' => isset($validated['middle_initial']) && $validated['middle_initial'] !== ''
+                    ? strtoupper(trim((string) $validated['middle_initial']))
+                    : null,
+                'last_name' => trim((string) $validated['last_name']),
+                'email' => strtolower(trim((string) $validated['email'])),
+                'password_hash' => Hash::make((string) $validated['password']),
+                'user_role' => 'customer',
+                'account_status' => 'active',
+            ]);
+        } catch (QueryException $e) {
+            if ((string) $e->getCode() === '23000') {
+                $msg = strtolower($e->getMessage());
+                if (str_contains($msg, 'uk_users_email') || str_contains($msg, 'email')) {
+                    throw ValidationException::withMessages([
+                        'email' => ['An account with this email already exists.'],
+                    ]);
+                }
+                throw ValidationException::withMessages([
+                    'username' => ['This username is already taken. Please choose another one.'],
+                ]);
+            }
+            throw $e;
+        }
 
         Auth::guard('web')->login($user);
 
@@ -49,6 +66,33 @@ class AuthService
         }
 
         return $this->formatUserPayload($user);
+    }
+
+    /**
+     * Check whether a username matches SALO format rules and is available.
+     *
+     * @return array{valid: bool, available: bool, message: string}
+     */
+    public function checkUsernameAvailability(string $rawUsername): array
+    {
+        $username = trim($rawUsername);
+        if (preg_match('/^[a-zA-Z0-9_]{3,30}$/', $username) !== 1) {
+            return [
+                'valid' => false,
+                'available' => false,
+                'message' => 'Username must be 3–30 characters using only letters, numbers, and underscores.',
+            ];
+        }
+
+        $exists = User::where('username', $username)->exists();
+
+        return [
+            'valid' => true,
+            'available' => ! $exists,
+            'message' => $exists
+                ? 'This username is already taken. Please choose another one.'
+                : 'Username is available.',
+        ];
     }
 
     /**
@@ -195,28 +239,19 @@ class AuthService
                 $lastName = 'User';
             }
 
-            $baseUsername = Str::slug(Str::before($googleEmail, '@'), '_');
-            if ($baseUsername === '') {
-                $baseUsername = 'salo_user';
-            }
-            $username = substr($baseUsername, 0, 40);
-            $suffix = 1;
-            while (User::where('username', $username)->exists()) {
-                $username = substr($baseUsername, 0, 35).'_'.$suffix;
-                $suffix++;
+            if ($request->hasSession()) {
+                $request->session()->put('google_pending_signup', [
+                    'email' => $googleEmail,
+                    'first_name' => mb_substr($firstName, 0, 100),
+                    'last_name' => mb_substr($lastName, 0, 100),
+                    'issued_at' => time(),
+                ]);
             }
 
-            $user = new User([
-                'username' => $username,
-                'first_name' => $firstName,
-                'last_name' => $lastName,
-                'email' => $googleEmail,
-                'password_hash' => Hash::make(Str::random(32)),
-            ]);
-            $user->user_role = 'customer';
-            $user->account_status = 'active';
-            $user->email_verified_at = now();
-            $user->save();
+            return [
+                'pending_username' => true,
+                'user' => null,
+            ];
         } elseif (! $user->isActiveAccount()) {
             throw new HttpException(403, 'Account is not active.');
         }
@@ -227,6 +262,91 @@ class AuthService
             $request->session()->regenerate();
             $request->session()->put('auth_issued_at', time());
         }
+
+        return $this->formatUserPayload($user);
+    }
+
+    /**
+     * @return array{email: string, first_name: string, last_name: string}
+     */
+    public function getPendingGoogleSignup(Request $request): array
+    {
+        $pending = $request->hasSession() ? $request->session()->get('google_pending_signup') : null;
+        if (! is_array($pending) || empty($pending['email'])) {
+            throw new HttpException(404, 'No pending Google sign-up session found. Please sign in with Google again.');
+        }
+        if (time() - (int) ($pending['issued_at'] ?? 0) > 900) {
+            $request->session()->forget('google_pending_signup');
+            throw new HttpException(410, 'Your Google sign-up session expired. Please sign in with Google again.');
+        }
+
+        return [
+            'email' => (string) $pending['email'],
+            'first_name' => (string) ($pending['first_name'] ?? ''),
+            'last_name' => (string) ($pending['last_name'] ?? ''),
+        ];
+    }
+
+    /**
+     * Complete a pending Google sign-up using the user-provided username.
+     *
+     * @return array<string, mixed>
+     */
+    public function completeGoogleSignup(string $rawUsername, Request $request): array
+    {
+        $pending = $this->getPendingGoogleSignup($request);
+        $username = trim($rawUsername);
+
+        if (preg_match('/^[a-zA-Z0-9_]{3,30}$/', $username) !== 1) {
+            throw ValidationException::withMessages([
+                'username' => ['Username must be 3–30 characters using only letters, numbers, and underscores.'],
+            ]);
+        }
+
+        if (User::where('username', $username)->exists()) {
+            throw ValidationException::withMessages([
+                'username' => ['This username is already taken. Please choose another one.'],
+            ]);
+        }
+
+        $existingByEmail = User::where('email', $pending['email'])->first();
+        if ($existingByEmail) {
+            $request->session()->forget('google_pending_signup');
+            if (! $existingByEmail->isActiveAccount()) {
+                throw new HttpException(403, 'Account is not active.');
+            }
+            Auth::guard('web')->login($existingByEmail);
+            $request->session()->regenerate();
+            $request->session()->put('auth_issued_at', time());
+
+            return $this->formatUserPayload($existingByEmail);
+        }
+
+        try {
+            $user = new User([
+                'username' => $username,
+                'first_name' => $pending['first_name'] !== '' ? $pending['first_name'] : Str::before($pending['email'], '@'),
+                'last_name' => $pending['last_name'] !== '' ? $pending['last_name'] : 'User',
+                'email' => $pending['email'],
+                'password_hash' => Hash::make(Str::random(32)),
+            ]);
+            $user->user_role = 'customer';
+            $user->account_status = 'active';
+            $user->email_verified_at = now();
+            $user->save();
+        } catch (QueryException $e) {
+            if ((string) $e->getCode() === '23000') {
+                throw ValidationException::withMessages([
+                    'username' => ['This username is already taken. Please choose another one.'],
+                ]);
+            }
+            throw $e;
+        }
+
+        $request->session()->forget('google_pending_signup');
+        Auth::guard('web')->login($user);
+        $request->session()->regenerate();
+        $request->session()->put('auth_issued_at', time());
 
         return $this->formatUserPayload($user);
     }

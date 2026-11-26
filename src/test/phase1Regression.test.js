@@ -6,6 +6,9 @@ import {
 } from '../services/authService.js';
 import {
   _resetDraftFileMemoryStoreForTests,
+  saveDraftFiles,
+  loadDraftFiles,
+  clearDraftFiles,
 } from '../services/draftFileStore.js';
 import {
   savePartnerDraft,
@@ -218,4 +221,22 @@ test('getMissingRiderApplicationRequirements names missing items and passes when
   };
 
   assert.deepEqual(getMissingRiderApplicationRequirements(completeRider), []);
+});
+
+test('draftFileStore isolates files per user scope and deletes only that user on logout cleanup', async () => {
+  _resetDraftFileMemoryStoreForTests();
+  const docA = new Blob(['user-a-id'], { type: 'image/jpeg' });
+  const docB = new Blob(['user-b-id'], { type: 'image/jpeg' });
+
+  await saveDraftFiles('partner_10', { 'doc:government_id': { file: docA, name: 'a.jpg' } });
+  await saveDraftFiles('rider_10', { 'identity:frontPhoto': { file: docA, name: 'a_rider.jpg' } });
+  await saveDraftFiles('partner_20', { 'doc:government_id': { file: docB, name: 'b.jpg' } });
+
+  await clearDraftFiles('partner_10');
+  await clearDraftFiles('rider_10');
+
+  assert.deepEqual(await loadDraftFiles('partner_10'), {});
+  assert.deepEqual(await loadDraftFiles('rider_10'), {});
+  const userBFiles = await loadDraftFiles('partner_20');
+  assert.equal(userBFiles['doc:government_id']?.name, 'b.jpg');
 });

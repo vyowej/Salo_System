@@ -7,6 +7,7 @@ import {
 import CurrentLocationButton from './CurrentLocationButton';
 import PhilippineAddressFields from './PhilippineAddressFields';
 import SharedMap from './SharedMap';
+import { formatFormalAddress, mergeLegacyStreetLine } from '../../utils/addressFormatter';
 import './LocationPicker.css';
 
 const DEFAULT_CENTER = { lat: 14.5995, lng: 120.9842 }; // Manila, Philippines
@@ -99,8 +100,12 @@ export default function LocationPicker({
           province: c.province || current.province || '',
           city: c.city || current.city || '',
           barangay: c.barangay || current.barangay || '',
-          street: c.street || current.street || '',
-          houseNumber: current.houseNumber || c.houseNumber || '',
+          street: mergeLegacyStreetLine({
+            houseNumber: c.houseNumber || current.houseNumber || '',
+            street: c.street || current.street || '',
+          }),
+          houseNumber: '',
+          buildingName: '',
           postalCode: current.postalCode || c.postalCode || '',
         };
         onChange?.(merged);
@@ -167,8 +172,12 @@ export default function LocationPicker({
         province: c.province || current.province || '',
         city: c.city || current.city || '',
         barangay: c.barangay || current.barangay || '',
-        street: c.street || current.street || '',
-        houseNumber: current.houseNumber || c.houseNumber || '',
+        street: mergeLegacyStreetLine({
+          houseNumber: c.houseNumber || current.houseNumber || '',
+          street: c.street || current.street || '',
+        }),
+        houseNumber: '',
+        buildingName: '',
         postalCode: current.postalCode || c.postalCode || '',
         gpsAccuracy: null,
         gps_accuracy: null,
@@ -209,16 +218,7 @@ export default function LocationPicker({
     }
   };
 
-  const formattedSummary = [
-    value.houseNumber,
-    value.street,
-    value.barangay && `Brgy. ${value.barangay}`,
-    value.city,
-    value.province,
-    'Philippines',
-  ]
-    .filter(Boolean)
-    .join(', ');
+  const formattedSummary = formatFormalAddress(value);
 
   return (
     <div className="salo-loc-picker">

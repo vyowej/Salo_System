@@ -125,12 +125,44 @@ class AuthController extends Controller
         );
     }
 
+    public function usernameAvailable(Request $request, AuthService $authService): JsonResponse
+    {
+        $result = $authService->checkUsernameAvailability((string) $request->query('username', ''));
+
+        return ApiResponse::success(
+            data: $result,
+            message: $result['message'],
+        );
+    }
+
+    public function googlePending(Request $request, AuthService $authService): JsonResponse
+    {
+        return ApiResponse::success(
+            data: ['pending' => $authService->getPendingGoogleSignup($request)],
+            message: 'Pending Google sign-up retrieved.',
+        );
+    }
+
+    public function googleComplete(Request $request, AuthService $authService): JsonResponse
+    {
+        $userPayload = $authService->completeGoogleSignup((string) $request->input('username', ''), $request);
+
+        return ApiResponse::success(
+            data: ['user' => $userPayload],
+            message: 'Google sign-up completed.',
+            status: 201,
+        );
+    }
+
     public function googleCallback(Request $request, AuthService $authService): RedirectResponse
     {
         $frontendUrl = rtrim((string) config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173')), '/');
 
         try {
             $userPayload = $authService->handleGoogleCallback($request);
+            if (! empty($userPayload['pending_username'])) {
+                return redirect()->away($frontendUrl.'/google-complete');
+            }
             $roles = $userPayload['roles'] ?? [];
             $destination = in_array('admin', $roles, true) ? '/admin' : '/customer';
 

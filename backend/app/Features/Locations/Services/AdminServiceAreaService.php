@@ -247,7 +247,7 @@ class AdminServiceAreaService
                 'restaurant_id' => (int) $r->restaurant_id,
                 'restaurant_name' => $r->restaurant_name,
                 'status' => $r->restaurant_status,
-                'address' => trim(($r->street ? $r->street . ', ' : '') . "Brgy. {$r->barangay_name}, {$r->city_name}, {$r->province_name}"),
+                'address' => \App\Support\AddressFormatter::format($r),
                 'latitude' => $r->latitude !== null ? (float) $r->latitude : null,
                 'longitude' => $r->longitude !== null ? (float) $r->longitude : null,
             ])

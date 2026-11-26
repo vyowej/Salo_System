@@ -9,6 +9,7 @@ import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import AddressFormModal from '../components/AddressFormModal';
+import { formatFormalAddress } from '../../../utils/addressFormatter';
 import ContactNumberFormModal from '../components/ContactNumberFormModal';
 import {
   buildCheckoutPayload,
@@ -663,13 +664,7 @@ export default function CheckoutPage() {
                             {group.deliveryAddress.isDefault && <Badge variant="success" size="sm">Default</Badge>}
                           </div>
                           <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                            {[
-                              group.deliveryAddress.street,
-                              group.deliveryAddress.barangay && `Brgy. ${group.deliveryAddress.barangay}`,
-                              group.deliveryAddress.city,
-                              group.deliveryAddress.province,
-                              group.deliveryAddress.postalCode,
-                            ].filter(Boolean).join(', ')}
+                            {formatFormalAddress(group.deliveryAddress)}
                           </p>
                           {group.deliveryAddress.notes && (
                             <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import locationApiService from '../../services/locationApiService';
 import SearchableLocationInput from './SearchableLocationInput';
+import { mergeLegacyStreetLine } from '../../utils/addressFormatter';
 import './PhilippineAddressFields.css';
 
 /**
@@ -103,6 +104,22 @@ export default function PhilippineAddressFields({
 
         {showStreetAndDetails && (
           <>
+            <div className="salo-ph-field salo-ph-field--full">
+              <label className="salo-ph-label" htmlFor="salo-ph-street">
+                House/Building No. and Street <span className="salo-ph-required">*</span>
+              </label>
+              <input
+                id="salo-ph-street"
+                type="text"
+                className={`salo-ph-input ${errors.street ? 'is-error' : ''}`}
+                value={mergeLegacyStreetLine(value)}
+                placeholder="e.g. 123 Rizal Street"
+                disabled={disabled}
+                onChange={(e) => update({ street: e.target.value, houseNumber: '', buildingName: '' })}
+              />
+              {errors.street && <span className="salo-ph-error">{errors.street}</span>}
+            </div>
+
             <div className="salo-ph-field">
               <label className="salo-ph-label" htmlFor="salo-ph-postal">
                 Postal Code (Optional)
@@ -122,47 +139,15 @@ export default function PhilippineAddressFields({
             </div>
 
             <div className="salo-ph-field">
-              <label className="salo-ph-label" htmlFor="salo-ph-street">
-                Street <span className="salo-ph-required">*</span>
-              </label>
-              <input
-                id="salo-ph-street"
-                type="text"
-                className={`salo-ph-input ${errors.street ? 'is-error' : ''}`}
-                value={value.street || ''}
-                placeholder="Street name, subdivision, or avenue"
-                disabled={disabled}
-                onChange={(e) => update({ street: e.target.value })}
-              />
-              {errors.street && <span className="salo-ph-error">{errors.street}</span>}
-            </div>
-
-            <div className="salo-ph-field">
-              <label className="salo-ph-label" htmlFor="salo-ph-house">
-                House / Building Number
-              </label>
-              <input
-                id="salo-ph-house"
-                type="text"
-                className={`salo-ph-input ${errors.houseNumber ? 'is-error' : ''}`}
-                value={value.houseNumber || ''}
-                placeholder="House no., block & lot, or bldg no."
-                disabled={disabled}
-                onChange={(e) => update({ houseNumber: e.target.value })}
-              />
-              {errors.houseNumber && <span className="salo-ph-error">{errors.houseNumber}</span>}
-            </div>
-
-            <div className="salo-ph-field salo-ph-field--full">
               <label className="salo-ph-label" htmlFor="salo-ph-details">
-                Additional Details (Unit, Floor, Landmark, Instructions)
+                Landmark (Optional)
               </label>
               <input
                 id="salo-ph-details"
                 type="text"
                 className="salo-ph-input"
                 value={value.notes ?? value.landmark ?? ''}
-                placeholder="e.g. Unit 4B, 2nd Floor, near red gate / church"
+                placeholder="e.g. near red gate / church"
                 disabled={disabled}
                 onChange={(e) => update({ notes: e.target.value, landmark: e.target.value })}
               />

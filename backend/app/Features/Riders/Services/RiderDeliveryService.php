@@ -1202,14 +1202,14 @@ class RiderDeliveryService
         ?string $province,
         string $fallback,
     ): string {
-        $parts = array_values(array_filter([
-            $street ? trim($street) : null,
-            $barangay ? trim($barangay) : null,
-            $city ? trim($city) : null,
-            $province ? trim($province) : null,
-        ], static fn (?string $p): bool => $p !== null && $p !== ''));
+        $formatted = \App\Support\AddressFormatter::format([
+            'street' => $street,
+            'barangay' => $barangay,
+            'city' => $city,
+            'province' => $province,
+        ]);
 
-        return $parts !== [] ? implode(', ', $parts) : $fallback;
+        return $formatted !== '' ? $formatted : $fallback;
     }
 
     private function isDuplicateKeyException(QueryException $e): bool

@@ -7,6 +7,7 @@ import {
   isBranchPermitEditable,
   validateBranchPermitInput,
 } from '../../../features/restaurant/utils/branchWorkspaceUtils.js';
+import { formatFormalAddress } from '../../../utils/addressFormatter.js';
 
 export function hasEnteredBranchData(addressData = {}) {
   if (String(addressData?.mainBranchName || '').trim() !== '') {
@@ -276,17 +277,7 @@ export function getApplicationBranchPermitViewModel(branch = {}, applicationStat
 
 export function formatBranchAddressSummary(address = {}) {
   if (!address || typeof address !== 'object') return '—';
-  const barangay = address.barangay || address.barangay_name;
-  const parts = [
-    address.houseNumber || address.house_number,
-    address.street,
-    barangay ? `Brgy. ${barangay}` : null,
-    address.city || address.city_name,
-    address.province || address.province_name,
-    address.postalCode || address.postal_code,
-  ].filter(Boolean);
-
-  return parts.length > 0 ? parts.join(', ') : '—';
+  return formatFormalAddress(address) || '—';
 }
 
 export function extractApplicationLocations(application = {}) {

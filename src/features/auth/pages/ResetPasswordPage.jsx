@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthLayout from '../../../layouts/AuthLayout';
-import { Input, PasswordField } from '../../../components/forms';
+import { Input, PasswordField, PasswordStrengthMeter } from '../../../components/forms';
 import Button from '../../../components/common/Button';
 import authService from '../../../services/authService';
+import { getPasswordPolicyError } from '../../../utils/passwordPolicy';
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -48,8 +49,9 @@ export default function ResetPasswordPage() {
       setError('Please provide your account email.');
       return;
     }
-    if (!formData.password || formData.password.length < 8) {
-      setError('New password must be at least 8 characters long.');
+    const pwPolicyErr = getPasswordPolicyError(formData.password, { email: formData.email });
+    if (pwPolicyErr) {
+      setError(pwPolicyErr);
       return;
     }
     if (formData.password !== formData.passwordConfirmation) {
@@ -151,6 +153,11 @@ export default function ResetPasswordPage() {
             required
             autoComplete="new-password"
             resetKey={passwordResetKey}
+          />
+
+          <PasswordStrengthMeter
+            password={formData.password}
+            email={formData.email}
           />
 
           <PasswordField
