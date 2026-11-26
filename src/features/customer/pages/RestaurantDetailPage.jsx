@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
+import OwnerLayout from '../../../layouts/OwnerLayout';
 import customerService from '../../../services/customerService';
 import publicRestaurantService from '../../../services/publicRestaurantService';
+import ownerService from '../../../services/ownerService';
 import { useCart } from '../../../hooks/useCart';
 import { BRANCH_BROWSE_COPY } from '../content/branchBrowseContent';
 import Button from '../../../components/common/Button';
@@ -41,11 +43,12 @@ function getInitials(name = '') {
     .join('') || 'S';
 }
 
-export default function RestaurantDetailPage() {
+export default function RestaurantDetailPage({ previewMode = false }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const cart = useCart();
+  const PageLayout = previewMode ? OwnerLayout : CustomerLayout;
 
   const [restaurant, setRestaurant] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -71,15 +74,19 @@ export default function RestaurantDetailPage() {
     setError(null);
     setNotFound(false);
     try {
-      const data = await publicRestaurantService.getRestaurantWithMenu(id);
+      const data = previewMode
+        ? await ownerService.getRestaurantPreview(id)
+        : await publicRestaurantService.getRestaurantWithMenu(id);
       if (!data) {
         setNotFound(true);
         setRestaurant(null);
       } else {
         setRestaurant(data);
-        customerService.fetchFavorites()
-          .then((res) => setIsFavorite(res.favoriteIds.includes(String(data.id))))
-          .catch(() => setIsFavorite(false));
+        if (!previewMode) {
+          customerService.fetchFavorites()
+            .then((res) => setIsFavorite(res.favoriteIds.includes(String(data.id))))
+            .catch(() => setIsFavorite(false));
+        }
       }
     } catch (err) {
       if (err?.status === 404) {
@@ -91,7 +98,7 @@ export default function RestaurantDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, previewMode]);
 
   useEffect(() => {
     fetchRest();
@@ -230,36 +237,36 @@ export default function RestaurantDetailPage() {
 
   if (loading) {
     return (
-      <CustomerLayout>
+      <PageLayout>
         <StateView state="loading" title="restaurant details" />
-      </CustomerLayout>
+      </PageLayout>
     );
   }
 
   if (error) {
     return (
-      <CustomerLayout>
+      <PageLayout>
         <StateView
           state="error"
           title="restaurant details"
           errorDescription={error}
           onRetry={fetchRest}
         />
-      </CustomerLayout>
+      </PageLayout>
     );
   }
 
   if (notFound || !restaurant) {
     return (
-      <CustomerLayout>
+      <PageLayout>
         <StateView
           state="empty"
           title="Restaurant not found"
           emptyTitle="Restaurant unavailable"
           emptyDescription="This restaurant does not exist or is currently not active."
-          action={<Button variant="primary" size="sm" onClick={() => navigate('/customer')}>Back to Restaurants</Button>}
+          action={<Button variant="primary" size="sm" onClick={() => navigate(previewMode ? '/owner' : '/customer')}>Back</Button>}
         />
-      </CustomerLayout>
+      </PageLayout>
     );
   }
 
@@ -268,28 +275,65 @@ export default function RestaurantDetailPage() {
     : [];
 
   return (
-    <CustomerLayout>
+    <PageLayout>
+      {previewMode && (
+        <div
+          role="status"
+          style={{
+            marginBottom: 16,
+            padding: '12px 16px',
+            borderRadius: 10,
+            border: '1px solid #f59e0b',
+            background: '#fffbeb',
+            color: '#92400e',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div>
+            <strong style={{ display: 'block', fontSize: 14 }}>
+              {restaurant.isPublished
+                ? 'Preview – live customer view.'
+                : 'Preview – not published yet. Customers cannot see this restaurant.'}
+            </strong>
+            <span style={{ fontSize: 12 }}>
+              Ordering and table reservations are disabled in preview mode.
+            </span>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => navigate('/owner/menu')}>
+            Back to Menu
+          </Button>
+        </div>
+      )}
+
       {/* ── Item Customization Modal ──────────────────────────── */}
       <ItemModal
         open={!!selectedItem}
         onClose={() => setSelectedItem(null)}
         item={selectedItem}
         restaurant={restaurant}
-        orderingDisabled={!canStartOrder}
+        orderingDisabled={previewMode || !canStartOrder}
         orderingDisabledMessage={
-          !acceptingOrders
+          previewMode
+            ? 'Ordering is disabled in preview mode.'
+            : !acceptingOrders
             ? 'This restaurant is not accepting orders right now.'
             : 'Ordering is unavailable while the restaurant is closed.'
         }
       />
 
       {/* ── Table Reservation Modal ───────────────────────────── */}
-      <ReservationModal
-        open={reservationOpen}
-        onClose={() => setReservationOpen(false)}
-        restaurant={restaurant}
-        onSuccess={() => {}}
-      />
+      {!previewMode && (
+        <ReservationModal
+          open={reservationOpen}
+          onClose={() => setReservationOpen(false)}
+          restaurant={restaurant}
+          onSuccess={() => {}}
+        />
+      )}
 
       {/* ── Restaurant Hero Header ────────────────────────────── */}
       <header className="rdp-hero-card">
@@ -302,15 +346,17 @@ export default function RestaurantDetailPage() {
             className="rdp-hero-cover-img"
           />
           <div className="rdp-hero-scrim" aria-hidden="true" />
-          <button
-            type="button"
-            onClick={handleToggleFavorite}
-            className={`rdp-hero-favorite${isFavorite ? ' is-favorite' : ''}`}
-            aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-            title={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
-          >
-            {isFavorite ? '♥' : '♡'}
-          </button>
+          {!previewMode && (
+            <button
+              type="button"
+              onClick={handleToggleFavorite}
+              className={`rdp-hero-favorite${isFavorite ? ' is-favorite' : ''}`}
+              aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              title={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
+            >
+              {isFavorite ? '♥' : '♡'}
+            </button>
+          )}
         </div>
 
         {/* Info row */}
@@ -357,22 +403,30 @@ export default function RestaurantDetailPage() {
               <Button
                 variant="primary"
                 size="md"
-                disabled={!canStartOrder || (!offersDelivery && !offersPickup)}
+                disabled={previewMode || !canStartOrder || (!offersDelivery && !offersPickup)}
                 onClick={() => {
                   const menuEl = document.getElementById('restaurant-menu-section');
                   menuEl?.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
-                {canStartOrder && (offersDelivery || offersPickup) ? 'Order Food' : 'Ordering unavailable'}
+                {previewMode
+                  ? 'Ordering disabled in preview'
+                  : canStartOrder && (offersDelivery || offersPickup)
+                  ? 'Order Food'
+                  : 'Ordering unavailable'}
               </Button>
 
               <Button
                 variant="outline"
                 size="md"
-                disabled={!acceptingReservations}
-                onClick={() => setReservationOpen(true)}
+                disabled={previewMode || !acceptingReservations}
+                onClick={() => !previewMode && setReservationOpen(true)}
               >
-                {acceptingReservations ? 'Reserve a Table' : 'Reservations unavailable'}
+                {previewMode
+                  ? 'Reservations disabled in preview'
+                  : acceptingReservations
+                  ? 'Reserve a Table'
+                  : 'Reservations unavailable'}
               </Button>
             </div>
           </div>
@@ -589,10 +643,19 @@ export default function RestaurantDetailPage() {
 
           {/* ── RIGHT: sticky order panel (desktop only) ─ */}
           <div className="rdp-panel-col" aria-hidden="false">
-            <OrderPanel
-              restaurantId={restaurant.id}
-              restaurantName={restaurant.displayName || restaurant.name}
-            />
+            {previewMode ? (
+              <div style={{ padding: 16, borderRadius: 12, border: '1px solid var(--border-primary)', background: 'var(--surface-primary)' }}>
+                <strong style={{ display: 'block', marginBottom: 6 }}>Preview Mode</strong>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  Customers will see the live order and reservation panel here once published.
+                </p>
+              </div>
+            ) : (
+              <OrderPanel
+                restaurantId={restaurant.id}
+                restaurantName={restaurant.displayName || restaurant.name}
+              />
+            )}
           </div>
 
         </div>{/* /rdp-two-col */}
@@ -625,11 +688,13 @@ export default function RestaurantDetailPage() {
       </section>
 
       {/* ── Mobile floating bar + bottom sheet ───────────── */}
-      <MobileOrderBar
-        restaurantId={restaurant.id}
-        restaurantName={restaurant.displayName || restaurant.name}
-      />
+      {!previewMode && (
+        <MobileOrderBar
+          restaurantId={restaurant.id}
+          restaurantName={restaurant.displayName || restaurant.name}
+        />
+      )}
 
-    </CustomerLayout>
+    </PageLayout>
   );
 }

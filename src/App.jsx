@@ -411,6 +411,8 @@ function AppShell() {
             <Route path="activity" element={<RequireAccess itemId="activity"><OwnerActivityPage /></RequireAccess>} />
             <Route path="notifications" element={<RequireAccess><OwnerNotificationsPage /></RequireAccess>} />
             <Route path="settings" element={<RequireAccess itemId="settings"><OwnerSettingsPage /></RequireAccess>} />
+            <Route path="preview" element={<RequireAccess><RestaurantDetailPage previewMode /></RequireAccess>} />
+            <Route path="preview/:id" element={<RequireAccess><RestaurantDetailPage previewMode /></RequireAccess>} />
             <Route path="earnings" element={<RequireAccess itemId="reports"><Navigate to="/owner/reports" replace /></RequireAccess>} />
             <Route path="*" element={<RequireAccess><Navigate to="/owner" replace /></RequireAccess>} />
           </Route>

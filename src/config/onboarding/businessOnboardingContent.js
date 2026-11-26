@@ -21,7 +21,7 @@ export const BUSINESS_ONBOARDING_CONTENT = {
     {
       id: 'welcome',
       kind: 'welcome',
-      titleTemplate: 'Welcome, {username}!',
+      titleTemplate: 'Mabuhay, {username}!',
       fallbackUsername: 'Partner',
       body: 'Congratulations on becoming a SALO partner! Let us get your restaurant ready to receive orders.',
       highlights: [
@@ -38,7 +38,7 @@ export const BUSINESS_ONBOARDING_CONTENT = {
           description: 'Manage incoming orders, table reservations, and customer availability toggles independently.',
         },
       ],
-      primaryButton: 'Simulan na ang setup',
+      primaryButton: 'Start Setup',
       wholeSkipButton: 'Maybe later',
     },
     {

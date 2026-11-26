@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 import locationApiService from './locationApiService';
+import { normalizeRestaurantWithMenuPayload } from './publicRestaurantService';
 
 function notAvailable(feature) {
   throw new Error(`${feature} is not available yet. The backend API endpoint is pending implementation.`);
@@ -376,6 +377,14 @@ export const ownerService = {
     return res?.data?.category ?? null;
   },
 
+  async bulkCreateMenuCategories(restaurantId, categories) {
+    const res = await apiClient.post('/restaurant/menu/categories/bulk', {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      categories,
+    });
+    return res?.data?.categories ?? [];
+  },
+
   async updateMenuCategory(restaurantId, categoryId, payload) {
     const res = await apiClient.patch(`/restaurant/menu/categories/${categoryId}`, {
       ...(restaurantId ? { restaurant_id: restaurantId } : {}),
@@ -414,6 +423,24 @@ export const ownerService = {
     if (photoFile) fd.append('photo', photoFile);
     const res = await apiClient.post('/restaurant/menu/items', fd);
     return res?.data?.item ?? null;
+  },
+
+  async bulkCreateMenuItems(restaurantId, menuCategoryId, items = []) {
+    const fd = new FormData();
+    if (restaurantId) fd.append('restaurant_id', String(restaurantId));
+    fd.append('menu_category_id', String(menuCategoryId));
+    items.forEach((item, idx) => {
+      fd.append(`items[${idx}][item_name]`, String(item.name || '').trim());
+      fd.append(`items[${idx}][base_price]`, String(item.price ?? ''));
+      if (item.description) {
+        fd.append(`items[${idx}][description]`, String(item.description).trim());
+      }
+      if (item.photoFile instanceof File || item.photoFile instanceof Blob) {
+        fd.append(`photos[${idx}]`, item.photoFile);
+      }
+    });
+    const res = await apiClient.post('/restaurant/menu/items/bulk', fd);
+    return res?.data ?? { items: [], photo_errors: [] };
   },
 
   async updateMenuItemApi(restaurantId, itemId, payload, photoFile = null, removePhoto = false) {
@@ -467,6 +494,20 @@ export const ownerService = {
     const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
     const res = await apiClient.get(`/restaurant/menu/preview${query}`);
     return res?.data ?? null;
+  },
+
+  async getRestaurantPreview(restaurantId) {
+    const query = restaurantId ? `?restaurant_id=${encodeURIComponent(restaurantId)}` : '';
+    const res = await apiClient.get(`/restaurant/preview${query}`);
+    const payload = res?.data;
+    if (!payload?.restaurant) return null;
+    const normalized = normalizeRestaurantWithMenuPayload(payload.restaurant, payload.categories || []);
+    return {
+      ...normalized,
+      isPreview: true,
+      isPublished: Boolean(payload.is_published),
+      restaurantStatus: payload.restaurant_status || '',
+    };
   },
 
   async publishMenu(restaurantId) {

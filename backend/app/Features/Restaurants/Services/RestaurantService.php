@@ -320,6 +320,153 @@ class RestaurantService
     }
 
     /**
+     * Return full customer-view preview details (including draft menu) for an owner or authorized staff.
+     * Never exposed to public routes or other users.
+     *
+     * @return array<string, mixed>
+     */
+    public function getOwnerPreviewDetails(User $user, ?int $restaurantId = null): array
+    {
+        $ownerQuery = DB::table('restaurants as r')
+            ->leftJoin('restaurant_owners as ro', function ($join) use ($user): void {
+                $join->on('ro.restaurant_id', '=', 'r.restaurant_id')
+                    ->where('ro.user_id', '=', $user->user_id);
+            })
+            ->leftJoin('restaurant_staff as rs', function ($join) use ($user): void {
+                $join->on('rs.restaurant_id', '=', 'r.restaurant_id')
+                    ->where('rs.user_id', '=', $user->user_id)
+                    ->where('rs.staff_status', '=', 'active');
+            })
+            ->where(function ($q): void {
+                $q->whereNotNull('ro.user_id')->orWhereNotNull('rs.user_id');
+            });
+
+        if ($restaurantId !== null) {
+            $ownerQuery->where('r.restaurant_id', $restaurantId);
+        } else {
+            $ownerQuery->orderBy('r.restaurant_id');
+        }
+
+        $authorizedRest = $ownerQuery->select('r.restaurant_id')->first();
+        if (! $authorizedRest) {
+            abort(403, 'You are not authorized to preview this restaurant.');
+        }
+
+        $targetId = (int) $authorizedRest->restaurant_id;
+
+        $activeTablesSub = DB::table('restaurant_tables as rt')
+            ->whereColumn('rt.restaurant_id', 'r.restaurant_id')
+            ->where('rt.is_active', 1)
+            ->selectRaw('COUNT(*)');
+
+        $row = DB::table('restaurants as r')
+            ->join('addresses as a', 'a.address_id', '=', 'r.address_id')
+            ->join('barangays as b', 'b.barangay_id', '=', 'a.barangay_id')
+            ->join('cities as c', 'c.city_id', '=', 'b.city_id')
+            ->join('provinces as p', 'p.province_id', '=', 'c.province_id')
+            ->where('r.restaurant_id', $targetId)
+            ->select([
+                'r.restaurant_id',
+                'r.restaurant_name',
+                'r.branch_name',
+                'r.brand_restaurant_id',
+                'r.parent_restaurant_id',
+                'r.business_type',
+                'r.description',
+                'r.contact_phone',
+                'r.logo_image',
+                'r.cover_image',
+                'r.offers_delivery',
+                'r.offers_pickup',
+                'r.offers_dine_in',
+                'r.accepts_reservations',
+                'r.accepting_orders',
+                'r.accepting_reservations',
+                'r.is_published',
+                'r.restaurant_status',
+                'r.reservation_min_notice_hours',
+                'r.reservation_max_party_size',
+                'r.reservation_notes',
+                'r.reservation_duration_minutes',
+                'r.reservation_max_advance_days',
+                'r.reservation_cancellation_cutoff_minutes',
+                'r.reservation_deposit_required',
+                'r.reservation_deposit_amount',
+                'r.reservation_service_fee',
+                'a.street',
+                'a.building_name',
+                'a.landmark',
+                'a.postal_code',
+                'b.barangay_name',
+                'c.city_name',
+                'p.province_name',
+            ])
+            ->selectSub($activeTablesSub, 'active_tables_count')
+            ->first();
+
+        if (! $row) {
+            throw new NotFoundHttpException('Restaurant not found.');
+        }
+
+        $brandId = (int) ($row->brand_restaurant_id ?? $targetId);
+        $categories = $this->loadCategoriesForRestaurants([$targetId])->get($targetId, collect())->values()->all();
+        $hours = $this->loadOperatingHoursForRestaurants([$targetId])->get($targetId, collect());
+        $closures = $this->loadRelevantClosuresForRestaurants([$targetId])->get($targetId, collect());
+        $availability = $this->availabilityService->compute($row, $hours, $closures);
+        $ratingSummary = $this->loadRatingSummariesForRestaurants([$targetId])->get($targetId);
+        $siblings = $this->loadVisibleSiblings($brandId, $targetId);
+
+        $details = $this->formatPublicRestaurantDetails(
+            $row,
+            $categories,
+            $hours,
+            $availability,
+            $ratingSummary,
+            $siblings,
+        );
+
+        $menuCategories = DB::table('menu_categories')
+            ->where('restaurant_id', $targetId)
+            ->where('is_active', 1)
+            ->where('draft_state', '!=', 'pending_delete')
+            ->orderBy('sort_order')
+            ->orderBy('menu_category_id')
+            ->get(['menu_category_id', 'category_name', 'description', 'sort_order']);
+
+        $categoryIds = $menuCategories->pluck('menu_category_id')->map(fn ($id) => (int) $id)->all();
+        $menuItems = $categoryIds === []
+            ? collect()
+            : DB::table('menu_items')
+                ->where('restaurant_id', $targetId)
+                ->whereIn('menu_category_id', $categoryIds)
+                ->where('draft_state', '!=', 'pending_delete')
+                ->where('availability_status', '!=', 'hidden')
+                ->orderBy('sort_order')
+                ->orderBy('menu_item_id')
+                ->get([
+                    'menu_item_id',
+                    'menu_category_id',
+                    'item_name',
+                    'description',
+                    'photo_image',
+                    'base_price',
+                    'availability_status',
+                    'sort_order',
+                ]);
+
+        $itemIds = $menuItems->pluck('menu_item_id')->map(fn ($id) => (int) $id)->all();
+        $addOnGroupsByItem = $this->loadAddOnGroupsForItems($itemIds);
+
+        return [
+            'restaurant' => $details,
+            'categories' => $this->formatPublicMenuCategories($menuCategories, $menuItems, $addOnGroupsByItem),
+            'is_preview' => true,
+            'is_published' => (bool) ($row->is_published ?? false),
+            'restaurant_status' => (string) ($row->restaurant_status ?? ''),
+        ];
+    }
+
+    /**
      * @param  array<int, int>  $brandIds
      * @return Collection<int, int>
      */

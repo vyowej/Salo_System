@@ -10,6 +10,8 @@ import ImageUploader from '../../../components/common/ImageUploader';
 import RestaurantImage from '../../customer/components/RestaurantImage';
 import { EmptyState, ErrorState, LoadingSpinner } from '../../../components/feedback';
 import MenuPublishBar from '../components/MenuPublishBar';
+import BulkAddCategoriesModal from '../components/BulkAddCategoriesModal';
+import BulkAddItemsModal from '../components/BulkAddItemsModal';
 import { useRestaurantAccess } from '../access/useRestaurantAccess';
 import { INVENTORY_MENU_DISPLAY } from './inventoryMenuDisplayConfig';
 import {
@@ -94,6 +96,8 @@ export default function OwnerMenuPage() {
   const [replacementCategoryId, setReplacementCategoryId] = useState('');
   const [publishStatus, setPublishStatus] = useState(null);
   const [publishBusy, setPublishBusy] = useState(false);
+  const [bulkCategoriesOpen, setBulkCategoriesOpen] = useState(false);
+  const [bulkItemsOpen, setBulkItemsOpen] = useState(false);
 
   const loadMenu = useCallback(async () => {
     setLoading(true);
@@ -500,7 +504,10 @@ export default function OwnerMenuPage() {
   return (
     <OwnerLayout>
       {access.canAccess(['menu.items.create', 'menu.pricing.manage']) && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
+          {access.canAccess(['menu.items.create']) && categories.length > 0 && (
+            <Button variant="outline" size="md" onClick={() => setBulkItemsOpen(true)}>Add multiple items</Button>
+          )}
           <Button variant="primary" size="md" onClick={openAddItem}>+ Add New Item</Button>
         </div>
       )}
@@ -513,6 +520,7 @@ export default function OwnerMenuPage() {
         onUnpublish={handleUnpublishRestaurant}
         onDiscard={handleDiscardChanges}
         onPreview={handlePreviewMenu}
+        onOpenCustomerPreview={() => navigate(`/owner/preview/${selectedRestaurantId || ''}`)}
       />
 
       <section style={{ background: 'var(--surface-primary)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)', marginBottom: 'var(--space-6)' }}>
@@ -549,6 +557,7 @@ export default function OwnerMenuPage() {
           <form onSubmit={submitCategory} style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
             <input aria-label="Category name" value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="New category name" style={{ ...CONTROL_STYLE, flex: 1, minWidth: 200 }} disabled={categorySaving} />
             <Button type="submit" variant="primary" size="sm" loading={categorySaving} disabled={categorySaving}>{editingCategoryId ? (categorySaving ? 'Saving...' : 'Save category') : (categorySaving ? 'Adding...' : 'Add category')}</Button>
+            {!editingCategoryId && <Button type="button" variant="outline" size="sm" disabled={categorySaving} onClick={() => setBulkCategoriesOpen(true)}>Add multiple</Button>}
             {editingCategoryId && <Button type="button" variant="ghost" size="sm" disabled={categorySaving} onClick={() => { setEditingCategoryId(null); setCategoryName(''); }}>Cancel</Button>}
           </form>
         )}
@@ -656,28 +665,17 @@ export default function OwnerMenuPage() {
               {categories.filter((category) => category.visible || category.name === formData.category).map((category) => <option key={category.id} value={category.name}>{category.name}{category.visible ? '' : ' (hidden)'}</option>)}
             </select>
           </Field>}
-          {access.canAccess(['menu.pricing.manage']) && <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-              <Field label="Regular price (₱)" error={formErrors.price}>
-                <input type="number" min="0.01" step="0.01" required value={formData.price} onChange={(event) => setFormData({ ...formData, price: event.target.value })} style={CONTROL_STYLE} />
-              </Field>
-              <Field label="Discounted price (Coming soon)" error={formErrors.discountedPrice}>
-                <input type="number" min="0.01" step="0.01" disabled value={formData.discountedPrice} placeholder="Coming soon" style={CONTROL_STYLE} />
-              </Field>
-            </div>
-          </>}
+          {access.canAccess(['menu.pricing.manage']) && (
+            <Field label="Price (₱)" error={formErrors.price}>
+              <input type="number" min="0.01" step="0.01" required value={formData.price} onChange={(event) => setFormData({ ...formData, price: event.target.value })} style={CONTROL_STYLE} />
+            </Field>
+          )}
           {access.canAccess(['menu.availability.manage']) && <Field label="Availability" error={formErrors.availability}>
             <select value={formData.availability} onChange={(event) => setFormData({ ...formData, availability: event.target.value })} style={CONTROL_STYLE}>
               {MENU_AVAILABILITY.map((status) => <option key={status} value={status}>{AVAILABILITY_LABELS[status]}</option>)}
             </select>
           </Field>}
           {access.canAccess(['menu.photos.manage']) && <ImageUploader id="menu-item-photo" label="Menu item photo" value={formData.photo} onChange={handlePhotoChange} deferCleanup />}
-          {(!editingItem || access.canAccess(['menu.items.edit'])) && <Field label="Preparation information (Coming soon)">
-            <input disabled value={formData.preparationInfo} placeholder="Coming soon" style={CONTROL_STYLE} />
-          </Field>}
-          {(!editingItem || access.canAccess(['menu.items.edit'])) && <Field label="Dietary information (Coming soon)">
-            <input disabled value={formData.dietaryInfo.join(', ')} placeholder="Coming soon" style={CONTROL_STYLE} />
-          </Field>}
           {access.canAccess(['menu.addons.manage']) && (
             <section style={{ borderTop: '1px solid var(--border-secondary)', paddingTop: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
@@ -759,6 +757,53 @@ export default function OwnerMenuPage() {
         title="Menu Warning"
         message={warning}
         onClose={() => setWarning('')}
+      />
+      <BulkAddCategoriesModal
+        open={bulkCategoriesOpen}
+        onClose={() => setBulkCategoriesOpen(false)}
+        existingCategories={categories}
+        onSaveAll={async (categoryPayload) => {
+          const created = await ownerService.bulkCreateMenuCategories(selectedRestaurantId, categoryPayload);
+          if (Array.isArray(created) && created.length > 0) {
+            setCategories((prev) => [
+              ...prev,
+              ...created.map((cat) => ({
+                id: cat.id,
+                name: cat.name,
+                description: cat.description,
+                visible: cat.is_active !== false,
+                sortOrder: cat.sort_order ?? 0,
+                itemsCount: cat.items_count ?? 0,
+                publish_state: cat.publish_state || (cat.is_published ? 'published' : 'new'),
+                is_published: Boolean(cat.is_published),
+                published: cat.published || null,
+              })),
+            ]);
+          }
+          ownerService.getMenuPublishStatus(selectedRestaurantId).then(setPublishStatus).catch(() => {});
+        }}
+      />
+      <BulkAddItemsModal
+        open={bulkItemsOpen}
+        onClose={() => setBulkItemsOpen(false)}
+        categories={categories}
+        onSaveAll={async (menuCategoryId, rows) => {
+          const res = await ownerService.bulkCreateMenuItems(selectedRestaurantId, menuCategoryId, rows);
+          const createdItems = Array.isArray(res?.items) ? res.items : [];
+          if (createdItems.length > 0) {
+            setMenuItems((prev) => [
+              ...prev,
+              ...createdItems.map((item) =>
+                normalizeMenuItem({
+                  ...item,
+                  photo: item.photo_url ? { id: `item-${item.id}`, src: item.photo_url } : null,
+                }),
+              ),
+            ]);
+          }
+          ownerService.getMenuPublishStatus(selectedRestaurantId).then(setPublishStatus).catch(() => {});
+          return res;
+        }}
       />
     </OwnerLayout>
   );

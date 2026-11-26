@@ -114,6 +114,97 @@ class OwnerMenuService
     }
 
     /**
+     * @param  array<int, array<string, mixed>>  $categoriesInput
+     * @return list<array<string, mixed>>
+     */
+    public function bulkCreateCategories(User $user, array $categoriesInput, ?int $restaurantId, Request $request): array
+    {
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuManage($user, $restaurantId);
+        $targetId = (int) $restaurant->restaurant_id;
+
+        $existingNames = DB::table('menu_categories')
+            ->where('restaurant_id', $targetId)
+            ->pluck('category_name')
+            ->map(static fn ($n): string => mb_strtolower(trim((string) $n)))
+            ->flip()
+            ->all();
+
+        $errors = [];
+        $seenInBatch = [];
+        $cleanRows = [];
+
+        foreach ($categoriesInput as $idx => $entry) {
+            $name = trim((string) ($entry['category_name'] ?? ''));
+            if ($name === '') {
+                $errors["categories.{$idx}.category_name"][] = 'Category name is required.';
+                continue;
+            }
+            $lower = mb_strtolower($name);
+            if (isset($seenInBatch[$lower])) {
+                $errors["categories.{$idx}.category_name"][] = "Duplicate category \"{$name}\" in this batch.";
+                continue;
+            }
+            if (isset($existingNames[$lower])) {
+                $errors["categories.{$idx}.category_name"][] = "Category \"{$name}\" already exists for your restaurant.";
+                continue;
+            }
+            $seenInBatch[$lower] = true;
+            $cleanRows[] = [
+                'name' => $name,
+                'description' => ! empty($entry['description']) ? trim((string) $entry['description']) : null,
+            ];
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        $nextOrder = ((int) DB::table('menu_categories')->where('restaurant_id', $targetId)->max('sort_order')) + 1;
+
+        $createdIds = DB::transaction(function () use ($targetId, $cleanRows, $nextOrder, $user, $request): array {
+            $now = now();
+            $ids = [];
+            foreach ($cleanRows as $offset => $row) {
+                $id = (int) DB::table('menu_categories')->insertGetId([
+                    'restaurant_id' => $targetId,
+                    'category_name' => $row['name'],
+                    'description' => $row['description'],
+                    'sort_order' => $nextOrder + $offset,
+                    'is_active' => 1,
+                    'draft_state' => 'new',
+                    'is_published' => 0,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+                $ids[] = $id;
+            }
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: 'owner_menu_categories_bulk_created',
+                entityType: 'menu_categories',
+                entityId: $ids[0] ?? $targetId,
+                newValues: [
+                    'restaurant_id' => $targetId,
+                    'count' => count($ids),
+                    'category_names' => array_column($cleanRows, 'name'),
+                ],
+                request: $request,
+            );
+
+            return $ids;
+        });
+
+        $rows = DB::table('menu_categories')
+            ->whereIn('menu_category_id', $createdIds)
+            ->orderBy('sort_order')
+            ->orderBy('menu_category_id')
+            ->get();
+
+        return $rows->map(fn (object $row): array => $this->formatCategory($row, 0))->all();
+    }
+
+    /**
      * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
      */
@@ -554,6 +645,100 @@ class OwnerMenuService
         }
 
         return $this->getFormattedItem($itemId, $targetId);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $itemsInput
+     * @param  array<int|string, UploadedFile|null>  $photos
+     * @return array{items: list<array<string, mixed>>, photo_errors: list<array<string, mixed>>}
+     */
+    public function bulkCreateItems(
+        User $user,
+        int $categoryId,
+        array $itemsInput,
+        array $photos,
+        ?int $restaurantId,
+        Request $request,
+    ): array {
+        $restaurant = $this->workspaceAccessResolver->requireActiveAuthorizedRestaurantForMenuManage($user, $restaurantId);
+        $targetId = (int) $restaurant->restaurant_id;
+
+        $this->assertCategoryOwnedByRestaurant($categoryId, $targetId);
+
+        $createdIds = DB::transaction(function () use ($targetId, $categoryId, $itemsInput, $user, $request): array {
+            $now = now();
+            $nextOrder = ((int) DB::table('menu_items')->where('restaurant_id', $targetId)->max('sort_order')) + 1;
+            $ids = [];
+
+            foreach ($itemsInput as $offset => $item) {
+                $price = number_format((float) $item['base_price'], 2, '.', '');
+                $availability = (string) ($item['availability_status'] ?? 'available');
+                $id = (int) DB::table('menu_items')->insertGetId([
+                    'restaurant_id' => $targetId,
+                    'menu_category_id' => $categoryId,
+                    'item_name' => trim((string) $item['item_name']),
+                    'description' => ! empty($item['description']) ? trim((string) $item['description']) : null,
+                    'photo_image' => null,
+                    'base_price' => $price,
+                    'availability_status' => $availability,
+                    'approval_status' => 'approved',
+                    'sort_order' => $nextOrder + $offset,
+                    'draft_state' => 'new',
+                    'is_published' => 0,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+                $ids[] = $id;
+            }
+
+            $this->auditLogService->record(
+                actorUserId: (int) $user->user_id,
+                action: 'owner_menu_items_bulk_created',
+                entityType: 'menu_items',
+                entityId: $ids[0] ?? $categoryId,
+                newValues: [
+                    'restaurant_id' => $targetId,
+                    'menu_category_id' => $categoryId,
+                    'count' => count($ids),
+                ],
+                request: $request,
+            );
+
+            return $ids;
+        });
+
+        $photoErrors = [];
+        foreach ($createdIds as $idx => $itemId) {
+            $photoFile = $photos[$idx] ?? null;
+            if (! $photoFile instanceof UploadedFile) {
+                continue;
+            }
+            try {
+                $storedPath = $this->storeMenuPhotoIfPresent($photoFile, $restaurant, $categoryId);
+                if ($storedPath !== null) {
+                    DB::table('menu_items')
+                        ->where('menu_item_id', $itemId)
+                        ->update(['photo_image' => $storedPath, 'updated_at' => now()]);
+                }
+            } catch (\Throwable $e) {
+                $photoErrors[] = [
+                    'index' => $idx,
+                    'item_id' => $itemId,
+                    'item_name' => trim((string) ($itemsInput[$idx]['item_name'] ?? '')),
+                    'error' => $e->getMessage() ?: 'Photo upload failed.',
+                ];
+            }
+        }
+
+        $formatted = array_map(
+            fn (int $id): array => $this->getFormattedItem($id, $targetId),
+            $createdIds,
+        );
+
+        return [
+            'items' => $formatted,
+            'photo_errors' => $photoErrors,
+        ];
     }
 
     /**

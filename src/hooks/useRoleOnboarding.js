@@ -175,7 +175,8 @@ export function useRoleOnboarding(role, options = {}) {
       return true;
     }
 
-    return Boolean(access?.isOwner && access?.membership?.status === 'approved');
+    const fallbackStatus = String(access?.membership?.status || access?.selectedRestaurant?.status || '').toLowerCase();
+    return Boolean(access?.isOwner && ['approved', 'active'].includes(fallbackStatus));
   }, [user, normalizedRole, access]);
 
   // Resolve backend numeric restaurant ID if user has one in restaurant_ownerships

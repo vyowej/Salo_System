@@ -129,7 +129,6 @@ test('OwnerLayout, OwnerProfilePage, and OwnerMenuPage enforce non-active gate, 
     new URL('../features/restaurant/pages/OwnerMenuPage.jsx', import.meta.url),
     'utf8',
   );
-  assert.ok(menuSrc.includes('Discounted price (Coming soon)'));
-  assert.ok(menuSrc.includes('Preparation information (Coming soon)'));
-  assert.ok(menuSrc.includes('Dietary information (Coming soon)'));
+  assert.ok(menuSrc.includes('Price (₱)'));
+  assert.equal(menuSrc.includes('Coming soon'), false);
 });

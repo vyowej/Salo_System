@@ -285,6 +285,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
 
         Route::get('/menu/categories', [OwnerMenuController::class, 'categories']);
         Route::post('/menu/categories', [OwnerMenuController::class, 'storeCategory']);
+        Route::post('/menu/categories/bulk', [OwnerMenuController::class, 'bulkStoreCategories']);
         Route::put('/menu/categories/reorder', [OwnerMenuController::class, 'reorderCategories']);
         Route::patch('/menu/categories/{categoryId}', [OwnerMenuController::class, 'updateCategory'])->whereNumber('categoryId');
         Route::delete('/menu/categories/{categoryId}', [OwnerMenuController::class, 'destroyCategory'])->whereNumber('categoryId');
@@ -292,6 +293,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
 
         Route::get('/menu/items', [OwnerMenuController::class, 'items']);
         Route::post('/menu/items', [OwnerMenuController::class, 'storeItem']);
+        Route::post('/menu/items/bulk', [OwnerMenuController::class, 'bulkStoreItems']);
         Route::post('/menu/items/{itemId}', [OwnerMenuController::class, 'updateItem'])->whereNumber('itemId');
         Route::patch('/menu/items/{itemId}', [OwnerMenuController::class, 'updateItem'])->whereNumber('itemId');
         Route::patch('/menu/items/{itemId}/availability', [OwnerMenuController::class, 'updateItemAvailability'])->whereNumber('itemId');
@@ -301,6 +303,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
 
         Route::get('/menu/publish-status', [OwnerMenuPublishController::class, 'status']);
         Route::get('/menu/preview', [OwnerMenuPublishController::class, 'preview']);
+        Route::get('/preview', [OwnerMenuPublishController::class, 'restaurantPreview']);
         Route::post('/menu/publish', [OwnerMenuPublishController::class, 'publish'])->middleware('throttle:20,1');
         Route::post('/menu/unpublish', [OwnerMenuPublishController::class, 'unpublish'])->middleware('throttle:20,1');
         Route::post('/menu/discard-changes', [OwnerMenuPublishController::class, 'discard']);

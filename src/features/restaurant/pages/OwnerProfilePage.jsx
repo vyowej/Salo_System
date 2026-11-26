@@ -754,8 +754,8 @@ export default function OwnerProfilePage() {
             <section className="owner-profile-card owner-profile-note-card">
               <h2>Public page preview</h2>
               <p>Customer storefront data comes from this same shared restaurant record. Save your changes before opening the customer page.</p>
-              <Link to={`/customer/restaurants/${selectedRestaurantId}`} target="_blank" rel="noreferrer">
-                <Button type="button" variant="outline" fullWidth>Preview saved customer page</Button>
+              <Link to={`/owner/preview/${selectedRestaurantId}`}>
+                <Button type="button" variant="outline" fullWidth>Preview customer page</Button>
               </Link>
             </section>
           </div>

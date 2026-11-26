@@ -6,6 +6,7 @@ use App\Features\Restaurants\Requests\DiscardMenuChangesRequest;
 use App\Features\Restaurants\Requests\PublishMenuRequest;
 use App\Features\Restaurants\Requests\UnpublishRestaurantRequest;
 use App\Features\Restaurants\Services\MenuPublishService;
+use App\Features\Restaurants\Services\RestaurantService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -15,7 +16,20 @@ class OwnerMenuPublishController extends Controller
 {
     public function __construct(
         private readonly MenuPublishService $menuPublishService,
+        private readonly RestaurantService $restaurantService,
     ) {}
+
+    public function restaurantPreview(Request $request): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+
+        return ApiResponse::success(
+            data: $this->restaurantService->getOwnerPreviewDetails($request->user(), $restaurantId),
+            message: 'Restaurant preview retrieved.',
+        )->withHeaders([
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ]);
+    }
 
     public function status(Request $request): JsonResponse
     {

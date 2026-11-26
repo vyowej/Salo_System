@@ -2,6 +2,8 @@
 
 namespace App\Features\Restaurants\Controllers;
 
+use App\Features\Restaurants\Requests\BulkStoreMenuCategoriesRequest;
+use App\Features\Restaurants\Requests\BulkStoreMenuItemsRequest;
 use App\Features\Restaurants\Requests\ReorderMenuCategoriesRequest;
 use App\Features\Restaurants\Requests\StoreMenuCategoryRequest;
 use App\Features\Restaurants\Requests\StoreMenuItemRequest;
@@ -38,6 +40,18 @@ class OwnerMenuController extends Controller
         return ApiResponse::success(
             data: ['category' => $this->ownerMenuService->createCategory($request->user(), $validated, $restaurantId, $request)],
             message: 'Menu category created.',
+            status: 201,
+        );
+    }
+
+    public function bulkStoreCategories(BulkStoreMenuCategoriesRequest $request): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+        $validated = $request->validated();
+
+        return ApiResponse::success(
+            data: ['categories' => $this->ownerMenuService->bulkCreateCategories($request->user(), $validated['categories'], $restaurantId, $request)],
+            message: 'Menu categories created.',
             status: 201,
         );
     }
@@ -103,6 +117,31 @@ class OwnerMenuController extends Controller
         return ApiResponse::success(
             data: ['item' => $this->ownerMenuService->createItem($request->user(), $validated, $request->file('photo'), $restaurantId, $request)],
             message: 'Menu item created.',
+            status: 201,
+        );
+    }
+
+    public function bulkStoreItems(BulkStoreMenuItemsRequest $request): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+        $validated = $request->validated();
+        $photos = $request->file('photos', []);
+        if (! is_array($photos)) {
+            $photos = [];
+        }
+
+        $result = $this->ownerMenuService->bulkCreateItems(
+            user: $request->user(),
+            categoryId: (int) $validated['menu_category_id'],
+            itemsInput: $validated['items'],
+            photos: $photos,
+            restaurantId: $restaurantId,
+            request: $request,
+        );
+
+        return ApiResponse::success(
+            data: $result,
+            message: 'Menu items created.',
             status: 201,
         );
     }

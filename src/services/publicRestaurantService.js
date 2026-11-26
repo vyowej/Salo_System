@@ -106,6 +106,76 @@ function mapMenuItem(rawItem, categoryName) {
   };
 }
 
+export function normalizeRestaurantWithMenuPayload(raw, menuCategories = []) {
+  if (!raw) return null;
+
+  const categories = Array.isArray(raw.categories) ? raw.categories : [];
+  const categoryNames = categories.map((c) => c.name).filter(Boolean);
+  const safeMenuCategories = Array.isArray(menuCategories) ? menuCategories : [];
+
+  const menu = safeMenuCategories.flatMap((cat) =>
+    (Array.isArray(cat.items) ? cat.items : []).map((item) => mapMenuItem(item, cat.name)),
+  );
+
+  return {
+    id: String(raw.id),
+    name: raw.name,
+    branchName: raw.branch_name || null,
+    brandRestaurantId: raw.brand_restaurant_id ? String(raw.brand_restaurant_id) : String(raw.id),
+    displayName: raw.display_name || raw.name,
+    branchCount: Number(raw.branch_count ?? 1),
+    siblings: Array.isArray(raw.siblings)
+      ? raw.siblings.map((sib) => ({
+        id: String(sib.id),
+        branchName: sib.branch_name || null,
+        displayName: sib.display_name || sib.branch_name || raw.name,
+        shortAddress: sib.short_address || '',
+        availability: sib.availability || {},
+      }))
+      : [],
+    businessType: raw.business_type || '',
+    cuisine: categoryNames.join(' · ') || raw.business_type || 'Restaurant',
+    foodCategories: categoryNames,
+    description: raw.description || '',
+    logoImage: raw.logo_path || null,
+    coverPhoto: raw.cover_path || null,
+    address: raw.address?.full || raw.address?.short || '',
+    shortAddress: raw.address?.short || '',
+    phone: raw.contact_phone || null,
+    operatingHours: formatOperatingHoursSummary(raw.operating_hours),
+    operatingHoursList: Array.isArray(raw.operating_hours) ? raw.operating_hours : [],
+    availability: raw.availability || {},
+    isOpen: Boolean(raw.availability?.is_open),
+    fulfillment: {
+      delivery: Boolean(raw.offers?.delivery),
+      pickup: Boolean(raw.offers?.pickup),
+      dineIn: Boolean(raw.offers?.dine_in),
+      reservations: Boolean(raw.offers?.reservations),
+    },
+    canReserve:
+      raw.can_reserve !== undefined
+        ? Boolean(raw.can_reserve)
+        : Boolean(raw.availability?.can_reserve ?? (raw.offers?.reservations && raw.availability?.accepting_reservations)),
+    reservationMinNoticeHours: Number(raw.reservation_min_notice_hours ?? 2),
+    reservationMaxPartySize: Number(raw.reservation_max_party_size ?? 8),
+    reservationNotes: raw.reservation_notes ?? null,
+    reservationDurationMinutes: Number(raw.reservation_duration_minutes ?? 90),
+    reservationMaxAdvanceDays: Number(raw.reservation_max_advance_days ?? 30),
+    reservationCancellationCutoffMinutes: Number(raw.reservation_cancellation_cutoff_minutes ?? 120),
+    reservationDepositRequired: Boolean(raw.reservation_deposit_required ?? false),
+    reservationDepositAmount: Number(raw.reservation_deposit_amount ?? 0),
+    reservationServiceFee: Number(raw.reservation_service_fee ?? 0),
+    operatingSchedule: {
+      acceptingOrders: Boolean(raw.availability?.accepting_orders),
+      acceptingReservations: Boolean(raw.availability?.accepting_reservations),
+    },
+    rating: raw.rating_summary?.average_rating ?? null,
+    reviewCount: raw.rating_summary?.review_count ?? null,
+    categories: safeMenuCategories.map((c) => c.name),
+    menu,
+  };
+}
+
 export const publicRestaurantService = {
   async getCategories() {
     const response = await apiClient.get('/restaurant-categories', {
@@ -153,71 +223,8 @@ export const publicRestaurantService = {
     const raw = detailRes?.data?.restaurant;
     if (!raw) return null;
 
-    const categories = Array.isArray(raw.categories) ? raw.categories : [];
-    const categoryNames = categories.map((c) => c.name).filter(Boolean);
     const menuCategories = Array.isArray(menuRes?.data?.categories) ? menuRes.data.categories : [];
-
-    const menu = menuCategories.flatMap((cat) =>
-      (Array.isArray(cat.items) ? cat.items : []).map((item) => mapMenuItem(item, cat.name)),
-    );
-
-    return {
-      id: String(raw.id),
-      name: raw.name,
-      branchName: raw.branch_name || null,
-      brandRestaurantId: raw.brand_restaurant_id ? String(raw.brand_restaurant_id) : String(raw.id),
-      displayName: raw.display_name || raw.name,
-      branchCount: Number(raw.branch_count ?? 1),
-      siblings: Array.isArray(raw.siblings)
-        ? raw.siblings.map((sib) => ({
-          id: String(sib.id),
-          branchName: sib.branch_name || null,
-          displayName: sib.display_name || sib.branch_name || raw.name,
-          shortAddress: sib.short_address || '',
-          availability: sib.availability || {},
-        }))
-        : [],
-      businessType: raw.business_type || '',
-      cuisine: categoryNames.join(' · ') || raw.business_type || 'Restaurant',
-      foodCategories: categoryNames,
-      description: raw.description || '',
-      logoImage: raw.logo_path || null,
-      coverPhoto: raw.cover_path || null,
-      address: raw.address?.full || raw.address?.short || '',
-      shortAddress: raw.address?.short || '',
-      phone: raw.contact_phone || null,
-      operatingHours: formatOperatingHoursSummary(raw.operating_hours),
-      operatingHoursList: Array.isArray(raw.operating_hours) ? raw.operating_hours : [],
-      availability: raw.availability || {},
-      isOpen: Boolean(raw.availability?.is_open),
-      fulfillment: {
-        delivery: Boolean(raw.offers?.delivery),
-        pickup: Boolean(raw.offers?.pickup),
-        dineIn: Boolean(raw.offers?.dine_in),
-        reservations: Boolean(raw.offers?.reservations),
-      },
-      canReserve:
-        raw.can_reserve !== undefined
-          ? Boolean(raw.can_reserve)
-          : Boolean(raw.availability?.can_reserve ?? (raw.offers?.reservations && raw.availability?.accepting_reservations)),
-      reservationMinNoticeHours: Number(raw.reservation_min_notice_hours ?? 2),
-      reservationMaxPartySize: Number(raw.reservation_max_party_size ?? 8),
-      reservationNotes: raw.reservation_notes ?? null,
-      reservationDurationMinutes: Number(raw.reservation_duration_minutes ?? 90),
-      reservationMaxAdvanceDays: Number(raw.reservation_max_advance_days ?? 30),
-      reservationCancellationCutoffMinutes: Number(raw.reservation_cancellation_cutoff_minutes ?? 120),
-      reservationDepositRequired: Boolean(raw.reservation_deposit_required ?? false),
-      reservationDepositAmount: Number(raw.reservation_deposit_amount ?? 0),
-      reservationServiceFee: Number(raw.reservation_service_fee ?? 0),
-      operatingSchedule: {
-        acceptingOrders: Boolean(raw.availability?.accepting_orders),
-        acceptingReservations: Boolean(raw.availability?.accepting_reservations),
-      },
-      rating: raw.rating_summary?.average_rating ?? null,
-      reviewCount: raw.rating_summary?.review_count ?? null,
-      categories: menuCategories.map((c) => c.name),
-      menu,
-    };
+    return normalizeRestaurantWithMenuPayload(raw, menuCategories);
   },
 
   async getReservationInfo(restaurantId) {

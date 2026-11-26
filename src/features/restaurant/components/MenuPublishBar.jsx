@@ -27,6 +27,7 @@ export default function MenuPublishBar({
   onUnpublish,
   onDiscard,
   onPreview,
+  onOpenCustomerPreview,
 }) {
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [unpublishModalOpen, setUnpublishModalOpen] = useState(false);
@@ -141,7 +142,7 @@ export default function MenuPublishBar({
         <div className="salo-menu-publish-bar__actions">
           {canPublish ? (
             <>
-              <Button variant="secondary" size="sm" onClick={handleOpenPreview} disabled={busy}>
+              <Button variant="secondary" size="sm" onClick={onOpenCustomerPreview || handleOpenPreview} disabled={busy}>
                 Preview
               </Button>
               {pending.total > 0 ? (
