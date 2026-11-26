@@ -1,0 +1,129 @@
+.salo-payment-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.salo-payment-summary-title {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: 700;
+}
+
+.salo-payment-summary-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.salo-payment-summary-group {
+  padding: var(--space-3);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.salo-payment-summary-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.salo-payment-summary-fulfillment {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.salo-payment-summary-address {
+  margin: 4px 0 8px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.salo-payment-summary-items {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.salo-payment-summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.salo-payment-summary-item-label {
+  color: var(--text-primary);
+}
+
+.salo-payment-summary-item-addons {
+  color: var(--text-muted);
+}
+
+.salo-payment-summary-item-price {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.salo-payment-summary-group-totals {
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.salo-payment-summary-totals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-primary);
+  font-size: var(--font-size-sm);
+}
+
+.salo-payment-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+}
+
+.salo-payment-summary-row span:last-child {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.salo-payment-summary-row.is-discount span {
+  color: var(--status-success-text, #1b5e20);
+}
+
+.salo-payment-summary-grand-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-primary);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.salo-payment-summary-grand-amount {
+  color: var(--accent);
+}
+
+.salo-payment-summary-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}

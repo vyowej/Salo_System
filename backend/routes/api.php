@@ -34,6 +34,7 @@ use App\Features\Locations\Controllers\TrackingController;
 use App\Features\Media\Controllers\PublicImageProxyController;
 use App\Features\Notifications\Controllers\NotificationController;
 use App\Features\Orders\Controllers\CustomerOrderController;
+use App\Features\Orders\Controllers\ReceiptController;
 use App\Features\Orders\Controllers\RestaurantOrderController;
 use App\Features\Payments\Controllers\PaymentController;
 use App\Features\Reservations\Controllers\CustomerReservationController;
@@ -186,6 +187,7 @@ Route::prefix('rider')->middleware('auth')->group(function (): void {
         Route::post('/deliveries/{orderId}/delivered', [RiderDeliveryController::class, 'delivered'])->whereNumber('orderId');
         Route::post('/deliveries/{orderId}/fail', [RiderDeliveryController::class, 'fail'])->whereNumber('orderId');
         Route::get('/deliveries/{orderId}/proof', [RiderDeliveryController::class, 'proof'])->whereNumber('orderId');
+        Route::get('/deliveries/{orderId}/receipt', [ReceiptController::class, 'riderShow'])->whereNumber('orderId');
 
         Route::get('/orders/{id}', [RiderConnectController::class, 'showOrder'])->whereNumber('id');
         Route::post('/orders/{id}/arrive', [RiderConnectController::class, 'arrive'])->whereNumber('id');
@@ -216,6 +218,7 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
     Route::post('/payments/{paymentId}/fail', [PaymentController::class, 'fail'])->whereNumber('paymentId');
     Route::get('/orders', [CustomerOrderController::class, 'index']);
     Route::get('/orders/{id}', [CustomerOrderController::class, 'show'])->whereNumber('id');
+    Route::get('/orders/{id}/receipt', [ReceiptController::class, 'customerShow'])->whereNumber('id');
     Route::post('/orders/{id}/cancel', [CustomerOrderController::class, 'cancel'])->whereNumber('id');
     Route::post('/orders/{id}/call/respond', [CustomerConnectController::class, 'respondToCall'])->whereNumber('id');
 
@@ -320,6 +323,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
 
         Route::get('/orders', [RestaurantOrderController::class, 'index']);
         Route::get('/orders/{id}', [RestaurantOrderController::class, 'show'])->whereNumber('id');
+        Route::get('/orders/{id}/receipt', [ReceiptController::class, 'restaurantShow'])->whereNumber('id');
         Route::post('/orders/{id}/accept', [RestaurantOrderController::class, 'accept'])->whereNumber('id');
         Route::post('/orders/{id}/reject', [RestaurantOrderController::class, 'reject'])->whereNumber('id');
         Route::post('/orders/{id}/prepare', [RestaurantOrderController::class, 'prepare'])->whereNumber('id');

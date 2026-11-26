@@ -1409,6 +1409,16 @@ export default function OrderDetailPage() {
             </div>
           )}
 
+          {['completed', 'delivered'].includes(statusKey) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <Link to={`/customer/orders/${order.id}/receipt`} style={{ textDecoration: 'none' }}>
+                <Button variant="secondary" size="sm">
+                  View receipt
+                </Button>
+              </Link>
+            </div>
+          )}
+
         </div>
       </div>
 

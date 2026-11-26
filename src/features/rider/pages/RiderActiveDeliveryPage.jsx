@@ -339,9 +339,16 @@ export default function RiderActiveDeliveryPage() {
               </Button>
             )}
             {(isDelivered || isFailed) && (
-              <Link to="/rider/deliveries">
-                <Button variant="primary">Find next delivery</Button>
-              </Link>
+              <>
+                {isDelivered && (
+                  <Link to={`/rider/deliveries/${delivery.order_id}/receipt`}>
+                    <Button variant="secondary">View receipt</Button>
+                  </Link>
+                )}
+                <Link to="/rider/deliveries">
+                  <Button variant="primary">Find next delivery</Button>
+                </Link>
+              </>
             )}
           </div>
         </CardBody>

@@ -224,7 +224,7 @@ function getAddOnsSignature(selectedAddOns) {
   return JSON.stringify(normalized);
 }
 
-function getItemAddOnCost(item) {
+export function getItemAddOnCost(item) {
   if (!Array.isArray(item?.selectedAddOns)) return 0;
   return item.selectedAddOns.reduce((sum, addon) => sum + Number(addon?.price || 0), 0);
 }

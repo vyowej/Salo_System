@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import OwnerLayout from '../../../layouts/OwnerLayout';
 import ownerService from '../../../services/ownerService';
 import Button from '../../../components/common/Button';
@@ -407,10 +408,19 @@ export default function OwnerOrdersPage() {
                       <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', margin: 0 }}>
                         Out for delivery{order.riderFirstName ? ` with ${order.riderFirstName}` : ''}.
                       </p>
-                    ) : statusKey === 'delivered' ? (
-                      <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', margin: 0 }}>
-                        Delivered{order.deliveredAt ? ` at ${formatDateTime(order.deliveredAt)}` : ''}.
-                      </p>
+                    ) : statusKey === 'delivered' || statusKey === 'completed' ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', margin: 0 }}>
+                          {statusKey === 'delivered'
+                            ? `Delivered${order.deliveredAt ? ` at ${formatDateTime(order.deliveredAt)}` : ''}.`
+                            : 'Order completed.'}
+                        </p>
+                        <Link to={`/restaurant/orders/${order.id}/receipt`} style={{ textDecoration: 'none' }}>
+                          <Button variant="secondary" size="sm">
+                            View receipt
+                          </Button>
+                        </Link>
+                      </div>
                     ) : null}
                   </div>
                 )}

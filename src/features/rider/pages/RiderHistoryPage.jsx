@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardBody } from '../../../components/common/Card';
 import { StateView as GlobalStateView } from '../../../components/feedback';
 import PageHeader from '../components/PageHeader';
@@ -122,6 +123,16 @@ export default function RiderHistoryPage() {
                   {row.cod_amount_collected > 0 && (
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                       COD: {formatPeso(row.cod_amount_collected)} ({row.cod_remittance_status})
+                    </div>
+                  )}
+                  {row.delivery_status === 'delivered' && (
+                    <div style={{ marginTop: 6 }}>
+                      <Link
+                        to={`/rider/deliveries/${row.order_id}/receipt`}
+                        style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--accent)' }}
+                      >
+                        View receipt
+                      </Link>
                     </div>
                   )}
                 </div>

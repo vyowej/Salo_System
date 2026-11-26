@@ -6,16 +6,14 @@ import useAddresses from '../../../hooks/useAddresses';
 import Button from '../../../components/common/Button';
 import RestaurantImage from '../components/RestaurantImage';
 import { checkAddressCoverage } from '../utils/deliveryCoverage';
-import { findAddressBySelectionId } from '../utils/checkoutAddressValidation';
+import { expandRestaurantGroupsToSubOrders, findAddressBySelectionId } from '../utils/checkoutAddressValidation';
+import ItemizedPaymentSummary from '../components/ItemizedPaymentSummary';
 import './CartPage.css';
 
 export default function CartPage() {
   const navigate = useNavigate();
   const {
     restaurantGroups,
-    itemsSubtotal,
-    totalDeliveryFees,
-    grandTotal,
     updateQuantity,
     removeItem,
     clearCart,
@@ -588,38 +586,13 @@ export default function CartPage() {
           top: 'calc(var(--topbar-height) + var(--space-4))',
           boxShadow: 'var(--shadow-sm)',
         }}>
-          <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>
-            Consolidated Summary
-          </h2>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-5)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Food Subtotal</span>
-              <span style={{ fontWeight: 600 }}>₱{itemsSubtotal.toLocaleString()}</span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Combined Delivery Fees</span>
-              <span style={{ fontWeight: 600 }}>₱{totalDeliveryFees.toLocaleString()}</span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--salo-success)', fontSize: 'var(--font-size-xs)' }}>
-              <span>Multi-vendor consolidated checkout</span>
-              <span>Enabled ✓</span>
-            </div>
-
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              paddingTop: 'var(--space-3)',
-              borderTop: '1px solid var(--border-primary)',
-              fontSize: 'var(--font-size-lg)',
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-            }}>
-              <span>Total Payable</span>
-              <span style={{ color: 'var(--accent)' }}>₱{grandTotal.toLocaleString()}</span>
-            </div>
+          <div style={{ marginBottom: 'var(--space-5)' }}>
+            <ItemizedPaymentSummary
+              subOrders={expandRestaurantGroupsToSubOrders(restaurantGroups)}
+              title="Consolidated Summary"
+              grandTotalLabel="Total Payable"
+              note="Multi-vendor consolidated checkout enabled."
+            />
           </div>
 
           <div

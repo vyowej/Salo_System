@@ -25,6 +25,7 @@ const CartPage = lazy(() => import('./features/customer/pages/CartPage'));
 const CheckoutPage = lazy(() => import('./features/customer/pages/CheckoutPage'));
 const OrdersPage = lazy(() => import('./features/customer/pages/OrdersPage'));
 const OrderDetailPage = lazy(() => import('./features/customer/pages/OrderDetailPage'));
+const OrderReceiptPage = lazy(() => import('./features/orders/pages/OrderReceiptPage'));
 const FavoritesPage = lazy(() => import('./features/customer/pages/FavoritesPage'));
 const NotificationsPage = lazy(() => import('./features/customer/pages/NotificationsPage'));
 const ReservationsPage = lazy(() => import('./features/customer/pages/ReservationsPage'));
@@ -379,6 +380,7 @@ function AppShell() {
             <Route path="/customer/checkout" element={<CheckoutPage />} />
             <Route path="/customer/orders" element={<OrdersPage />} />
             <Route path="/customer/orders/:id" element={<OrderDetailPage />} />
+            <Route path="/customer/orders/:id/receipt" element={<OrderReceiptPage role="customer" />} />
             <Route path="/customer/favorites" element={<FavoritesPage />} />
             <Route path="/customer/notifications" element={<NotificationsPage />} />
             <Route path="/customer/reservations" element={<ReservationsPage />} />
@@ -402,6 +404,7 @@ function AppShell() {
             <Route path="profile" element={<RequireAccess itemId="profile"><OwnerProfilePage /></RequireAccess>} />
             <Route path="menu" element={<RequireAccess itemId="menu"><OwnerMenuPage /></RequireAccess>} />
             <Route path="orders" element={<RequireAccess itemId="orders"><OwnerOrdersPage /></RequireAccess>} />
+            <Route path="orders/:id/receipt" element={<RequireAccess itemId="orders"><OrderReceiptPage role="restaurant" /></RequireAccess>} />
             <Route path="reservations" element={<RequireAccess itemId="reservations"><OwnerReservationsPage /></RequireAccess>} />
             <Route path="tables" element={<RequireAccess itemId="tables"><OwnerTablesPage /></RequireAccess>} />
             <Route path="inventory" element={<RequireAccess itemId="inventory"><OwnerInventoryPage /></RequireAccess>} />
@@ -423,6 +426,7 @@ function AppShell() {
             <Route path="jobs" element={<RiderDeliveriesPage />} />
             <Route path="deliveries" element={<RiderDeliveriesPage />} />
             <Route path="deliveries/active" element={<RiderActiveDeliveryPage />} />
+            <Route path="deliveries/:orderId/receipt" element={<OrderReceiptPage role="rider" />} />
             <Route path="active" element={<RiderActiveDeliveryPage />} />
             <Route path="map" element={<RiderMapPage />} />
             <Route path="schedule" element={<RiderSchedulePage />} />

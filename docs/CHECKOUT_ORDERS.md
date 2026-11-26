@@ -9,6 +9,7 @@ All endpoints require `auth` middleware.
 | `POST` | `/api/customer/checkout` | Validate cart groups, compute totals on the backend, and create checkout + per-restaurant orders + COD payments in one transaction. |
 | `GET` | `/api/customer/orders` | Paginated list of the authenticated customer's orders (`page`, `per_page`, optional `status`), newest first. |
 | `GET` | `/api/customer/orders/{id}` | Order detail with item snapshots, fee, subtotal, total, address snapshot, payment status, and restaurant logo URL. Returns `404` if not owned by the user. |
+| `GET` | `/api/customer/orders/{id}/receipt` | Printable customer receipt for finalized orders (`delivered` for delivery, `completed` for pickup/dine-in; `409` otherwise, `404` if not owned). |
 | `POST` | `/api/customer/orders/{id}/cancel` | Cancel the customer's own `pending` order (optional `reason`), set `cancelled_at` / `cancelled_by = 'customer'`, cancel its pending cash payment, and write an audit log. Returns `409` if not pending or `404` if not owned by the user. |
 
 ---
@@ -62,3 +63,24 @@ Client-sent prices or totals are ignored.
 - **Delivery fee formula:** Currently a flat configurable placeholder (`SALO_FLAT_DELIVERY_FEE=49.00`) per delivery sub-order; distance/zone-based fees are future work.
 
 - **Multi-branch `restaurant_name` snapshot (Phase 6a):** `CheckoutService` snapshots `display_name` (`"<restaurant_name> — <branch_name>"`, or `<restaurant_name>` for single-location businesses) into `orders.restaurant_name`, `computedGroupsSummary`, and `order_received` notification text. Existing orders keep their original snapshot.
+
+---
+
+## 5. Phase 5: Itemized Payment Summary & Role-Scoped Receipts
+
+### Shared Itemized Payment Summary (`ItemizedPaymentSummary`)
+- Used across Cart / Multi-Cart (`CartPage`), Checkout (`CheckoutPage`), and Order Confirmation (`confirmedCheckout`).
+- **Delivery group breakdown:** Groups by `(restaurant, delivery_address)` (or pickup/dine-in group). Each group displays:
+  - Restaurant name (and formal delivery address via `formatFormalAddress` when delivery).
+  - Each item line (`[Item name] × quantity` with add-ons and line price).
+  - Group `Food subtotal` and `Delivery fee` (or `No delivery fee` for pickup/dine-in).
+- **Consolidated totals:** Displays `Food total`, `Delivery fee` (when 1 delivery group) or `Combined delivery fees` (when >1 delivery groups), optional promo discount, and `Grand Total` computed in integer centavos so it matches `sum(groups[].expected_total) - promoDiscount` sent to `POST /api/customer/checkout`.
+
+### Role-Authorized Receipt Endpoints
+All receipts derive strictly from persisted order/item/payment/delivery snapshots (even if live menu item names or prices later change) and format timestamps in `Asia/Manila`.
+
+| Role | Endpoint | Authorization | Finalized-Status Rule | Visible Fields & Privacy |
+| --- | --- | --- | --- | --- |
+| Customer | `GET /api/customer/orders/{id}/receipt` | `auth`; `orders.customer_id === user_id` (`404` otherwise) | `delivery` -> `delivered`; `pickup`/`dine_in` -> `completed` (`409` if non-final, `cancelled`, or `rejected`) | Receipt & order ref, restaurant, `placed_at` & `finalized_at`, formal delivery address & `rider_first_name` (delivery), snapshot items & add-ons, subtotal, delivery fee, total, payment method/status (`Paid` / `Paid in cash`), and `sibling_orders` links for multi-restaurant checkouts. |
+| Restaurant | `GET /api/restaurant/orders/{id}/receipt` | `auth` + `role:owner,staff` + `WorkspaceAccessResolver::requireActiveAuthorizedRestaurantForOrders` (`403`/`404` otherwise) | `delivery` -> `delivered`; `pickup`/`dine_in` -> `completed` (`409` otherwise) | Receipt & order ref, restaurant, `customer_name` (same as restaurant order view), `placed_at` & `finalized_at`, snapshot items & add-ons, subtotal, delivery fee, total, payment method/status, and `cod_remittance_status` (when COD). |
+| Rider | `GET /api/rider/deliveries/{orderId}/receipt` | `auth` + `role:rider`; active rider assigned to `deliveries.rider_id` (`403`/`404` otherwise) | `deliveries.delivery_status === 'delivered'` (`409` otherwise) | Receipt & order ref, restaurant, pickup address, formal drop-off address, `placed_at` & `delivered_at`, `delivery_fee`, `total_amount`, payment method/status, `cod_amount_collected`, and `cod_remittance_status`. Omits itemized food list and customer contact details. |

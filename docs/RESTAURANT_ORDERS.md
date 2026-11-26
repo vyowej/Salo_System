@@ -44,6 +44,7 @@ The backend exposes `order_handler_positions` (from `config('salo.orders.handler
 | --- | --- | --- |
 | `GET` | `/api/restaurant/orders` | Paginated list (`page`, `per_page`), newest first, optional `status` filter, scoped to the restaurant |
 | `GET` | `/api/restaurant/orders/{id}` | Order detail: items, snapshots, fulfillment, delivery address, payment status, customer name & phone (`404` if another restaurant's order) |
+| `GET` | `/api/restaurant/orders/{id}/receipt` | Printable restaurant receipt for finalized orders (`delivered` for delivery, `completed` for pickup/dine-in; `409` otherwise, `403`/`404` if unauthorized) |
 | `POST` | `/api/restaurant/orders/{id}/accept` | Transition `pending` -> `accepted` |
 | `POST` | `/api/restaurant/orders/{id}/reject` | Transition `pending` -> `rejected` (requires `reason`; HTTP `422` if missing) |
 | `POST` | `/api/restaurant/orders/{id}/prepare` | Transition `accepted` -> `preparing` |

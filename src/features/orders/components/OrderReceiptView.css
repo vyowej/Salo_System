@@ -1,0 +1,197 @@
+.salo-receipt-page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--space-4) 0;
+}
+
+.salo-receipt-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.salo-receipt-sheet {
+  padding: var(--space-6);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xl);
+  background: var(--surface-primary, #fff);
+  color: var(--text-primary);
+}
+
+.salo-receipt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.salo-receipt-brand {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--accent, #f36b2b);
+}
+
+.salo-receipt-title {
+  margin: 4px 0 0;
+  font-size: var(--font-size-xl);
+}
+
+.salo-receipt-ref-block {
+  text-align: right;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.salo-receipt-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px dashed var(--border-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.salo-receipt-meta-wide {
+  grid-column: 1 / -1;
+}
+
+.salo-receipt-meta dt {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.salo-receipt-meta dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+}
+
+.salo-receipt-items-section h2,
+.salo-receipt-siblings h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.salo-receipt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-4);
+}
+
+.salo-receipt-table th,
+.salo-receipt-table td {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-secondary);
+  vertical-align: top;
+}
+
+.salo-receipt-table th {
+  text-align: left;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.salo-receipt-table .is-right {
+  text-align: right;
+}
+
+.salo-receipt-item-name {
+  font-weight: 600;
+}
+
+.salo-receipt-item-addons {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.salo-receipt-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+}
+
+.salo-receipt-total-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.salo-receipt-total-row.is-grand {
+  margin-top: 4px;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-primary);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+}
+
+.salo-receipt-payment-box {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+}
+
+.salo-receipt-siblings {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.salo-receipt-siblings ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.salo-receipt-siblings li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+@media print {
+  @page {
+    size: auto;
+    margin: 12mm;
+  }
+
+  nav,
+  aside,
+  header.topbar,
+  .salo-topbar,
+  .salo-sidebar,
+  .rider-mobile-nav,
+  .customer-mobile-nav,
+  .owner-mobile-nav,
+  .salo-receipt-no-print {
+    display: none !important;
+  }
+
+  .salo-receipt-page {
+    max-width: 100%;
+    padding: 0;
+    margin: 0;
+  }
+
+  .salo-receipt-sheet {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
+}

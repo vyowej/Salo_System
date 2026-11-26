@@ -9,6 +9,7 @@ import customerService from '../../../services/customerService';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import AddressFormModal from '../components/AddressFormModal';
+import ItemizedPaymentSummary from '../components/ItemizedPaymentSummary';
 import { formatFormalAddress } from '../../../utils/addressFormatter';
 import ContactNumberFormModal from '../components/ContactNumberFormModal';
 import {
@@ -309,6 +310,14 @@ export default function CheckoutPage() {
               </p>
             </div>
           )}
+
+          <div style={{ marginBottom: 'var(--space-5)' }}>
+            <ItemizedPaymentSummary
+              subOrders={confirmedCheckout.orders || []}
+              title="Confirmed Payment Summary"
+              grandTotalLabel="Total Confirmed"
+            />
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
             {(confirmedCheckout.orders || []).map((ord) => (
@@ -1046,97 +1055,64 @@ export default function CheckoutPage() {
           position: 'sticky',
           top: 'calc(var(--topbar-height) + var(--space-4))',
         }}>
-          <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>
-            Payment Summary
-          </h2>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-6)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Total Food Subtotal</span>
-              <span style={{ fontWeight: 600 }}>₱{displayedItemsSubtotal.toLocaleString()}</span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Combined Delivery Fees</span>
-              <span style={{ fontWeight: 600 }}>₱{displayedDeliveryFees.toLocaleString()}</span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-              <span>Multi-Vendor Settlement Fee</span>
-              <span>₱0 (Free)</span>
-            </div>
-
-            <div style={{ paddingTop: 'var(--space-2)', borderTop: '1px dashed var(--border-secondary)' }}>
-              <label htmlFor="checkout-promo-code" style={{ display: 'block', fontSize: 'var(--font-size-xs)', fontWeight: 600, marginBottom: 6 }}>
-                Promo Code
-              </label>
-              <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                <input
-                  id="checkout-promo-code"
-                  type="text"
-                  className="input"
-                  placeholder="Enter promo code"
-                  value={promoInput}
-                  onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
-                  disabled={Boolean(appliedPromo) || promoLoading}
-                  style={{ flex: 1 }}
-                />
-                {appliedPromo ? (
-                  <Button type="button" variant="outline" size="sm" onClick={handleRemovePromo}>
-                    Remove
-                  </Button>
-                ) : (
-                  <Button type="button" variant="secondary" size="sm" onClick={handleApplyPromo} disabled={promoLoading}>
-                    {promoLoading ? 'Checking...' : 'Apply'}
-                  </Button>
-                )}
-              </div>
-              {promoError && (
-                <div role="alert" style={{ marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)' }}>
-                  {promoError}
+          <div style={{ marginBottom: 'var(--space-6)' }}>
+            <ItemizedPaymentSummary
+              subOrders={subOrders}
+              serverGroupTotals={serverGroupTotals}
+              appliedPromo={appliedPromo}
+              title="Payment Summary"
+              grandTotalLabel="Estimated Total"
+              note="Estimated total — final prices and delivery fees are confirmed by the server on checkout."
+              promoSlot={(
+                <div style={{ paddingTop: 'var(--space-2)', borderTop: '1px dashed var(--border-secondary)' }}>
+                  <label htmlFor="checkout-promo-code" style={{ display: 'block', fontSize: 'var(--font-size-xs)', fontWeight: 600, marginBottom: 6 }}>
+                    Promo Code
+                  </label>
+                  <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    <input
+                      id="checkout-promo-code"
+                      type="text"
+                      className="input"
+                      placeholder="Enter promo code"
+                      value={promoInput}
+                      onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                      disabled={Boolean(appliedPromo) || promoLoading}
+                      style={{ flex: 1 }}
+                    />
+                    {appliedPromo ? (
+                      <Button type="button" variant="outline" size="sm" onClick={handleRemovePromo}>
+                        Remove
+                      </Button>
+                    ) : (
+                      <Button type="button" variant="secondary" size="sm" onClick={handleApplyPromo} disabled={promoLoading}>
+                        {promoLoading ? 'Checking...' : 'Apply'}
+                      </Button>
+                    )}
+                  </div>
+                  {promoError && (
+                    <div role="alert" style={{ marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)' }}>
+                      {promoError}
+                    </div>
+                  )}
                 </div>
               )}
-              {appliedPromo && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, color: 'var(--status-success-text)', fontWeight: 600 }}>
-                  <span>Promo ({appliedPromo.promo_code})</span>
-                  <span>-₱{Number(appliedPromo.discount_amount || 0).toFixed(2)}</span>
+              footerSlot={hasDeliverySubOrders && selectedContact ? (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  paddingTop: 'var(--space-2)',
+                  borderTop: '1px solid var(--border-secondary)',
+                  fontSize: 'var(--font-size-xs)',
+                }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Delivery Contact</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {selectedContact.label} · {selectedContact.phoneNumber}
+                  </span>
                 </div>
-              )}
-            </div>
-
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              paddingTop: 'var(--space-3)',
-              borderTop: '1px solid var(--border-primary)',
-              fontSize: 'var(--font-size-xl)',
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-            }}>
-              <span>Estimated Total</span>
-              <span style={{ color: 'var(--accent)' }}>
-                ₱{Math.max(0, displayedGrandTotal - Number(appliedPromo?.discount_amount || 0)).toLocaleString()}
-              </span>
-            </div>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
-              Estimated total — final prices and delivery fees are confirmed by the server on checkout.
-            </p>
-            {hasDeliverySubOrders && selectedContact && (
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: 'var(--space-2)',
-                paddingTop: 'var(--space-2)',
-                borderTop: '1px solid var(--border-secondary)',
-                fontSize: 'var(--font-size-xs)',
-              }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Delivery Contact</span>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {selectedContact.label} · {selectedContact.phoneNumber}
-                </span>
-              </div>
-            )}
+              ) : null}
+            />
           </div>
 
           <Button

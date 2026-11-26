@@ -38,6 +38,9 @@
 - **`POST /api/rider/deliveries/{orderId}/delivered`:**
   - Assigned rider only (`404` otherwise), requires `delivery_status = 'picked_up'` and `order_status = 'out_for_delivery'` (`409` otherwise).
   - Transitions `delivery_status` -> `'delivered'` (`deliveries.delivered_at = now()`) and `orders.order_status` -> `'delivered'`. `orders.completed_at` remains `NULL` (moving `delivered -> completed` is not built in Step 9b).
+- **`GET /api/rider/deliveries/{orderId}/receipt`:**
+  - Assigned active rider only (`403`/`404` otherwise), requires `delivery_status = 'delivered'` (`409` otherwise).
+  - Returns printable delivery receipt (order ref, restaurant, pickup & formal drop-off addresses, `placed_at` & `delivered_at` in `Asia/Manila`, delivery fee, order total, payment status, COD collected & remittance status) without exposing itemized food lines or customer contact details.
 - **Timestamps:** All timestamps are returned in consistent `Asia/Manila` ISO-8601 format (`+08:00`) via `OrderTimestampFormatter`. Customer and restaurant views read the delivered time from `deliveries.delivered_at` and see only the assigned rider's `first_name`.
 
 ---

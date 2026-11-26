@@ -410,17 +410,31 @@ export default function OrdersPage() {
                           Track Order
                         </Button>
                       ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          loading={reorderingOrderId === order.id}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleReorder(order);
-                          }}
-                        >
-                          Reorder
-                        </Button>
+                        <>
+                          {bucket === 'completed' && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                navigate(`/customer/orders/${order.id}/receipt`);
+                              }}
+                            >
+                              View receipt
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            loading={reorderingOrderId === order.id}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleReorder(order);
+                            }}
+                          >
+                            Reorder
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
