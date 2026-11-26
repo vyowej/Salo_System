@@ -155,8 +155,12 @@ return [
     ],
 
     'orders' => [
-        // Placeholder flat delivery fee per delivery sub-order (PHP). Pickup fee is always 0.00.
+        // Legacy flat delivery fee key (used as fallback default for base delivery fee).
         'flat_delivery_fee' => (string) env('SALO_FLAT_DELIVERY_FEE', '49.00'),
+        'delivery_fee_base' => (string) env('SALO_DELIVERY_FEE_BASE', env('SALO_FLAT_DELIVERY_FEE', '49.00')),
+        'delivery_fee_base_distance_km' => (float) env('SALO_DELIVERY_FEE_BASE_DISTANCE_KM', 2.0),
+        'delivery_fee_per_extra_km' => (string) env('SALO_DELIVERY_FEE_PER_EXTRA_KM', '10.00'),
+        'delivery_fee_max' => (string) env('SALO_DELIVERY_FEE_MAX', '150.00'),
         'max_item_quantity' => max(1, (int) env('SALO_MAX_ORDER_ITEM_QUANTITY', 50)),
         // Derived from staff.position_permissions (single source of truth).
         'handler_positions' => $positionsWithPermission('orders.view'),

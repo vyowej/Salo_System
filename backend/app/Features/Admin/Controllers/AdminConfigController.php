@@ -12,11 +12,18 @@ class AdminConfigController extends Controller
 {
     public function publicDeliveryFee(PlatformSettingsService $settings): JsonResponse
     {
-        $fee = $settings->getFlatDeliveryFee();
+        $config = $settings->getFeesConfig();
 
         return ApiResponse::success([
-            'flat_delivery_fee' => (float) $fee,
-            'flat_delivery_fee_formatted' => $fee,
+            'flat_delivery_fee' => $config['base_fee'],
+            'flat_delivery_fee_formatted' => $config['base_fee_formatted'],
+            'base_fee' => $config['base_fee'],
+            'base_fee_formatted' => $config['base_fee_formatted'],
+            'base_distance_km' => $config['base_distance_km'],
+            'per_extra_km' => $config['per_extra_km'],
+            'per_extra_km_formatted' => $config['per_extra_km_formatted'],
+            'max_fee' => $config['max_fee'],
+            'max_fee_formatted' => $config['max_fee_formatted'],
         ], 'Delivery fee retrieved successfully.');
     }
 
@@ -30,14 +37,20 @@ class AdminConfigController extends Controller
 
     public function updateFees(Request $request, PlatformSettingsService $settings): JsonResponse
     {
-        $data = $settings->updateFlatDeliveryFee(
+        $data = $settings->updateDeliveryFeeConfig(
             admin: $request->user(),
-            rawFee: $request->input('flat_delivery_fee'),
+            input: $request->only([
+                'base_fee',
+                'flat_delivery_fee',
+                'base_distance_km',
+                'per_extra_km',
+                'max_fee',
+            ]),
             reason: $request->input('reason'),
             request: $request,
         );
 
-        return ApiResponse::success($data, 'Flat delivery fee updated successfully.');
+        return ApiResponse::success($data, 'Delivery fee configuration updated successfully.');
     }
 
     public function platformConfig(): JsonResponse

@@ -28,7 +28,7 @@
 - **`GET /api/rider/deliveries/available`:**
   - Available only to active, online riders with no unfinished delivery (`403` otherwise).
   - Paginated, newest first (`order_status = 'ready'`, `order_type = 'delivery'`, unassigned).
-  - Returns restaurant name, item count, delivery fee, order total, pickup address, drop-off address, and `placed_at`. Customer phone is **never** exposed before acceptance.
+  - Returns restaurant name, item count, delivery fee, `distance_km` (rounded to 1 decimal when both coordinates exist, else `null`), order total, payment method/COD amount, pickup address, drop-off address, and `placed_at`. Customer phone is **never** exposed before acceptance.
 - **`POST /api/rider/deliveries/{orderId}/accept`:**
   - Locks `orders` with `lockForUpdate()`. Blocks self-orders, restaurant owners, and active restaurant staff (`403`). Enforces one unfinished delivery per rider (`409`).
   - Reuses an existing unassigned `deliveries` row (`pending_assignment` / `offered`) if present, or inserts a new row (`delivery_status = 'accepted'`). `uk_deliveries_order` duplicate-key collisions return `409 Conflict`.

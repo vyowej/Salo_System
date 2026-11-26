@@ -7,6 +7,7 @@ import Button from '../../../components/common/Button';
 import RestaurantImage from '../components/RestaurantImage';
 import { checkAddressCoverage } from '../utils/deliveryCoverage';
 import { expandRestaurantGroupsToSubOrders, findAddressBySelectionId } from '../utils/checkoutAddressValidation';
+import useDeliveryFeeQuotes from '../hooks/useDeliveryFeeQuotes';
 import ItemizedPaymentSummary from '../components/ItemizedPaymentSummary';
 import './CartPage.css';
 
@@ -41,6 +42,14 @@ export default function CartPage() {
     isOpen: false,
     selectedAddressId: savedAddresses[0]?.id || '',
   });
+
+  const cartSubOrders = expandRestaurantGroupsToSubOrders(restaurantGroups);
+  const {
+    enrichedSubOrders,
+    loading: quotesLoading,
+    error: quotesError,
+    retry: retryQuotes,
+  } = useDeliveryFeeQuotes(cartSubOrders);
 
   // Calculate validation issues
   const validationIssues = [];
@@ -588,11 +597,19 @@ export default function CartPage() {
         }}>
           <div style={{ marginBottom: 'var(--space-5)' }}>
             <ItemizedPaymentSummary
-              subOrders={expandRestaurantGroupsToSubOrders(restaurantGroups)}
+              subOrders={enrichedSubOrders}
               title="Consolidated Summary"
               grandTotalLabel="Total Payable"
-              note="Multi-vendor consolidated checkout enabled."
+              note={quotesLoading ? 'Calculating distance-based delivery fees...' : 'Multi-vendor consolidated checkout enabled.'}
             />
+            {quotesError && (
+              <div role="alert" style={{ marginTop: 8, fontSize: 'var(--font-size-xs)', color: 'var(--status-error-text)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <span>{quotesError}</span>
+                <Button type="button" variant="outline" size="sm" onClick={retryQuotes}>
+                  Retry
+                </Button>
+              </div>
+            )}
           </div>
 
           <div

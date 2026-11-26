@@ -10,6 +10,7 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import AddressFormModal from '../components/AddressFormModal';
 import ItemizedPaymentSummary from '../components/ItemizedPaymentSummary';
+import useDeliveryFeeQuotes from '../hooks/useDeliveryFeeQuotes';
 import { formatFormalAddress } from '../../../utils/addressFormatter';
 import ContactNumberFormModal from '../components/ContactNumberFormModal';
 import {
@@ -43,8 +44,6 @@ export default function CheckoutPage() {
   const {
     restaurantGroups,
     itemsSubtotal,
-    totalDeliveryFees,
-    grandTotal,
     setRestaurantAddress,
     setItemAddress,
     clearCart,
@@ -85,6 +84,15 @@ export default function CheckoutPage() {
     () => expandRestaurantGroupsToSubOrders(restaurantGroups),
     [restaurantGroups]
   );
+
+  const {
+    quotesByKey,
+    enrichedSubOrders,
+    allDeliveryQuotesReady,
+    loading: quotesLoading,
+    error: quotesError,
+    retry: retryQuotes,
+  } = useDeliveryFeeQuotes(subOrders, { enabled: !confirmedCheckout });
 
   const applySubOrderAddress = (subOrder, nextAddress) => {
     if (subOrder.addressMode === 'multiple') {
@@ -379,16 +387,21 @@ export default function CheckoutPage() {
   const displayedDeliveryFees = hasServerTotals
     ? subOrders.reduce(
         (sum, subOrder) =>
-          sum + (serverGroupTotals[subOrder.subOrderKey]?.deliveryFee ?? Number(subOrder.deliveryFee || 0)),
+          sum + (serverGroupTotals[subOrder.subOrderKey]?.deliveryFee ?? Number(quotesByKey[subOrder.subOrderKey]?.deliveryFee ?? subOrder.deliveryFee ?? 0)),
         0
       )
-    : totalDeliveryFees;
-  const displayedGrandTotal = hasServerTotals
-    ? displayedItemsSubtotal + displayedDeliveryFees
-    : grandTotal;
+    : enrichedSubOrders.reduce(
+        (sum, subOrder) => sum + (subOrder.fulfillment === 'delivery' ? Number(subOrder.deliveryFee || 0) : 0),
+        0
+      );
+  const displayedGrandTotal = displayedItemsSubtotal + displayedDeliveryFees;
 
   const handlePlaceOrder = async () => {
-    if (isSubmitting || addressesLoading) return;
+    if (isSubmitting || addressesLoading || quotesLoading) return;
+    if (quotesError || (hasDeliverySubOrders && !allDeliveryQuotesReady)) {
+      setError(quotesError || 'Please wait for delivery fee quotes to finish loading.');
+      return;
+    }
     if (hasInvalidDeliveryAddresses) {
       setError(
         addresses.length === 0
@@ -424,6 +437,7 @@ export default function CheckoutPage() {
         orderNotesBySubOrder,
         idempotencyKey: idempotencyKeyRef.current,
         expectedTotalsByRestaurant,
+        deliveryFeeQuotesByKey: quotesByKey,
         contactNumberId: hasDeliverySubOrders && selectedContact?.id ? selectedContact.id : null,
         paymentMethod,
         promoCode: appliedPromo?.promo_code || '',
@@ -1057,12 +1071,14 @@ export default function CheckoutPage() {
         }}>
           <div style={{ marginBottom: 'var(--space-6)' }}>
             <ItemizedPaymentSummary
-              subOrders={subOrders}
+              subOrders={enrichedSubOrders}
               serverGroupTotals={serverGroupTotals}
               appliedPromo={appliedPromo}
               title="Payment Summary"
               grandTotalLabel="Estimated Total"
-              note="Estimated total — final prices and delivery fees are confirmed by the server on checkout."
+              note={quotesLoading
+                ? 'Calculating distance-based delivery fees...'
+                : 'Estimated total — final prices and delivery fees are confirmed by the server on checkout.'}
               promoSlot={(
                 <div style={{ paddingTop: 'var(--space-2)', borderTop: '1px dashed var(--border-secondary)' }}>
                   <label htmlFor="checkout-promo-code" style={{ display: 'block', fontSize: 'var(--font-size-xs)', fontWeight: 600, marginBottom: 6 }}>
@@ -1113,6 +1129,14 @@ export default function CheckoutPage() {
                 </div>
               ) : null}
             />
+            {quotesError && (
+              <div role="alert" style={{ marginTop: 10, padding: '8px 10px', borderRadius: 'var(--radius-md)', background: 'var(--status-error-bg)', color: 'var(--status-error-text)', fontSize: 'var(--font-size-xs)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <span>{quotesError}</span>
+                <Button type="button" variant="outline" size="sm" onClick={retryQuotes}>
+                  Retry
+                </Button>
+              </div>
+            )}
           </div>
 
           <Button
@@ -1120,19 +1144,23 @@ export default function CheckoutPage() {
             size="lg"
             fullWidth
             loading={isSubmitting}
-            disabled={hasInvalidDeliveryAddresses || hasInvalidPhoneForDelivery || hasInvalidDeliveryNotes || addressesLoading || isSubmitting}
+            disabled={hasInvalidDeliveryAddresses || hasInvalidPhoneForDelivery || hasInvalidDeliveryNotes || addressesLoading || quotesLoading || Boolean(quotesError) || (hasDeliverySubOrders && !allDeliveryQuotesReady) || isSubmitting}
             onClick={handlePlaceOrder}
-            style={hasInvalidDeliveryAddresses || hasInvalidPhoneForDelivery || hasInvalidDeliveryNotes || addressesLoading ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+            style={hasInvalidDeliveryAddresses || hasInvalidPhoneForDelivery || hasInvalidDeliveryNotes || addressesLoading || quotesLoading || Boolean(quotesError) || (hasDeliverySubOrders && !allDeliveryQuotesReady) ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
           >
             {addressesLoading
               ? 'Loading Delivery Addresses...'
-              : hasInvalidDeliveryAddresses
-                ? 'Complete Delivery Details'
-                : hasInvalidPhoneForDelivery
-                  ? 'Add Contact Phone Number'
-                  : hasInvalidDeliveryNotes
-                    ? 'Shorten Delivery Notes'
-                    : `Confirm & Place Order · ₱${displayedGrandTotal.toLocaleString()}`}
+              : quotesLoading
+                ? 'Calculating Delivery Fees...'
+                : quotesError
+                  ? 'Delivery Fee Quote Failed'
+                  : hasInvalidDeliveryAddresses
+                    ? 'Complete Delivery Details'
+                    : hasInvalidPhoneForDelivery
+                      ? 'Add Contact Phone Number'
+                      : hasInvalidDeliveryNotes
+                        ? 'Shorten Delivery Notes'
+                        : `Confirm & Place Order · ₱${displayedGrandTotal.toLocaleString()}`}
           </Button>
 
           <div style={{

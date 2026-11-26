@@ -429,6 +429,7 @@ export function buildCheckoutPayload({
   orderNotesBySubOrder = {},
   idempotencyKey,
   expectedTotalsByRestaurant = {},
+  deliveryFeeQuotesByKey = {},
   contactNumberId = null,
   paymentMethod = 'cod',
   promoCode = '',
@@ -455,9 +456,12 @@ export function buildCheckoutPayload({
       const computedSubtotal = Number.isFinite(Number(subOrder.subtotal))
         ? Number(subOrder.subtotal)
         : rawItemsSubtotal;
+      const quotedFee = deliveryFeeQuotesByKey?.[subOrder.subOrderKey]?.deliveryFee;
       const computedDeliveryFee =
         subOrder.fulfillment === 'delivery'
-          ? (Number.isFinite(Number(subOrder.deliveryFee)) ? Number(subOrder.deliveryFee) : 0)
+          ? (Number.isFinite(Number(quotedFee))
+            ? Number(quotedFee)
+            : (Number.isFinite(Number(subOrder.deliveryFee)) ? Number(subOrder.deliveryFee) : 0))
           : 0;
       const expectedTotal =
         overrideTotal !== undefined && overrideTotal !== null && Number.isFinite(Number(overrideTotal))

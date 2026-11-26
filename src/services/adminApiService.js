@@ -465,11 +465,8 @@ export const adminApiService = {
     return response?.data ?? null;
   },
 
-  async updateFeesConfig({ flat_delivery_fee, reason }) {
-    const response = await apiClient.put('/admin/config/fees', {
-      flat_delivery_fee,
-      reason,
-    });
+  async updateFeesConfig(payload) {
+    const response = await apiClient.put('/admin/config/fees', payload);
     return response?.data ?? null;
   },
 

@@ -51,8 +51,21 @@ export default function ItemizedPaymentSummary({
                 <span>{formatPesoAmount(group.subtotal)}</span>
               </div>
               <div className="salo-payment-summary-row">
-                <span>Delivery fee</span>
-                <span>{group.isDelivery ? formatPesoAmount(group.deliveryFee) : 'No delivery fee'}</span>
+                <span>
+                  Delivery fee
+                  {group.isDelivery && group.distanceKm != null && (
+                    <small style={{ marginLeft: 6, color: 'var(--text-muted)' }}>
+                      ({group.distanceKm.toFixed(1)} km)
+                    </small>
+                  )}
+                </span>
+                <span>
+                  {!group.isDelivery
+                    ? 'No delivery fee'
+                    : group.isFeePending
+                      ? 'Calculating...'
+                      : formatPesoAmount(group.deliveryFee)}
+                </span>
               </div>
             </div>
           </section>

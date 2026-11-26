@@ -246,6 +246,22 @@ export const customerService = {
     return res?.data?.checkout ?? null;
   },
 
+  async getDeliveryFeeQuote({
+    restaurantId,
+    fulfillment = 'delivery',
+    addressId = null,
+    latitude = null,
+    longitude = null,
+  }) {
+    const res = await apiClient.post('/customer/delivery-fee/quote', {
+      restaurant_id: Number(restaurantId),
+      fulfillment,
+      ...(addressId ? { address_id: Number(addressId) } : {}),
+      ...(latitude != null && longitude != null ? { latitude: Number(latitude), longitude: Number(longitude) } : {}),
+    });
+    return res?.data ?? null;
+  },
+
   async validatePromoCode({ promoCode, subtotal, restaurantId = null }) {
     const res = await apiClient.post('/customer/promos/validate', {
       promo_code: promoCode,

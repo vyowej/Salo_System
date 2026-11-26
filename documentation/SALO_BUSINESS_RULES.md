@@ -961,18 +961,15 @@ Suspicious cases should be reviewed according to the approved policy.
 
 ## 33. Delivery Fee Calculation
 
-Delivery fees should be configurable by Admin.
+Delivery fees are configurable by Admin using a base-plus-distance model with a maximum cap:
 
-Possible models:
+- **Base fee:** Charged for any straight-line (haversine) distance up to and including the base distance (default: ₱49.00 up to 2.0 km).
+- **Extra distance fee:** Beyond the base distance, an additional per-kilometer fee (default: ₱10.00/km) is charged for every extra kilometer, rounded **up** to the next full kilometer (e.g., 2.1 km → +1 km = ₱59.00; 3.1 km → +2 km = ₱69.00).
+- **Maximum fee cap:** Capped at a configurable maximum (default: ₱150.00).
+- **Pickup and dine-in orders:** Delivery fee is ₱0.00.
+- **Missing coordinates fallback:** If either the restaurant or delivery address lacks coordinates, the base fee applies so ordering is never blocked.
 
-- Fixed fee.
-- Zone-based fee.
-- Distance-based fee.
-- Base fee plus distance.
-- Special delivery fee.
-- Promotional free delivery.
-
-The calculation must use the appropriate restaurant pickup location and customer delivery address.
+The calculation uses the restaurant pickup location and customer delivery address coordinates.
 
 ### 33.1 Multi-Restaurant Delivery Fees
 

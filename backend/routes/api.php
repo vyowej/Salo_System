@@ -34,6 +34,7 @@ use App\Features\Locations\Controllers\TrackingController;
 use App\Features\Media\Controllers\PublicImageProxyController;
 use App\Features\Notifications\Controllers\NotificationController;
 use App\Features\Orders\Controllers\CustomerOrderController;
+use App\Features\Orders\Controllers\DeliveryFeeQuoteController;
 use App\Features\Orders\Controllers\ReceiptController;
 use App\Features\Orders\Controllers\RestaurantOrderController;
 use App\Features\Payments\Controllers\PaymentController;
@@ -211,6 +212,7 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
     Route::get('/orders/{id}/delivery-proof', [RiderDeliveryController::class, 'customerProof'])->whereNumber('id');
 
     Route::post('/checkout', [CustomerOrderController::class, 'checkout']);
+    Route::post('/delivery-fee/quote', [DeliveryFeeQuoteController::class, 'quote'])->middleware('throttle:120,1');
     Route::post('/promos/validate', [AdminPromoController::class, 'validateForCustomer']);
     Route::get('/payments/{paymentId}', [PaymentController::class, 'show'])->whereNumber('paymentId');
     Route::post('/payments/{paymentId}/initiate', [PaymentController::class, 'initiate'])->whereNumber('paymentId');

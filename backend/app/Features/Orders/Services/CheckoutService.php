@@ -35,6 +35,7 @@ class CheckoutService
         private readonly PublicRestaurantVisibility $visibility,
         private readonly PaymentService $paymentService,
         private readonly PlatformSettingsService $platformSettingsService,
+        private readonly DeliveryFeeCalculator $deliveryFeeCalculator,
     ) {}
 
     /**
@@ -108,7 +109,7 @@ class CheckoutService
             $selectedContactPhone = $normalizedSelected;
         }
 
-        $deliveryFeeCents = Money::toCents($this->platformSettingsService->getFlatDeliveryFee());
+        $feeSettings = $this->platformSettingsService->getDeliveryFeeSettings();
         $maxQty = max(1, (int) config('salo.orders.max_item_quantity', 50));
 
         foreach ($groupsInput as $gIdx => $group) {
@@ -436,7 +437,33 @@ class CheckoutService
                 ];
             }
 
-            $feeCents = $fulfillment === 'delivery' ? $deliveryFeeCents : 0;
+            $distanceKm = null;
+            if ($fulfillment === 'delivery') {
+                $restaurantAddress = $restaurant->address_id
+                    ? DB::table('addresses')->where('address_id', $restaurant->address_id)->first(['latitude', 'longitude'])
+                    : null;
+
+                $calc = $this->deliveryFeeCalculator->calculate(
+                    restaurantLat: $restaurantAddress?->latitude !== null ? (float) $restaurantAddress->latitude : null,
+                    restaurantLng: $restaurantAddress?->longitude !== null ? (float) $restaurantAddress->longitude : null,
+                    deliveryLat: isset($addressSnapshot['latitude']) ? (float) $addressSnapshot['latitude'] : null,
+                    deliveryLng: isset($addressSnapshot['longitude']) ? (float) $addressSnapshot['longitude'] : null,
+                    settings: $feeSettings,
+                    fulfillment: $fulfillment,
+                );
+
+                if ($calc['used_fallback']) {
+                    Log::warning('Delivery fee fell back to base fee due to missing coordinates at checkout.', [
+                        'restaurant_id' => $restaurantId,
+                        'address_id' => $addressId,
+                    ]);
+                }
+
+                $feeCents = $calc['fee_cents'];
+                $distanceKm = $calc['distance_km'];
+            } else {
+                $feeCents = 0;
+            }
             $totalCents = $subtotalCents + $feeCents;
 
             $preparedGroups[] = [
@@ -446,6 +473,7 @@ class CheckoutService
                 'items' => $preparedItems,
                 'subtotal_cents' => $subtotalCents,
                 'delivery_fee_cents' => $feeCents,
+                'distance_km' => $distanceKm,
                 'total_cents' => $totalCents,
                 'expected_total' => array_key_exists('expected_total', $group) && $group['expected_total'] !== null
                     ? (string) $group['expected_total']
@@ -471,6 +499,7 @@ class CheckoutService
                 'restaurant_name' => RestaurantBranchService::formatDisplayName((string) $groupRest->restaurant_name, $groupRest->branch_name ?? null),
                 'subtotal_amount' => (float) Money::fromCents($group['subtotal_cents']),
                 'delivery_fee' => (float) Money::fromCents($group['delivery_fee_cents']),
+                'distance_km' => $group['distance_km'],
                 'discount_amount' => (float) Money::fromCents($group['discount_cents'] ?? 0),
                 'total_amount' => (float) Money::fromCents($group['total_cents']),
             ];

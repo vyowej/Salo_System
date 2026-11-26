@@ -80,27 +80,32 @@ export function computePaymentSummaryModel(
           ? toCents(raw.subtotal)
           : items.reduce((sum, it) => sum + it.lineCents, 0);
 
+    const rawFee = serverOverride?.deliveryFee !== undefined
+      ? serverOverride.deliveryFee
+      : raw.delivery_fee !== undefined
+        ? raw.delivery_fee
+        : raw.deliveryFee;
+    const isFeePending = isDelivery && (rawFee === null || rawFee === undefined);
     const deliveryFeeCents = isDelivery
-      ? (
-        serverOverride?.deliveryFee !== undefined
-          ? toCents(serverOverride.deliveryFee)
-          : raw.delivery_fee !== undefined
-            ? toCents(raw.delivery_fee)
-            : toCents(raw.deliveryFee || 0)
-      )
+      ? (isFeePending ? 0 : toCents(rawFee))
       : 0;
+    const distanceKm = isDelivery && raw.distanceKm != null && Number.isFinite(Number(raw.distanceKm))
+      ? Number(raw.distanceKm)
+      : (isDelivery && raw.distance_km != null && Number.isFinite(Number(raw.distance_km)) ? Number(raw.distance_km) : null);
 
     return {
       key,
       restaurantName,
       fulfillment,
       isDelivery,
+      isFeePending,
+      distanceKm,
       deliveryAddressText,
       items,
       subtotalCents,
       subtotal: fromCents(subtotalCents),
       deliveryFeeCents,
-      deliveryFee: fromCents(deliveryFeeCents),
+      deliveryFee: isFeePending ? null : fromCents(deliveryFeeCents),
       groupTotalCents: subtotalCents + deliveryFeeCents,
       groupTotal: fromCents(subtotalCents + deliveryFeeCents),
     };

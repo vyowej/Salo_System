@@ -6,6 +6,7 @@ use App\Features\Connect\Events\OrderStatusUpdated;
 use App\Features\Connect\Services\ConversationService;
 use App\Features\Connect\Services\OrderConnectService;
 use App\Features\Notifications\Services\NotificationService;
+use App\Features\Orders\Services\DeliveryFeeCalculator;
 use App\Features\Orders\Support\OrderTimestampFormatter;
 use App\Features\Restaurants\Services\OwnerInventoryService;
 use App\Models\User;
@@ -95,6 +96,8 @@ class RiderDeliveryService
                 'o.delivery_fee',
                 'o.total_amount',
                 'o.delivery_address_text',
+                'o.delivery_latitude',
+                'o.delivery_longitude',
                 'o.placed_at',
             ])
             ->orderByDesc('o.placed_at')
@@ -118,6 +121,8 @@ class RiderDeliveryService
                     'r.restaurant_name as live_restaurant_name',
                     'r.branch_name as live_branch_name',
                     'ra.street as pickup_street',
+                    'ra.latitude as pickup_latitude',
+                    'ra.longitude as pickup_longitude',
                     'rb.barangay_name as pickup_barangay',
                     'rc.city_name as pickup_city',
                     'rp.province_name as pickup_province',
@@ -160,6 +165,22 @@ class RiderDeliveryService
                 ? (float) $row->total_amount
                 : null;
 
+            $distanceKm = null;
+            if (
+                $pickupAddr?->pickup_latitude !== null
+                && $pickupAddr?->pickup_longitude !== null
+                && $row->delivery_latitude !== null
+                && $row->delivery_longitude !== null
+            ) {
+                $meters = DeliveryFeeCalculator::haversineMeters(
+                    (float) $pickupAddr->pickup_latitude,
+                    (float) $pickupAddr->pickup_longitude,
+                    (float) $row->delivery_latitude,
+                    (float) $row->delivery_longitude,
+                );
+                $distanceKm = round($meters / 1000.0, 1);
+            }
+
             return [
                 'order_id' => (int) $row->order_id,
                 'order_reference' => $row->order_reference,
@@ -167,6 +188,7 @@ class RiderDeliveryService
                 'restaurant_name' => $restaurantName,
                 'item_count' => (int) ($counts->total_qty ?? $counts->line_count ?? 0),
                 'delivery_fee' => (float) $row->delivery_fee,
+                'distance_km' => $distanceKm,
                 'order_total' => (float) $row->total_amount,
                 'payment_method' => $paymentMethod,
                 'cod_amount' => $codAmount,

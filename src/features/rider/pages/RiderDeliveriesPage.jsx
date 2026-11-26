@@ -191,7 +191,7 @@ export default function RiderDeliveriesPage() {
                       Drop-off: {item.dropoff_address_text || 'See order details'}
                     </p>
                     <p style={{ margin: '6px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-                      {item.item_count} item{item.item_count === 1 ? '' : 's'} · Delivery fee {formatPeso(item.delivery_fee)} · Order total {formatPeso(item.order_total)} · Placed {formatDateTimeManila(item.placed_at)}
+                      {item.item_count} item{item.item_count === 1 ? '' : 's'} · {item.distance_km != null ? `${Number(item.distance_km).toFixed(1)} km · ` : ''}Delivery fee {formatPeso(item.delivery_fee)} · Order total {formatPeso(item.order_total)} · Placed {formatDateTimeManila(item.placed_at)}
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
