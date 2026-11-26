@@ -299,7 +299,7 @@ test('onboarding content: verifies required role copy and skip confirmation stri
   assert.equal(riderSteps[4].primaryButton, 'Go to Rider Dashboard');
 
   const businessSteps = ONBOARDING_CONTENT_BY_ROLE.business.steps;
-  assert.equal(businessSteps[0].primaryButton, 'Simulan na ang setup');
+  assert.equal(businessSteps[0].primaryButton, 'Start Setup');
   assert.equal(businessSteps[0].wholeSkipButton, 'Maybe later');
   assert.equal(businessSteps[1].title, 'Prepare your restaurant');
   assert.equal(businessSteps[2].title, 'Good to know');
@@ -379,9 +379,9 @@ test('RoleOnboardingModal & SetupChecklistCard render accessible dialog markup a
         }),
       ),
     );
-    assert.match(businessHtml, /Welcome, kusina_owner!/);
+    assert.match(businessHtml, /Mabuhay, kusina_owner!/);
     assert.match(businessHtml, /Congratulations on becoming a SALO partner!/);
-    assert.match(businessHtml, /Simulan na ang setup/);
+    assert.match(businessHtml, /Start Setup/);
 
     // 4. Closed modal renders nothing
     const closedHtml = renderToStaticMarkup(

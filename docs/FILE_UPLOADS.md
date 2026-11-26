@@ -4,7 +4,7 @@
 
 SALO separates **public** storefront assets from **private** compliance/delivery files and **local-only** assets:
 
-- **Public images** (restaurant logo, cover photo, menu item photos) use `PUBLIC_IMAGE_STORAGE` (`local` or `google_drive`, served via `/api/media/images/{fileId}` when on Drive).
+- **Public images** (restaurant logo, cover photo, menu item photos, rider profile photos) use `PUBLIC_IMAGE_STORAGE` (`local` or `google_drive`, served via `/api/media/images/{fileId}` when on Drive).
 - **Private Drive-scoped files** (restaurant/rider application documents, branch permits, rider delivery confirmation photos, and future support attachments) use `PRIVATE_FILE_STORAGE` (`local` or `google_drive`), streamed only via authenticated, role-authorized backend routes with `appProperties.visibility=private` enforcement.
 - **Always local:** restaurant gallery, platform assets, admin banners, default placeholder images, and `profile_change_requests` supporting documents (routed through `StoragePurpose::PROFILE_CHANGE_DOCUMENT` on the `local` driver).
 
@@ -39,8 +39,10 @@ SALO separates **public** storefront assets from **private** compliance/delivery
   - Accepts optional `proof_photo` (`jpg`, `jpeg`, `png`, `webp` only — no PDF; resized & EXIF-stripped server-side). Required only when `SALO_DELIVERY_PROOF_REQUIRED=true`.
 - `GET /api/rider/deliveries/{orderId}/proof` (`role:rider`), `GET /api/customer/orders/{id}/delivery-proof` (`auth`), `GET /api/admin/orders/{id}/delivery-proof` (`role:admin`)
   - Streams `deliveries.proof_photo` to the assigned rider, the order's customer, or admin with 10-minute deduped `audit_logs` tracking. *(Open policy item: restaurant owner/staff viewing of `proof_photo` is currently excluded.)*
+- `POST /api/rider/profile/photo` & `DELETE /api/rider/profile/photo` (`auth` + `role:rider`)
+  - Uploads or removes `riders.profile_photo` (`jpg`, `jpeg`, `png`, `webp`, max 5 MB; resized to max 1024px & EXIF-stripped server-side via `StoragePurpose::RIDER_PROFILE_PHOTO`, stored under `riders/{rider_id}/profile/` locally or `Riders/{Rider name} [U-{userId}]/Profile Photo/` on Drive with `visibility=public`). Old unreferenced file is cleaned up after commit.
 - `GET /api/media/images/{fileId}` (public, `throttle:600,1`)
-  - Streams public Drive-stored images (`gdrive:{fileId}`) only if referenced by `restaurants.logo_image`, `restaurants.cover_image`, or `menu_items.photo_image`/`published_photo_image` AND `appProperties.visibility === 'public'` (fails closed with `404` otherwise).
+  - Streams public Drive-stored images (`gdrive:{fileId}`) only if referenced by `restaurants.logo_image`, `restaurants.cover_image`, `menu_items.photo_image`/`published_photo_image`, or `riders.profile_photo` AND `appProperties.visibility === 'public'` (fails closed with `404` otherwise).
   - Uses a read-through cache in `backend/storage/app/private/drive-cache/` when `GOOGLE_DRIVE_PROXY_CACHE=true`, with `Cache-Control: public, max-age=31536000, immutable`, `ETag`, `X-Content-Type-Options: nosniff`, and `Content-Security-Policy: default-src 'none'`. Public image requests are not audit-logged.
 
 ---

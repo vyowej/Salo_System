@@ -10,6 +10,8 @@ final class StoragePurpose
 
     public const MENU_ITEM_PHOTO = 'menu_item_photo';
 
+    public const RIDER_PROFILE_PHOTO = 'rider_profile_photo';
+
     public const APPLICATION_DOCUMENT = 'application_document';
 
     public const BRANCH_PERMIT = 'branch_permit';
@@ -30,6 +32,7 @@ final class StoragePurpose
             self::RESTAURANT_LOGO,
             self::RESTAURANT_COVER,
             self::MENU_ITEM_PHOTO,
+            self::RIDER_PROFILE_PHOTO,
         ], true);
     }
 

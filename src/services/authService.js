@@ -103,7 +103,7 @@ export function normalizeUser(rawUser, preferredWorkspace = null) {
     roles,
     role: resolvedWorkspace,
     phone: rawUser.phone_number ?? null,
-    avatar: null,
+    avatar: rawUser.avatar ?? rawUser.rider_profile?.profile_photo ?? null,
   };
 }
 

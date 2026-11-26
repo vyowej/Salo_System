@@ -88,6 +88,7 @@ class RiderDeliveryService
         $rows = $baseQuery
             ->select([
                 'o.order_id',
+                'o.checkout_id',
                 'o.order_reference',
                 'o.restaurant_id',
                 'o.restaurant_name',
@@ -133,12 +134,31 @@ class RiderDeliveryService
                 ->get()
                 ->keyBy('order_id');
 
-        $deliveries = $rows->map(function (object $row) use ($itemCounts, $pickupAddressesByRestaurantId): array {
+        $checkoutIds = $rows->pluck('checkout_id')->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+
+        $paymentsByCheckoutId = $checkoutIds === []
+            ? collect()
+            : DB::table('payments')
+                ->whereIn('checkout_id', $checkoutIds)
+                ->where('payment_type', 'payment')
+                ->orderByDesc('payment_id')
+                ->get(['checkout_id', 'payment_method', 'payment_status', 'amount'])
+                ->unique('checkout_id')
+                ->keyBy('checkout_id');
+
+        $deliveries = $rows->map(function (object $row) use ($itemCounts, $pickupAddressesByRestaurantId, $paymentsByCheckoutId): array {
             $counts = $itemCounts->get((int) $row->order_id);
             $pickupAddr = $pickupAddressesByRestaurantId->get((int) $row->restaurant_id);
+            $payment = $row->checkout_id ? $paymentsByCheckoutId->get((int) $row->checkout_id) : null;
             $restaurantName = $pickupAddr
                 ? RestaurantBranchService::formatDisplayName((string) $pickupAddr->live_restaurant_name, $pickupAddr->live_branch_name ?? null)
                 : $row->restaurant_name;
+
+            $rawPaymentMethod = $payment?->payment_method ?? null;
+            $paymentMethod = $rawPaymentMethod === 'cash' ? 'cod' : $rawPaymentMethod;
+            $codAmount = ($rawPaymentMethod === 'cash' && ($payment?->payment_status ?? 'pending') === 'pending')
+                ? (float) $row->total_amount
+                : null;
 
             return [
                 'order_id' => (int) $row->order_id,
@@ -148,6 +168,8 @@ class RiderDeliveryService
                 'item_count' => (int) ($counts->total_qty ?? $counts->line_count ?? 0),
                 'delivery_fee' => (float) $row->delivery_fee,
                 'order_total' => (float) $row->total_amount,
+                'payment_method' => $paymentMethod,
+                'cod_amount' => $codAmount,
                 'pickup_address_text' => $this->formatAddressText(
                     $pickupAddr?->pickup_street,
                     $pickupAddr?->pickup_barangay,

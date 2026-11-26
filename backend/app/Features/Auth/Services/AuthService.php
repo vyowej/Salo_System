@@ -396,6 +396,7 @@ class AuthService
             'restaurant_staff_assignments' => $roleContext['restaurant_staff_assignments'],
             'order_handler_positions' => $roleContext['order_handler_positions'],
             'rider_profile' => $roleContext['rider_profile'],
+            'avatar' => $roleContext['rider_profile']['profile_photo'] ?? null,
         ];
     }
 }

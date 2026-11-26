@@ -6,6 +6,7 @@ import { StateView as GlobalStateView } from '../../../components/feedback';
 import { RatingSummaryCard, ReviewList } from '../../../components/reviews';
 import reviewService from '../../../services/reviewService';
 import PageHeader from '../components/PageHeader';
+import RiderAvatarControl from '../components/RiderAvatarControl';
 import riderService from '../../../services/riderService';
 import { useAuth } from '../../../hooks/useAuth';
 import {
@@ -173,7 +174,13 @@ export default function RiderProfilePage() {
         <Card>
           <CardBody>
             <div className="rider-profile-identity">
-              <div className="rider-profile-avatar" aria-hidden="true">{displayName.slice(0, 2).toUpperCase()}</div>
+              <RiderAvatarControl
+                avatarUrl={profile.profile_photo || user?.avatar}
+                displayName={displayName}
+                onPhotoUpdated={(updated) => {
+                  if (updated) setProfile(updated);
+                }}
+              />
               <div>
                 <h2>{displayName}</h2>
                 <p>{profile.base_city || 'Base city not set'}</p>

@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Button from '../../../components/common/Button';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import WarningDialog from '../../../components/common/WarningDialog';
 import { StateView as GlobalStateView } from '../../../components/feedback';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
+import AvailableDeliveryCard from '../components/AvailableDeliveryCard';
+import { RiderAvatarImage } from '../components/RiderAvatarControl';
 import riderService from '../../../services/riderService';
 import { useAuth } from '../../../hooks/useAuth';
 import './RiderDashboardPage.css';
 
 const DAILY_TRIP_GOAL = 10;
+const AVAILABLE_POLL_INTERVAL_MS = 15000;
 
 const RIDER_DECK_TABS = [
   { id: 'pulse', label: 'Daily Pulse' },
@@ -26,10 +29,14 @@ const isRiderOnline = (avail) => (
 
 export default function RiderDashboardPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [dashboard, setDashboard] = useState(null);
   const [availableDeliveries, setAvailableDeliveries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshingAvailable, setRefreshingAvailable] = useState(false);
   const [error, setError] = useState(null);
+  const [acceptError, setAcceptError] = useState('');
+  const [acceptingId, setAcceptingId] = useState(null);
   const [toggling, setToggling] = useState(false);
   const [deckIndex, setDeckIndex] = useState(0);
   const [heroPhotoFailed, setHeroPhotoFailed] = useState(false);
@@ -37,10 +44,14 @@ export default function RiderDashboardPage() {
   const [confirmOfflineOpen, setConfirmOfflineOpen] = useState(false);
   const [offlineBlockedMessage, setOfflineBlockedMessage] = useState('');
   const offlinePromptShownRef = useRef(false);
+  const availableInFlightRef = useRef(false);
+  const acceptInFlightRef = useRef(false);
 
-  const loadDashboard = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadDashboard = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const [data, availableResult] = await Promise.all([
         riderService.getDashboard(),
@@ -54,15 +65,87 @@ export default function RiderDashboardPage() {
           : [];
       setAvailableDeliveries(list);
     } catch (err) {
-      setError(err?.message || 'Unable to load rider dashboard.');
+      if (!silent) {
+        setError(err?.message || 'Unable to load rider dashboard.');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  const refreshAvailableDeliveries = useCallback(async ({ silent = false } = {}) => {
+    if (availableInFlightRef.current) return;
+    availableInFlightRef.current = true;
+    if (!silent) setRefreshingAvailable(true);
+    try {
+      const availableResult = await riderService.getAvailableDeliveries({ perPage: 5 });
+      const list = Array.isArray(availableResult?.deliveries)
+        ? availableResult.deliveries
+        : Array.isArray(availableResult?.data)
+          ? availableResult.data
+          : [];
+      setAvailableDeliveries(list);
+    } catch {
+      // Keep existing state on silent poll error
+    } finally {
+      availableInFlightRef.current = false;
+      if (!silent) setRefreshingAvailable(false);
     }
   }, []);
 
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    const riderStatus = dashboard?.rider?.rider_status;
+    const online = isRiderOnline(dashboard?.availability);
+    const hasPending = Boolean(dashboard?.active_delivery || dashboard?.stats?.has_active_delivery);
+    if (riderStatus !== 'active' || !online || hasPending) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      refreshAvailableDeliveries({ silent: true });
+    }, AVAILABLE_POLL_INTERVAL_MS);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshAvailableDeliveries({ silent: true });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [dashboard, refreshAvailableDeliveries]);
+
+  const handleAcceptDelivery = async (orderId) => {
+    if (acceptInFlightRef.current || acceptingId !== null) return;
+    acceptInFlightRef.current = true;
+    setAcceptingId(orderId);
+    setAcceptError('');
+    try {
+      await riderService.acceptDelivery(orderId);
+      window.dispatchEvent(new Event('salo:riderUpdated'));
+      navigate('/rider/deliveries/active');
+    } catch (err) {
+      const status = err?.status ?? err?.response?.status;
+      setAcceptError(
+        status === 409
+          ? (err?.message || 'This delivery was just accepted by another rider or is no longer available.')
+          : (err?.message || 'Unable to accept delivery.'),
+      );
+      await refreshAvailableDeliveries({ silent: true });
+    } finally {
+      acceptInFlightRef.current = false;
+      setAcceptingId(null);
+    }
+  };
 
   useEffect(() => {
     if (loading || !dashboard || offlinePromptShownRef.current) return;
@@ -192,7 +275,10 @@ export default function RiderDashboardPage() {
         <div className="rider-hero-content">
           <div className="rider-hero-left">
             <div className="rider-status-bar-avatar rider-hero-avatar" aria-hidden="true">
-              {displayName.slice(0, 2).toUpperCase()}
+              <RiderAvatarImage
+                src={rider.profile_photo || user?.avatar}
+                initials={displayName.slice(0, 2).toUpperCase()}
+              />
             </div>
             <div>
               <div className="rider-hero-pill-row">
@@ -246,6 +332,92 @@ export default function RiderDashboardPage() {
         <StatCard label="Active delivery" value={stats.has_active_delivery ? '1 Active' : 'None'} tone="gold" />
         <StatCard label="Available nearby" value={String(availableDeliveries.length)} tone="brown" />
       </section>
+
+      {/* ── Active Delivery Banner or Available Deliveries Queue ──── */}
+      {activeDelivery ? (
+        <section className="rider-active-banner" aria-label="Active delivery">
+          <div>
+            <span className="rider-active-banner-eyebrow">Active delivery</span>
+            <h2 className="rider-active-banner-title">
+              {activeDelivery.order_reference} · {activeDelivery.restaurant_name || 'Restaurant'}
+            </h2>
+            <p className="rider-active-banner-copy">
+              Complete your current delivery before accepting another order.
+            </p>
+          </div>
+          <Link to="/rider/deliveries/active">
+            <Button variant="primary" size="sm">Open active delivery</Button>
+          </Link>
+        </section>
+      ) : (
+        <section className="rider-available-section" aria-label="Available deliveries">
+          <div className="rider-available-header">
+            <div>
+              <h2>Available deliveries</h2>
+              <p>Orders ready for pickup right now</p>
+            </div>
+            <div className="rider-available-header-actions">
+              {isRiderActive && isOnline && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={refreshingAvailable}
+                  onClick={() => refreshAvailableDeliveries()}
+                >
+                  {refreshingAvailable ? 'Refreshing...' : 'Refresh'}
+                </Button>
+              )}
+              <Link to="/rider/deliveries" className="rider-available-see-all">
+                View all →
+              </Link>
+            </div>
+          </div>
+
+          {acceptError && (
+            <div role="alert" className="rider-available-alert">
+              {acceptError}
+            </div>
+          )}
+
+          {!isRiderActive ? (
+            <div className="rider-available-empty" role="status">
+              Your rider account is awaiting activation. Once activated by an admin, you can go online and accept deliveries here.
+            </div>
+          ) : !isOnline ? (
+            <div className="rider-available-empty" role="status">
+              <p style={{ margin: '0 0 var(--space-3)' }}>
+                You are currently offline. Go online to view and accept available deliveries.
+              </p>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                disabled={toggling}
+                onClick={handleToggleAvailability}
+              >
+                {toggling ? 'Updating...' : 'Go online'}
+              </Button>
+            </div>
+          ) : availableDeliveries.length === 0 ? (
+            <div className="rider-available-empty" role="status">
+              No deliveries ready for pickup right now. New ready orders will appear here automatically.
+            </div>
+          ) : (
+            <div className="rider-available-grid">
+              {availableDeliveries.map((delivery) => (
+                <AvailableDeliveryCard
+                  key={delivery.order_id}
+                  delivery={delivery}
+                  accepting={acceptingId === delivery.order_id}
+                  disabled={acceptingId !== null}
+                  onAccept={handleAcceptDelivery}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ── 2. Quick Actions Launchpad ────────────────────────────── */}
       <section className="rider-quick-actions" aria-label="Quick rider actions">

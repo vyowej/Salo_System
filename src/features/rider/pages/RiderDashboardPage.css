@@ -61,6 +61,8 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
   border: 1px solid rgba(243, 107, 43, 0.16);
+  position: relative;
+  overflow: hidden;
 }
 
 .rider-status-bar-info {
@@ -983,4 +985,185 @@
   .rider-pulse-grid {
     grid-template-columns: 1fr;
   }
+}
+
+
+/* ── Active Delivery Banner & Available Deliveries Queue ─────────────────── */
+.rider-active-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(243, 107, 43, 0.35);
+  background: var(--accent-subtle, rgba(243, 107, 43, 0.08));
+}
+
+.rider-active-banner-eyebrow {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.rider-active-banner-title {
+  margin: var(--space-1) 0;
+  font-size: var(--font-size-lg);
+}
+
+.rider-active-banner-copy {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.rider-available-section {
+  margin-top: var(--space-6);
+}
+
+.rider-available-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.rider-available-header h2 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+}
+
+.rider-available-header p {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.rider-available-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.rider-available-see-all {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.rider-available-alert {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--status-error-border, #f5c2c7);
+  background: var(--status-error-bg, #fff5f5);
+  color: var(--status-error-text, #c62828);
+  font-size: var(--font-size-sm);
+}
+
+.rider-available-empty {
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--border-primary);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: var(--font-size-sm);
+}
+
+.rider-available-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+
+.rider-available-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  background: var(--surface-primary);
+}
+
+.rider-available-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.rider-available-restaurant {
+  margin: 0;
+  font-size: var(--font-size-base);
+}
+
+.rider-available-meta-line {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.rider-available-fee-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.rider-available-fee-badge strong {
+  font-size: var(--font-size-sm);
+  color: var(--accent);
+}
+
+.rider-available-addresses {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.rider-available-addresses dt {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+}
+
+.rider-available-addresses dd {
+  margin: 0;
+}
+
+.rider-available-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.rider-available-cod-pill {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: rgba(234, 179, 8, 0.16);
+  color: #92400e;
+  font-weight: var(--font-weight-semibold);
+}
+
+.rider-available-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
 }

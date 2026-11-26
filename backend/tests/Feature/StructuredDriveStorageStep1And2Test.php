@@ -155,6 +155,19 @@ class StructuredDriveStorageStep1And2Test extends TestCase
         $catAId = (int) $catA['id'];
         $catBId = (int) $catB['id'];
 
+        // Category creation does not eagerly create a Drive folder (lazy on first item photo upload)
+        $this->assertNull($this->fakeDrive->findFolderByAppProperties(
+            $this->resolveMenuParentFolderId($restaurantId),
+            ['salo_type' => 'menu_category', 'salo_id' => "C-{$catAId}"],
+        ));
+
+        // Create item in Cat A with photo -> lazily creates Cat A Drive folder
+        $item = $menuService->createItem($owner, [
+            'menu_category_id' => $catAId,
+            'item_name' => 'Tapsilog',
+            'base_price' => 145,
+        ], UploadedFile::fake()->image('tapsilog.jpg', 800, 600), $restaurantId, $req);
+
         $catAFolderId = $this->fakeDrive->findFolderByAppProperties(
             $this->resolveMenuParentFolderId($restaurantId),
             ['salo_type' => 'menu_category', 'salo_id' => "C-{$catAId}"],
@@ -162,20 +175,13 @@ class StructuredDriveStorageStep1And2Test extends TestCase
         $this->assertNotNull($catAFolderId);
         $this->assertSame('Silog Meals', $this->fakeDrive->nodes[$catAFolderId]['name']);
 
-        // Rename category -> renames same folder, no duplicate
-        $menuService->updateCategory($owner, $catAId, ['category_name' => 'All-Day Silog'], $restaurantId, $req);
-        $this->assertSame('All-Day Silog', $this->fakeDrive->nodes[$catAFolderId]['name']);
-
-        // Create item in Cat A with photo
-        $item = $menuService->createItem($owner, [
-            'menu_category_id' => $catAId,
-            'item_name' => 'Tapsilog',
-            'base_price' => 145,
-        ], UploadedFile::fake()->image('tapsilog.jpg', 800, 600), $restaurantId, $req);
-
         $storedPhoto = (string) DB::table('menu_items')->where('menu_item_id', $item['id'])->value('photo_image');
         $photoId = substr($storedPhoto, strlen('gdrive:'));
         $this->assertSame([$catAFolderId], $this->fakeDrive->nodes[$photoId]['parents']);
+
+        // Rename category -> renames same folder, no duplicate
+        $menuService->updateCategory($owner, $catAId, ['category_name' => 'All-Day Silog'], $restaurantId, $req);
+        $this->assertSame('All-Day Silog', $this->fakeDrive->nodes[$catAFolderId]['name']);
 
         // Deleting non-empty category is blocked (409)
         try {

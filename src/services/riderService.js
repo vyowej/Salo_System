@@ -31,6 +31,18 @@ export const riderService = {
     return response?.data?.profile ?? null;
   },
 
+  async uploadProfilePhoto(file) {
+    const fd = new FormData();
+    fd.append('photo', file);
+    const response = await apiClient.post('/rider/profile/photo', fd);
+    return response?.data?.profile ?? null;
+  },
+
+  async removeProfilePhoto() {
+    const response = await apiClient.delete('/rider/profile/photo');
+    return response?.data?.profile ?? null;
+  },
+
   async updateAvailability(status) {
     const response = await apiClient.patch('/rider/availability', { status });
     return response?.data?.availability ?? null;

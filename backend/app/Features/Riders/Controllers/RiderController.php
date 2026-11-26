@@ -3,6 +3,7 @@
 namespace App\Features\Riders\Controllers;
 
 use App\Features\Riders\Requests\UpdateRiderAvailabilityRequest;
+use App\Features\Riders\Requests\UpdateRiderProfilePhotoRequest;
 use App\Features\Riders\Requests\UpdateRiderProfileRequest;
 use App\Features\Riders\Services\RiderService;
 use App\Http\Controllers\Controller;
@@ -37,6 +38,36 @@ class RiderController extends Controller
         return ApiResponse::success(
             data: ['profile' => $this->riderService->updateProfile($request->user(), $request->validated(), $request)],
             message: 'Rider profile updated.',
+        );
+    }
+
+    public function uploadProfilePhoto(UpdateRiderProfilePhotoRequest $request): JsonResponse
+    {
+        $profile = $this->riderService->uploadProfilePhoto(
+            user: $request->user(),
+            photo: $request->file('photo'),
+            request: $request,
+        );
+
+        return ApiResponse::success(
+            data: [
+                'profile' => $profile,
+                'profile_photo' => $profile['profile_photo'] ?? null,
+            ],
+            message: 'Rider profile photo updated.',
+        );
+    }
+
+    public function removeProfilePhoto(Request $request): JsonResponse
+    {
+        $profile = $this->riderService->removeProfilePhoto($request->user(), $request);
+
+        return ApiResponse::success(
+            data: [
+                'profile' => $profile,
+                'profile_photo' => null,
+            ],
+            message: 'Rider profile photo removed.',
         );
     }
 

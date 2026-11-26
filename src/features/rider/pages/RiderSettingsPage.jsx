@@ -17,6 +17,7 @@ import {
   SettingsToggleRow,
 } from '../../../components/settings/SettingsPrimitives';
 import { getSettingsSectionsForRole } from '../../../config/settingsConfig';
+import RiderAvatarControl from '../components/RiderAvatarControl';
 
 const INITIAL_ACCOUNT_SETTINGS = {
   notifications: {
@@ -264,6 +265,20 @@ export default function RiderSettingsPage() {
       case 'account':
         return (
           <>
+            <SettingsCard
+              title="Rider Profile Photo"
+              description="Upload a clear profile photo or take one with your camera."
+            >
+              <RiderAvatarControl
+                compact
+                avatarUrl={riderProfile?.profile_photo || user?.avatar}
+                displayName={profileName}
+                onPhotoUpdated={(updated) => {
+                  if (updated) setRiderProfile(updated);
+                }}
+              />
+            </SettingsCard>
+
             <SettingsAccountSection
               role="rider"
               user={user}

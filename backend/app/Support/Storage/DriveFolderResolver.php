@@ -45,6 +45,7 @@ class DriveFolderResolver
                 saloType: 'restaurant_cover',
             ),
             StoragePurpose::MENU_ITEM_PHOTO => $this->resolveMenuCategoryFolder($context),
+            StoragePurpose::RIDER_PROFILE_PHOTO => $this->resolveRiderProfilePhotoFolder($context),
             StoragePurpose::APPLICATION_DOCUMENT => $this->resolveApplicationFolder($context),
             StoragePurpose::BRANCH_PERMIT => $this->resolveBranchPermitFolder($context),
             StoragePurpose::DELIVERY_CONFIRMATION => $this->resolveDeliveryMonthFolder($context),
@@ -307,6 +308,37 @@ class DriveFolderResolver
         );
     }
 
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function resolveRiderProfilePhotoFolder(array $context): string
+    {
+        $ridersRoot = $this->resolveOrCreateFolder(
+            parentId: $this->rootFolderId(),
+            name: 'Riders',
+            saloType: 'root_riders',
+            saloId: 'root',
+            visibility: StoragePurpose::VISIBILITY_PRIVATE,
+        );
+
+        $userId = (int) $context['rider_user_id'];
+        $riderFolder = $this->resolveOrCreateFolder(
+            parentId: $ridersRoot,
+            name: DriveFolderName::rider((string) ($context['rider_name'] ?? 'Rider'), $userId),
+            saloType: 'rider',
+            saloId: "U-{$userId}",
+            visibility: StoragePurpose::VISIBILITY_PRIVATE,
+        );
+
+        return $this->resolveOrCreateFolder(
+            parentId: $riderFolder,
+            name: 'Profile Photo',
+            saloType: 'rider_profile_photo',
+            saloId: "U-{$userId}",
+            visibility: StoragePurpose::VISIBILITY_PUBLIC,
+        );
+    }
+
     private function resolveSupportFolder(string $ticketRef): string
     {
         $supportRoot = $this->resolveOrCreateFolder(
@@ -424,6 +456,18 @@ class DriveFolderResolver
 
         if ($purpose === StoragePurpose::MENU_ITEM_PHOTO && isset($context['menu_category_id'])) {
             $this->forgetAndReResolveMenuCategory($context);
+        }
+
+        if ($purpose === StoragePurpose::RIDER_PROFILE_PHOTO && isset($context['rider_user_id'])) {
+            $userId = (int) $context['rider_user_id'];
+            $ridersRoot = Cache::get($this->folderCacheKey($rootId, 'root_riders', 'root'));
+            if (is_string($ridersRoot) && $ridersRoot !== '') {
+                $riderFolder = Cache::get($this->folderCacheKey($ridersRoot, 'rider', "U-{$userId}"));
+                if (is_string($riderFolder) && $riderFolder !== '') {
+                    $this->forgetFolderCache($riderFolder, 'rider_profile_photo', "U-{$userId}");
+                }
+                $this->forgetFolderCache($ridersRoot, 'rider', "U-{$userId}");
+            }
         }
     }
 

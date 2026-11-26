@@ -49,3 +49,4 @@ backend/storage/app/public/**/*.pdf
 
 # Local database backups
 database/backups/
+salo_riders_backup.sql

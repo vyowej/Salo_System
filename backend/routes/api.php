@@ -163,6 +163,8 @@ Route::prefix('rider')->middleware('auth')->group(function (): void {
         Route::get('/dashboard', [RiderController::class, 'dashboard']);
         Route::get('/profile', [RiderController::class, 'profile']);
         Route::patch('/profile', [RiderController::class, 'updateProfile']);
+        Route::post('/profile/photo', [RiderController::class, 'uploadProfilePhoto']);
+        Route::delete('/profile/photo', [RiderController::class, 'removeProfilePhoto']);
         Route::patch('/availability', [RiderController::class, 'updateAvailability']);
         Route::post('/location', [TrackingController::class, 'recordRiderLocation']);
 

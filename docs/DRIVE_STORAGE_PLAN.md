@@ -8,7 +8,7 @@
 - **Root:** `GOOGLE_DRIVE_PUBLIC_FOLDER_ID` serves as the `SALO` root folder.
 - **Hierarchy:**
   - `Restaurants/{Restaurant name} [R-{brandId}]/Logo/`, `Cover Photo/`, `Menu/{Category}/`, `Branches/{Branch name} [R-{branchId}]/Menu/{Category}/` (`visibility=public`)
-  - `Riders/{Rider name} [U-{userId}]/Delivery Confirmations/{YYYY-MM}/` (`visibility=private`)
+  - `Riders/{Rider name} [U-{userId}]/Profile Photo/` (`visibility=public`) and `Riders/{Rider name} [U-{userId}]/Delivery Confirmations/{YYYY-MM}/` (`visibility=private`)
   - `Applications/Restaurant Applications/{Owner} - {Restaurant} [A-{appId}]/` + `Branch Permits/{Branch name} [R-{branchId}|AB-{appBranchId}]/` (`visibility=private`)
   - `Applications/Rider Applications/{Rider name} [A-{appId}]/` (`visibility=private`)
   - `Support/{Ticket or report ref}/` (`visibility=private`, reserved for future support feature)

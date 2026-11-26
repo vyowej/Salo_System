@@ -426,6 +426,7 @@ CREATE TABLE riders (
     emergency_contact_alt_phone    VARCHAR(30)     NULL,
     base_city_id                   BIGINT UNSIGNED NOT NULL COMMENT 'Primary city where shifts begin',
     preferred_hubs                 VARCHAR(255)    NULL,
+    profile_photo                  VARCHAR(500)    NULL,
     preferred_shifts               SET('breakfast','lunch','afternoon','dinner','late_night','flexible') NULL,
     available_days                 SET('mon','tue','wed','thu','fri','sat','sun') NULL,
     schedule_effective_date        DATE            NULL,

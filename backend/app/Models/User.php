@@ -230,6 +230,7 @@ class User extends Authenticatable
                 'vehicle_type',
                 'rider_status',
                 'approved_at',
+                'profile_photo',
             ])
             ->first();
 
@@ -238,6 +239,9 @@ class User extends Authenticatable
             'vehicle_type' => $riderRow->vehicle_type,
             'rider_status' => $riderRow->rider_status,
             'approved_at' => $riderRow->approved_at,
+            'profile_photo' => ! empty($riderRow->profile_photo)
+                ? app(\App\Support\FileStorageService::class)->publicUrl((string) $riderRow->profile_photo)
+                : null,
         ] : null;
 
         $isAdmin = $this->user_role === 'admin';

@@ -4,8 +4,11 @@ namespace App\Features\Riders\Services;
 
 use App\Models\User;
 use App\Support\AuditLogService;
+use App\Support\FileStorageService;
+use App\Support\Storage\StoragePurpose;
 use App\Support\WorkspaceAccessResolver;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -21,6 +24,7 @@ class RiderService
     public function __construct(
         private readonly AuditLogService $auditLogService,
         private readonly WorkspaceAccessResolver $workspaceAccessResolver,
+        private readonly FileStorageService $fileStorageService,
     ) {}
 
     /**
@@ -243,7 +247,109 @@ class RiderService
             'emergency_contact_phone' => $rider->emergency_contact_phone,
             'rider_status' => $rider->rider_status,
             'approved_at' => $rider->approved_at,
+            'profile_photo' => ! empty($rider->profile_photo)
+                ? $this->fileStorageService->publicUrl((string) $rider->profile_photo)
+                : null,
             'availability' => $availability,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function uploadProfilePhoto(User $user, UploadedFile $photo, Request $request): array
+    {
+        $rider = $this->requireRiderRecord($user);
+        $oldPath = $rider->profile_photo ?? null;
+        $riderName = trim(implode(' ', array_filter([
+            $user->first_name,
+            $user->last_name,
+        ]))) ?: ($user->username ?: 'Rider');
+
+        $stored = $this->fileStorageService->storePublicImageForPurpose(
+            file: $photo,
+            purpose: StoragePurpose::RIDER_PROFILE_PHOTO,
+            ownerContext: [
+                'rider_user_id' => (int) $user->user_id,
+                'rider_id' => (int) $rider->rider_id,
+                'rider_name' => $riderName,
+            ],
+            localDirectory: 'riders/'.((int) $rider->rider_id).'/profile',
+            fieldName: 'photo',
+        );
+
+        $newPath = $stored['path'];
+
+        try {
+            DB::transaction(function () use ($rider, $newPath, $oldPath, $user, $request): void {
+                DB::table('riders')
+                    ->where('rider_id', $rider->rider_id)
+                    ->update([
+                        'profile_photo' => $newPath,
+                        'updated_at' => now(),
+                    ]);
+
+                $this->auditLogService->record(
+                    actorUserId: (int) $user->user_id,
+                    action: 'rider_profile_photo_updated',
+                    entityType: 'riders',
+                    entityId: (int) $rider->rider_id,
+                    oldValues: ['profile_photo' => $oldPath],
+                    newValues: ['profile_photo' => $newPath],
+                    request: $request,
+                );
+            });
+        } catch (\Throwable $e) {
+            $this->fileStorageService->deleteIfUnreferenced('public', $newPath, fn (): bool => false);
+            throw $e;
+        }
+
+        if ($oldPath !== null && $oldPath !== '' && $oldPath !== $newPath) {
+            $this->fileStorageService->deleteIfUnreferenced(
+                'public',
+                (string) $oldPath,
+                fn (string $path): bool => DB::table('riders')->where('profile_photo', $path)->exists(),
+            );
+        }
+
+        return $this->getProfile($user);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function removeProfilePhoto(User $user, Request $request): array
+    {
+        $rider = $this->requireRiderRecord($user);
+        $oldPath = $rider->profile_photo ?? null;
+
+        if ($oldPath !== null && $oldPath !== '') {
+            DB::transaction(function () use ($rider, $oldPath, $user, $request): void {
+                DB::table('riders')
+                    ->where('rider_id', $rider->rider_id)
+                    ->update([
+                        'profile_photo' => null,
+                        'updated_at' => now(),
+                    ]);
+
+                $this->auditLogService->record(
+                    actorUserId: (int) $user->user_id,
+                    action: 'rider_profile_photo_removed',
+                    entityType: 'riders',
+                    entityId: (int) $rider->rider_id,
+                    oldValues: ['profile_photo' => $oldPath],
+                    newValues: ['profile_photo' => null],
+                    request: $request,
+                );
+            });
+
+            $this->fileStorageService->deleteIfUnreferenced(
+                'public',
+                (string) $oldPath,
+                fn (string $path): bool => DB::table('riders')->where('profile_photo', $path)->exists(),
+            );
+        }
+
+        return $this->getProfile($user);
     }
 }

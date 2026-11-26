@@ -115,7 +115,7 @@ class FileStorageService
             fieldName: $fieldName,
         );
 
-        $maxDim = $purpose === StoragePurpose::RESTAURANT_LOGO ? 1024 : 1920;
+        $maxDim = in_array($purpose, [StoragePurpose::RESTAURANT_LOGO, StoragePurpose::RIDER_PROFILE_PHOTO], true) ? 1024 : 1920;
         $optimizedPath = ImageProcessor::sanitizeAndOptimize($validated['real_path'], $validated['mime_type'], $maxDim);
         $sourcePath = $optimizedPath ?? $validated['real_path'];
 

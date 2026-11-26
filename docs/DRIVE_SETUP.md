@@ -1,6 +1,6 @@
 # SALO — Google Drive Storage Setup Guide
 
-This guide walks you through setting up Google Drive for SALO's approved Drive-scoped uploads (**public restaurant/menu images** and **private application documents, branch permits, delivery confirmation photos, and future support attachments**) using your own Gmail account.
+This guide walks you through setting up Google Drive for SALO's approved Drive-scoped uploads (**public restaurant/menu/rider profile images** and **private application documents, branch permits, delivery confirmation photos, and future support attachments**) using your own Gmail account.
 
 > **Important:**
 > - **Stays local (never on Drive):** restaurant gallery, platform assets, admin banners, default placeholder images, and `profile_change_requests` supporting documents.

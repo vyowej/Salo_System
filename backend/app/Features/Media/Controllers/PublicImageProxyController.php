@@ -37,6 +37,9 @@ class PublicImageProxyController extends Controller
             || DB::table('menu_items')
                 ->where('photo_image', $storedValue)
                 ->orWhere('published_photo_image', $storedValue)
+                ->exists()
+            || DB::table('riders')
+                ->where('profile_photo', $storedValue)
                 ->exists();
 
         abort_unless($isReferenced, 404, 'Image not found.');

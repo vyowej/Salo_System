@@ -198,14 +198,15 @@ test('Middle Initial (M.I.) field: optional, auto-uppercase, max 1 letter, strip
     assert.equal(sanitizeMiddleInitial('7'), '');
     assert.equal(sanitizeMiddleInitial('9d'), 'D');
 
-    // 2. Username auto-suggestion only uses first + last name (excludes middle initial)
+    // 2. Username is entered manually (not auto-suggested from name/middle initial)
     assert.equal(toUsernameSlug('Cassidy' + 'Santos'), 'cassidysantos');
     const registerSrc = await fs.readFile(
       new URL('../features/auth/pages/RegisterPage.jsx', import.meta.url),
       'utf8',
     );
-    assert.match(registerSrc, /toUsernameSlug\(formData\.firstName \+ formData\.lastName\)/);
+    assert.equal(registerSrc.includes('toUsernameSlug'), false);
     assert.equal(registerSrc.includes('formData.firstName + formData.middleInitial'), false);
+    assert.match(registerSrc, /validateUsernameFormat\(formData\.username\)/);
 
     // 3. Rendered RegisterPage contains First Name | M.I. (optional) | Last Name
     const registerHtml = renderToStaticMarkup(
