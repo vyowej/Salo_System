@@ -65,6 +65,7 @@ use App\Features\Riders\Controllers\RiderController;
 use App\Features\Riders\Controllers\RiderDeliveryController;
 use App\Features\Riders\Controllers\RiderFinanceController;
 use App\Features\Riders\Controllers\RiderScheduleController;
+use App\Features\Riders\Controllers\RiderSupportController;
 use App\Support\ApiResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -199,6 +200,11 @@ Route::prefix('rider')->middleware('auth')->group(function (): void {
         Route::post('/finance/remit', [RiderFinanceController::class, 'remit']);
 
         Route::get('/reviews', [RiderReviewController::class, 'index']);
+
+        Route::get('/support/tickets', [RiderSupportController::class, 'index']);
+        Route::post('/support/tickets', [RiderSupportController::class, 'store']);
+        Route::get('/support/tickets/{id}', [RiderSupportController::class, 'show'])->whereNumber('id');
+        Route::patch('/support/tickets/{id}/close', [RiderSupportController::class, 'close'])->whereNumber('id');
     });
 });
 

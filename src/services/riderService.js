@@ -216,6 +216,37 @@ export const riderService = {
     const response = await apiClient.post(`/rider/schedule/requests/${encodeURIComponent(requestId)}/cancel`, {});
     return response?.data?.request ?? null;
   },
+
+  async getSupportTickets({ status = 'all', category = 'all', page = 1, perPage = 20 } = {}) {
+    const params = new URLSearchParams();
+    if (status && status !== 'all') params.set('status', status);
+    if (category && category !== 'all') params.set('category', category);
+    if (page) params.set('page', String(page));
+    if (perPage) params.set('per_page', String(perPage));
+    const qs = params.toString();
+    const response = await apiClient.get(`/rider/support/tickets${qs ? `?${qs}` : ''}`);
+    return response?.data ?? {
+      tickets: [],
+      counts: { total: 0, open: 0, in_review: 0, resolved: 0, closed: 0 },
+      recent_orders: [],
+      pagination: { current_page: 1, last_page: 1, per_page: perPage, total: 0 },
+    };
+  },
+
+  async getSupportTicket(ticketId) {
+    const response = await apiClient.get(`/rider/support/tickets/${encodeURIComponent(ticketId)}`);
+    return response?.data?.ticket ?? null;
+  },
+
+  async createSupportTicket(payload) {
+    const response = await apiClient.post('/rider/support/tickets', payload);
+    return response?.data?.ticket ?? null;
+  },
+
+  async closeSupportTicket(ticketId) {
+    const response = await apiClient.patch(`/rider/support/tickets/${encodeURIComponent(ticketId)}/close`, {});
+    return response?.data?.ticket ?? null;
+  },
 };
 
 export default riderService;

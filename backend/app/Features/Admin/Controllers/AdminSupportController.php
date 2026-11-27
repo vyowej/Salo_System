@@ -65,12 +65,31 @@ class AdminSupportController extends Controller
                 'alr.created_at',
             ]);
 
+        $riderTickets = DB::table('rider_support_tickets as rst')
+            ->join('riders as rd', 'rd.rider_id', '=', 'rst.rider_id')
+            ->join('users as u', 'u.user_id', '=', 'rst.user_id')
+            ->whereIn('rst.status', ['open', 'in_review'])
+            ->orderByDesc('rst.created_at')
+            ->limit(25)
+            ->get([
+                'rst.ticket_id',
+                'rst.ticket_reference',
+                'rst.rider_id',
+                'rst.category',
+                'rst.priority',
+                'rst.subject',
+                'rst.status',
+                DB::raw("TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) as rider_name"),
+                'rst.created_at',
+            ]);
+
         return ApiResponse::success([
             'counts' => [
                 'disputes' => $openDisputes->count(),
                 'reservation_reviews' => (int) ($flaggedReservations['meta']['total'] ?? 0),
                 'change_requests' => $changeRequests->count(),
                 'lifecycle_requests' => $lifecycleRequests->count(),
+                'rider_tickets' => $riderTickets->count(),
             ],
             'disputes' => $openDisputes->map(static fn (object $row): array => [
                 'order_id' => (int) $row->order_id,
@@ -105,6 +124,18 @@ class AdminSupportController extends Controller
                 'reason' => $row->reason,
                 'created_at' => $row->created_at,
                 'target_route' => '/admin/accounts',
+            ])->values()->all(),
+            'rider_tickets' => $riderTickets->map(static fn (object $row): array => [
+                'ticket_id' => (int) $row->ticket_id,
+                'reference' => $row->ticket_reference,
+                'rider_id' => (int) $row->rider_id,
+                'rider_name' => $row->rider_name,
+                'category' => $row->category,
+                'priority' => $row->priority,
+                'subject' => $row->subject,
+                'status' => $row->status,
+                'created_at' => $row->created_at,
+                'target_route' => "/admin/riders/{$row->rider_id}",
             ])->values()->all(),
         ], 'Admin support escalations retrieved.');
     }

@@ -89,6 +89,7 @@ export const TOPBAR_PAGE_TITLES = {
   '/rider/schedule': 'Schedule',
   '/rider/earnings': 'Earnings',
   '/rider/history': 'Delivery History',
+  '/rider/reviews': 'Ratings & Reviews',
   '/rider/notifications': 'Notifications',
   '/rider/support': 'Support',
   '/rider/profile': 'Rider Profile',

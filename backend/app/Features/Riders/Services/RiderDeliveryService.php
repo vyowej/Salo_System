@@ -294,6 +294,10 @@ class RiderDeliveryService
         $baseQuery = DB::table('deliveries as d')
             ->join('orders as o', 'o.order_id', '=', 'd.order_id')
             ->join('restaurants as r', 'r.restaurant_id', '=', 'o.restaurant_id')
+            ->leftJoin('rider_reviews as rr', function ($join): void {
+                $join->on('rr.order_id', '=', 'o.order_id')
+                    ->where('rr.is_visible', '=', 1);
+            })
             ->where('d.rider_id', $riderId)
             ->whereIn('d.delivery_status', ['delivered', 'failed', 'cancelled']);
 
@@ -333,6 +337,9 @@ class RiderDeliveryService
                 'd.delivered_at',
                 'd.failed_at',
                 'o.placed_at',
+                'rr.rating as customer_rating',
+                'rr.comment as customer_comment',
+                'rr.created_at as reviewed_at',
             ])
             ->orderByDesc('d.updated_at')
             ->orderByDesc('d.delivery_id')
@@ -362,6 +369,9 @@ class RiderDeliveryService
                 'delivered_at' => OrderTimestampFormatter::toManilaIso($row->delivered_at),
                 'failed_at' => OrderTimestampFormatter::toManilaIso($row->failed_at),
                 'placed_at' => OrderTimestampFormatter::toManilaIso($row->placed_at),
+                'customer_rating' => $row->customer_rating !== null ? (int) $row->customer_rating : null,
+                'customer_comment' => $row->customer_comment,
+                'reviewed_at' => OrderTimestampFormatter::toManilaIso($row->reviewed_at),
             ];
         })->all();
 

@@ -112,6 +112,16 @@ export default function RiderHistoryPage() {
                       Failure reason: {row.failure_reason}
                     </div>
                   )}
+                  {row.customer_rating != null && (
+                    <div style={{ marginTop: 6, padding: '6px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-secondary)', fontSize: 'var(--font-size-xs)' }}>
+                      <strong>Customer rating: ★ {row.customer_rating}/5</strong>
+                      {row.customer_comment && (
+                        <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
+                          “{row.customer_comment}”
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontWeight: 700, fontSize: 'var(--font-size-sm)' }}>

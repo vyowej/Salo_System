@@ -66,6 +66,7 @@ const RiderAccountStatusPage = lazy(() => import('./features/rider/pages/RiderAc
 const RiderGoOnlinePage = lazy(() => import('./features/rider/pages/RiderGoOnlinePage'));
 const RiderSchedulePage = lazy(() => import('./features/rider/pages/RiderSchedulePage'));
 const RiderHistoryPage = lazy(() => import('./features/rider/pages/RiderHistoryPage'));
+const RiderReviewsPage = lazy(() => import('./features/rider/pages/RiderReviewsPage'));
 const RiderNotificationsPage = lazy(() => import('./features/rider/pages/RiderNotificationsPage'));
 const RiderSupportPage = lazy(() => import('./features/rider/pages/RiderSupportPage'));
 const RiderProfilePage = lazy(() => import('./features/rider/pages/RiderProfilePage'));
@@ -240,6 +241,10 @@ function AppShell() {
       '/rider/history': {
         title: 'Delivery history | SALO Rider',
         description: 'Review past deliveries, payment, and record details.',
+      },
+      '/rider/reviews': {
+        title: 'Ratings & reviews | SALO Rider',
+        description: 'View customer star ratings and delivery comments.',
       },
       '/rider/support': {
         title: 'Support & incidents | SALO Rider',
@@ -433,6 +438,7 @@ function AppShell() {
             <Route path="earnings" element={<RiderEarningsPage />} />
             <Route path="history" element={<RiderHistoryPage />} />
             <Route path="history/:id" element={<RiderHistoryPage />} />
+            <Route path="reviews" element={<RiderReviewsPage />} />
             <Route path="notifications" element={<RiderNotificationsPage />} />
             <Route path="support" element={<RiderSupportPage />} />
             <Route path="support/:id" element={<RiderSupportPage />} />
