@@ -647,6 +647,33 @@ export default function OwnerReservationsPage() {
     }
   }
 
+  const [preOrderBusy, setPreOrderBusy] = useState(false);
+
+  async function handlePreOrderStatus(res, action) {
+    if (!res || preOrderBusy) return;
+    let reason = null;
+    if (action === 'reject') {
+      const entered = window.prompt('Enter reason for declining this pre-order:');
+      if (!entered || !entered.trim()) return;
+      reason = entered.trim();
+    }
+    setPreOrderBusy(true);
+    try {
+      const updatedPreOrder = await ownerService.updateReservationPreOrderStatus(
+        restaurantId,
+        res.reservationId || res.id,
+        { action, reason },
+      );
+      setDetailRes((prev) => (prev && prev.id === res.id ? { ...prev, preOrder: updatedPreOrder } : prev));
+      showToastMessage('success', `Pre-order updated to ${updatedPreOrder?.statusLabel || action}.`);
+      await loadReservations(true);
+    } catch (err) {
+      showToastMessage('error', err?.message || 'Unable to update pre-order status.');
+    } finally {
+      setPreOrderBusy(false);
+    }
+  }
+
   function renderDepositButtons(res) {
     const depActions = Array.isArray(res?.allowedDepositActions) ? res.allowedDepositActions : [];
     if (depActions.length === 0) return null;
@@ -1324,6 +1351,14 @@ export default function OwnerReservationsPage() {
                                     <span>
                                       History: {res.guestHistory.visits} visits · {res.guestHistory.noShows} no-shows
                                     </span>
+                                    {res.preOrder && (
+                                      <>
+                                        <span>·</span>
+                                        <Badge variant={res.preOrder.orderStatus === 'ready' || res.preOrder.orderStatus === 'completed' ? 'success' : res.preOrder.orderStatus === 'cancelled' || res.preOrder.orderStatus === 'rejected' ? 'default' : 'info'}>
+                                          Pre-Order: {res.preOrder.itemCount} dish(es) · ₱{Number(res.preOrder.totalAmount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · {res.preOrder.statusLabel}
+                                        </Badge>
+                                      </>
+                                    )}
                                     {res.specialRequests && (
                                       <>
                                         <span>·</span>
@@ -1572,6 +1607,89 @@ export default function OwnerReservationsPage() {
               {detailRes.specialRequests && (
                 <div style={{ padding: 10, borderRadius: 8, background: 'var(--surface-secondary)', fontSize: 12 }}>
                   <strong>Special Requests:</strong> {detailRes.specialRequests}
+                </div>
+              )}
+
+              {detailRes.preOrder && (
+                <div style={{ padding: 12, borderRadius: 10, border: '1px solid var(--border-primary)', background: 'var(--surface-secondary)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <div>
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block' }}>
+                        Dine-In Menu Pre-Order
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                        <strong style={{ fontSize: 13 }}>{detailRes.preOrder.orderReference}</strong>
+                        <Badge variant={detailRes.preOrder.orderStatus === 'ready' || detailRes.preOrder.orderStatus === 'completed' ? 'success' : detailRes.preOrder.orderStatus === 'cancelled' || detailRes.preOrder.orderStatus === 'rejected' ? 'default' : 'info'}>
+                          {detailRes.preOrder.statusLabel}
+                        </Badge>
+                      </div>
+                    </div>
+                    <strong style={{ fontSize: 14 }}>
+                      ₱{Number(detailRes.preOrder.totalAmount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {detailRes.preOrder.items.map((item) => (
+                      <div key={item.orderItemId || `${item.menuItemId}-${item.itemName}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, fontSize: 12, paddingBottom: 4, borderBottom: '1px solid var(--border-secondary)' }}>
+                        <div>
+                          <strong>{item.quantity}× {item.itemName}</strong>
+                          {item.addOns?.length > 0 && (
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              {item.addOns.map((ao) => ao.optionName).join(', ')}
+                            </div>
+                          )}
+                          {item.specialInstructions && (
+                            <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                              Note: {item.specialInstructions}
+                            </div>
+                          )}
+                        </div>
+                        <strong>₱{Number(item.lineTotal || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      </div>
+                    ))}
+                  </div>
+
+                  {detailRes.preOrder.notes && (
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      <strong>Pre-Order Notes:</strong> {detailRes.preOrder.notes}
+                    </div>
+                  )}
+
+                  {canUpdateStatus && Array.isArray(detailRes.preOrder.allowedActions) && detailRes.preOrder.allowedActions.length > 0 && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 4 }}>
+                      {detailRes.preOrder.allowedActions.includes('accept') && (
+                        <Button size="sm" variant="primary" disabled={preOrderBusy} onClick={() => handlePreOrderStatus(detailRes, 'accept')}>
+                          Accept Pre-Order
+                        </Button>
+                      )}
+                      {detailRes.preOrder.allowedActions.includes('prepare') && (
+                        <Button size="sm" variant="primary" disabled={preOrderBusy} onClick={() => handlePreOrderStatus(detailRes, 'prepare')}>
+                          Start Preparing
+                        </Button>
+                      )}
+                      {detailRes.preOrder.allowedActions.includes('ready') && (
+                        <Button size="sm" variant="primary" disabled={preOrderBusy} onClick={() => handlePreOrderStatus(detailRes, 'ready')}>
+                          Mark Ready for Dine-In
+                        </Button>
+                      )}
+                      {detailRes.preOrder.allowedActions.includes('complete') && (
+                        <Button size="sm" variant="primary" disabled={preOrderBusy} onClick={() => handlePreOrderStatus(detailRes, 'complete')}>
+                          Mark Served / Completed
+                        </Button>
+                      )}
+                      {detailRes.preOrder.allowedActions.includes('reject') && (
+                        <Button size="sm" variant="outline" disabled={preOrderBusy} onClick={() => handlePreOrderStatus(detailRes, 'reject')}>
+                          Decline Pre-Order
+                        </Button>
+                      )}
+                      {detailRes.preOrder.allowedActions.includes('cancel') && (
+                        <Button size="sm" variant="ghost" disabled={preOrderBusy} onClick={() => handlePreOrderStatus(detailRes, 'cancel')}>
+                          Cancel Pre-Order
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -58,6 +58,14 @@ class StoreCustomerReservationRequest extends FormRequest
             'contact_phone' => ['nullable', 'string', 'max:30', 'regex:/^[0-9+\-\s()]{7,30}$/'],
             'special_requests' => ['nullable', 'string', 'max:500'],
             'idempotency_key' => ['required', 'string', 'min:8', 'max:64'],
+            'pre_order' => ['nullable', 'array'],
+            'pre_order.notes' => ['nullable', 'string', 'max:500'],
+            'pre_order.items' => ['nullable', 'array', 'max:50'],
+            'pre_order.items.*.menu_item_id' => ['required_with:pre_order.items', 'integer', 'min:1'],
+            'pre_order.items.*.quantity' => ['required_with:pre_order.items', 'integer', 'min:1', 'max:50'],
+            'pre_order.items.*.add_on_option_ids' => ['nullable', 'array', 'max:30'],
+            'pre_order.items.*.add_on_option_ids.*' => ['integer', 'min:1'],
+            'pre_order.items.*.special_instructions' => ['nullable', 'string', 'max:500'],
         ];
     }
 

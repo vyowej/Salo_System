@@ -35,6 +35,7 @@ class CustomerReservationService
         private readonly NotificationService $notificationService,
         private readonly FileStorageService $fileStorageService,
         private readonly ReservationExpiryService $expiryService,
+        private readonly ReservationPreOrderService $preOrderService,
     ) {}
 
     /**
@@ -54,6 +55,11 @@ class CustomerReservationService
         $idempotencyKey = trim((string) $validated['idempotency_key']);
         $manilaNow = $this->toManilaImmutable($now);
 
+        $incomingPreOrderInput = isset($validated['pre_order']) && is_array($validated['pre_order'])
+            ? $validated['pre_order']
+            : null;
+        $incomingPreOrderFingerprint = $this->preOrderService->canonicalPreOrderFingerprint($incomingPreOrderInput);
+
         // 1. Idempotency check by (customer_id, idempotency_key)
         $existing = DB::table('reservations')
             ->where('customer_id', $customerId)
@@ -64,10 +70,12 @@ class CustomerReservationService
             $reqStartStr = CarbonImmutable::parse((string) $validated['start'], self::TIMEZONE)
                 ->setTimezone(self::TIMEZONE)
                 ->format('Y-m-d H:i:s');
+            $storedPreOrderFingerprint = $this->preOrderService->storedPreOrderFingerprint((int) $existing->reservation_id);
             if (
                 (int) $existing->restaurant_id !== (int) $validated['restaurant_id']
                 || (string) $existing->reservation_start !== $reqStartStr
                 || (int) $existing->number_of_guests !== (int) $validated['party_size']
+                || $incomingPreOrderFingerprint !== $storedPreOrderFingerprint
             ) {
                 throw new ReservationBookingException(
                     errorCode: 'IDEMPOTENCY_KEY_REUSED',
@@ -118,6 +126,17 @@ class CustomerReservationService
             );
         }
 
+        $preOrderInput = isset($validated['pre_order']) && is_array($validated['pre_order'])
+            ? $validated['pre_order']
+            : null;
+        $preOrderItemsInput = is_array($preOrderInput['items'] ?? null) ? $preOrderInput['items'] : [];
+        $preOrderNotes = isset($preOrderInput['notes']) && is_string($preOrderInput['notes'])
+            ? trim($preOrderInput['notes'])
+            : null;
+        $preparedPreOrder = $preOrderItemsInput !== []
+            ? $this->preOrderService->validateAndPrepareItems($restaurantId, $restaurantRow, $preOrderItemsInput)
+            : null;
+
         // 5. Customer limits (overlapping booking at any restaurant & max active pending)
         $this->assertCustomerBookingLimits($customerId, $manilaStart, $manilaEnd, $manilaNow);
 
@@ -150,6 +169,8 @@ class CustomerReservationService
                 $requestedDiningArea,
                 $validated,
                 $request,
+                $preparedPreOrder,
+                $preOrderNotes,
                 &$assignedDiningAreaDiffers,
             ): int {
                 // Lock protocol step 1: acquire FOR UPDATE locks on candidate restaurant_tables
@@ -358,6 +379,20 @@ class CustomerReservationService
                     'updated_at' => $nowStr,
                 ]);
 
+                if ($preparedPreOrder !== null) {
+                    $this->preOrderService->createLinkedPreOrder(
+                        user: $user,
+                        restaurantRow: $restaurantRow,
+                        reservationId: $id,
+                        reservationStartSql: $manilaStart->format('Y-m-d H:i:s'),
+                        contactName: $contactName,
+                        notes: $preOrderNotes,
+                        prepared: $preparedPreOrder,
+                        idempotencyKey: $idempotencyKey,
+                        now: $manilaNow,
+                    );
+                }
+
                 // Status history row
                 $this->historyRecorder->record(
                     reservationId: $id,
@@ -448,10 +483,12 @@ class CustomerReservationService
                     ->first(['reservation_id', 'restaurant_id', 'reservation_start', 'number_of_guests']);
 
                 if ($raced) {
+                    $storedPreOrderFingerprint = $this->preOrderService->storedPreOrderFingerprint((int) $raced->reservation_id);
                     if (
                         (int) $raced->restaurant_id !== $restaurantId
                         || (string) $raced->reservation_start !== $manilaStart->format('Y-m-d H:i:s')
                         || (int) $raced->number_of_guests !== $partySize
+                        || $incomingPreOrderFingerprint !== $storedPreOrderFingerprint
                     ) {
                         throw new ReservationBookingException(
                             errorCode: 'IDEMPOTENCY_KEY_REUSED',
@@ -768,6 +805,14 @@ class CustomerReservationService
                 request: $request,
             );
 
+            $this->preOrderService->syncPreOrderOnReservationTerminalState(
+                reservationId: $reservationId,
+                cancelledBy: 'customer',
+                reason: $cleanReason ?? 'Cancelled by customer.',
+                actorUserId: $customerId,
+                now: $manilaNow,
+            );
+
             if (((string) ($row->deposit_status ?? 'none')) === 'paid') {
                 $this->auditLogService->record(
                     actorUserId: $customerId,
@@ -1023,6 +1068,13 @@ class CustomerReservationService
         $formatted['deposit_under_review'] = ((string) ($row->reservation_status ?? '')) === ReservationStatus::CANCELLED
             && ((string) ($row->cancelled_by ?? '')) === 'customer'
             && ((string) ($row->deposit_status ?? 'none')) === 'paid';
+
+        $preOrders = $this->preOrderService->loadByReservationIds(
+            [$reservationId],
+            [$reservationId => $row],
+            $manilaNow,
+        );
+        $formatted['pre_order'] = $preOrders[$reservationId] ?? null;
 
         return $formatted;
     }

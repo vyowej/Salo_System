@@ -41,6 +41,68 @@ const DEPOSIT_STATUS_LABELS = {
   not_collected: 'Deposit not collected',
 };
 
+export const PRE_ORDER_STATUS_LABELS = {
+  pending: 'Pending Acceptance',
+  accepted: 'Accepted',
+  preparing: 'Preparing',
+  ready: 'Ready for Dine-In',
+  completed: 'Served / Completed',
+  cancelled: 'Cancelled',
+  rejected: 'Declined',
+};
+
+export function normalizeReservationPreOrder(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const orderStatus = String(raw.order_status ?? raw.orderStatus ?? 'pending').toLowerCase();
+  const items = Array.isArray(raw.items)
+    ? raw.items.map((item) => ({
+        orderItemId: Number(item.order_item_id ?? item.orderItemId ?? 0),
+        menuItemId: item.menu_item_id ?? item.menuItemId ?? null,
+        itemName: item.item_name ?? item.itemName ?? '',
+        photoImage: item.photo_image ?? item.photoImage ?? null,
+        unitPrice: Number(item.unit_price ?? item.unitPrice ?? 0),
+        quantity: Number(item.quantity ?? 1),
+        specialInstructions: item.special_instructions ?? item.specialInstructions ?? null,
+        lineTotal: Number(item.line_total ?? item.lineTotal ?? 0),
+        addOns: Array.isArray(item.add_ons ?? item.addOns)
+          ? (item.add_ons ?? item.addOns).map((ao) => ({
+              orderItemAddOnId: Number(ao.order_item_add_on_id ?? ao.orderItemAddOnId ?? 0),
+              addOnOptionId: ao.add_on_option_id ?? ao.addOnOptionId ?? null,
+              groupName: ao.group_name ?? ao.groupName ?? 'Add-on',
+              optionName: ao.option_name ?? ao.optionName ?? '',
+              additionalPrice: Number(ao.additional_price ?? ao.additionalPrice ?? 0),
+            }))
+          : [],
+      }))
+    : [];
+
+  return {
+    orderId: Number(raw.order_id ?? raw.orderId ?? 0),
+    orderReference: raw.order_reference ?? raw.orderReference ?? '',
+    orderType: raw.order_type ?? raw.orderType ?? 'dine_in',
+    orderStatus,
+    statusLabel: PRE_ORDER_STATUS_LABELS[orderStatus] || orderStatus,
+    notes: raw.notes ?? null,
+    subtotalAmount: Number(raw.subtotal_amount ?? raw.subtotalAmount ?? 0),
+    deliveryFee: Number(raw.delivery_fee ?? raw.deliveryFee ?? 0),
+    totalAmount: Number(raw.total_amount ?? raw.totalAmount ?? 0),
+    itemCount: Number(raw.item_count ?? raw.itemCount ?? items.reduce((s, i) => s + i.quantity, 0)),
+    items,
+    rejectionReason: raw.rejection_reason ?? raw.rejectionReason ?? null,
+    cancellationReason: raw.cancellation_reason ?? raw.cancellationReason ?? null,
+    canCustomerEdit: Boolean(raw.can_customer_edit ?? raw.canCustomerEdit ?? false),
+    editBlockedReason: raw.edit_blocked_reason ?? raw.editBlockedReason ?? null,
+    allowedActions: Array.isArray(raw.allowed_actions ?? raw.allowedActions)
+      ? (raw.allowed_actions ?? raw.allowedActions)
+      : [],
+    placedAt: raw.placed_at ?? raw.placedAt ?? null,
+    acceptedAt: raw.accepted_at ?? raw.acceptedAt ?? null,
+    completedAt: raw.completed_at ?? raw.completedAt ?? null,
+    cancelledAt: raw.cancelled_at ?? raw.cancelledAt ?? null,
+  };
+}
+
 export function normalizeReservation(raw) {
   if (!raw || typeof raw !== 'object') return null;
 
@@ -166,6 +228,7 @@ export function normalizeReservation(raw) {
     latestPayment: raw.latest_payment ?? raw.latestPayment ?? null,
     latestRefund: raw.latest_refund ?? raw.latestRefund ?? null,
     depositUnderReview: Boolean(raw.deposit_under_review ?? raw.depositUnderReview ?? false),
+    preOrder: normalizeReservationPreOrder(raw.pre_order ?? raw.preOrder),
     history,
     statusHistory: history,
   };
@@ -375,6 +438,21 @@ export const customerService = {
       body.special_requests = payload.special_requests ?? payload.specialRequests ?? null;
     }
 
+    const preOrderRaw = payload.pre_order ?? payload.preOrder;
+    if (preOrderRaw && Array.isArray(preOrderRaw.items) && preOrderRaw.items.length > 0) {
+      body.pre_order = {
+        items: preOrderRaw.items.map((item) => ({
+          menu_item_id: Number(item.menu_item_id ?? item.menuItemId ?? item.id ?? 0),
+          quantity: Number(item.quantity ?? 1),
+          add_on_option_ids: Array.isArray(item.add_on_option_ids ?? item.addOnOptionIds)
+            ? (item.add_on_option_ids ?? item.addOnOptionIds).map(Number)
+            : [],
+          special_instructions: item.special_instructions ?? item.specialInstructions ?? null,
+        })),
+        ...(preOrderRaw.notes ? { notes: String(preOrderRaw.notes).trim() } : {}),
+      };
+    }
+
     const res = await apiClient.post('/customer/reservations', body);
     return normalizeReservation(res?.data?.reservation ?? null);
   },
@@ -446,6 +524,22 @@ export const customerService = {
       idempotency_key: idempotencyKey,
     });
     return res?.data?.payment ?? null;
+  },
+
+  async updateReservationPreOrder(id, { items = [], notes = null } = {}) {
+    const body = {
+      items: items.map((item) => ({
+        menu_item_id: Number(item.menu_item_id ?? item.menuItemId ?? item.id ?? 0),
+        quantity: Number(item.quantity ?? 1),
+        add_on_option_ids: Array.isArray(item.add_on_option_ids ?? item.addOnOptionIds)
+          ? (item.add_on_option_ids ?? item.addOnOptionIds).map(Number)
+          : [],
+        special_instructions: item.special_instructions ?? item.specialInstructions ?? null,
+      })),
+      notes: notes ? String(notes).trim() : null,
+    };
+    const res = await apiClient.put(`/customer/reservations/${encodeURIComponent(id)}/pre-order`, body);
+    return normalizeReservationPreOrder(res?.data?.pre_order ?? null);
   },
 
   // Favorites (Backend-connected via /api/customer/favorites*)

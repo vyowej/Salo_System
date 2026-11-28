@@ -35,6 +35,7 @@ class OwnerReservationService
         private readonly ReservationExpiryService $expiryService,
         private readonly PaymentService $paymentService,
         private readonly RefundService $refundService,
+        private readonly ReservationPreOrderService $preOrderService,
     ) {}
 
     /**
@@ -150,12 +151,15 @@ class OwnerReservationService
         $customerIds = $rows->pluck('customer_id')->map(static fn ($id): int => (int) $id)->unique()->values()->all();
         $guestHistories = $this->loadGuestHistories($targetRestaurantId, $customerIds);
         $permissions = $this->resolveUserPermissionsForRestaurant($user, $targetRestaurantId);
+        $reservationIds = $rows->pluck('reservation_id')->map(static fn ($id): int => (int) $id)->all();
+        $preOrdersByResId = $this->preOrderService->loadByReservationIds($reservationIds, $rows->keyBy('reservation_id')->all(), $manilaNow);
 
-        $items = $rows->map(function (object $row) use ($restaurant, $guestHistories, $permissions, $manilaNow): array {
+        $items = $rows->map(function (object $row) use ($restaurant, $guestHistories, $permissions, $manilaNow, $preOrdersByResId): array {
             $custId = (int) $row->customer_id;
+            $resId = (int) $row->reservation_id;
             $history = $guestHistories[$custId] ?? ['visits' => 0, 'no_shows' => 0, 'cancellations' => 0];
 
-            return $this->formatOwnerRow($row, $restaurant, $history, $permissions, $manilaNow);
+            return $this->formatOwnerRow($row, $restaurant, $history, $permissions, $manilaNow, null, $preOrdersByResId[$resId] ?? null, true);
         })->values()->all();
 
         return [
@@ -492,6 +496,7 @@ class OwnerReservationService
                 if (((string) ($row->deposit_status ?? 'none')) === 'paid') {
                     $this->refundService->refundReservationDepositIfPaid($reservationId, (int) $actor->user_id, $cleanReason, $req);
                 }
+                $this->preOrderService->syncPreOrderOnReservationTerminalState($reservationId, 'restaurant', $cleanReason, (int) $actor->user_id);
             },
         );
     }
@@ -729,6 +734,9 @@ class OwnerReservationService
             },
             notificationFactory: null,
             now: $now,
+            afterUpdate: function (object $row, User $actor) use ($reservationId): void {
+                $this->preOrderService->syncPreOrderOnReservationTerminalState($reservationId, 'restaurant', 'Reservation marked as no-show.', (int) $actor->user_id);
+            },
         );
     }
 
@@ -847,6 +855,9 @@ class OwnerReservationService
             },
             notificationFactory: null,
             now: $now,
+            afterUpdate: function (object $row, User $actor) use ($reservationId): void {
+                $this->preOrderService->syncPreOrderOnReservationTerminalState($reservationId, 'restaurant', 'Reservation marked as no-show.', (int) $actor->user_id);
+            },
         );
     }
 
@@ -886,6 +897,9 @@ class OwnerReservationService
                 ];
             },
             now: $now,
+            afterUpdate: function (object $row, User $actor) use ($reservationId): void {
+                $this->preOrderService->syncPreOrderOnReservationTerminalState($reservationId, 'restaurant', 'Reservation marked as no-show.', (int) $actor->user_id);
+            },
         );
     }
 
@@ -939,6 +953,9 @@ class OwnerReservationService
                 ];
             },
             now: $now,
+            afterUpdate: function (object $row, User $actor) use ($reservationId): void {
+                $this->preOrderService->syncPreOrderOnReservationTerminalState($reservationId, 'restaurant', 'Reservation marked as no-show.', (int) $actor->user_id);
+            },
         );
     }
 
@@ -1011,6 +1028,7 @@ class OwnerReservationService
                 if (((string) ($row->deposit_status ?? 'none')) === 'paid') {
                     $this->refundService->refundReservationDepositIfPaid($reservationId, (int) $actor->user_id, $cleanReason, $req);
                 }
+                $this->preOrderService->syncPreOrderOnReservationTerminalState($reservationId, 'restaurant', $cleanReason, (int) $actor->user_id);
             },
         );
     }
@@ -1557,13 +1575,15 @@ class OwnerReservationService
         array $permissions,
         CarbonImmutable $manilaNow,
         ?array $statusHistory = null,
+        ?array $preOrder = null,
+        bool $preOrderLoaded = false,
     ): array {
         $row->reservation_pending_expiry_minutes = (int) ($restaurant->reservation_pending_expiry_minutes ?? 120);
         $allowedActions = $this->computeAllowedActions($row, $permissions, $manilaNow);
         $allowedDepositActions = $this->computeAllowedDepositActions($row, $permissions);
         $attention = $this->computeAttentionFlag($row, $restaurant, $manilaNow);
 
-        return ReservationFormatter::formatOwner(
+        $formatted = ReservationFormatter::formatOwner(
             row: $row,
             now: $manilaNow,
             cancellationCutoffMinutes: isset($restaurant->reservation_cancellation_cutoff_minutes)
@@ -1575,6 +1595,16 @@ class OwnerReservationService
             attention: $attention,
             allowedDepositActions: $allowedDepositActions,
         );
+
+        $resId = (int) $row->reservation_id;
+        if ($preOrderLoaded) {
+            $formatted['pre_order'] = $preOrder;
+        } else {
+            $preOrders = $this->preOrderService->loadByReservationIds([$resId], [$resId => $row], $manilaNow);
+            $formatted['pre_order'] = $preOrders[$resId] ?? null;
+        }
+
+        return $formatted;
     }
 
     /**

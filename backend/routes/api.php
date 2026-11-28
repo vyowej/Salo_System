@@ -239,6 +239,7 @@ Route::prefix('customer')->middleware('auth')->group(function (): void {
     Route::get('/reservations/{id}', [CustomerReservationController::class, 'show'])->whereNumber('id');
     Route::post('/reservations/{id}/cancel', [CustomerReservationController::class, 'cancel'])->whereNumber('id')->middleware('throttle:30,1');
     Route::post('/reservations/{id}/deposit/initiate', [CustomerReservationController::class, 'initiateDeposit'])->whereNumber('id')->middleware('throttle:20,1');
+    Route::put('/reservations/{id}/pre-order', [CustomerReservationController::class, 'updatePreOrder'])->whereNumber('id')->middleware('throttle:30,1');
 
     Route::middleware('role:customer')->group(function (): void {
         Route::get('/favorites', [CustomerFavoriteController::class, 'index']);
@@ -367,6 +368,7 @@ Route::prefix('restaurant')->middleware('auth')->group(function (): void {
         Route::post('/reservations/{id}/no-show', [OwnerReservationController::class, 'noShow'])->whereNumber('id')->middleware('throttle:60,1');
         Route::post('/reservations/{id}/cancel', [OwnerReservationController::class, 'cancel'])->whereNumber('id')->middleware('throttle:30,1');
         Route::patch('/reservations/{id}/table', [OwnerReservationController::class, 'assignTable'])->whereNumber('id')->middleware('throttle:60,1');
+        Route::post('/reservations/{id}/pre-order/status', [OwnerReservationController::class, 'updatePreOrderStatus'])->whereNumber('id')->middleware('throttle:60,1');
     });
 });
 

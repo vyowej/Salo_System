@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 import locationApiService from './locationApiService';
+import { normalizeReservationPreOrder } from './customerService';
 import { normalizeRestaurantWithMenuPayload } from './publicRestaurantService';
 
 function notAvailable(feature) {
@@ -280,6 +281,7 @@ export function normalizeOwnerReservation(raw) {
       : [],
     attention: raw.attention ?? null,
     restaurantSettings: raw.restaurant_settings ?? raw.restaurantSettings ?? null,
+    preOrder: normalizeReservationPreOrder(raw.pre_order ?? raw.preOrder),
     statusHistory: Array.isArray(historyRaw)
       ? historyRaw.map((entry) => ({
           historyId: Number(entry.history_id ?? entry.historyId ?? 0),
@@ -1014,6 +1016,16 @@ export const ownerService = {
     };
     const res = await apiClient.post(`/restaurant/reservations/${encodeURIComponent(id)}/deposit`, body);
     return normalizeOwnerReservation(res?.data?.reservation ?? null);
+  },
+
+  async updateReservationPreOrderStatus(restaurantId, id, { action, reason = null } = {}) {
+    const body = {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      action,
+      ...(reason ? { reason } : {}),
+    };
+    const res = await apiClient.post(`/restaurant/reservations/${encodeURIComponent(id)}/pre-order/status`, body);
+    return normalizeReservationPreOrder(res?.data?.pre_order ?? null);
   },
 
   getInventoryItems() {

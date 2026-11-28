@@ -30,6 +30,7 @@ class ReceiptService
             ->leftJoin('users as ru', 'ru.user_id', '=', 'rd.user_id')
             ->where('o.order_id', $orderId)
             ->where('o.customer_id', $user->user_id)
+            ->whereNull('o.reservation_id')
             ->select([
                 'o.*',
                 'r.restaurant_name as live_restaurant_name',
@@ -121,6 +122,7 @@ class ReceiptService
             ->leftJoin('deliveries as d', 'd.order_id', '=', 'o.order_id')
             ->where('o.order_id', $orderId)
             ->where('o.restaurant_id', $targetId)
+            ->whereNull('o.reservation_id')
             ->select([
                 'o.*',
                 'd.delivery_status',

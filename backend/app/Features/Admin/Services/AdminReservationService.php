@@ -512,6 +512,9 @@ class AdminReservationService
         );
 
         $reviewMap = $this->loadReviewLogsForReservations([$reservationId]);
+        $preOrderMap = app(\App\Features\Reservations\Services\ReservationPreOrderService::class)
+            ->loadByReservationIds([$reservationId], [$reservationId => $row], $manilaNow);
+        $formatted['pre_order'] = $preOrderMap[$reservationId] ?? null;
         $reviewState = $this->evaluateReviewState($row, $reviewMap[$reservationId] ?? []);
 
         $formatted['needs_admin_review'] = $reviewState['needs_admin_review'];

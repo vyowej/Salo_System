@@ -5,7 +5,15 @@ import { useCart } from '../../../hooks/useCart';
 import RestaurantImage from './RestaurantImage';
 import { getMenuCustomerPrice, normalizeMenuItem } from '../../restaurant/menu/menuData';
 
-export default function ItemModal({ open, onClose, item, restaurant, orderingDisabled = false, orderingDisabledMessage = '' }) {
+export default function ItemModal({
+  open,
+  onClose,
+  item,
+  restaurant,
+  orderingDisabled = false,
+  orderingDisabledMessage = '',
+  onAddOverride = null,
+}) {
   const { addItem } = useCart();
 
   const [quantity, setQuantity] = useState(1);
@@ -89,18 +97,24 @@ export default function ItemModal({ open, onClose, item, restaurant, orderingDis
       }
     }
 
-    addItem({
+    const payload = {
       id: menuItem.id,
       name: menuItem.name,
       price: basePrice,
       quantity,
       selectedAddOns: flattenedAddOns,
       specialInstructions: specialInstructions.trim(),
-      restaurantId: restaurant.id,
-      restaurantName: restaurant.displayName || restaurant.name,
-      deliveryFee: restaurant.deliveryFee,
+      restaurantId: restaurant?.id,
+      restaurantName: restaurant?.displayName || restaurant?.name || '',
+      deliveryFee: restaurant?.deliveryFee,
       image: menuItem.photo || menuItem.image,
-    });
+    };
+
+    if (typeof onAddOverride === 'function') {
+      onAddOverride(payload);
+    } else {
+      addItem(payload);
+    }
 
     onClose();
   };

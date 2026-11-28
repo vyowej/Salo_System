@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import { normalizeReservationPreOrder } from './customerService';
 import locationApiService from './locationApiService';
 
 function toQueryString(params = {}) {
@@ -59,6 +60,7 @@ export function normalizeAdminReservation(row = {}) {
     status_history: Array.isArray(row.status_history) ? row.status_history : [],
     customer_history: row.customer_history ?? null,
     restaurant_settings: row.restaurant_settings ?? null,
+    pre_order: normalizeReservationPreOrder(row.pre_order ?? row.preOrder),
   };
 }
 

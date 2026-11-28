@@ -5,6 +5,8 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import { useAuth } from '../../../hooks/useAuth';
 import customerService from '../../../services/customerService';
+import publicRestaurantService from '../../../services/publicRestaurantService';
+import ReservationPreOrderSection from './ReservationPreOrderSection';
 
 const REASON_LABELS = {
   TOO_SOON: 'Within minimum notice window',
@@ -72,6 +74,12 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
   const [tablesLoading, setTablesLoading] = useState(false);
 
   // Submission state
+  const [step, setStep] = useState('details'); // 'details' | 'menu' | 'review'
+  const [preOrderItems, setPreOrderItems] = useState([]);
+  const [preOrderNotes, setPreOrderNotes] = useState('');
+  const [menuRestaurant, setMenuRestaurant] = useState(null);
+  const [menuLoading, setMenuLoading] = useState(false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedReservation, setConfirmedReservation] = useState(null);
   const [formError, setFormError] = useState('');
@@ -94,6 +102,39 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
   }, [restaurant?.id, date, time, selectedStartIso, guests, seatingArea, selectedTableId]);
 
   const restaurantId = restaurant?.id;
+  const activeMenuRestaurant = useMemo(() => {
+    if (Array.isArray(restaurant?.menu) && restaurant.menu.length > 0) return restaurant;
+    return menuRestaurant || restaurant;
+  }, [restaurant, menuRestaurant]);
+
+  useEffect(() => {
+    setPreOrderItems([]);
+    setPreOrderNotes('');
+    setMenuRestaurant(null);
+    setStep('details');
+  }, [restaurantId]);
+
+  useEffect(() => {
+    if (!open || step !== 'menu' || !restaurantId) return;
+    if (Array.isArray(restaurant?.menu) && restaurant.menu.length > 0) return;
+    if (menuRestaurant && String(menuRestaurant.id) === String(restaurantId)) return;
+
+    let cancelled = false;
+    setMenuLoading(true);
+    publicRestaurantService
+      .getRestaurantWithMenu(restaurantId)
+      .then((loaded) => {
+        if (!cancelled && loaded) setMenuRestaurant(loaded);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setMenuLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, step, restaurantId, restaurant?.menu, menuRestaurant]);
+
   const currentMonthKey = useMemo(() => monthKeyFromDate(calendarDate), [calendarDate]);
   const selectedSlotRef = useRef({ time: '', selectedStartIso: '' });
 
@@ -363,10 +404,32 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
     return '';
   };
 
+  const preOrderItemCount = useMemo(
+    () => preOrderItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+    [preOrderItems],
+  );
+  const preOrderSubtotal = useMemo(
+    () => preOrderItems.reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 0), 0),
+    [preOrderItems],
+  );
+
+  const handleGoToStep = (nextStep) => {
+    if (nextStep !== 'details') {
+      const validationMessage = validateReservation();
+      if (validationMessage) {
+        setFormError(validationMessage);
+        return;
+      }
+    }
+    setFormError('');
+    setStep(nextStep);
+  };
+
   const handleBookTable = async () => {
     const validationMessage = validateReservation();
     if (validationMessage) {
       setFormError(validationMessage);
+      setStep('details');
       return;
     }
 
@@ -386,6 +449,19 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
         contactPhone: guestPhone.trim(),
         specialRequests: specialRequests.trim() || null,
         idempotencyKey,
+        ...(preOrderItems.length > 0
+          ? {
+              preOrder: {
+                items: preOrderItems.map((entry) => ({
+                  menuItemId: Number(entry.menuItemId),
+                  quantity: Number(entry.quantity),
+                  addOnOptionIds: entry.addOnOptionIds || [],
+                  specialInstructions: entry.specialInstructions || null,
+                })),
+                notes: preOrderNotes.trim() || null,
+              },
+            }
+          : {}),
       });
 
       setConfirmedReservation(created);
@@ -412,6 +488,9 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
     setConfirmedReservation(null);
     setFormError('');
     setSuggestedAlternatives([]);
+    setStep('details');
+    setPreOrderItems([]);
+    setPreOrderNotes('');
     onClose();
   };
 
@@ -440,8 +519,8 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
           <Button variant="primary" fullWidth disabled>
             Reservations Unavailable
           </Button>
-        ) : (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 'var(--space-3)' }}>
+        ) : step === 'details' ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
             <div style={{ lineHeight: 1.2 }}>
               <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
                 {totalPayable > 0 ? 'Estimated Deposit & Fee' : 'No Upfront Deposit Required'}
@@ -451,6 +530,52 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
               </p>
             </div>
 
+            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              <Button
+                variant="outline"
+                size="md"
+                onClick={() => handleGoToStep('review')}
+                disabled={!date || (!time && !selectedStartIso)}
+              >
+                Skip Menu &amp; Review
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => handleGoToStep('menu')}
+                disabled={!date || (!time && !selectedStartIso)}
+              >
+                Next: Pre-Order Menu (Optional)
+              </Button>
+            </div>
+          </div>
+        ) : step === 'menu' ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+            <Button variant="outline" size="md" onClick={() => setStep('details')}>
+              Back to Details
+            </Button>
+            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => {
+                  setPreOrderItems([]);
+                  setPreOrderNotes('');
+                  setStep('review');
+                }}
+              >
+                Skip Pre-Order
+              </Button>
+              <Button variant="primary" size="md" onClick={() => setStep('review')}>
+                Review Reservation{preOrderItemCount > 0 ? ` (${preOrderItemCount} items)` : ''}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+            <Button variant="outline" size="md" onClick={() => setStep('menu')}>
+              Back to Menu
+            </Button>
             <Button
               variant="primary"
               size="md"
@@ -564,6 +689,14 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
               <span style={{ color: 'var(--text-muted)' }}>Reservation Status:</span>
               <strong style={{ color: 'var(--text-primary)' }}>{confirmedReservation.status}</strong>
             </div>
+            {confirmedReservation.preOrder && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-secondary)', paddingTop: 6, marginTop: 2 }}>
+                <span style={{ color: 'var(--text-muted)' }}>Dine-In Pre-Order ({confirmedReservation.preOrder.orderReference}):</span>
+                <strong style={{ color: 'var(--text-primary)' }}>
+                  {confirmedReservation.preOrder.itemCount} item(s) · ₱{Number(confirmedReservation.preOrder.totalAmount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </strong>
+              </div>
+            )}
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
@@ -581,7 +714,7 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          {/* Header */}
+          {/* Header & Stepper */}
           <div>
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Table Availability &amp; Booking
@@ -589,9 +722,34 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
             <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0 2px' }}>
               Reserve a Table at {restaurant.name}
             </h2>
-            <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', margin: 0 }}>
-              {reservationInfo?.reservationNotes || 'Select your party size, date, and arrival time to book an available table.'}
+            <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', margin: '0 0 var(--space-3)' }}>
+              {reservationInfo?.reservationNotes || 'Select your party size, date, and arrival time, and optionally pre-order dishes for dine-in.'}
             </p>
+            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              {[
+                { key: 'details', label: '1. Table & Details' },
+                { key: 'menu', label: `2. Pre-Order Menu${preOrderItemCount > 0 ? ` (${preOrderItemCount})` : ' (Optional)'}` },
+                { key: 'review', label: '3. Review & Confirm' },
+              ].map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => handleGoToStep(s.key)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: step === s.key ? '1.5px solid var(--accent)' : '1px solid var(--border-primary)',
+                    background: step === s.key ? 'var(--accent-subtle, rgba(234, 88, 12, 0.08))' : 'var(--surface-secondary)',
+                    color: step === s.key ? 'var(--accent)' : 'var(--text-secondary)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {formError && (
@@ -638,6 +796,114 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
             </div>
           )}
 
+          {step === 'menu' && (
+            <ReservationPreOrderSection
+              restaurant={activeMenuRestaurant}
+              menuLoading={menuLoading}
+              preOrderItems={preOrderItems}
+              onChangeItems={setPreOrderItems}
+              preOrderNotes={preOrderNotes}
+              onChangeNotes={setPreOrderNotes}
+            />
+          )}
+
+          {step === 'review' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <div style={{ background: 'var(--surface-secondary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)', border: '1px solid var(--border-secondary)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <strong style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>Reservation Details</strong>
+                  <Button size="sm" variant="outline" onClick={() => setStep('details')}>Edit Details</Button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, fontSize: 'var(--font-size-xs)' }}>
+                  <div><span style={{ color: 'var(--text-muted)' }}>Restaurant:</span> <strong style={{ color: 'var(--text-primary)' }}>{restaurant.name}</strong></div>
+                  <div><span style={{ color: 'var(--text-muted)' }}>Date:</span> <strong style={{ color: 'var(--text-primary)' }}>{date}</strong></div>
+                  <div><span style={{ color: 'var(--text-muted)' }}>Time:</span> <strong style={{ color: 'var(--text-primary)' }}>{time}</strong></div>
+                  <div><span style={{ color: 'var(--text-muted)' }}>Guests:</span> <strong style={{ color: 'var(--text-primary)' }}>{guests} guest(s)</strong></div>
+                  <div><span style={{ color: 'var(--text-muted)' }}>Guest Name:</span> <strong style={{ color: 'var(--text-primary)' }}>{guestName}</strong></div>
+                  <div><span style={{ color: 'var(--text-muted)' }}>Phone:</span> <strong style={{ color: 'var(--text-primary)' }}>{guestPhone}</strong></div>
+                </div>
+                {specialRequests.trim() && (
+                  <p style={{ margin: '8px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                    <strong>Reservation Notes:</strong> {specialRequests.trim()}
+                  </p>
+                )}
+              </div>
+
+              <div style={{ background: 'var(--surface-secondary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)', border: '1px solid var(--border-secondary)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <strong style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>
+                    Pre-Ordered Items ({preOrderItemCount})
+                  </strong>
+                  <Button size="sm" variant="outline" onClick={() => setStep('menu')}>
+                    {preOrderItems.length > 0 ? 'Edit Pre-Order' : 'Add Menu Items'}
+                  </Button>
+                </div>
+
+                {preOrderItems.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                    No food pre-ordered. You are reserving a table only.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {preOrderItems.map((entry) => (
+                      <div key={entry.lineKey} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, paddingBottom: 6, borderBottom: '1px solid var(--border-secondary)', fontSize: 'var(--font-size-xs)' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                            {entry.quantity}× {entry.name}
+                          </div>
+                          {entry.addOns?.length > 0 && (
+                            <div style={{ color: 'var(--text-muted)' }}>
+                              Options: {entry.addOns.map((ao) => ao.name).join(', ')}
+                            </div>
+                          )}
+                          {entry.specialInstructions && (
+                            <div style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                              Note: {entry.specialInstructions}
+                            </div>
+                          )}
+                          <div style={{ color: 'var(--text-muted)' }}>
+                            Unit: ₱{Number(entry.unitPrice || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                        <strong style={{ color: 'var(--text-primary)' }}>
+                          ₱{(Number(entry.unitPrice || 0) * Number(entry.quantity || 0)).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </strong>
+                      </div>
+                    ))}
+                    {preOrderNotes.trim() && (
+                      <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+                        <strong>Pre-Order Kitchen Notes:</strong> {preOrderNotes.trim()}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ background: 'var(--surface-secondary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)', border: '1px solid var(--border-secondary)', fontSize: 'var(--font-size-xs)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                  <span>Pre-Order Food Subtotal ({preOrderItemCount} items):</span>
+                  <strong>₱{preOrderSubtotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                  <span>Delivery Fee (Dine-In):</span>
+                  <strong>₱0.00</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                  <span>Reservation Deposit &amp; Fee:</span>
+                  <strong>₱{totalPayable.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                </div>
+                <div style={{ borderTop: '1px solid var(--border-secondary)', paddingTop: 6, marginTop: 2, display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>
+                  <span>Total Estimated Amount:</span>
+                  <span style={{ color: 'var(--accent)' }}>
+                    ₱{(preOrderSubtotal + totalPayable).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 'details' && (
+            <>
           {/* Party size bar */}
           <div style={{
             display: 'flex',
@@ -1101,6 +1367,8 @@ export default function ReservationModal({ open, onClose, restaurant, onReservat
               </span>
             </div>
           </div>
+            </>
+          )}
         </div>
       )}
     </Modal>

@@ -133,7 +133,8 @@ class AdminOrderService
      */
     private function buildOrdersBaseQuery(array $filters, string $paymentStatus, bool $hasPaymentStatusFilter): Builder
     {
-        $baseQuery = DB::table('orders as o');
+        $baseQuery = DB::table('orders as o')
+            ->whereNull('o.reservation_id');
 
         if ($hasPaymentStatusFilter) {
             $latestPaymentSub = DB::table('payment_allocations as pa')
@@ -282,6 +283,7 @@ class AdminOrderService
             ->leftJoin('riders as ri', 'ri.rider_id', '=', 'd.rider_id')
             ->leftJoin('users as riu', 'riu.user_id', '=', 'ri.user_id')
             ->where('o.order_id', $orderId)
+            ->whereNull('o.reservation_id')
             ->first([
                 'o.order_id',
                 'o.checkout_id',
@@ -552,7 +554,11 @@ class AdminOrderService
             : null;
 
         $outcome = DB::transaction(function () use ($orderId, $cleanReason, $cleanIdem, $admin, $request): array {
-            $order = DB::table('orders')->where('order_id', $orderId)->lockForUpdate()->first();
+            $order = DB::table('orders')
+                ->where('order_id', $orderId)
+                ->whereNull('reservation_id')
+                ->lockForUpdate()
+                ->first();
             if (! $order) {
                 throw new NotFoundHttpException('Order not found.');
             }

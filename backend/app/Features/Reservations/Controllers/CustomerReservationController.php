@@ -6,7 +6,9 @@ use App\Features\Payments\Services\PaymentService;
 use App\Features\Reservations\Requests\CancelCustomerReservationRequest;
 use App\Features\Reservations\Requests\ListCustomerReservationsRequest;
 use App\Features\Reservations\Requests\StoreCustomerReservationRequest;
+use App\Features\Reservations\Requests\UpdateCustomerPreOrderRequest;
 use App\Features\Reservations\Services\CustomerReservationService;
+use App\Features\Reservations\Services\ReservationPreOrderService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -18,6 +20,7 @@ class CustomerReservationController extends Controller
     public function __construct(
         private readonly CustomerReservationService $customerReservationService,
         private readonly PaymentService $paymentService,
+        private readonly ReservationPreOrderService $preOrderService,
     ) {}
 
     public function index(ListCustomerReservationsRequest $request): JsonResponse
@@ -85,6 +88,23 @@ class CustomerReservationController extends Controller
             data: ['payment' => $payment],
             message: 'Reservation deposit payment initiated.',
             status: 201,
+        );
+    }
+
+    public function updatePreOrder(UpdateCustomerPreOrderRequest $request, int $id): JsonResponse
+    {
+        $validated = $request->validated();
+        $preOrder = $this->preOrderService->updateCustomerPreOrder(
+            user: $request->user(),
+            reservationId: $id,
+            itemsInput: $validated['items'],
+            notes: $validated['notes'] ?? null,
+            request: $request,
+        );
+
+        return ApiResponse::success(
+            data: ['pre_order' => $preOrder],
+            message: $preOrder !== null ? 'Reservation pre-order updated.' : 'Reservation pre-order cancelled.',
         );
     }
 }

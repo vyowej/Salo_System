@@ -201,6 +201,14 @@ class ReservationExpiryService
                 ],
             );
 
+            app(ReservationPreOrderService::class)->syncPreOrderOnReservationTerminalState(
+                reservationId: $reservationId,
+                cancelledBy: 'system',
+                reason: $note,
+                actorUserId: null,
+                now: $manilaNow,
+            );
+
             $ref = $row->reservation_reference ?: ('#' . $reservationId);
             $startCarbon = CarbonImmutable::parse((string) $row->reservation_start, self::TIMEZONE);
             $when = $startCarbon->format('M j, Y \a\t g:i A');

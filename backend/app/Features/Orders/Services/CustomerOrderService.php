@@ -39,7 +39,8 @@ class CustomerOrderService
         $status = trim((string) ($filters['status'] ?? ''));
 
         $baseQuery = DB::table('orders as o')
-            ->where('o.customer_id', $user->user_id);
+            ->where('o.customer_id', $user->user_id)
+            ->whereNull('o.reservation_id');
 
         if ($status !== '' && $status !== 'all') {
             $baseQuery->where('o.order_status', $status);
@@ -157,6 +158,7 @@ class CustomerOrderService
             ->leftJoin('users as ru', 'ru.user_id', '=', 'rd.user_id')
             ->where('o.order_id', $orderId)
             ->where('o.customer_id', $user->user_id)
+            ->whereNull('o.reservation_id')
             ->select([
                 'o.*',
                 'd.delivered_at',
@@ -313,6 +315,7 @@ class CustomerOrderService
             $order = DB::table('orders')
                 ->where('order_id', $orderId)
                 ->where('customer_id', $user->user_id)
+                ->whereNull('reservation_id')
                 ->lockForUpdate()
                 ->first();
 

@@ -63,7 +63,8 @@ class RestaurantOrderService
         $status = trim((string) ($filters['status'] ?? ''));
 
         $baseQuery = DB::table('orders as o')
-            ->where('o.restaurant_id', $targetId);
+            ->where('o.restaurant_id', $targetId)
+            ->whereNull('o.reservation_id');
 
         if ($status !== '' && $status !== 'all') {
             $baseQuery->where('o.order_status', $status);
@@ -186,6 +187,7 @@ class RestaurantOrderService
             ->leftJoin('users as ru', 'ru.user_id', '=', 'rd.user_id')
             ->where('o.order_id', $orderId)
             ->where('o.restaurant_id', $targetId)
+            ->whereNull('o.reservation_id')
             ->select(['o.*', 'd.delivered_at', 'ru.first_name as rider_first_name', 'cu.phone_number as customer_phone'])
             ->first();
 
@@ -277,6 +279,7 @@ class RestaurantOrderService
             $order = DB::table('orders')
                 ->where('order_id', $orderId)
                 ->where('restaurant_id', $targetId)
+                ->whereNull('reservation_id')
                 ->lockForUpdate()
                 ->first();
 

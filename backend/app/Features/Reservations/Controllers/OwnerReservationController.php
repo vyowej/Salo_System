@@ -9,8 +9,10 @@ use App\Features\Reservations\Requests\OptionalOwnerReservationNoteRequest;
 use App\Features\Reservations\Requests\OwnerReservationCalendarRequest;
 use App\Features\Reservations\Requests\RejectOwnerReservationRequest;
 use App\Features\Reservations\Requests\SeatOwnerReservationRequest;
+use App\Features\Reservations\Requests\UpdateOwnerPreOrderStatusRequest;
 use App\Features\Reservations\Requests\UpdateOwnerReservationDepositRequest;
 use App\Features\Reservations\Services\OwnerReservationService;
+use App\Features\Reservations\Services\ReservationPreOrderService;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -20,6 +22,7 @@ class OwnerReservationController extends Controller
 {
     public function __construct(
         private readonly OwnerReservationService $ownerReservationService,
+        private readonly ReservationPreOrderService $preOrderService,
     ) {}
 
     public function index(ListOwnerReservationsRequest $request): JsonResponse
@@ -214,17 +217,35 @@ class OwnerReservationController extends Controller
         $validated = $request->validated();
 
         return ApiResponse::success(
-            data: [
-                'reservation' => $this->ownerReservationService->cancel(
+            data: ['reservation' => $this->ownerReservationService->cancel(
                     user: $request->user(),
                     reservationId: $id,
                     reason: (string) $validated['reason'],
                     restaurantId: $restaurantId,
                     request: $request,
                     refundDeposit: (bool) ($validated['refund_deposit'] ?? false),
-                ),
-            ],
+                )],
             message: 'Reservation cancelled.',
+        );
+    }
+
+    public function updatePreOrderStatus(UpdateOwnerPreOrderStatusRequest $request, int $id): JsonResponse
+    {
+        $restaurantId = $this->resolveRestaurantId($request);
+        $validated = $request->validated();
+
+        $preOrder = $this->preOrderService->transitionPreOrderStatus(
+            user: $request->user(),
+            reservationId: $id,
+            action: (string) $validated['action'],
+            reason: $validated['reason'] ?? null,
+            restaurantId: $restaurantId,
+            request: $request,
+        );
+
+        return ApiResponse::success(
+            data: ['pre_order' => $preOrder],
+            message: 'Reservation pre-order status updated.',
         );
     }
 

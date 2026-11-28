@@ -916,6 +916,84 @@ export default function AdminReservationsPage() {
                 </div>
               )}
 
+              {selectedDetail.pre_order && (
+                <div className="admin-record-panel" style={{ display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <div>
+                      <h3 style={{ margin: 0 }}>Dine-in menu pre-order</h3>
+                      <span style={{ fontSize: '0.82rem', opacity: 0.78 }}>
+                        {selectedDetail.pre_order.orderReference || `#${selectedDetail.pre_order.orderId}`}
+                      </span>
+                    </div>
+                    <StatusBadge status={selectedDetail.pre_order.statusLabel || selectedDetail.pre_order.orderStatus} />
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {(selectedDetail.pre_order.items || []).map((item) => (
+                      <div
+                        key={item.orderItemId || `${item.menuItemId}-${item.itemName}`}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: 8,
+                          paddingBottom: 6,
+                          borderBottom: '1px solid var(--border-secondary, rgba(148, 163, 184, 0.25))',
+                          fontSize: '0.88rem',
+                        }}
+                      >
+                        <div>
+                          <strong>{item.quantity}× {item.itemName}</strong>
+                          <div style={{ fontSize: '0.78rem', opacity: 0.75 }}>
+                            Unit: ₱{Number(item.unitPrice || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                          {item.addOns?.length > 0 && (
+                            <div style={{ fontSize: '0.78rem', opacity: 0.8 }}>
+                              Options: {item.addOns.map((ao) => ao.optionName).join(', ')}
+                            </div>
+                          )}
+                          {item.specialInstructions && (
+                            <div style={{ fontSize: '0.78rem', fontStyle: 'italic', opacity: 0.85 }}>
+                              Note: {item.specialInstructions}
+                            </div>
+                          )}
+                        </div>
+                        <strong>
+                          ₱{Number(item.lineTotal || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+
+                  {selectedDetail.pre_order.notes && (
+                    <div style={{ fontSize: '0.84rem', opacity: 0.88 }}>
+                      <strong>Pre-order notes:</strong> {selectedDetail.pre_order.notes}
+                    </div>
+                  )}
+
+                  {(selectedDetail.pre_order.rejectionReason || selectedDetail.pre_order.cancellationReason) && (
+                    <div style={{ fontSize: '0.84rem', opacity: 0.88 }}>
+                      <strong>Pre-order reason:</strong> {selectedDetail.pre_order.rejectionReason || selectedDetail.pre_order.cancellationReason}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gap: 4, fontSize: '0.85rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
+                      <span>Subtotal ({selectedDetail.pre_order.itemCount} item{selectedDetail.pre_order.itemCount === 1 ? '' : 's'})</span>
+                      <span>₱{Number(selectedDetail.pre_order.subtotalAmount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
+                      <span>Delivery fee (Dine-in)</span>
+                      <span>₱{Number(selectedDetail.pre_order.deliveryFee || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                      <span>Pre-order total</span>
+                      <span>₱{Number(selectedDetail.pre_order.totalAmount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {(selectedDetail.cancellation_reason || selectedDetail.rejection_reason) && (
                 <div className="admin-record-panel">
                   <h3>{selectedDetail.rejection_reason ? 'Rejection reason' : 'Cancellation reason'}</h3>

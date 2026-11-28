@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import CustomerLayout from '../../../layouts/CustomerLayout';
 import customerService from '../../../services/customerService';
+import publicRestaurantService from '../../../services/publicRestaurantService';
+import ReservationPreOrderSection from '../components/ReservationPreOrderSection';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
@@ -73,6 +75,15 @@ export default function ReservationsPage() {
   const [depositBusy, setDepositBusy] = useState(false);
   const [depositError, setDepositError] = useState('');
   const [copiedId, setCopiedId] = useState(null);
+
+  // Pre-order edit modal state
+  const [preOrderModalOpen, setPreOrderModalOpen] = useState(false);
+  const [preOrderRestaurant, setPreOrderRestaurant] = useState(null);
+  const [preOrderMenuLoading, setPreOrderMenuLoading] = useState(false);
+  const [preOrderEditItems, setPreOrderEditItems] = useState([]);
+  const [preOrderEditNotes, setPreOrderEditNotes] = useState('');
+  const [preOrderBusy, setPreOrderBusy] = useState(false);
+  const [preOrderError, setPreOrderError] = useState('');
 
   const todayKey = localDateKey(new Date());
 
@@ -777,6 +788,17 @@ export default function ReservationsPage() {
                           </div>
                         </div>
 
+                        {res.preOrder && (
+                          <div style={{ padding: '6px 20px', fontSize: 12, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <Badge variant={res.preOrder.orderStatus === 'ready' || res.preOrder.orderStatus === 'completed' ? 'success' : res.preOrder.orderStatus === 'cancelled' || res.preOrder.orderStatus === 'rejected' ? 'default' : 'info'}>
+                              Pre-Order: {res.preOrder.statusLabel}
+                            </Badge>
+                            <span>
+                              {res.preOrder.itemCount} dish(es) · ₱{Number(res.preOrder.totalAmount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        )}
+
                         {res.specialRequests && (
                           <div className="customer-reservation-card__note" style={{ padding: '8px 20px', fontSize: 12, color: 'var(--text-secondary)' }}>
                             <strong>Note to restaurant:</strong> {res.specialRequests}
@@ -1289,6 +1311,120 @@ export default function ReservationsPage() {
                 </div>
               )}
 
+              {/* Linked Dine-In Pre-Order */}
+              <div style={{ padding: 12, borderRadius: 10, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary, #f8fafc)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div>
+                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block' }}>
+                      Dine-In Menu Pre-Order
+                    </span>
+                    {detailsRes.preOrder ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                        <strong style={{ fontSize: 13 }}>{detailsRes.preOrder.orderReference}</strong>
+                        <Badge variant={detailsRes.preOrder.orderStatus === 'ready' || detailsRes.preOrder.orderStatus === 'completed' ? 'success' : detailsRes.preOrder.orderStatus === 'cancelled' || detailsRes.preOrder.orderStatus === 'rejected' ? 'default' : 'info'}>
+                          {detailsRes.preOrder.statusLabel}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No dishes pre-ordered yet.</span>
+                    )}
+                  </div>
+
+                  {(['pending', 'approved', 'awaiting_payment', 'confirmed'].includes(detailsRes.rawStatus) && (!detailsRes.preOrder || detailsRes.preOrder.canCustomerEdit)) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        setPreOrderError('');
+                        setPreOrderModalOpen(true);
+                        const existing = detailsRes.preOrder;
+                        setPreOrderEditNotes(existing?.notes || '');
+                        setPreOrderEditItems(
+                          existing && !['cancelled', 'rejected', 'completed'].includes(existing.orderStatus)
+                            ? existing.items.map((it) => {
+                                const addOns = (it.addOns || []).map((ao) => ({
+                                  id: Number(ao.addOnOptionId || 0),
+                                  groupName: ao.groupName,
+                                  name: ao.optionName,
+                                  price: Number(ao.additionalPrice || 0),
+                                }));
+                                const optIds = addOns.map((ao) => ao.id).filter((n) => n > 0).sort((a, b) => a - b).join(',');
+                                return {
+                                  lineKey: `${Number(it.menuItemId)}:${optIds}:${String(it.specialInstructions || '').trim()}`,
+                                  menuItemId: Number(it.menuItemId),
+                                  name: it.itemName,
+                                  image: it.photoImage || null,
+                                  unitPrice: Number(it.unitPrice || 0),
+                                  quantity: Number(it.quantity || 1),
+                                  addOns,
+                                  addOnOptionIds: addOns.map((ao) => ao.id).filter((n) => n > 0),
+                                  specialInstructions: it.specialInstructions || '',
+                                };
+                              })
+                            : [],
+                        );
+                        setPreOrderMenuLoading(true);
+                        try {
+                          const loaded = await publicRestaurantService.getRestaurantWithMenu(detailsRes.restaurantId);
+                          setPreOrderRestaurant(loaded);
+                        } catch {
+                          setPreOrderError('Failed to load restaurant menu.');
+                        } finally {
+                          setPreOrderMenuLoading(false);
+                        }
+                      }}
+                    >
+                      {detailsRes.preOrder && !['cancelled', 'rejected'].includes(detailsRes.preOrder.orderStatus)
+                        ? 'Edit Pre-Order'
+                        : 'Add Menu Pre-Order'}
+                    </Button>
+                  )}
+                </div>
+
+                {detailsRes.preOrder && (
+                  <>
+                    {detailsRes.preOrder.editBlockedReason && !detailsRes.preOrder.canCustomerEdit && (
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '6px 10px', borderRadius: 6, background: 'rgba(245, 158, 11, 0.1)' }}>
+                        {detailsRes.preOrder.editBlockedReason}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {detailsRes.preOrder.items.map((item) => (
+                        <div key={item.orderItemId || `${item.menuItemId}-${item.itemName}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, fontSize: 12, paddingBottom: 4, borderBottom: '1px solid var(--border-secondary)' }}>
+                          <div>
+                            <strong>{item.quantity}× {item.itemName}</strong>
+                            {item.addOns?.length > 0 && (
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                {item.addOns.map((ao) => ao.optionName).join(', ')}
+                              </div>
+                            )}
+                            {item.specialInstructions && (
+                              <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                                Note: {item.specialInstructions}
+                              </div>
+                            )}
+                          </div>
+                          <strong>₱{Number(item.lineTotal || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                        </div>
+                      ))}
+                    </div>
+                    {detailsRes.preOrder.notes && (
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <strong>Kitchen Notes:</strong> {detailsRes.preOrder.notes}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)' }}>
+                      <span>Delivery Fee (Dine-In)</span>
+                      <span>₱0.00</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700 }}>
+                      <span>Pre-Order Total ({detailsRes.preOrder.itemCount} items)</span>
+                      <span>₱{Number(detailsRes.preOrder.totalAmount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
               {/* Restaurant Reservation Policy Notes */}
               {detailsRes.reservationNotes && (
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -1333,6 +1469,69 @@ export default function ReservationsPage() {
                 </div>
               )}
             </div>
+          </Modal>
+        )}
+        {detailsRes && preOrderModalOpen && (
+          <Modal
+            open={preOrderModalOpen}
+            onClose={() => !preOrderBusy && setPreOrderModalOpen(false)}
+            title={`Edit Dine-In Pre-Order · ${detailsRes.reference || detailsRes.id}`}
+            size="lg"
+            footer={
+              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8 }}>
+                <Button variant="outline" size="sm" onClick={() => setPreOrderModalOpen(false)} disabled={preOrderBusy}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={preOrderBusy}
+                  disabled={preOrderBusy}
+                  onClick={async () => {
+                    setPreOrderBusy(true);
+                    setPreOrderError('');
+                    try {
+                      const updatedPreOrder = await customerService.updateReservationPreOrder(
+                        detailsRes.reservationId || detailsRes.id,
+                        {
+                          items: preOrderEditItems.map((entry) => ({
+                            menuItemId: entry.menuItemId,
+                            quantity: entry.quantity,
+                            addOnOptionIds: entry.addOnOptionIds || [],
+                            specialInstructions: entry.specialInstructions || null,
+                          })),
+                          notes: preOrderEditNotes,
+                        },
+                      );
+                      setDetailsRes((prev) => (prev ? { ...prev, preOrder: updatedPreOrder } : prev));
+                      setPreOrderModalOpen(false);
+                      setSuccessBanner(updatedPreOrder ? 'Reservation pre-order updated.' : 'Reservation pre-order cancelled.');
+                      loadReservations();
+                    } catch (err) {
+                      setPreOrderError(err?.message || 'Unable to update pre-order.');
+                    } finally {
+                      setPreOrderBusy(false);
+                    }
+                  }}
+                >
+                  {preOrderEditItems.length === 0 ? 'Cancel Pre-Order' : 'Save Pre-Order'}
+                </Button>
+              </div>
+            }
+          >
+            {preOrderError && (
+              <div role="alert" style={{ marginBottom: 12, padding: 10, borderRadius: 8, background: '#fef2f2', color: '#b91c1c', fontSize: 12, fontWeight: 600 }}>
+                {preOrderError}
+              </div>
+            )}
+            <ReservationPreOrderSection
+              restaurant={preOrderRestaurant || { id: detailsRes.restaurantId, name: detailsRes.restaurantName, menu: [] }}
+              menuLoading={preOrderMenuLoading}
+              preOrderItems={preOrderEditItems}
+              onChangeItems={setPreOrderEditItems}
+              preOrderNotes={preOrderEditNotes}
+              onChangeNotes={setPreOrderEditNotes}
+            />
           </Modal>
         )}
       </div>
